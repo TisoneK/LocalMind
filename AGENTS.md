@@ -21,7 +21,9 @@ If you read nothing else, obey these rules:
    for "context" — the protocol lives in the `.context_ledger/` directory.
 2. **Never write under `.context_ledger/core/`** — it is a read-only, versioned
    copy of the protocol. All project memory you write lives under
-   `.context_ledger/memory/`.
+   `.context_ledger/memory/` — the live office in `memory/office/`, the
+   durable files (workflows, collaboration, system, user, overrides,
+   secrets) at the memory root.
 3. **Pick your instruction set by YOUR agent type**, never by what a
    previous session recorded: local IDE agent →
    `.context_ledger/core/rules/ai-engineering-protocol-local.md`; cloud/sandbox
@@ -29,18 +31,18 @@ If you read nothing else, obey these rules:
    agents never use PATs or clone this repo; cloud steps are not yours.
 4. **Read memory before working:** at minimum
    `.context_ledger/memory/workflows/active.md`,
-   `.context_ledger/memory/agents/sessions.md` (last entries),
-   `.context_ledger/memory/agents/roster.md` (the "who's in the office" board —
+   `.context_ledger/memory/office/agents/sessions.md` (last entries),
+   `.context_ledger/memory/office/agents/roster.md` (the "who's in the office" board —
    a live row you didn't write means a peer is here),
    `.context_ledger/memory/collaboration/README.md` and relevant event files
    when collaboration is enabled, `.context_ledger/memory/workflows/gates.conf`,
-   `.context_ledger/memory/tasks/current.md`, and
-   `.context_ledger/memory/inefficiencies/log.md` (known traps). If the
+   `.context_ledger/memory/office/tasks/current.md`, and
+   `.context_ledger/memory/office/inefficiencies/log.md` (known traps). If the
    active session has detailed notes at
-   `.context_ledger/memory/sessions/`, skim them for current state.
+   `.context_ledger/memory/office/sessions/`, skim them for current state.
 5. **Check in first, then choose the mode from evidence.** Every session
    (solo or collaboration) adds or updates its row in
-   `memory/agents/roster.md` — real name you pick (unique per group),
+   `memory/office/agents/roster.md` — real name you pick (unique per office),
    codename `S<NNN>`, model, one line on what you're on — and pushes it
    before product work. Roster edits are additive — your row only: a live
    row you didn't write is a colleague's check-in, not sample text — never
@@ -54,10 +56,10 @@ If you read nothing else, obey these rules:
    You
    are solo only when there is no shared
    collaboration `session` + `issue`, no live roster row you didn't
-   write, and `tasks/current.md` is idle; otherwise coordinate (join or
+   write, and `office/tasks/current.md` is idle; otherwise coordinate (join or
    declare a session, isolated worktree/branch, `note` + `claim`) — a
    peer in the office is a teammate, not a rival, and the human is your
-   supervisor: do not block teammates on `tasks/current.md`. Present
+   supervisor: do not block teammates on `office/tasks/current.md`. Present
    yourself by your name — "John (S427)", never "peer". The everyday move
    is a
    `note` (the office channel — say what you're on, flag a coworker, review a
@@ -70,9 +72,9 @@ If you read nothing else, obey these rules:
    integration, and exit run the matching gate. On Windows, use the `.cmd`
    launchers (they run the `.ps1` ports; no execution-policy setup).
 6. **Know which kind of file you're in.** *Append-only* logs
-   (`agents/sessions.md`, `plans/decisions.md`,
-   `flaws/log.md`, `inefficiencies/log.md`) grow at the bottom — never edit
-   or delete past entries. `tasks/backlog.md` is a live queue: append
+   (`office/agents/sessions.md`, `office/plans/decisions.md`,
+   `office/flaws/log.md`, `office/inefficiencies/log.md`) grow at the bottom — never edit
+   or delete past entries. `office/tasks/backlog.md` is a live queue: append
    open items, delete a line when its item is finished (the completion
    record is the session entry + commit, not a tombstone); `ledger-mem
    closeout` sweeps tombstones a session left checked off.
@@ -81,7 +83,10 @@ If you read nothing else, obey these rules:
    correct them by **editing** the entry, never by appending a duplicate
    (its old value is in git history). `ledger-mem check` flags a dup key.
    Collaboration event files are stronger still: immutable, one event per
-   file; emit a correction instead of editing one.
+   file; emit a correction instead of editing one. Office files are
+   office-scoped: when the office fills up, `ledger-history close` freezes
+   the whole directory verbatim into `history/` and the next office starts
+   from empty skeletons — open threads are re-seeded explicitly.
 7. **No secrets in tracked files, ever.** Values go only in
    `.context_ledger/memory/secrets/` (self-gitignored). Never echo a secret or
    token in chat, logs, or commit messages.
@@ -94,16 +99,16 @@ If you read nothing else, obey these rules:
    dangling pointer for anyone reading only the product repo. `ledger-mem
    lint` flags it in your staged diff.
 9. **The session is not done until everything is committed AND pushed**,
-   the session is logged in `.context_ledger/memory/agents/sessions.md`, and
-   `.context_ledger/memory/tasks/current.md` is cleared. Clock out too: remove
-   your row from `.context_ledger/memory/agents/roster.md` in the closing
+   the session is logged in `.context_ledger/memory/office/agents/sessions.md`, and
+   `.context_ledger/memory/office/tasks/current.md` is cleared. Clock out too: remove
+   your row from `.context_ledger/memory/office/agents/roster.md` in the closing
    memory commit, so the board shows who is in the office now — but only
    when you are actually leaving. The session is not over until the user
    says so; if you clocked out and the supervisor brings more work, check
    back in first (re-add your row, same name and codename `S<N>`) and
    extend your existing `sessions.md` entry — never a second `Session N`.
    If the user has to remind you to commit or push, that is a protocol
-   failure — log it in `.context_ledger/memory/flaws/log.md`.
+   failure — log it in `.context_ledger/memory/office/flaws/log.md`.
 10. **Don't ask permission for the default next step.** Do it and
     report. Ask only on genuine ambiguity or destructive/irreversible
     actions.
@@ -111,155 +116,3 @@ If you read nothing else, obey these rules:
 Formats and file rules: `.context_ledger/core/schemas/ledger-schema.md` is
 the single source of truth. Project-specific rule adjustments:
 `.context_ledger/memory/overrides/rules.md` (they win over the edition).
-## LocalMind architectural target (added 2026-07-26, Session 12)
-
-Agent-mode is aligned to the **CODING HARNESS closed-loop** model
-(Context → 5-step Agent Loop → Tools, with a Workspace feedback bar
-that pipes git/diff/test output back into context every turn). See
-**ADR-5** in `.context_ledger/memory/plans/decisions.md` for the foundational
-diagram-to-module mapping. ADR-8 is now the standing implementation
-target; it builds on ADR-5 without replacing the closed-loop model.
-Do not relitigate the closed-loop model — implement the current ADR-8
-target in `workflows/active.md`.
-
-## Feature-scoped memory (added 2026-07-26, Session 13)
-
-Multi-session work is tracked under
-`.context_ledger/memory/features/<slug>/manifest.md` — read the active one
-(named in `tasks/current.md`'s `Feature:` line) before starting; update
-it before you stop. The `features/ledger.md` file is append-only and
-permanent (one line per feature ever); the per-feature directory is
-working state that may be archived to `features/archive/` once the
-ledger line records the merge sha or abandonment reason. Single-session
-work uses `Feature: none` and skips the feature directory entirely.
-This is a project-level preview ahead of core 0.5.0 (feature-scoped memory is not yet part of the vendored core);
-see `memory/overrides/rules.md` for the full opt-in.
-
-## Silent-failure fallback contract (added 2026-07-27, Session 31)
-
-The agent loop's contract with the engine is: **always yield text on
-the silent-failure path**. When the model returns an empty stream (or
-all chunks are filtered out as system-leak XML — common with free-tier
-models), the loop MUST yield a meaningful fallback that surfaces what
-tools actually ran, NOT silently return nothing. The engine's
-last-resort fallback (when the loop yields zero text) is intent-aware
-and suggests concrete next steps (switch model, one step at a time,
-re-run) — it MUST NOT say "rephrase your request" because the user's
-phrasing is almost never the cause (real cause: free-tier model
-overload or context window overflow).
-
-If you add a new code path where the model's text might be empty after
-tool execution, wire it through `AgentLoop._summarize_trace_for_user()`
-so the user sees what tools ran. Regression tests live in
-`tests/e2e/test_tool_execution_failure.py`.
-
-## Adapter provider quirks (added 2026-07-27, Session 31 addendum)
-
-The OpenAI-compat adapter (`backend/src/adapters/openai_compat.py`)
-has two provider-specific quirks that were the ACTUAL root cause of the
-"Tools execution failure" bug (not model overload — that was a wrong
-guess). If you touch the adapter, know these:
-
-1. **Trailing `tool` role → 400 on some providers.** DeepSeek-v4-flash-free
-   (via Zen) and possibly other providers reject requests where the last
-   message is a `tool` role. The agent loop sends this format after every
-   tool execution. Fix: `chat_with_tools` appends a synthetic `user`
-   message when the last message is `tool` role. This is general (applies
-   to all providers) — do not remove it unless you've verified the
-   provider accepts tool-terminated messages.
-
-2. **Phase 1 detection must wait for content, not just reasoning.** Some
-   models (DeepSeek-v4-flash-free) produce 80+ reasoning chunks before
-   the tool_call delta arrives. Phase 1 breaks at `chunks_read >= 15` —
-   but ONLY if it has seen actual `content` (not just reasoning).
-   Reasoning-only streams keep reading until content or tool_calls
-   arrives (hard cap: 500 chunks). If you change the Phase 1 break
-   condition, test against a model that produces long reasoning streams
-   before tool calls — otherwise you'll reintroduce the silent-drop bug.
-
-Regression tests: `tests/adapters/test_zen_deepseek_fixes.py`. The
-real-model test scripts that found these bugs are in
-`/home/z/my-project/scripts/` (not committed — they contain API key
-references in comments, but no actual keys).
-
-## Iteration limit + check-before-acting contract (added 2026-07-27, Session 32)
-
-Two contracts from Session 32, both critical — removing either
-reintroduces the "Tools execution failure" bug:
-
-1. **Iteration limit must be >= 8 and configurable.** The Session 31 cap
-   of 3 was too low — the model did 3 reconnaissance calls (checking
-   state before acting, exactly what we want) and hit the cap before the
-   actual work. `MAX_ITERATIONS` defaults to 8 (configurable via
-   `LOCALMIND_MAX_ITERATIONS` env var); `MAX_WALL_CLOCK_SECS` defaults to
-   180s (configurable via `LOCALMIND_MAX_WALL_CLOCK_SECS`). Do NOT lower
-   these defaults below 8 / 180s without a concrete reason — multi-step
-   tasks (recon + work + verify) need the room. The wall-clock cap is the
-   real safety net against a spinning model, not the iteration cap.
-
-2. **Fallback messages must name the ACTUAL budget when `trace.hit_limit`
-   is True** (amended Session 420, 2026-09-05). Sessions 21-31 kept
-   guessing "overload" / "context overflow" / "tool output too large"
-   when the actual cause was a cap — the misdiagnosis was worse than no
-   diagnosis. Session 420 extended this: a wall-clock break is NOT an
-   iteration-cap break, and a repetition stop is neither. `trace.limit_kind`
-   (iteration_cap / wall_clock / repetition / hard_ceiling) records which
-   budget fired; `_summarize_trace_for_user()`, `classify_failure()`, and
-   the agent_runtime empty-response fallback MUST name the actual kind and
-   give the matching remedy (steps → "tell me to continue"; time →
-   smaller turns; repetition → rephrase with specifics) — never "switch
-   to a larger model". **And: a capped turn whose forced synthesis
-   delivered a real answer is NOT a failure** — `classify_failure()`
-   returns "" when `trace.final_response` is a real answer (the
-   "find my CV" transcript showed "✗ Agent loop failed" above a complete
-   answer). `_force_final_answer` sets `final_response` only on a real
-   model synthesis, never on the deterministic fallbacks — keep it that
-   way or failure memory will remember rescued turns as failures. The
-   identical-call stop (`identical_call_streak`, cap 3) hard-stops
-   same-tool+same-args loops the soft same-tool nudge can't catch.
-   Regression tests: `tests/e2e/test_identical_call_stop.py`.
-
-3. **"Check before acting" is a universal workflow constraint.**
-   `backend/data/workflows/safety.md` defines the rule: every tool
-   invocation that creates, writes, modifies, or deletes something MUST
-   first check whether the target already exists or has content, and
-   adapt the plan based on what's found — never act on an assumed state.
-   This is injected into the agent system prompt for ALL agent intents via
-   `build_agent_system_prompt()`. If you add a new tool, the safety
-   workflow already covers it (it's universal). If you remove the
-   injection, the model will go back to running `mkdir` before checking
-   if the dir exists, and barreling into non-empty unrelated directories.
-
-Regression tests: `tests/e2e/test_iteration_limit_and_safety.py`.
-
-## LocalMind architectural target — ADR-8 (historical; current scope amended by ADR-53)
-
-ADR-8 remains a historical record of the earlier agent-centric proposal
-(tasks → agents → tools) and its relationship to the CODING HARNESS closed
-loop. It is **not the active implementation target now**. The user's Session
-303 decision in ADR-53 is authoritative: LocalMind is Parent-only, with one
-active Parent and no child-agent, specialist, delegation, parallel-delegation,
-or inheritance work in scope.
-
-The closed-loop shape and the Session 31-33 safety contracts remain active and
-must not be regressed: iteration cap, hit-limit-aware fallback,
-check-before-acting safety workflow, and `_obs.all()` rather than `drain()` in
-the engine. The old ADR-8 feature directory is retained as historical memory,
-not an instruction to start multi-agent phases.
-
-**Historical feature directory:**
-`.context_ledger/memory/features/adr-8-agent-centric-routing/` (read it only when
-reviewing that historical decision; do not start its multi-agent phases).
-
-## Parent-only scope amendment (added 2026-08-20, Session 303)
-
-The user's current architectural decision is authoritative: **LocalMind is
-Parent-only right now.** The Parent is the sole active agent and owns the
-kernel, session, turn context, tools, planning, execution, verification,
-recovery, and final answer. Do not add, route through, extend, or design around
-child agents, specialist agents, delegation, parallel delegation, or agent
-inheritance. Existing multi-agent code is parked/legacy compatibility surface,
-not the current architecture. This amendment supersedes ADR-8's agent-centric
-implementation target and ADR-48's accept-and-harden scope for active work;
-the historical records remain unchanged. See ADR-53 in
-`.context_ledger/memory/plans/decisions.md`.
