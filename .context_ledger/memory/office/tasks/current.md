@@ -1,31 +1,36 @@
 # Current Task
 
-**Status:** IDLE — **Session 467 (Asha / qwen3.8-flash, ZCode local, Windows)
-COMPLETE (2026-09-11), in two bursts: context sync + core 1.0.0 adoption.**
+**Status:** IDLE — **Session 468 (Amir / glm-5.3-flash, ZCode local, Windows)
+COMPLETE (2026-09-11): protocol sync to core 1.0.2 + two gate findings.**
 
-**Burst 2 — core 1.0.0 (MAJOR, owner go-ahead):** `ledger-sync.cmd update
--Major` ran clean (rc=0): core replaced 0.22.0→1.0.0, the office migration
-grouped the flat memory layout into `memory/office/` (durable files stayed at
-the memory root; `agents/GROUP` retired; `group_size`→`office_size`; missing
-office dirs backfilled). Three commits: core `fbe59fa2`, regroup `ddc9843b`
-(owner's prescribed message), entry-point refresh `58690ba0` (AGENTS.md /
-CLAUDE.md / kickoff.md regenerated from the new templates, facts refilled,
-placeholder scan clean; `active.md` version line bumped). `ledger-sync
-verify` OK on 1.0.0; `ledger-mem check` OK on the office paths.
+**Sync:** main == origin at start; `ledger-sync.cmd verify` OK on 1.0.0;
+`status` → 1.0.2 at the local package clone (same MAJOR) → `update` clean
+(no migration step; templates unchanged, entry points left as S467
+regenerated them). Commits: core `5ef36cb5`, dup-check path fix `5d959367`,
+bookkeeping `b0e139d0`. The 1.0.2 `Write-Lock` fix ends the S458/S467
+`core.lock` em-dash churn (one-time header upgrade `--`→`—`, then stable);
+`verify` now also parse-checks every port.
 
-**Carried finding:** the gate-teeth flaw (Windows `ledger-gates` prints
-`GATE PASSED` + rc=0 after a configured command's `FAILED (1)` line when the
-command writes to stdout) was RE-VERIFIED against 1.0.0 and is STILL OPEN —
-the 1.0.0 rewrite applied the script-scoped-exit pattern only to
-`Invoke-ChildScript` call sites, not to `Run-One`/`Run-ProjectCommands`.
-**Until fixed upstream: read gate stdout for `FAILED (N)` lines; never trust
-the exit code on Windows.**
+**Finding 1 (still open):** the S467 gate-teeth flaw SURVIVES 1.0.2 — the
+1.0.1 fix closed the piped-consumer case (dual exit-code/`$?` signal +
+pipeline-text vetting) but `Run-One` still lets a configured command's
+stdout ride its return pipeline, so a stdout-emitting failing command still
+yields `FAILED (N)` … then `GATE PASSED` + rc=0 (real demonstration: this
+session's first pre-commit on the dup-check line; probe evidence in the
+flaws log). **Until fixed upstream: read gate stdout for `FAILED (N)` lines;
+never trust the exit code on Windows.**
 
-**Next up:** B-2026-09-10-4 (date bombs — sole exit-gate red; its fix should
-ride along with an upstream gate fix), B-2026-09-11-1 (usage → SSE `done`),
+**Finding 2 (fixed this session):** `gates.conf`'s backlog-dup line still
+pointed at the dead pre-migration path `memory/tasks/backlog.md` — silently
+red (file-not-found) on every commit since the 1.0.0 adoption, invisible
+because of Finding 1. Re-pointed to `memory/office/tasks/backlog.md`
+(`5d959367`), green (no conflicting-status duplicates).
+
+**Next up:** the upstream gate fix (capture/re-emit child stdout in
+`Run-One` + a verdict-asserting regression) — B-2026-09-10-4 (date bombs,
+sole exit-gate red) rides along; B-2026-09-11-1 (usage → SSE `done`);
 owner calls on thinking-exposure policy + B-2026-09-10-8 (`grep_search`
-expose-or-retire), B-2026-09-10-5/6, OTT reruns, B-2026-09-11-2
-(design-first), the legacy Session-double-entry WARNs (S405/S421/S431/S439/
-S442 — owner call), and the first `ledger-history close` under the new
-office lifecycle (office_size=20 will be crossed soon — the nudge is
-warn-only).
+expose-or-retire); B-2026-09-10-5/6; OTT reruns; B-2026-09-11-2
+(design-first); legacy Session-double-entry WARNs (owner call); and the
+first `ledger-history close` under the office lifecycle (the office-full
+nudge is now firing: 440/20 — warn-only, owner call).
