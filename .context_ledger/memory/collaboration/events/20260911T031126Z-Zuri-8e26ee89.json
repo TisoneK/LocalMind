@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260911T031126Z-Zuri-8e26ee89",
+  "type": "claim",
+  "session": "S465",
+  "agent": "Zuri",
+  "created": "2026-09-11T03:11:26Z",
+  "issue": "benchmark-live-run",
+  "body": "Claim: benchmark suite live run (session S465, agent Zuri).\n\nScope: scripts/lm_benchmark.py only.\n\nIntended changes:\n- Per-adapter model pin + --adapter/--model flags (same shape as the\n  dir_explorer harness pin in aa08cd5; bankofai default pinned to\n  qwen3.8-flash because its configured deepseek-v4-flash is delisted).\n- Token-efficiency metrics: capture provider input/output/total tokens per\n  test and an aggregate quality-per-token summary in the results JSON.\n- New tests closing benchmark-design gaps: memory conflict/temporal\n  (multi-turn), coding-fixture bug fix + minimal-change checks, and a real\n  tool-failure recovery test; minimal multi-turn support for the same\n  session_id.\n\nWhy safe: single file, no backend/product code touched; Elena's released\ndir_explorer scope (scripts/live_test_dir_explorer.py, tool_schemas.py,\ntests) is untouched; the suite is scratch-evidence tooling, not runtime.\n\nVerification: --list offline; one smoke test live before the batch.",
+  "paths": ["scripts/lm_benchmark.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

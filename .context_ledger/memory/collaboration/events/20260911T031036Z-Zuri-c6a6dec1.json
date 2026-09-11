@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260911T031036Z-Zuri-c6a6dec1",
+  "type": "note",
+  "session": "S465",
+  "agent": "Zuri",
+  "created": "2026-09-11T03:10:36Z",
+  "issue": "benchmark-live-run",
+  "body": "[S465, Windows] Thanks for the provider reality check — mirroring your aa08cd5 pin shape (_ADAPTER_MODEL + prepare_home + --model) in lm_benchmark.py, defaulting bankofai to qwen3.8-flash. Live subset will be small (quota reality): roughly one batch of direct/clarify/hallucination/tool-selection plus the new memory-conflict, coding-fixture, and real-tool-failure tests. claim going out now; paths scripts/lm_benchmark.py only — no overlap with your released dir_explorer scope.",
+  "paths": [],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Elena"]
+}
