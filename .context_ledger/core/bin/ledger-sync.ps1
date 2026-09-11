@@ -75,7 +75,7 @@ function Core-Version { # $dir -> version string
   param([string]$dir)
   $vf = Join-Path $dir 'VERSION'
   if (-not (Test-Path -LiteralPath $vf)) { return '0.0.0' }
-  $line = (Get-Content -LiteralPath $vf -TotalCount 1)
+  $line = (Get-Content -Encoding UTF8 -LiteralPath $vf -TotalCount 1)
   if ($null -eq $line) { return '0.0.0' }
   return ($line -replace '\s', '')
 }
@@ -175,7 +175,7 @@ function Verify-Tree {
     Err "no MANIFEST.sha256 in $dir"; return $false
   }
   $problems = @()
-  foreach ($line in Get-Content -LiteralPath $manifest) {
+  foreach ($line in Get-Content -Encoding UTF8 -LiteralPath $manifest) {
     $entry = Parse-Manifest-Line $line
     if (-not $entry) { continue }
     $file = Join-Path $dir ($entry.Path.Replace('/', [IO.Path]::DirectorySeparatorChar))
@@ -197,20 +197,26 @@ function Write-Lock { # $version
     New-Item -ItemType Directory -Path $MEMORY_DIR -Force | Out-Null
   }
   $today = Get-Date -Format 'yyyy-MM-dd'
+  # The em-dash matches the sh port byte-for-byte. Two traps here: PS 5.1
+  # writes ANSI via Set-Content, AND it *parses* BOM-less .ps1 source as
+  # cp1252 -- so the em-dash must come from a code point, never a literal in
+  # this file (ps1 string literals stay pure ASCII). WriteAllText keeps UTF-8
+  # without a BOM.
+  $em = [string][char]0x2014
   $body = @(
-    '# written by ledger-sync -- the last-known-good core version.'
+    "# written by ledger-sync $em the last-known-good core version."
     '# Do not edit by hand. If core fails verify, `ledger-sync rollback`'
     '# restores the version recorded here from git history.'
     "version=$version"
     "verified=$today"
   ) -join "`n"
-  Set-Content -LiteralPath (Join-Path $MEMORY_DIR 'core.lock') -Value ($body + "`n") -NoNewline
+  [IO.File]::WriteAllText((Join-Path $MEMORY_DIR 'core.lock'), $body + "`n", (New-Object System.Text.UTF8Encoding $false))
 }
 
 function Lock-Version {
   $lf = Join-Path $MEMORY_DIR 'core.lock'
   if (-not (Test-Path -LiteralPath $lf)) { return '' }
-  foreach ($line in Get-Content -LiteralPath $lf) {
+  foreach ($line in Get-Content -Encoding UTF8 -LiteralPath $lf) {
     if ($line -match '^version=(.*)$') { return $matches[1] }
   }
   return ''
@@ -251,18 +257,51 @@ function Cmd-Status {
   }
 }
 
+# Port parse check (core 1.0.1): hashing catches a corrupted file, not a port
+# that shipped unable to run. This edition ParseFiles every ps1 port natively
+# and, when a POSIX sh is on PATH (Git Bash on Windows), `sh -n`s every sh
+# port; the sh edition is the mirror image (its ps1 half is skipped where no
+# PowerShell engine exists). Returns $true clean, $false broken.
+function Parse-Ports { param([string]$dir)
+  $bad = $false
+  foreach ($f in (Get-ChildItem -LiteralPath (Join-Path $dir 'bin') -Filter 'ledger-*.ps1' -File)) {
+    $tok = $null; $errs = $null
+    [void][System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$tok, [ref]$errs)
+    if ($errs -and $errs.Count -gt 0) {
+      foreach ($e in $errs) { Err ("{0}: {1}" -f $f.Name, $e.Message) }
+      $bad = $true
+    }
+  }
+  if (Get-Command sh -ErrorAction SilentlyContinue) {
+    foreach ($f in (Get-ChildItem -LiteralPath (Join-Path $dir 'bin') -File)) {
+      if ($f.Name -like '*.ps1' -or $f.Name -like '*.cmd') { continue }
+      $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+      try { $out = @(& sh -n $f.FullName 2>&1); $code = $LASTEXITCODE }
+      finally { $ErrorActionPreference = $eap }
+      if ($code -ne 0) { Err ("sh parse: {0}: {1}" -f $f.Name, ($out -join ' ')); $bad = $true }
+    }
+  }
+  return (-not $bad)
+}
+
 function Cmd-Verify {
   param([string]$target)
   if (-not $target) { $target = $CORE_DIR }
-  if (Verify-Tree $target) {
-    Say "core OK: every file matches MANIFEST.sha256 ($(Core-Version $target))"
-    if ($target -eq $CORE_DIR) { Write-Lock (Core-Version $target) }
-    exit 0
+  if (-not (Verify-Tree $target)) {
+    Err 'CORE INTEGRITY FAILURE -- core/ does not match its manifest.'
+    Err 'Do not ''fix'' core in place. Run: ledger-sync rollback'
+    Err 'Then log the incident in memory/flaws/log.md and continue.'
+    exit 3
   }
-  Err 'CORE INTEGRITY FAILURE -- core/ does not match its manifest.'
-  Err 'Do not ''fix'' core in place. Run: ledger-sync rollback'
-  Err 'Then log the incident in memory/flaws/log.md and continue.'
-  exit 3
+  if (-not (Parse-Ports $target)) {
+    Err 'PORT PARSE FAILURE -- a script in core/bin cannot be parsed.'
+    Err 'If this core just arrived from a release: ledger-sync rollback <previous-version>, and report it upstream.'
+    Err 'Do not ''fix'' core in place.'
+    exit 3
+  }
+  Say "core OK: every file matches MANIFEST.sha256 and every port parses ($(Core-Version $target))"
+  if ($target -eq $CORE_DIR) { Write-Lock (Core-Version $target) }
+  exit 0
 }
 
 # One-time layout migration (core 1.0.0): group a legacy flat memory layout
@@ -287,7 +326,7 @@ function Migrate-OfficeLayout {
   if (Test-Path -LiteralPath $grp) { Remove-Item -LiteralPath $grp -Force }  # counter retired: office numbers are derived at close
   $hc = Join-Path $MEMORY_DIR 'workflows/history.conf'
   if ((Test-Path -LiteralPath $hc) -and (Select-String -LiteralPath $hc -Pattern '^group_size=' -Quiet)) {
-    $lines = Get-Content -LiteralPath $hc | ForEach-Object { $_ -replace '^group_size=', 'office_size=' }
+    $lines = Get-Content -Encoding UTF8 -LiteralPath $hc | ForEach-Object { $_ -replace '^group_size=', 'office_size=' }
     [IO.File]::WriteAllText($hc, ($lines -join "`n") + "`n", (New-Object System.Text.UTF8Encoding $false))
   }
   Say 'office migration: done -- the old layout is now the live office.'
@@ -438,8 +477,10 @@ function Cmd-Rename {
   foreach ($f in @('.context_ledger/README.md', '.context_ledger/kickoff.md', '.context_ledger/.gitattributes', 'AGENTS.md', 'CLAUDE.md')) {
     $p = Join-Path $PROJECT_DIR $f
     if (Test-Path -LiteralPath $p -PathType Leaf) {
-      $t = Get-Content -LiteralPath $p -Raw
-      Set-Content -LiteralPath $p -Value ($t -replace '\.context/', '.context_ledger/' -replace '\.context\b', '.context_ledger') -NoNewline
+      $t = Get-Content -Encoding UTF8 -LiteralPath $p -Raw
+      # WriteAllText UTF-8 without a BOM — Set-Content writes ANSI on
+      # Windows PowerShell 5.1 and would mangle every em-dash in these files.
+      [IO.File]::WriteAllText($p, ($t -replace '\.context/', '.context_ledger/' -replace '\.context\b', '.context_ledger'), (New-Object System.Text.UTF8Encoding $false))
     }
   }
   Get-ChildItem -LiteralPath $CORE_DIR -Recurse -File | ForEach-Object { Convert-ToLf $_.FullName }
@@ -501,7 +542,7 @@ switch ($Command) {
   }
   { $_ -in '', $null, '-h', '--help', 'help' } {
     # print the command-doc comment (lines 13..31) as help, stripping '# '
-    $self = Get-Content -LiteralPath $PSCommandPath
+    $self = Get-Content -Encoding UTF8 -LiteralPath $PSCommandPath
     $self[12..33] | ForEach-Object { Say ($_ -replace '^# ?', '') }
     exit 2
   }

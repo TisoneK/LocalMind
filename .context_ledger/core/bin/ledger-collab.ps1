@@ -122,7 +122,7 @@ function Get-JsonField { param([IO.FileInfo]$File, [string]$Name)
 function Get-Field { param([IO.FileInfo]$File, [string]$Name)
   if (Test-JsonFile $File) { return Get-JsonField $File $Name }
   $pattern = "^${Name}: (.*)$"
-  $line = Get-Content -LiteralPath $File.FullName | Where-Object { $_ -match $pattern } | Select-Object -First 1
+  $line = Get-Content -Encoding UTF8 -LiteralPath $File.FullName | Where-Object { $_ -match $pattern } | Select-Object -First 1
   if ($null -eq $line) { return '' } else { return (($line -replace $pattern, '$1').TrimEnd("`r")) }
 }
 # First non-empty body line, for the chatter feed.
@@ -134,7 +134,7 @@ function Get-FirstBodyLine { param([IO.FileInfo]$File)
     return ''
   }
   $dashes = 0
-  foreach ($raw in Get-Content -LiteralPath $File.FullName) {
+  foreach ($raw in Get-Content -Encoding UTF8 -LiteralPath $File.FullName) {
     $ln = $raw.TrimEnd("`r")
     if ($ln -eq '---') { $dashes++; continue }
     if ($dashes -ge 2 -and $ln.Trim() -ne '') { return $ln }
@@ -162,7 +162,7 @@ function Emit { param([string]$EventType, [string[]]$EventArgs)
   if ($o.bodyFile -and $o.body) { Die 'use either --body or --body-file, not both' }
   if ($o.bodyFile) {
     if (-not (Test-Path -LiteralPath $o.bodyFile -PathType Leaf)) { Die "body file not found: $($o.bodyFile)" }
-    $body = Get-Content -LiteralPath $o.bodyFile -Raw
+    $body = Get-Content -Encoding UTF8 -LiteralPath $o.bodyFile -Raw
   } elseif ($o.body) { $body = $o.body }
   elseif ($EventType -eq 'claim') { $body = 'Intent and evidence: describe the intended change and why this scope is safe.' }
   elseif ($EventType -eq 'note') { Die 'note requires --body or --body-file -- say what you want your peers to know' }

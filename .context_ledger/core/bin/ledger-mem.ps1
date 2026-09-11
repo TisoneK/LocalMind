@@ -56,7 +56,7 @@ function Check-AiModels {
   $f = Join-Path $memoryDir 'system/ai-models.md'
   if (-not (Test-Path -LiteralPath $f)) { return $true }
   $seen = @{}; $where = @{}; $ln = 0
-  foreach ($raw in Get-Content -LiteralPath $f) {
+  foreach ($raw in Get-Content -Encoding UTF8 -LiteralPath $f) {
     $ln++
     $line = $raw.TrimEnd("`r")
     if ($line -notmatch '^\s*\|') { continue }
@@ -85,7 +85,7 @@ function Check-Environments {
   $f = Join-Path $memoryDir 'system/environments.md'
   if (-not (Test-Path -LiteralPath $f)) { return $true }
   $seen = @{}; $where = @{}; $ln = 0
-  foreach ($raw in Get-Content -LiteralPath $f) {
+  foreach ($raw in Get-Content -Encoding UTF8 -LiteralPath $f) {
     $ln++
     $line = $raw.TrimEnd("`r")
     if ($line -notmatch '^\s*-\s*\*\*Identify by:\*\*') { continue }
@@ -108,7 +108,7 @@ function Check-Roster {
   $f = Join-Path $officeDir 'agents/roster.md'
   if (-not (Test-Path -LiteralPath $f)) { return $true }
   $nseen = @{}; $nwhere = @{}; $cseen = @{}; $cwhere = @{}; $ln = 0
-  foreach ($raw in Get-Content -LiteralPath $f) {
+  foreach ($raw in Get-Content -Encoding UTF8 -LiteralPath $f) {
     $ln++
     $line = $raw.TrimEnd("`r")
     if ($line -notmatch '^\s*\|') { continue }
@@ -133,7 +133,7 @@ function Check-RosterStale {
   $s = Join-Path $officeDir 'agents/sessions.md'
   if (-not (Test-Path -LiteralPath $r) -or -not (Test-Path -LiteralPath $s)) { return }
   $nums = @()
-  foreach ($raw in Get-Content -LiteralPath $r) {
+  foreach ($raw in Get-Content -Encoding UTF8 -LiteralPath $r) {
     $line = $raw.TrimEnd("`r")
     if ($line -notmatch '^\s*\|') { continue }
     $cells = $line.Split('|')
@@ -142,7 +142,7 @@ function Check-RosterStale {
     if ($code -match '^[Ss]([0-9]+)$') { $nums += $Matches[1] }
   }
   if ($nums.Count -eq 0) { return }
-  $heads = @(Get-Content -LiteralPath $s | Where-Object { $_ -match '^## ' })
+  $heads = @(Get-Content -Encoding UTF8 -LiteralPath $s | Where-Object { $_ -match '^## ' })
   foreach ($num in ($nums | Sort-Object -Unique)) {
     foreach ($h in $heads) {
       if ($h -match ("Session {0}([^0-9]|`$)" -f $num)) {
@@ -161,7 +161,7 @@ function Check-DupSessions {
   if (-not (Test-Path -LiteralPath $s)) { return }
   $seen = @{}; $where = @{}
   $ln = 0
-  foreach ($raw in Get-Content -LiteralPath $s) {
+  foreach ($raw in Get-Content -Encoding UTF8 -LiteralPath $s) {
     $ln++
     $line = $raw.TrimEnd("`r")
     if ($line -match '^##\s+.*[Ss]ession\s+([0-9]+)') {
@@ -183,7 +183,7 @@ function Check-BacklogTombstones {
   # Warns only; the sweep is `ledger-mem closeout`.
   $f = Join-Path $officeDir 'tasks/backlog.md'
   if (-not (Test-Path -LiteralPath $f)) { return }
-  $n = @(Get-Content -LiteralPath $f | Where-Object { $_ -match '^\s*[-*+]\s+\[[xX]\]' }).Count
+  $n = @(Get-Content -Encoding UTF8 -LiteralPath $f | Where-Object { $_ -match '^\s*[-*+]\s+\[[xX]\]' }).Count
   if ($n -gt 0) {
     Say ('WARN backlog.md: {0} finished item(s) still sit checked off (- [x]) - the backlog holds open work only; run ledger-mem closeout to sweep them (git history keeps the lines)' -f $n)
   }
@@ -218,7 +218,7 @@ function Invoke-Closeout {
   $utf8 = New-Object System.Text.UTF8Encoding($false)
   [IO.File]::WriteAllText($f, $keep -join $eol, $utf8)
   Say ('backlog closeout: deleted {0} finished item(s) from tasks/backlog.md (git history keeps them).' -f $tomb.Count)
-  $open = @(Get-Content -LiteralPath $f | Where-Object { $_ -match '^\s*[-*+]\s+\[ \]' }).Count
+  $open = @(Get-Content -Encoding UTF8 -LiteralPath $f | Where-Object { $_ -match '^\s*[-*+]\s+\[ \]' }).Count
   Say ('backlog now holds {0} open item(s).' -f $open)
   Say 'Commit as: chore(ledger): close out finished backlog items'
 }
@@ -255,7 +255,7 @@ function Invoke-Prune {
     $f = Join-Path $officeDir $rel
     if (-not (Test-Path -LiteralPath $f)) { continue }
     $total = 0; $lines = 0; $inseg = $false; $closed = $false; $heading = ''; $cand = @()
-    foreach ($raw in Get-Content -LiteralPath $f) {
+    foreach ($raw in Get-Content -Encoding UTF8 -LiteralPath $f) {
       $lines++
       $line = $raw.TrimEnd("`r")
       if ($line -match '^## ') {

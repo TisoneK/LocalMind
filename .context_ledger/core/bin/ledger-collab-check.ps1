@@ -52,7 +52,7 @@ function Get-Fields { param([IO.FileInfo]$File)
     }
   } else {
     $dashes = 0
-    foreach ($raw in Get-Content -LiteralPath $File.FullName) {
+    foreach ($raw in Get-Content -Encoding UTF8 -LiteralPath $File.FullName) {
       $ln = $raw.TrimEnd("`r")
       if ($ln -eq '---') { $dashes++; if ($dashes -ge 2) { break }; continue }
       if ($dashes -eq 1 -and $ln -match '^([a-z]+): (.*)$') { $h[$matches[1]] = $matches[2] }

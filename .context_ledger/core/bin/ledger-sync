@@ -219,12 +219,61 @@ cmd_status() {
   fi
 }
 
+# Port parse check (core 1.0.1): hashing catches a corrupted file, not a port
+# that shipped unable to run. Each edition verifies what its host can run:
+# this one `sh -n`s every sh port in bin/ and, when a PowerShell engine is on
+# PATH (always on Windows; pwsh on POSIX), runs Parser::ParseFile over every
+# ps1 port. Without a PS engine the ps1 half is skipped -- the manifest plus a
+# PS-hosted verify still cover it. Returns 0 clean, 3 broken.
+parse_ports() { # $1 = a core dir
+  _rc=0
+  for _f in "$1"/bin/*; do
+    [ -f "$_f" ] || continue
+    case $_f in
+      *.ps1) continue ;;  # handled below, batched per engine
+      *.cmd) continue ;;
+      *)
+        _e=$(sh -n "$_f" 2>&1) || { err "sh parse: $_f: $_e"; _rc=3; }
+        ;;
+    esac
+  done
+  _ps=$(command -v powershell || command -v pwsh) || _ps=""
+  if [ -z "$_ps" ]; then
+    say "ps1 parse check skipped — no PowerShell engine on PATH (the manifest + a PS-hosted verify still cover the ps1 ports)"
+    return "$_rc"
+  fi
+  _list=""
+  for _f in "$1"/bin/*.ps1; do
+    [ -e "$_f" ] || continue
+    if command -v cygpath >/dev/null 2>&1; then _w=$(cygpath -w "$_f"); else _w=$_f; fi
+    _list="${_list:+$_list;}$_w"
+  done
+  if [ -n "$_list" ] && ! LEDGER_PARSE_FILES="$_list" "$_ps" -NoProfile -ExecutionPolicy Bypass -Command '
+    $bad = 0
+    foreach ($f in $env:LEDGER_PARSE_FILES -split ";") {
+      $tok = $null; $errs = $null
+      [void][System.Management.Automation.Language.Parser]::ParseFile($f, [ref]$tok, [ref]$errs)
+      if ($errs -and $errs.Count -gt 0) { foreach ($e in $errs) { [Console]::Error.WriteLine($f + ": " + $e.Message) }; $bad = 1 }
+    }
+    exit $bad'; then
+    err "ps1 parse: a port cannot be parsed by the engine above"
+    _rc=3
+  fi
+  return "$_rc"
+}
+
 cmd_verify() {
   TARGET=${1:-$CORE_DIR}
   if verify_tree "$TARGET"; then
-    say "core OK: every file matches MANIFEST.sha256 ($(core_version "$TARGET"))"
-    [ "$TARGET" = "$CORE_DIR" ] && write_lock "$(core_version "$TARGET")"
-    return 0
+    if parse_ports "$TARGET"; then
+      say "core OK: every file matches MANIFEST.sha256 and every port parses ($(core_version "$TARGET"))"
+      [ "$TARGET" = "$CORE_DIR" ] && write_lock "$(core_version "$TARGET")"
+      return 0
+    fi
+    err "PORT PARSE FAILURE — a script in core/bin cannot be parsed."
+    err "If this core just arrived from a release: ledger-sync rollback <previous-version>, and report it upstream."
+    err "Do not 'fix' core in place."
+    return 3
   fi
   err "CORE INTEGRITY FAILURE — core/ does not match its manifest."
   err "Do not 'fix' core in place. Run: ledger-sync rollback"

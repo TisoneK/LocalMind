@@ -61,7 +61,7 @@ function Usage {
 
 function Get-Conf { param([string]$Key, [int]$Default)
   if (Test-Path -LiteralPath $configFile) {
-    foreach ($raw in Get-Content -LiteralPath $configFile) {
+    foreach ($raw in Get-Content -Encoding UTF8 -LiteralPath $configFile) {
       $line = $raw.TrimEnd("`r")
       if ($line -match "^$Key=(\d+)\s*$") { return [int]$matches[1] }
     }
@@ -74,7 +74,7 @@ function Get-OfficeSize { Get-Conf 'office_size' (Get-Conf 'group_size' 20) }
 function Get-SessionCount {
   if (-not (Test-Path -LiteralPath $sessionsMd)) { return 0 }
   $n = 0
-  foreach ($raw in Get-Content -LiteralPath $sessionsMd) {
+  foreach ($raw in Get-Content -Encoding UTF8 -LiteralPath $sessionsMd) {
     if ($raw -match '^## \d{4}-\d{2}-\d{2}.*Session ') { $n++ }
   }
   return $n
@@ -82,7 +82,7 @@ function Get-SessionCount {
 
 function Get-OfficeOpened {
   if (-not (Test-Path -LiteralPath $sessionsMd)) { return '' }
-  foreach ($raw in Get-Content -LiteralPath $sessionsMd) {
+  foreach ($raw in Get-Content -Encoding UTF8 -LiteralPath $sessionsMd) {
     if ($raw -match '^## (\d{4}-\d{2}-\d{2})') { return $matches[1] }
   }
   return ''

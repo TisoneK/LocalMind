@@ -43,11 +43,72 @@ valid_id() {
   return 0
 }
 
+# A POSIX pipeline reports only its last stage's status, so a gated
+# `failing-cmd | tee out.txt` used to clear a red gate (tee = 0). When a shell
+# with `set -o pipefail` is available, gated commands run under it and every
+# pipeline stage's failure fails the gate; on a shell without pipefail, a
+# gated command containing a top-level pipeline is unverifiable and is
+# rejected instead of silently passing. Probed once, through the same child
+# form run_one will use.
+PIPEFAIL_RUNNER=""
+if sh -c 'set -o pipefail' >/dev/null 2>&1; then
+  PIPEFAIL_RUNNER=self
+elif command -v bash >/dev/null 2>&1 && bash -c 'set -o pipefail' >/dev/null 2>&1; then
+  PIPEFAIL_RUNNER=$(command -v bash)
+fi
+
+# True when the command text contains a top-level pipeline operator: a `|`
+# outside quotes that is not part of a `||` pair. Quote- and escape-aware;
+# conservative (a `|` in a case pattern or heredoc also matches -- the
+# rejection message tells the author how to restructure).
+has_unverified_pipeline() {
+  printf '%s' "$1" | awk '
+    { line = $0; n = length(line); q = 0; prev = ""
+      for (i = 1; i <= n; i++) {
+        c = substr(line, i, 1)
+        if (q == 1) { if (c == "\047") q = 0; prev = c; continue }
+        if (q == 2) {
+          if (c == "\\") { i++; prev = ""; continue }
+          if (c == "\"") q = 0
+          prev = c; continue
+        }
+        if (c == "\\") { i++; prev = ""; continue }
+        if (c == "\047") { q = 1; prev = ""; continue }
+        if (c == "\"") { q = 2; prev = ""; continue }
+        if (c == "|") {
+          nxt = (i < n) ? substr(line, i + 1, 1) : ""
+          if (prev != "|" && nxt != "|") exit 0
+        }
+        prev = c
+      }
+      exit 1
+    }'
+}
+
 run_one() {
   _label=$1; _command=$2
   say "GATE command: $_label -> $_command"
-  (cd "$PROJECT_DIR" && sh -c "$_command")
-  _status=$?
+  _status=0
+  case "$PIPEFAIL_RUNNER" in
+    self)
+      # Pipefail is set inside the child so it reaches the gated command's own
+      # pipelines; the child also keeps the gated text out of this shell's scope.
+      (cd "$PROJECT_DIR" && sh -c 'set -o pipefail; eval "$1"' sh "$_command") || _status=$?
+      ;;
+    */bash)
+      (cd "$PROJECT_DIR" && "$PIPEFAIL_RUNNER" -c 'set -o pipefail; eval "$1"' bash "$_command") || _status=$?
+      ;;
+    *)
+      if has_unverified_pipeline "$_command"; then
+        err "REJECTED: $_command"
+        err "  this shell has no pipefail, so a pipeline's verdict is only its last"
+        err "  stage's -- an earlier stage can fail and the gate would still pass."
+        err "  Use redirection ('tool > file 2>&1') or one command per gates.conf line."
+        return 1
+      fi
+      (cd "$PROJECT_DIR" && sh -c "$_command") || _status=$?
+      ;;
+  esac
   if [ "$_status" -ne 0 ]; then
     err "FAILED ($_status): $_command"
     return "$_status"
