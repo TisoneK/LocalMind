@@ -25,7 +25,6 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
-| Elena | S464 | deepseek-v4-flash | Closing the exit gate: three more dir_explorer wiring leftovers surfaced by `ci-check` |
 | Zuri | S465 | glm-5.3-flash | Benchmark live run — model override + efficiency metrics for the suite, live test subset on Windows |
 
 <!-- Clock-out 2026-09-10: Elena (S464) — dir_explorer live-tested on
