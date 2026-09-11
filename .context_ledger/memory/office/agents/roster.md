@@ -25,7 +25,13 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
-| Asha | S467 | qwen3.8-flash | Core 1.0.0 adoption (owner go-ahead) — office regroup + entry-point refresh |
+
+<!-- Clock-out 2026-09-11 (second): Asha (S467) — core 1.0.0 adopted with
+owner go-ahead: update + office migration clean (fbe59fa2/ddc9843b), entry
+points regenerated (58690ba0), bookkeeping b249b366. Exit gate re-run BEFORE
+this closing commit per the S462 sequencing: sole red = the tracked
+B-2026-09-10-4 date-bomb trio; gate rc untrusted (flaw re-verified open in
+1.0.0). Board empty = nobody in the office. -->
 
 <!-- Clock-out 2026-09-11: Asha (S467) — context sync complete: main ==
 origin, core OK 0.22.0, registries refreshed, session record + flaw landed
