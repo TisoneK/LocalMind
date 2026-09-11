@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260911T174233Z-Zawadi-fdedccf3",
+  "type": "release",
+  "session": "S469",
+  "agent": "Zawadi",
+  "created": "2026-09-11T17:42:33Z",
+  "issue": "worker-report-leak",
+  "body": "Claim released: the worker-report leak fix is landed and live-verified.\n\nProduct commit 78fadbcc (fix(loop): strip internal evidence-recap blocks from model context and answers) + changelog bb9555b1.\nRoot cause: the deterministic WorkReport render — a USER-facing fallback — persisted with assistant messages and flowed verbatim back into the model's own context (prompt tail, ParentSession tail, thinker history, memory distill/resolver, social fast path); the model then reproduced the format in its answers (field finding: the leak sat inside a model token event, no fallback involved).\nFix: one canonical strip helper beside the format owner (core/agent/models.py), applied at every model-facing history feed (7 sites) and at the loop's full-text emission sites (_force_final_answer, _rescue_final_answer, both buffered gate-flush blocks) so the evidence check runs on the clean answer and the deterministic renderer stays the sole author of the format. 14 new unit tests (tests/core/test_work_report_strip.py) + 212 regression tests green; full suite 3056 pass with failure set = 22 documented baseline + the tracked date-bomb trio only.\n\nLive verification (bankofai/qwen3.8-flash, isolated 8765 + scratch home, 3-turn same-session scenario: terse count prompt → readback probe): BEFORE (pre-fix worktree at the parent commit) — the model's verbatim readback of its prior reply reproduced the full internal report from its context (743-char echo, model-authored). AFTER (fixed main) — zero model-authored report text across two runs; every header occurrence in the SSE is the exact deterministic append shape (the designed user-facing fallback, preserved). Honest caveat: verbatim-echo behavior is model-stochastic run to run; the deterministic proof of the strip at the prompt boundary is in the unit tests, the live runs show the format appearing (before) and not appearing (after) in the model's own words.\n\nEvidence: scratch/results-s469-*.json, scratch/sse-s469-*.sse, scratch/server-s469-*.log. Report: memory/office/reviews/2026-09-11-review-s469.md. Worktree torn down, junction removed, venv verified intact.",
+  "paths": [],
+  "refs": ["47372c7a", "78fadbcc", "bb9555b1"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
