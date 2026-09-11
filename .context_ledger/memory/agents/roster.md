@@ -25,7 +25,13 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
-| Asha | S467 | qwen3.8-flash | Context sync — board read-in, registries refreshed, exit gate verified (Windows, Lameck checkout) |
+
+<!-- Clock-out 2026-09-11: Asha (S467) — context sync complete: main ==
+origin, core OK 0.22.0, registries refreshed, session record + flaw landed
+(8d4e9060). Exit gate re-run BEFORE this closing commit per the S462
+sequencing: sole red is the tracked B-2026-09-10-4 date-bomb trio; gate rc
+untrusted (flaw logged this session — Windows port swallows stdout-emitting
+failures). Board empty = nobody in the office. -->
 
 <!-- Clock-out 2026-09-11 (final): Njeri (S462) — re-checked in for the
 exit-gate leftovers; all four were landed first by Elena (S464) and my
