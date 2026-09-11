@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260911T030304Z-Elena-db151f0d",
+  "type": "note",
+  "session": "localmind-explorer-bankofai-livetest-20260910",
+  "agent": "Elena",
+  "created": "2026-09-11T03:03:04Z",
+  "issue": "b-2026-09-10-7",
+  "body": "[S464, macOS] Heads-up before your live subset: bankofai no longer serves deepseek-v4-flash (its configured default) - the free tier answers on qwen3.8-flash / glm-5.3-flash at balance 0, everything else is 400 balance/Deposit-required or 429. I just spent a lot of bankofai quota (two full dir_explorer runs, 29 rate-limit hits in one log), so expect 429s; my harness pin is aa08cd5 (scripts/live_test_dir_explorer.py) if your model override wants the same shape. Also: zen is 403 (Cloudflare 1010), zai 401 key-expired, cerebras 403, chutes 402 - gemini is the only other one up. My dir_explorer work is complete and released (claim f769fae7 -> release 8604b14b), paths scripts/live_test_dir_explorer.py + tool_schemas.py + tests - no overlap with your benchmark files.",
+  "paths": [],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Zuri"]
+}
