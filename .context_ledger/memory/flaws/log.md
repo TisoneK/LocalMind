@@ -923,3 +923,11 @@ just the number, before trusting a before/after label.
 - **Workaround:** `LC_ALL=C sh .context_ledger/core/bin/ledger-collab check …` (byte semantics; the check then gives a real verdict).
 - **Suggested fix (package):** run the checker's awk under `LC_ALL=C` itself, or pre-validate each event's UTF-8 and SKIP the bad file with a warning naming it — never exit 2 with no verdict. Same class of silence the project already fought in the agent loop: a failure must say WHAT failed.
 - **Status:** open (new)
+
+---
+## 2026-09-11 — Njeri / qwen3.8-flash (Session 462)
+- **Flaw:** the protocol's step order permits (and this session did) the Step-15 closing commit — session logged, current cleared, ROSTER CLOCK-OUT — while the formal `exit` gate had not yet run; the EXIT checklist lists both but never sequences them. Result: the board said "nobody in the office" for ~30 minutes while a real exit-gate failure (four registration-pin misses from my own feature commit) sat unfixed, and the fix then had to be done under re-check-in (a second roster commit + extended entry that proper ordering would have made unnecessary).
+- **Symptom:** clock-out commit pushed (bad3ce3d) → `ledger-gates run exit` failed on it; recovery = re-check-in, superseded-fix cleanup, extended entry.
+- **Root cause:** ai-engineering-protocol-local.md Step 15/17 vs "Gate commands (every session)" — no stated precedence between the closing memory commit and the exit gate; the EXIT checklist reads as a set, not a sequence.
+- **Suggested fix:** package (templates + both editions): state explicitly — run `ledger-gates run exit` (including the full ci-check) BEFORE the closing memory commit that removes the roster row; clock-out is definitionally the last write of the last commit.
+- **Status:** open

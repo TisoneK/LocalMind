@@ -25,7 +25,14 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
-| Njeri | S462 | qwen3.8-flash | re-checked in — exit-gate follow-up: registering DIR_EXPLORER in the intent-coverage maps |
+
+<!-- Clock-out 2026-09-11 (final): Njeri (S462) — re-checked in for the
+exit-gate leftovers; all four were landed first by Elena (S464) and my
+superseded local commit dropped via rebase --skip. Verified merged tree
+(45 pass / 1 skip targeted; full ci-check = documented baseline + the
+tracked date-bomb family only); tsc/eslint/core-verify/bookkeeping green.
+Flaw logged: protocol does not sequence clock-out after the exit gate.
+Feature explorer-tool COMPLETE. Board: empty = nobody in the office. -->
 
 <!-- Clock-out 2026-09-11: Zuri (S465) — benchmark suite extended + live run:
 per-adapter model pin + --adapter/--model + multi-turn + usage capture + new
