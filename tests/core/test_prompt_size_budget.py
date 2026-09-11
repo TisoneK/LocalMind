@@ -40,7 +40,7 @@ _BUDGETS = {
     # repeated-listings fix; hard-capped at ~330 chars, this is the once-off
     # cost of telling models not to re-list what they already have).
     Intent.SHELL: 12_200,  # Session 351: +100; Session 379: +200 (shell-writes-last-resort)
-    Intent.SYSINFO: 11_200,  # 2026-08-21: +500; S378: +400; S379: +300
+    Intent.SYSINFO: 11_500,  # 2026-08-21: +500; S378: +400; S379: +300; +300 (dir_explorer steering in the planning templates + TOOL ARGUMENT rule — the always-present executor prompt grew with the new core tool; measured 11,355, justified rather than absorbed)
     Intent.CODE_EXEC: 12_500,  # Session 351: +100; S378: +350; S379: +250
     Intent.FILE_WRITE: 12_600,  # S378: +400; S379: +200
     Intent.FILE_EDIT: 12_600,  # S378: +400; S379: +200
