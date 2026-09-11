@@ -26,6 +26,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
 | Elena | S464 | deepseek-v4-flash | Closing the exit gate: three more dir_explorer wiring leftovers surfaced by `ci-check` |
+| Zuri | S465 | glm-5.3-flash | Benchmark live run — model override + efficiency metrics for the suite, live test subset on Windows |
 
 <!-- Clock-out 2026-09-10: Elena (S464) — dir_explorer live-tested on
 bankofai/qwen3.8-flash (the protocol's PRIMARY provider): 3/3 new-capability
@@ -39,6 +40,7 @@ CORE tool-count pin corrected. The harness gained a per-adapter model pin
 (bankofai's configured default deepseek-v4-flash is delisted). Solo light path:
 claim f769fae7 → release 8604b14b, check green, all claims resolved. Session
 logged, current idle. Board empty = nobody in the office. -->
+>>>>>>> 3cbac1db (chore(ledger): Zuri (S465) checks in — benchmark live run (suite metrics + live subset))
 
 <!-- Clock-out 2026-09-10: Njeri (S462) — explorer-tool SHIPPED:
 dir_explorer {list,tree,stat} + wiring + 22 tests (9d85df0f), Explorer UI
