@@ -57,10 +57,12 @@ function Valid-Id { param([string]$Value) return ($Value -match '^[A-Za-z0-9._:-
 function Invoke-ChildScript { param([string]$Path, [string[]]$ScriptArgs = @())
   $global:LASTEXITCODE = $null
   $out = & $Path @ScriptArgs
-  foreach ($line in @($out)) { if ($null -ne $line) { Write-Host $line } }
+  # Judge the child BEFORE the re-emit loop: Write-Host resets $?, so on the
+  # LASTEXITCODE-less fallback path a chatty failing child would read as 0.
   if ($null -ne $LASTEXITCODE) { $script:ChildExit = $LASTEXITCODE }
   elseif ($?) { $script:ChildExit = 0 }
   else { $script:ChildExit = 1 }
+  foreach ($line in @($out)) { if ($null -ne $line) { Write-Host $line } }
 }
 # PowerShell has no pipefail: after `failing-cmd | tee out.txt`, $LASTEXITCODE
 # is the last native command's (tee = 0) and $? follows the pipeline tail, so a
@@ -105,12 +107,21 @@ function Run-One { param([string]$Label, [string]$Text)
       # $LASTEXITCODE is only written by native executables; resetting it first
       # keeps a cmdlet-only command from inheriting a stale previous exit code.
       $global:LASTEXITCODE = $null
-      & ([scriptblock]::Create($Text))
+      # Capture the child's stdout so it never rides the return pipeline: run
+      # inline, a chatty failing command used to return @(lines..., $false),
+      # -not on a non-empty array never registered the failure, and the gate
+      # printed FAILED (N) and then GATE PASSED with rc=0. Re-emit on the host
+      # stream (same shape as Invoke-ChildScript); stderr needs no capture --
+      # it never enters the output pipeline.
+      $out = & ([scriptblock]::Create($Text))
       # Fail on EITHER signal: a nonzero native exit code or a failed final
       # stage -- either alone can miss a compound command's real verdict.
+      # Judged BEFORE the re-emit loop, whose Write-Host successes would
+      # otherwise reset $? and mask a failed final stage.
       if (($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) -or -not $?) {
         if ($null -ne $LASTEXITCODE) { $status = $LASTEXITCODE } else { $status = 1 }
       }
+      foreach ($line in @($out)) { if ($null -ne $line) { Write-Host $line } }
     }
   } catch {
     $status = 1

@@ -476,8 +476,9 @@ git push origin main  # uses the user's existing credentials
 
 **Step 13 — Write the report**
 - Save to `.context_ledger/memory/office/reviews/YYYY-MM-DD-review.md` in the repo (use today's date; create the directory if missing). If a report for today already exists, suffix the new one: `YYYY-MM-DD-review-2.md` (per `reviews/README.md`). Role overlays use their own filename (e.g., `YYYY-MM-DD-security-review.md` — see `roles/README.md`).
-- Structure: Executive Summary → Discovery Phase → Baseline Health → Findings (by severity) → Fixes Applied → Open Items → Recommended Next Steps.
-- **Even if no findings:** write a report saying "baseline healthy, no findings" — the next agent needs to know the review happened.
+- **Write it for the project's owner, not for a filing cabinet.** Plain sentences a reader outside this chat understands in one pass — no form-speak headings ("Executive Summary", "Discovery Phase", "Baseline Health" are labels for archiving, not prose for a person). Lead with what happened and why it matters, and keep it as short as the work allows; padding a thin session to look thorough is the failure mode here, not informality.
+- **Shape is a suggestion, not a form.** Cover, in whatever structure fits the session: what happened → what you found → what you changed → what's still open → what to do next. Headings only when the report is long enough to need them; severity labels (Critical / High / Medium / Low) only on findings that carry one.
+- **Even if no findings:** one plain line — "reviewed `<area>`; baseline healthy; nothing needed" — the next agent needs to know the review happened. Don't inflate a clean review.
 - Commit (`docs(review): ...` or the project's convention) and push (same push workflow as Step 12).
 
 **Step 14 — Update CHANGELOG**
