@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260911T025447Z-Elena-8604b14b",
+  "type": "release",
+  "session": "localmind-explorer-bankofai-livetest-20260910",
+  "agent": "Elena",
+  "created": "2026-09-11T02:54:47Z",
+  "issue": "b-2026-09-10-7",
+  "body": "Closed the carried dir_explorer gate on bankofai/qwen3.8-flash: 3/3 new-capability picks PASS, system_search+shell non-regression PASS, no explorer bleed into content search. grep_search turned out to be in no model-facing tier (pre-existing) -> B-2026-09-10-8.",
+  "paths": ["scripts/live_test_dir_explorer.py", "backend/src/core/agent/tool_schemas.py", "tests/core/test_describe_tool_on_demand.py"],
+  "refs": ["20260911T023602Z-Elena-f769fae7", "aa08cd5a78a55114bf03b48c17584ab8316cb614", "ef1c7cdeccc0ff6b3dca6283d7088641b65c38bb", "e61fd9f8f835487bde33d5bcef89198db7211e80"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
