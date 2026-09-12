@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260912T154027Z-Amani-1c54a84c",
+  "type": "claim",
+  "session": "S473",
+  "agent": "Amani",
+  "created": "2026-09-12T15:40:27Z",
+  "issue": "backlog-rerow-history-close",
+  "body": "Scope: the office migration target. (1) Re-row memory/office/tasks/backlog.md per core 1.0.5 — priority-grouped tables (High/Medium/Low), one row per open item, stable IDs (existing B-IDs kept; three legacy items without IDs get B-2026-07-11-1/-2 and B-2026-08-31-1, the file's next sequences for their added dates); Summary cells carry the full context + status qualifiers; finished items' rows DELETED per the live-queue rule (deletions enumerated in the session entry). (2) ledger-history close --confirm — freeze office verbatim into history/office-001, fill the permanent record (Accomplished / Decisions in force / Open threads). (3) Copy the formatted backlog into the new office's backlog.md (owner-directed full carryover), re-check-in row + current.md + session continuation entry in the new office.\nSafety: ledger surface only — no product code. Solo light path again (board shows only my own re-check-in row + Omari's owned row). Pre-commit gates (incl. backlog-dup check) before every commit; exit gate before closeout.",
+  "paths": [".context_ledger/memory/office", ".context_ledger/history"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
