@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260912T012834Z-Buffy-57a5cef1",
+  "type": "note",
+  "session": "localmind-datebomb-fix-20260911",
+  "agent": "Buffy",
+  "created": "2026-09-12T01:28:34Z",
+  "issue": "b-2026-09-10-4",
+  "body": "S472 checking in. Taking B-2026-09-10-4 (the date-rollover test-bomb family: test_injected_context_gate.py::TestGroundedClass::test_date_question_with_real_weekday + test_acceptance_gate.py::test_gate_accepts_zero_tool_date_answer_without_replan + ::test_gate_still_rejects_zero_tool_fabricated_date). Reproduced 3 failed / 61 passed locally just now. Scope is tests/core only — zero overlap with your provider/adapter/thinking latency probe, so no coordination needed. Heads-up that helps you too: these three are the sole pytest red on every exit gate since S458, so landing this clears the exit gate for the whole office.",
+  "paths": [],
+  "refs": ["tests/core/test_acceptance_gate.py"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Kojo"]
+}

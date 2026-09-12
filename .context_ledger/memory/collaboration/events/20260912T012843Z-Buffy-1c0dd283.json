@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260912T012843Z-Buffy-1c0dd283",
+  "type": "claim",
+  "session": "localmind-datebomb-fix-20260911",
+  "agent": "Buffy",
+  "created": "2026-09-12T01:28:43Z",
+  "issue": "b-2026-09-10-4",
+  "body": "Claim scope: B-2026-09-10-4 — the date-rollover test-bomb family (tests only).\n\nSYMPTOM (reproduced on this macOS checkout at 2026-09-11, 3 failed / 61 passed):\n- tests/core/test_injected_context_gate.py::TestGroundedClass::test_date_question_with_real_weekday — asserts a zero-tool date answer is valid, but the answer is the literal \"Today is **Wednesday, September 9, 2026**\" and zero_tool_turn_is_valid() reads the REAL clock (injected_context_gate.zero_tool_turn_is_valid -> answer_grounded_in_injected_context(now=None) -> datetime.now()). Passes only on 2026-09-09.\n- tests/core/test_acceptance_gate.py::test_gate_accepts_zero_tool_date_answer_without_replan — same hard-coded Wednesday answer through the parent acceptance gate.\n- tests/core/test_acceptance_gate.py::test_gate_still_rejects_zero_tool_fabricated_date — the negative twin: the answer \"Today is Friday, September 9, 2026.\" is fabricated, but _answer_states_current_date guards only the YEAR and, when a weekday word is present, whether that weekday is TODAY's. From 2026-09-11 (a Friday) the fabricated string's weekday matches the real one, so the gate now ACCEPTS it and the assertion `is_final is False` fails. The same mechanism that made the positive twins pass on 09-09 silently turned the negative twin into a false pass-through one day later.\n\nROOT CAUSE (shared): a test that consults the real clock hard-codes the date the test was written. Third member of the family found by S465; S458 filed the first two.\n\nFIX (per the item's prescribed shape — compute the expected value in-test, or freeze the clock at the seam):\n1. Positive tests: build the answer string from datetime.datetime.now() in-test (weekday + month/day/year in the shape the gate parses), so the grounded answer is grounded on ANY day.\n2. Negative test: build the fabricated answer from a date that is necessarily NOT today (now - 1 day, rendered with its own weekday) so it is rejected on ANY day by the weekday guard (and by the year guard across a year boundary).\n3. Add a date-independence regression pin: exercise the checker's explicit `now` seam across a run of dates (all 7 weekdays + a month and a year boundary) asserting grounded=True and fabricated=False for each — so this class of bomb cannot come back silently.\n\nNo product behavior change: the checker (backend/src/core/agent/injected_context_gate.py) is correct as written; only the tests encode the wrong assumption.\n\nVERIFICATION: the three node IDs pass locally; the date-independence pin passes; the wider tests/core suite and the full pytest suite show no new failures; pre-commit/exit gates read green. Live-testing bar not applicable (no agent loop, tool, or adapter behavior touched).",
+  "paths": ["tests/core/test_injected_context_gate.py", "tests/core/test_acceptance_gate.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
