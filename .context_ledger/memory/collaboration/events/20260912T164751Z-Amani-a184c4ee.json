@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260912T164751Z-Amani-a184c4ee",
+  "type": "release",
+  "session": "S473",
+  "agent": "Amani",
+  "created": "2026-09-12T16:47:52Z",
+  "issue": "backlog-rerow-history-close",
+  "body": "Claim complete. Backlog re-rowed per core 1.0.5 (69 rows, priority tables, stable IDs; 6 finished rows deleted with evidence) and committed as 3bd045de; ledger-history close --confirm executed (office-001 frozen verbatim, permanent record filled); new office re-seeded (full backlog copy per owner directive, decisions index, carried flaws, session record). Ledger surface only.",
+  "paths": [],
+  "refs": ["20260912T154027Z-Amani-1c54a84c", "3bd045de"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

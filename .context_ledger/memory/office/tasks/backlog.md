@@ -27,12 +27,21 @@ rest in the permanent record (`history/office-<NNN>.md`, "Open threads").
 Full spec: `.context_ledger/core/schemas/ledger-schema.md` →
 "The backlog: arrangement + workstream view".
 
-Provenance: re-rowed in place on 2026-09-12 (Session 473) from the legacy
-checkbox format, per core 1.0.5 — existing B-IDs kept; the three legacy
-items that never had IDs got `B-2026-07-11-1`, `B-2026-07-11-2`, and
-`B-2026-08-31-1` (their dates' next sequences in the file). Finished rows
-deleted during the re-row are enumerated in the Session 473 entry; the
-pre-re-row file remains in git history and in this office's frozen copy.
+Provenance: re-rowed in place on 2026-09-12 by the session that closed
+office-001, per core 1.0.5 (this office's Session 1; the same session's
+pre-close record is frozen at `history/office-001/agents/sessions.md`) —
+existing B-IDs kept; the three legacy items that never had IDs got
+`B-2026-07-11-1`, `B-2026-07-11-2`, and `B-2026-08-31-1` (their dates' next
+sequences in the file). Finished rows deleted during the re-row are
+enumerated in that session's entry; the pre-re-row file remains in git
+history and in the closed office's frozen copy
+(`history/office-001/tasks/backlog.md`). Re-seeded into this office's
+backlog IN FULL at the close — owner directive 2026-09-12 ("keep the
+backlog copy to the new office"); the next office is free to prune rows
+whose items no longer matter, but nothing was culled at the re-seed.
+Note on references: Summary cells cite sessions by their office-001
+numbers — those records live in `history/office-001/agents/sessions.md`;
+this office's own records start at Session 1.
 
 ## Open Items
 
