@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime
 
+import pytest
 from core.agent.injected_context_gate import (
     answer_grounded_in_injected_context as _answer_grounded,
 )
@@ -26,11 +27,49 @@ from core.agent.injected_context_gate import (
 WEDNESDAY = datetime.datetime(2026, 9, 9, 14, 23)  # noqa: DTZ001
 
 
+def _grounded_date_answer(moment: datetime.datetime) -> str:
+    """A date answer that IS grounded for `moment`."""
+    return (
+        f"Today is **{moment.strftime('%A, %B')} {moment.day}, {moment.year}** "
+        "(per your system clock)."
+    )
+
+
+def _fabricated_date_answer(moment: datetime.datetime) -> str:
+    """A date answer that is NOT grounded for `moment`: the previous day's
+    date, stated as today. Its weekday can never equal `moment`'s, so the
+    weekday guard rejects it on every calendar day (across a year boundary the
+    year guard rejects it first).
+    """
+    other = moment - datetime.timedelta(days=1)
+    return f"Today is {other.strftime('%A, %B')} {other.day}, {other.year}."
+
+
+# Every weekday, both clock edges of a day, and the month/year boundaries —
+# the dates `_answer_states_current_date`'s guards have to hold on.
+_DATES = [
+    datetime.datetime(2026, 9, 7, 8, 15),  # Monday
+    datetime.datetime(2026, 9, 8, 12, 0),  # Tuesday
+    datetime.datetime(2026, 9, 9, 14, 23),  # Wednesday (the S458 fixture's day)
+    datetime.datetime(2026, 9, 10, 23, 59),  # Thursday, last minute of the day
+    datetime.datetime(2026, 9, 11, 0, 1),  # Friday, first minute of the day
+    datetime.datetime(2026, 9, 12, 6, 30),  # Saturday
+    datetime.datetime(2026, 9, 13, 19, 5),  # Sunday
+    datetime.datetime(2026, 9, 30, 12, 0),  # month end
+    datetime.datetime(2026, 10, 1, 12, 0),  # month start
+    datetime.datetime(2026, 12, 31, 23, 59),  # year end
+    datetime.datetime(2027, 1, 1, 0, 1),  # year start
+]  # noqa: DTZ001 — naive on purpose, matching the gate's local clock
+
+
 class TestGroundedClass:
     def test_date_question_with_real_weekday(self):
+        # The answer is built from the real clock: the checker compares it
+        # against the real clock, so a literal date here is only true on the
+        # day it was written (B-2026-09-10-4).
         assert zero_tool_turn_is_valid(
             "What day of the week is it today?",
-            "Today is **Wednesday, September 9, 2026** (per your system clock).",
+            _grounded_date_answer(datetime.datetime.now()),
         ) is True
 
     def test_request_shape_variants(self):
@@ -110,6 +149,27 @@ class TestGroundedClass:
                 WEDNESDAY,
             )
             is False
+        )
+
+
+class TestDateIndependence:
+    """The checker reads the real clock, so a date fixture must hold on EVERY
+    calendar day, not just the day it was written. These pins walk the
+    explicit `now` seam over each weekday plus the month and year boundaries:
+    the grounded answer is accepted and the previous day's date is rejected on
+    every one of them (B-2026-09-10-4).
+    """
+
+    REQUEST = "What day of the week is it today?"
+
+    @pytest.mark.parametrize("moment", _DATES, ids=lambda m: m.strftime("%a %Y-%m-%d"))
+    def test_grounded_answer_holds_on_every_date(self, moment):
+        assert _answer_grounded(self.REQUEST, _grounded_date_answer(moment), moment)
+
+    @pytest.mark.parametrize("moment", _DATES, ids=lambda m: m.strftime("%a %Y-%m-%d"))
+    def test_fabricated_answer_is_rejected_on_every_date(self, moment):
+        assert not _answer_grounded(
+            self.REQUEST, _fabricated_date_answer(moment), moment
         )
 
 

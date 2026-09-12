@@ -15,6 +15,7 @@ Session 173: 4. The ENGINE's direct AgentLoop path (agent selection
 
 from __future__ import annotations
 
+import datetime
 import json
 from unittest.mock import MagicMock, patch
 
@@ -1177,6 +1178,23 @@ def _zero_tool_trace(final_response: str) -> AgentTrace:
     return trace
 
 
+def _grounded_date_answer(moment: datetime.datetime) -> str:
+    """A date answer that IS grounded for `moment`."""
+    return (
+        f"Today is **{moment.strftime('%A, %B')} {moment.day}, {moment.year}** "
+        "(per your system clock)."
+    )
+
+
+def _fabricated_date_answer(moment: datetime.datetime) -> str:
+    """A date answer that is NOT grounded for `moment`: the previous day's
+    date, stated as today. Its weekday can never equal `moment`'s, so the
+    gate's grounded class must not apply on any calendar day.
+    """
+    other = moment - datetime.timedelta(days=1)
+    return f"Today is {other.strftime('%A, %B')} {other.day}, {other.year}."
+
+
 async def _run_parent_gate(loop, trace, *, message, iteration=0, obs=None):
     return await loop._acceptance_gate_at_final_answer(
         trace=trace,
@@ -1199,11 +1217,12 @@ async def test_gate_accepts_zero_tool_date_answer_without_replan():
     evidence (the forced-replan churn on zero-tool grounding turns)."""
     loop = AgentLoop(adapter=MagicMock())
     adapter = _ReplanAdapter()
+    # Built from the real clock — the gate's grounded class compares against
+    # the real clock, so a literal date is only true on the day it was written
+    # (B-2026-09-10-4).
     suffix, is_final = await _run_parent_gate(
         loop,
-        _zero_tool_trace(
-            "Today is **Wednesday, September 9, 2026** (per your system clock)."
-        ),
+        _zero_tool_trace(_grounded_date_answer(datetime.datetime.now())),
         message="What day of the week is it today?",
     )
     assert is_final is True
@@ -1241,7 +1260,7 @@ async def test_gate_still_rejects_zero_tool_fabricated_date():
     adapter = _ReplanAdapter()
     messages = [{"role": "user", "content": "What day of the week is it today?"}]
     _, is_final = await loop._acceptance_gate_at_final_answer(
-        trace=_zero_tool_trace("Today is Friday, September 9, 2026."),
+        trace=_zero_tool_trace(_fabricated_date_answer(datetime.datetime.now())),
         iteration=0,
         effective_max_iter=8,
         loop_messages=messages,
