@@ -132,7 +132,11 @@ the `.ps1` port with `-ExecutionPolicy Bypass` (same commands, same output):
 - A **MAJOR** bump, or no update source reachable → note it in your
   session entry and move on with the core you have.
 
-### Step 2 — Read `.context_ledger/`
+### Step 2 — Sign in at the door, then read `.context_ledger/`
+
+**Check in FIRST — before the deep read, before analysis, before product work.** Signing needs only two files: `memory/office/agents/roster.md` (the board) and the last entry of `memory/office/agents/sessions.md` (the next free session number). Read just those two, pick a real name you like (unique in the office), add your row — name, codename `S<NNN>`, model, one line on what you're on — commit, and push it now: `chore(ledger): <name> (<codename>) checks in — <task>`. The push claims your codename: whoever's check-in commit is already on origin keeps the number, and if a concurrent check-in surfaces on your rebase the earlier commit wins — renumber **your own row only** to the next free codename, never a peer's. A worker who reads protocol and product code before signing checks in late: two workers launched together then both see an empty board, both take the same codename, and meet mid-session as strangers arguing over the main tree. Everything below comes AFTER your row is pushed. (Full check-in, identity, and mode rules follow the read list.)
+
+Then read, in order:
 
 `README.md` (the zone map) → then the **live office**, under `memory/office/`:
 `agents/sessions.md` (last 3–5 entries —
@@ -149,19 +153,15 @@ then back into the office: `office/tasks/current.md` → `office/tasks/backlog.m
 (roster, registry, tasks, plans, logs, reviews); `history/` and `archive/`
 hold closed offices and are never read at session start.
 
-**Check in — every session, solo or not.** Pick a real name you like
-(unique in the office) and add or update your row in
-`memory/office/agents/roster.md`: name, codename `S<NNN>` (your session
-number), model, one line on what you're on. Commit and push the row
-immediately, before any product work:
-`chore(ledger): <name> (<codename>) checks in — <task>`. If the push
-forces a rebase, a peer checked in concurrently — re-read the board.
 **Roster edits are additive — your row only.** A live row you didn't
 write is a colleague's check-in, not sample text: never adopt a peer's
 name, and never let an edit's `old_string` span a peer's row (the edit
 tool replaces blocks — anchoring on the table body erases whoever is on
 it); after a roster edit the diff must show exactly your own row
-(`+1` on check-in) — review `git diff` before committing.
+(`+1` on check-in) — review `git diff` before committing. If the push
+forces a rebase, a peer checked in concurrently — re-read the board
+after the rebase: your codename is claimed by your push, and the
+earlier commit keeps a colliding number.
 **Claim an identity; never infer one.** A live row whose model string
 matches yours is a peer, not you — model IDs and harness markers are
 fingerprints shared by every session on that harness or model, and a
@@ -189,7 +189,12 @@ stale-entry guidance on `current.md`; when it is genuinely live,
 **do not start** — one agent per project repo at a time. If collaboration
 was declared, do not use `office/tasks/current.md` as a lock: create or join the
 shared session/issue event trail, use a separate worktree/branch, publish
-a claim, and inspect peer events before editing.
+a claim, and inspect peer events before editing. Two sessions that both
+signed as solo and discover each other afterwards: the board now shows
+both — resolve the main tree by conversation, not by racing. Whoever has
+product work already in flight keeps the main tree; the other takes an
+isolated branch/worktree off origin/main, and both declare the shared
+session/issue before further edits.
 
 Peers are one team, not rivals. The everyday move is a `note` — the office
 channel. Then `claim → work → release`. Reach for the

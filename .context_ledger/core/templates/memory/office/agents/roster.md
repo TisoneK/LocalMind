@@ -5,9 +5,13 @@ are a coworker on a team, the human is your supervisor, and this is the board
 by the door that says who's in and what they're on.
 
 **Every session checks in here, solo or not** — it is how the next agent
-through the door sees you are in the office. Push the check-in (its own
+through the door sees you are in the office. Sign **before the deep read**
+— at the entrance, not after analysis: two workers who read first both
+see an empty board and collide on codenames. Push the check-in (its own
 `chore(ledger):` commit) before any product work; if the push forces a
-rebase, a peer checked in concurrently — re-read the board.
+rebase, a peer checked in concurrently — re-read the board. Your codename
+is claimed by your push: the earlier commit keeps a colliding number —
+fix your own row to the next free codename, never drop a peer's row.
 
 **Pick a real name you like when you start** — any human name (John, Ada,
 Kwame, Mei, …) — and add your row. Present yourself by that name from then

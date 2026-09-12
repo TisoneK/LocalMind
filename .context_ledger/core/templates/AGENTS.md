@@ -29,7 +29,8 @@ If you read nothing else, obey these rules:
    `.context_ledger/core/rules/ai-engineering-protocol-local.md`; cloud/sandbox
    agent → `.context_ledger/core/rules/ai-engineering-protocol.md`. Local
    agents never use PATs or clone this repo; cloud steps are not yours.
-4. **Read memory before working:** at minimum
+4. **Read memory before working** — but sign the roster first (rule 5):
+   at minimum
    `.context_ledger/memory/workflows/active.md`,
    `.context_ledger/memory/office/agents/sessions.md` (last entries),
    `.context_ledger/memory/office/agents/roster.md` (the "who's in the office" board —
@@ -40,11 +41,17 @@ If you read nothing else, obey these rules:
    `.context_ledger/memory/office/inefficiencies/log.md` (known traps). If the
    active session has detailed notes at
    `.context_ledger/memory/office/sessions/`, skim them for current state.
-5. **Check in first, then choose the mode from evidence.** Every session
+5. **Check in first — at the entrance, before any analysis.** Every session
    (solo or collaboration) adds or updates its row in
    `memory/office/agents/roster.md` — real name you pick (unique per office),
    codename `S<NNN>`, model, one line on what you're on — and pushes it
-   before product work. Roster edits are additive — your row only: a live
+   BEFORE reading protocol or product code: the startup read comes after
+   your row is on the board, because two workers who read first both see
+   an empty office, both take the same codename, and meet mid-session
+   fighting over the main tree. The push claims the codename — whoever's
+   check-in commit lands first keeps it; on a collision fix your row to
+   the next free number, never drop a peer's row. Then choose the mode
+   from evidence. Roster edits are additive — your row only: a live
    row you didn't write is a colleague's check-in, not sample text — never
    adopt a peer's name, never let an edit span a peer's row, review the
    `git diff` (exactly your row, `+1` on check-in) before committing.

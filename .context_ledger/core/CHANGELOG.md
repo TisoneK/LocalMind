@@ -10,6 +10,42 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 1.0.6 — 2026-09-12
+
+**The check-in happens at the entrance, not after working.** The
+protocol sequenced the roster sign-in after the startup read (memory,
+edition, product code, analysis); two workers launched together then
+both saw an empty office, both took the same codename, and met
+mid-session as strangers fighting over the main tree
+(supervisor-reported PATCH).
+
+- **Check-in is now the first write of every session** (both editions'
+  Ten Binding Rules #1 and Step 3, and the kickoff template's Step 2,
+  retitled "Sign in at the door, then read `.context_ledger/`"):
+  signing needs exactly two files — the roster and the last session
+  entry — so read those, push your row, then do the deep read of
+  memory, protocol, and product code. Presence becomes visible in
+  minutes, not after analysis. The editions' ENTRY rule now names the
+  check-in row as the one sanctioned edit inside Phase 1.
+- **The push claims the codename, not the intention**: whoever's
+  check-in commit is already on origin keeps the number; a worker who
+  reads for an hour before signing does not own the codename they
+  thought of at the door. On a concurrent collision the earlier commit
+  keeps it, and the later worker edits **their own row only** to the
+  next free codename — never drops or rewrites a peer's row.
+- **The main tree is settled at the door, by conversation**: two solo
+  starts that discover each other afterwards resolve it from the board
+  — work already in flight keeps the main tree, the other worker takes
+  an isolated branch/worktree off origin/main, and both declare the
+  shared session/issue before further edits.
+- **No migration, no tooling change**: docs-only wording across the
+  editions, the kickoff/AGENTS/roster/ledger-README templates, and the
+  schema (roster file spec, reading order, office lifecycle). Regenerate
+  the project entry points on next sync: kickoff.md, root AGENTS.md,
+  `.context_ledger/README.md`.
+
+---
+
 ## 1.0.5 — 2026-09-12
 
 **The backlog is arranged, not a checkbox list.** `tasks/backlog.md`

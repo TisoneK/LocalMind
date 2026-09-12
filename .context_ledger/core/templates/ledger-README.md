@@ -22,7 +22,7 @@ is committed to git and travels with the repo. It has **two zones**:
 │   ├── office/                 # THE live office — one at a time, never numbered;
 │   │                           #   frozen verbatim into history/ when it fills up
 │   │   ├── agents/sessions.md      # append-only session registry
-│   │   ├── agents/roster.md        # the "who's in the office now" board
+│   │   ├── agents/roster.md        # the "who's in the office now" board — sign here FIRST, before the deep read
 │   │   ├── tasks/current.md        # task in progress (single-agent lock only)
 │   │   ├── tasks/backlog.md        # live queue of open items, priority-grouped tables (delete the row when done)
 │   │   ├── plans/decisions.md      # append-only ADRs
@@ -64,6 +64,8 @@ is committed to git and travels with the repo. It has **two zones**:
 3. **Sessions start at `kickoff.md`** (one level up from memory —
    `.context_ledger/kickoff.md`). It routes you by agent type to your edition
    in `core/rules/`. Memory never chooses your edition — your agent
-   type does. For concurrent work, use isolated branches/worktrees and
+   type does. Check in at the roster before the deep read — signing is
+   the first write of a session, not a wrap-up formality; the push
+   claims your codename. For concurrent work, use isolated branches/worktrees and
    `memory/collaboration/events/`; overlapping changes require a peer
    agreement before implementation.
