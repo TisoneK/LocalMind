@@ -25,6 +25,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
+| Kojo | S471 | glm-5.3-flash | Diagnosing owner-reported glm-5.3-flash >60s silent thinking in chat (bankofai) vs qwen3.8-flash |
 
 <!-- Clock-out 2026-09-11: Jabari (S470) — context sync complete: core 1.0.2 → 1.0.4
 (via S469's pull + same-MAJOR update from the tison-side package clone; core.lock
