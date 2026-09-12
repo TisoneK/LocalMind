@@ -1,7 +1,7 @@
 # Current Task
 
-**Status:** ACTIVE — Session 471 (Kojo / glm-5.3-flash, ZCode local, Windows): diagnose owner-reported glm-5.3-flash chat latency on bankofai — silent >60s thinking, then a single short thought + answer; qwen3.8-flash on the same provider streams thinking live and answers in ~2s. Where does the wall time go on glm, and why does its thinking not stream? Code trace of the provider/adapter/thinking path + live SSE timing probe. Assessment first — no product fix until the owner asks.
+**Status:** IDLE — **Session 471 (Kojo / glm-5.3-flash, ZCode local, Windows) COMPLETE (2026-09-12): glm-5.3-flash bankofai stall diagnosed (pre-first-byte provider queue, request shape excluded live), provider-stall watchdog shipped (`e32e08a1`) and live-verified end-to-end (notice@5s, offer@30s, clean recovery), ZCode import map documented, standing Target updated to the resilience + import program.**
 
-**Outcome:** in progress
+**Outcome:** Diagnosis via two live probes (app fast path + differential request shapes, 30 calls total): the owner's 107s silent turn was queue time at bankofai's glm-5.3-flash upstream — not thinking, not the app, not the request shape; the app streams thinking per-delta. Same-session postscript: the free promo flipped to paid (`400 insufficient_user_quota` — S464's documented shape); qwen/hy3/mimo confirmed free. Fix (`e32e08a1`): fast path emits `provider_call_start`/`provider_first_byte`; heartbeat names the stalled provider and escalates past 30s to a switch-model offer, falling through truthfully once bytes arrive — no abort, no adapter change, no extra calls. +4 unit tests, 131 green on touched suites; live trace against a controlled 40s stall on the real server path. Report: `office/reviews/2026-09-12-review-s471.md`.
 
 Feature: none

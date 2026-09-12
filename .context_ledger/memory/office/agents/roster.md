@@ -25,8 +25,19 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
-| Kojo | S471 | glm-5.3-flash | Diagnosing owner-reported glm-5.3-flash >60s silent thinking in chat (bankofai) vs qwen3.8-flash |
 | Omari | S472 | glm-5.3-flash | Frontend thinking-block fix LANDED (f58d90f9): thought renders via shared markdown pipeline; session open pending owner verification — peer Kojo S471 on backend |
+
+<!-- Clock-out 2026-09-12: Kojo (S471) — glm-5.3-flash latency session COMPLETE:
+diagnosed the owner-reported >60s silent chat turns as a bankofai glm upstream
+QUEUE stall (two live probes, 30 calls; request shape excluded; app streaming
+path verified healthy), and shipped + live-verified the provider-stall watchdog
+(e32e08a1: notice@5s, switch-model offer@30s, clean fall-through after first
+byte; 131 green touched-suite tests). ZCode import map + Part-3 update in
+office/reviews/2026-09-12-review-s471.md; standing Target updated (resilience +
+import program, guardrails preserved). Light path closed: note 57aaf8d0 → claim
+8ca6a43c → release fcdfb2e6; exit gate GATE PASSED (ci-check + bookkeeping
+2026-09-12) before this closing commit. Peers' rows (Omari S472) untouched —
+their session owns them. Board: Omari only. -->
 
 <!-- Clock-out 2026-09-11: Buffy (S472) — B-2026-09-10-4 CLOSED: the date-bomb
 family (3 tests) now derives its grounded/fabricated date answers from the

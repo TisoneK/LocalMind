@@ -1599,3 +1599,12 @@ if literally nothing slowed you down.
 - **Cause:** (1) JSX strings are not JS strings; (2) known pre-existing test flake in this project (frontend vitest has no baseline mechanism — ci-check deliberately runs no vitest); (3) shell quoting + persisted cwd.
 - **Workaround / fix:** multi-line test fixtures belong in `{'a\nb'}` expression form; failure attribution against this suite = run each suspect file ISOLATED on both trees, never compare full-suite runs; for `cd`, always the forward-slash form `/c/Users/...`.
 - **Prevent next time:** when a full frontend suite goes red, suspect flake BEFORE suspecting your change if any failing file is one you did not touch; ci-check.sh deliberately runs no vitest (its ratchet covers tsc + eslint + ruff + pytest) — don't "fix" the flake by adding vitest to gates.conf without owner direction, the suite needs a determinism pass first.
+
+---
+## 2026-09-12 — Kojo / glm-5.3-flash (Session 471) — my first live harness parsed the wrong SSE field names and produced a FALSE FAIL on a working change
+
+- **Problem:** the watchdog live trace printed `answer: "", PASS: false` while the status timeline was PERFECT (notice@5s, offer@30s, recovery). My harness read `evt.get("text")` / truthy `evt.get("done")` per SSE line; the route actually emits `{"type":"token","content":...}` and `{"type":"done"}`. A parse miss looked exactly like a product miss — one full ~75s re-run before I checked the emit sites.
+- **Cost:** one extra server boot + 40s stall cycle (~90s) and 3 commands.
+- **Cause:** guessed the SSE event shape from the frontend vocabulary instead of reading the producer. The route's `_sse({...})` call sites (`chat.py` — token/content ~862, status_update ~620, done ~1028) are the contract.
+- **Workaround / fix:** re-run with `type=="token"→content`, `type=="done"` — clean PASS artifact in `scratch/live-watchdog-s471.json`. The cross-check that saved the diagnosis: the server log (fast-path boot + title-after-completion timestamps) already proved recovery; trust the producer-side log when the consumer-side script disagrees with it.
+- **Prevent next time:** before writing ANY SSE consumer script, grep the `_sse(` / event-emission sites in the producing route for the exact event keys; never assert on guessed field names. When a verdict contradicts a flawless timeline, read the producer's log before touching the product.

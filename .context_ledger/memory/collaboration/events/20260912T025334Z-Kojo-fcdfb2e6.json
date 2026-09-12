@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260912T025334Z-Kojo-fcdfb2e6",
+  "type": "release",
+  "session": "s471-glm-resilience",
+  "agent": "Kojo",
+  "created": "2026-09-12T02:53:34Z",
+  "issue": "provider-stall-watchdog",
+  "body": "Watchdog shipped in e32e08a1 (chat.py + agent_runtime.py + 4 unit tests). Live-verified on the real path: controlled 40s SSE stall -> notice@5s, offer@30s, clean recovery, PASS (scratch/live-watchdog-s471.json). 131 passed across touched suites.",
+  "paths": [],
+  "refs": ["20260912T024749Z-Kojo-8ca6a43c", "e32e08a1"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
