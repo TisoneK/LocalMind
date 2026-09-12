@@ -1139,6 +1139,19 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
 
                 _response_chunks: list[str] = []
                 _fast_usage: dict[str, int] = {}
+                # S471 first-byte watchdog signal: the transport heartbeat
+                # (chat.py _heartbeat_status_text) must tell "the provider has
+                # sent ZERO bytes — we're stuck in its queue" apart from "the
+                # model is thinking/generating slowly." The owner-reported
+                # bankofai glm-5.3-flash stall (107s before the first byte)
+                # read as silent pondering because both looked identical.
+                collector.emit(
+                    "provider_call_start",
+                    provider=settings.localmind_adapter,
+                    model=active_parent_model() or "",
+                    started_at=time.monotonic(),
+                )
+                _fast_first_byte_seen = False
                 if _is_trivial:
                     _stream = trivial_response(
                         message,
@@ -1156,6 +1169,11 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                         memory_facts=_recent_memories,
                     )
                 async for _chunk in _stream:
+                    if not _fast_first_byte_seen and (_chunk.thinking or _chunk.text):
+                        # The provider answered — past this point a heartbeat
+                        # silence means slow GENERATION, not a stalled queue.
+                        _fast_first_byte_seen = True
+                        collector.emit("provider_first_byte")
                     if _chunk.usage:
                         _fast_usage.update(_chunk.usage)
                     if _chunk.thinking:

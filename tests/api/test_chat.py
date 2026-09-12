@@ -821,3 +821,51 @@ class TestToolRegistry:
         status = _heartbeat_status_text(obs, live_tool_events=False)
         assert "still working" in status, status
         assert "getting started" not in status, status
+
+    def test_heartbeat_status_names_provider_stall_before_first_byte(self):
+        """S471: provider_call_start with no provider_first_byte and a short
+        wait is a QUEUE stall, not slow thinking — the status names the
+        provider and the wait, not the generic 'still working' text."""
+        import time
+
+        from api.routes.chat import _heartbeat_status_text
+        from core.obs import ObsCollector
+
+        obs = ObsCollector()
+        obs.emit("provider_call_start", provider="bankofai", model="glm-5.3-flash",
+                 started_at=time.monotonic() - 5)
+        status = _heartbeat_status_text(obs, live_tool_events=False)
+        assert "Waiting for bankofai" in status, status
+        assert "start responding" in status, status
+        assert "switching" not in status, status  # under the offer threshold
+
+    def test_heartbeat_status_offers_model_switch_after_stall_threshold(self):
+        """S471: a stall past PROVIDER_OFFER_AFTER_S escalates to the
+        model-switch offer (the owner's 'qwen fallback' ask)."""
+        import time
+
+        from api.routes.chat import PROVIDER_OFFER_AFTER_S, _heartbeat_status_text
+        from core.obs import ObsCollector
+
+        obs = ObsCollector()
+        obs.emit("provider_call_start", provider="bankofai", model="glm-5.3-flash",
+                 started_at=time.monotonic() - (PROVIDER_OFFER_AFTER_S + 10))
+        status = _heartbeat_status_text(obs, live_tool_events=False)
+        assert "switching to a different model" in status, status
+        assert "bankofai" in status, status
+
+    def test_heartbeat_status_not_a_stall_once_first_byte_arrived(self):
+        """S471: once provider_first_byte is emitted the silence is slow
+        GENERATION, not a queue — fall through to the neutral text."""
+        import time
+
+        from api.routes.chat import _heartbeat_status_text
+        from core.obs import ObsCollector
+
+        obs = ObsCollector()
+        obs.emit("provider_call_start", provider="bankofai", model="glm-5.3-flash",
+                 started_at=time.monotonic() - 60)
+        obs.emit("provider_first_byte")
+        status = _heartbeat_status_text(obs, live_tool_events=False)
+        assert "Waiting for bankofai" not in status, status
+        assert "still working" in status, status

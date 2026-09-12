@@ -48,6 +48,11 @@ logger = logging.getLogger(__name__)
 
 _INTERNAL_DELEGATION_TOOLS = frozenset({"delegate", "delegate_parallel", "delegate_inline"})
 LIVE_PROGRESS_INTERVAL_S = 5  # Session 352: was 15s — too long, user stays in the dark
+# S471: seconds a fast-path provider call may hold with ZERO bytes sent
+# before the heartbeat escalates from "waiting for provider" to the
+# model-switch offer. Healthy bankofai calls answer in 2-5s; 15s+ TTFBs
+# and the owner-reported 107s stall are queue congestion (S471 probes).
+PROVIDER_OFFER_AFTER_S = 30
 LIVE_TOOL_EVENT_TYPES = frozenset({"tool_call", "tool_status", "terminal_output"})
 
 # B-2026-08-24-4: retain fire-and-forget background tasks. asyncio.create_task
@@ -428,11 +433,30 @@ def _heartbeat_status_text(obs: ObsCollector, live_tool_events: bool) -> str:
     was running. Inspect the obs collector: init started but not finished
     → "getting started"; tools have run → "working with tools"; otherwise
     → neutral still-working.
+
+    S471: a provider that has not sent a SINGLE byte (the social fast
+    path's `provider_call_start` with no `provider_first_byte`) is a
+    queue stall, not slow thinking — the bankofai glm-5.3-flash case sat
+    107s before the first byte and read as silent pondering. Name the
+    wait; past PROVIDER_OFFER_AFTER_S escalate to the model-switch offer.
     """
-    _history_types = {evt.type for evt in obs.history()}
+    _history = obs.history()
+    _history_types = {evt.type for evt in _history}
+    if "provider_call_start" in _history_types and "provider_first_byte" not in _history_types:
+        _start = next(e for e in reversed(_history) if e.type == "provider_call_start")
+        _waited = time.monotonic() - float(_start.data.get("started_at", time.monotonic()))
+        _provider = _start.data.get("provider") or "the model provider"
+        if _waited >= PROVIDER_OFFER_AFTER_S:
+            return (
+                f"Waiting for {_provider} to respond — nothing back after "
+                f"{int(_waited)}s. The provider may be congested or the model "
+                "unavailable; try switching to a different model that answers "
+                "in seconds."
+            )
+        return f"Waiting for {_provider} to start responding…"
     _init_started = "agent_initialization_start" in _history_types
     _init_done = "agent_initialization_done" in _history_types
-    _any_tool = any(evt.type == "tool_call" for evt in obs.history())
+    _any_tool = any(evt.type == "tool_call" for evt in _history)
     if _init_started and not _init_done:
         return "Agent is getting started — understanding your request…"
     if live_tool_events or _any_tool:
