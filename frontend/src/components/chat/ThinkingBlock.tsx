@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, Brain, Terminal, Copy, Check } from 'lucide-react';
 import { ThinkingStep } from '@/types';
+import { MarkdownContent } from '@/components/shared/MarkdownContent';
 import { useEnterMotion } from '@/lib/localmind/motion';
 import { formatLatency } from '@/lib/localmind/progress';
 
@@ -142,16 +143,16 @@ export function ThinkingBlock({ thinking, thinkMs, isStreaming }: ThinkingBlockP
             transition={{ duration: 0.2, ease: 'easeOut' }}
             className="overflow-hidden border-t border-brand-border bg-brand-bg-dark"
           >
-            {/* Session 265: bounded-height reasoning with its own scrollbar —
-                a long thought process scrolls instead of stretching the
-                message; new tokens auto-scroll into view. */}
+            {/* Bounded-height reasoning with its own scrollbar — a long
+                thought process scrolls instead of stretching the message;
+                new tokens auto-scroll into view. */}
             <div
               ref={scrollRef}
               data-testid="thinking-scroll"
               className="max-h-64 overflow-y-auto custom-scrollbar"
             >
-              <div className="whitespace-pre-wrap break-words px-3 py-2 text-[11px] leading-relaxed text-brand-green-muted">
-                {stepLabel ? (
+              {stepLabel ? (
+                <div className="whitespace-pre-wrap break-words px-3 py-2 text-[11px] leading-relaxed text-brand-green-muted">
                   <div className="flex items-start gap-2">
                     <Terminal className={`mt-0.5 h-3 w-3 shrink-0 ${stepColor}`} />
                     <span>
@@ -159,13 +160,16 @@ export function ThinkingBlock({ thinking, thinkMs, isStreaming }: ThinkingBlockP
                       {isStreaming && <LiveCaret reduceMotion={reduceMotion} />}
                     </span>
                   </div>
-                ) : (
-                  <>
-                    {content}
-                    {isStreaming && <LiveCaret reduceMotion={reduceMotion} />}
-                  </>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="px-3 py-2">
+                  {/* The model writes its reasoning in markdown — render it
+                      through the same pipeline as answers so headings, lists,
+                      emphasis and code format instead of dumping raw. */}
+                  <MarkdownContent text={content} />
+                  {isStreaming && <LiveCaret reduceMotion={reduceMotion} />}
+                </div>
+              )}
             </div>
             {/* Footer: copy the full reasoning trace */}
             <div className="flex items-center justify-end border-t border-brand-border/60 px-2 py-1">

@@ -88,4 +88,32 @@ describe('ThinkingBlock', () => {
     rerender(<ThinkingBlock thinking="first chunk second chunk" isStreaming />);
     expect(scroller.scrollTop).toBe(500);
   });
+
+  // The model writes its reasoning in markdown; the block must format it
+  // through the shared markdown pipeline, not dump the raw source.
+  describe('markdown formatting', () => {
+    it('renders emphasis markup as a strong element, not literal asterisks', () => {
+      render(<ThinkingBlock thinking="**Bold** call, then verify" isStreaming />);
+      const strong = screen.getByText('Bold');
+      expect(strong.tagName).toBe('STRONG');
+      expect(screen.queryByText(/\*\*Bold\*\*/)).not.toBeInTheDocument();
+    });
+
+    it('renders bullet lists as list items', () => {
+      render(<ThinkingBlock thinking={'- check the cache\n- then the stream'} isStreaming />);
+      expect(screen.getAllByRole('listitem')).toHaveLength(2);
+    });
+
+    it('processes headings instead of showing the raw marker', () => {
+      render(<ThinkingBlock thinking={'## Plan\ndo the thing'} isStreaming />);
+      expect(screen.getByText('Plan')).toBeInTheDocument();
+      expect(screen.queryByText(/## Plan/)).not.toBeInTheDocument();
+    });
+
+    it('still copies the raw markdown source, not the rendered output', () => {
+      render(<ThinkingBlock thinking="**copy me** verbatim" isStreaming />);
+      fireEvent.click(screen.getByTitle('Copy reasoning'));
+      expect(writeText).toHaveBeenCalledWith('**copy me** verbatim');
+    });
+  });
 });
