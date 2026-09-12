@@ -27,7 +27,26 @@ is your stable session tag.
 |------|----------|-------|-------|
 | Kojo | S471 | glm-5.3-flash | Diagnosing owner-reported glm-5.3-flash >60s silent thinking in chat (bankofai) vs qwen3.8-flash |
 | Omari | S472 | glm-5.3-flash | Frontend: thinking-block UI does not format the LLM's thought (peer Kojo S471 owns the backend side) |
-| Buffy | S472 | deepseek-v4-flash | Fixing the date-bomb test family (B-2026-09-10-4) — tests only, zero product paths |
+
+<!-- Clock-out 2026-09-11: Buffy (S472) — B-2026-09-10-4 CLOSED: the date-bomb
+family (3 tests) now derives its grounded/fabricated date answers from the
+clock, and a new TestDateIndependence pin walks the checker's `now` seam over
+every weekday plus the month/year boundaries (product a3988fc; backlog line
+deleted). Verified: 3 failed -> 86 passed on the two files; full suite 3106
+passed / 2 skipped / 0 failed; the real parent gate driven under 13 frozen
+clocks (backend/scratch/s472-date-probe.py). This was the sole pytest red on
+every exit gate since S458, so the office's exit gate is clear of it. Second
+find, FIXED on discovery in the same session: the exit gate's
+check-bookkeeping.sh had been a silent no-op since the 1.0.0 office migration
+(stale pre-migration path -> "no dated session entries yet — skipping" ->
+PASSED over a 6,770-line sessions.md); product 3658cfd takes the office root
+as an input with hard failures (rc=2 missing argument/dir, rc=1 missing log),
+registry 6fa762f passes it, flaw logged with the class-level ask. Exit gate
+re-run GREEN end-to-end (ci-check PASSED; bookkeeping now actually evaluating).
+Collab: session localmind-datebomb-fix-20260911 — notes 57a5cef1/3974c14c,
+claims 1c0dd283/33252d65, releases 7e0ce5e0/44d6c7e5; check green, no open
+claims; tasks/current.md untouched (Kojo's live S471 task). Board: Kojo (S471)
+stays — a peer is in the office. -->
 
 <!-- Clock-out 2026-09-11: Jabari (S470) — context sync complete: core 1.0.2 → 1.0.4
 (via S469's pull + same-MAJOR update from the tison-side package clone; core.lock
