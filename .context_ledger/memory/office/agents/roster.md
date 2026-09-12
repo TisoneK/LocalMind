@@ -26,7 +26,6 @@ is your stable session tag.
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
 | Omari | S472 | glm-5.3-flash | Frontend thinking-block fix LANDED (f58d90f9): thought renders via shared markdown pipeline; session open pending owner verification — peer Kojo S471 on backend |
-| Amani | S473 | glm-5.3-flash | Core sync session: 1.0.4 → 1.0.5 (backlog-arrangement PATCH); entry points + registries current |
 
 <!-- Clock-out 2026-09-12: Kojo (S471) — glm-5.3-flash latency session COMPLETE:
 diagnosed the owner-reported >60s silent chat turns as a bankofai glm upstream

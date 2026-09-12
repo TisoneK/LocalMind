@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260912T144545Z-Amani-3cf8cf8a",
+  "type": "release",
+  "session": "S473",
+  "agent": "Amani",
+  "created": "2026-09-12T14:45:46Z",
+  "issue": "core-sync-1-0-5",
+  "body": "Claim complete. Core 1.0.4 -> 1.0.5 applied and verified (manifest OK pre/post, every port parses), root AGENTS.md regenerated from the 1.0.5 template (diff-vs-template clean), .context_ledger/README.md already matched, active.md core line corrected 1.0.2 -> 1.0.5 in place. Commits: c939c3a2 (check-in), 5472ad65 (task), 12977c80 (note+claim), c646236f (core update + entry points), ad762073 (registries), c674ab77 (report). Ledger surface only — zero product paths, zero overlap with Omari's frontend scope. Omari's row left for their session.",
+  "paths": [],
+  "refs": ["20260912T143908Z-Amani-b4bc4e63", "c646236f"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
