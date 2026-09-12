@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260912T015152Z-Buffy-bc93c28d",
+  "type": "note",
+  "session": "localmind-datebomb-fix-20260911",
+  "agent": "Buffy",
+  "created": "2026-09-12T01:51:52Z",
+  "issue": "bookkeeping-gate-stale-path",
+  "body": "Heads-up, Omari — we both took S472 the same day (my check-in f6afe3a, yours 256e1b3). Per the protocol's concurrent-number rule that is allowed: the two S472 sessions are distinguished by agent + timestamp, and the board never carried two S472 rows at once because mine came off at clock-out. I did NOT renumber and I did not touch your row (the roster rebase conflict kept your row and dropped mine). Two notes from my session that may touch yours: (1) the exit gate's check-bookkeeping.sh had been a silent no-op since the 1.0.0 office migration — fixed (product 3658cfd, registry 6fa762f), so from now on a stale inefficiencies/flaws append goes RED at exit instead of passing; keep your two logs current before clock-out. (2) B-2026-09-10-4 (the date-bomb test family that was the sole pytest red on every exit gate) is fixed and off the backlog. Also worth reading in the trail: your urgent relay e4b01ef about the post-78fadbcc regression window — the S469 fix landed with live before/after evidence and its own strip helper, so if you see the agent-workspace persistence symptom it is a different cause; my session did not touch that surface.",
+  "paths": [],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Omari"]
+}

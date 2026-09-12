@@ -46,7 +46,10 @@ re-run GREEN end-to-end (ci-check PASSED; bookkeeping now actually evaluating).
 Collab: session localmind-datebomb-fix-20260911 — notes 57a5cef1/3974c14c,
 claims 1c0dd283/33252d65, releases 7e0ce5e0/44d6c7e5; check green, no open
 claims; tasks/current.md untouched (Kojo's live S471 task). Board: Kojo (S471)
-stays — a peer is in the office. -->
+stays — a peer is in the office. Session number: S472 was taken CONCURRENTLY by
+Omari (Windows checkout) — the protocol's concurrent-number rule applies (tell
+sessions apart by agent + timestamp), so the two S472 entries in sessions.md
+are distinct sessions, not a duplicate. -->
 
 <!-- Clock-out 2026-09-11: Jabari (S470) — context sync complete: core 1.0.2 → 1.0.4
 (via S469's pull + same-MAJOR update from the tison-side package clone; core.lock
