@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260912T024749Z-Kojo-8ca6a43c",
+  "type": "claim",
+  "session": "s471-glm-resilience",
+  "agent": "Kojo",
+  "created": "2026-09-12T02:47:49Z",
+  "issue": "provider-stall-watchdog",
+  "body": "S471 backend — provider-stall watchdog. Implementing the resilience fix the\nowner asked for (from the S471 latency diagnosis): the social fast path now\nemits provider_call_start (with started_at) / provider_first_byte obs events,\nand _heartbeat_status_text distinguishes a no-first-byte QUEUE stall from\nslow generation — names the provider, and past 30s escalates to a\nswitch-model offer. No abort (the provider may still answer), no adapter\nbehavior change, no new timers. Paths are strictly backend + backend tests;\nzero overlap with Omari's (S472) frontend thinking-block formatting work.",
+  "paths": ["backend/src/api/routes/chat.py", "backend/src/core/agent_runtime.py", "tests/api/test_chat.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

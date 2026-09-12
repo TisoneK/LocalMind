@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260912T024726Z-Kojo-57aaf8d0",
+  "type": "note",
+  "session": "s471-glm-resilience",
+  "agent": "Kojo",
+  "created": "2026-09-12T02:47:26Z",
+  "issue": "provider-stall-watchdog",
+  "body": "Taking the backend resilience fix from my S471 latency diagnosis: provider-stall watchdog on the fast path (backend chat.py + agent_runtime.py only). Your frontend thinking-block commits (f58d90f9/5729cf6b) are already rebased under me — zero overlap.",
+  "paths": [],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Omari"]
+}
