@@ -42,8 +42,14 @@ re-seeded into the new office explicitly, and nothing else carries over.
 ## 2026-09-12 — Session 2
 - **Agent:** Kwame (ZCode local) | **Model:** qwen3.8-flash (per system prompt `18ae0130-10c3-4a72-ac96-e46e6f4b7bc0/qwen3.8-flash`) | **Platform:** Windows 11 (10.0.26200 x64) | **Role:** engineer | **Core:** 1.0.5
 - **Task:** protocol sync on the supervisor's command (kickoff Step 1): pull the project, verify the vendored core, check for drift.
-- **Commits:** 2 (992ac777..clock-out)
+- **Commits:** 5 (992ac777..clock-out)
 - **Outcome:** done — `git pull --ff-only` fast-forwarded 39ffab8a..d279b36c (the pulled history already carried the core bump to 1.0.5 and Session 1's office-001 close + re-seed); `ledger-sync verify` OK on 1.0.5 (every file matches MANIFEST.sha256, all ports parse); `ledger-sync status`: locked 1.0.5, update source (`C:\Users\tison\Dev\context-ledger\core`) reports 1.0.4 — older than the vendored core, "nothing to do". No core update or migration needed; no product work — the only changes this session are its own bookkeeping commits.
 - **Open items:** none from the sync. Observation for the owner: the local package-upstream checkout sits behind the project's vendored core (1.0.4 vs 1.0.5) — if the package repo is meant to be the release source for updates, the 1.0.5 content needs back-porting there.
 - **Notes:** none
 - **Report:** none (sync-only session; chat summary delivered)
+
+**Re-check-in — same session, supervisor follow-up ("Re-sync core"); extends this entry, not a second Session 2:**
+- Re-added my roster row same name/codename (`c2a71fcf` re-check-in, per the re-check-in rule) and ran kickoff Step 1 again: pull clean (already up to date), verify OK on 1.0.5, but `ledger-sync status` now showed the update source at **1.0.6** — the supervisor had back-ported the release into `C:\Users\tison\Dev\context-ledger` after my first sync, resolving this entry's earlier "upstream stale" observation.
+- Same MAJOR → ran `ledger-sync update` (1.0.5 → 1.0.6; it replaces `core/` only, memory untouched). Migration was docs-only wording (CHANGELOG 1.0.6: sign-in moves to the entrance — the check-in is the first write of a session, the push claims the codename, concurrent-solo discovery resolves the main tree by conversation).
+- Filled the migration's one step left, per kickoff rule 1: regenerated `.context_ledger/kickoff.md` and root `AGENTS.md` from the new templates and refilled the Project Facts (name/URL/privacy/branch/live-URL/git-identity/package-upstream); `memory/core.lock`, `.context_ledger/README.md` and `memory/workflows/active.md` (core ref → 1.0.6) updated with them. Committed as `f0982f82` (`chore(ledger): migrate to core 1.0.6` — 15 files, all ledger surface) and pushed. Placeholder scan clean (only the rule-1 comment and the token forms remain); `ledger-sync verify` OK on 1.0.6; pre-commit gate green before the commit; exit gate re-run at clock-out.
+- **Outcome (follow-up):** done — core 1.0.6 in place, entrypoints regenerated, pushed. Clock-out commits: `aeb165be` (first, superseded by re-check-in) and this one.
