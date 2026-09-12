@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260912T013526Z-omari-zcode-glm-5.3-flash-win-s472-6e584307",
+  "type": "claim",
+  "session": "localmind-thinker-ui-20260912",
+  "agent": "omari-zcode-glm-5.3-flash-win-s472",
+  "created": "2026-09-12T01:35:26Z",
+  "issue": "thinker-ui-format",
+  "body": "SCOPE: frontend thinking-block rendering only - zero backend overlap with Kojo (S471). ROOT CAUSE (code-verified): the chat ANSWER renders through MarkdownContent (repairMarkdown -> ReactMarkdown + remarkGfm + themed renderer map, ChatMessage.tsx ~508), but ThinkingBlock.tsx renders the LLM's thought as a RAW text node (whitespace-pre-wrap, line 153/164) - no markdown path at all, so model reasoning with headings/bullets/bold/code shows as an unformatted wall of text. INTENDED CHANGE: (1) extract the themed markdown pipeline verbatim from ChatMessage.tsx into a new shared component frontend/src/components/shared/MarkdownContent.tsx (ChatMessage keeps using it unchanged); (2) ThinkingBlock renders the thought through it with a compact 11px muted wrapper; step-line chip branch, streaming caret, copy-raw behavior, auto-scroll and collapse logic all preserved; (3) extend ThinkingBlock.test.tsx with markdown-formatting cases. Verification: tsc -b --noEmit, vitest ThinkingBlock + TurnTimeline suites, vite build. Working in isolated worktree ../LocalMind-omari-s472 on collab/localmind-thinker-ui-20260912/omari-zcode-glm-5.3-flash-win-s472 (per overrides/rules.md - peer live). Baseline: tsc rc=0, ThinkingBlock 10/10 green on main.",
+  "paths": ["frontend/src/components/shared/MarkdownContent.tsx", "frontend/src/components/chat/ChatMessage.tsx", "frontend/src/components/chat/ThinkingBlock.tsx", "frontend/src/components/chat/ThinkingBlock.test.tsx"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
