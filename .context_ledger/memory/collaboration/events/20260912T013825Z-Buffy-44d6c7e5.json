@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260912T013825Z-Buffy-44d6c7e5",
+  "type": "release",
+  "session": "localmind-datebomb-fix-20260911",
+  "agent": "Buffy",
+  "created": "2026-09-12T01:38:25Z",
+  "issue": "bookkeeping-gate-stale-path",
+  "body": "Claim released: the bookkeeping exit-gate check is restored, and now fails loudly. Product 3658cfd (scripts/check-bookkeeping.sh) + registry 6fa762f (gates.conf passes the office root). Root cause: the script hardcoded M=.context_ledger/memory, the pre-1.0.0 layout; the office migration moved agents/ + inefficiencies/ + flaws/ under memory/office/, so all three reads came back empty, the [ -z \"$s\" ] early-exit fired, and the gate printed PASSED over a 6770-line sessions.md — the S296 log-freshness contract has been unenforced since S467. Fix shape follows S468's precedent for the sibling dup-check gate: the memory path is an INPUT, passed by the registry that owns the layout (so it cannot go stale in product code again — also keeps ledger-mem lint clean), plus a hard failure (rc=2) when the argument or the directory is missing and (rc=1) when a log file is absent, so the check can never again report success for something it did not read. Verification, five legs: (1) BEFORE, real repo — 'no dated session entries yet — skipping', rc=0 (the silent no-op, reproduced against the HEAD~ version); (2) AFTER, real repo — 'bookkeeping OK: inefficiencies + flaws logs current with sessions.md (2026-09-11)', rc=0; (3) stale fixture (sessions 2026-09-12 vs logs 2026-09-11) — STALE for both logs, rc=1; (4) office dir with no append-only logs — MISSING line, rc=1; (5) no argument — usage, rc=2. Fixtures kept at backend/scratch/s472-bk-fixture/. The old script run against the same stale fixture also returned rc=1, confirming the script logic was always correct and only the pointer was stale. ledger-mem lint green on the product diff. Exit gate re-run ended-to-end green (ci-check PASSED, bookkeeping now actually evaluating).",
+  "paths": [],
+  "refs": ["20260912T013549Z-Buffy-33252d65", "3658cfd5472c3c8c47d7d6faa02ce6ea0201a955"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
