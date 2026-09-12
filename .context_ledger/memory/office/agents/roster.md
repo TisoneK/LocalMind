@@ -36,6 +36,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
+| Kwame | S2 | qwen3.8-flash | engineer — protocol sync (kickoff Step 1): pull + verify + drift check |
 
 **Clock out when your session ends**: remove your row in the closing
 `chore(ledger):` commit. The board shows who is in the office *now*;

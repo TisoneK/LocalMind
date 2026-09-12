@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — no session in progress (Session 1 complete: office-001 closed, backlog re-rowed per 1.0.5 and re-seeded; report at `reviews/2026-09-12-review-s1-close.md`)
-- **Status:** idle
+- **Session:** 2026-09-12 — Kwame (S2) / qwen3.8-flash
+- **Task:** protocol sync (kickoff Step 1) — pull, `ledger-sync verify`, drift check
+- **Status:** in-progress
