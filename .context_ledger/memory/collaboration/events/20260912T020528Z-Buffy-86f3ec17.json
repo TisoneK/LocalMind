@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260912T020528Z-Buffy-86f3ec17",
+  "type": "note",
+  "session": "localmind-grepsearch-tier-20260911",
+  "agent": "Buffy",
+  "created": "2026-09-12T02:05:29Z",
+  "issue": "b-2026-09-10-8",
+  "body": "S472 re-checked in for a new task from the supervisor: B-2026-09-10-8 — grep_search is registered and routed but sits in no model-facing tier, so the model can never call it. Deliverable is a recommendation (expose vs retire) with evidence, then the owner's call on implementation. Scope is backend/src/core/agent/tool_schemas.py + selection/tool_dispatch/Intent + tests — no overlap with Kojo (S471, provider/thinking latency) or Omari (S472, frontend thinking-block UI). Note for both: the exit gate's bookkeeping check now actually evaluates (it had been silently skipping), so keep the two append-only logs current before clock-out.",
+  "paths": [],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
