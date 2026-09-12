@@ -27,6 +27,7 @@ is your stable session tag.
 |------|----------|-------|-------|
 | Kojo | S471 | glm-5.3-flash | Diagnosing owner-reported glm-5.3-flash >60s silent thinking in chat (bankofai) vs qwen3.8-flash |
 | Omari | S472 | glm-5.3-flash | Frontend: thinking-block UI does not format the LLM's thought (peer Kojo S471 owns the backend side) |
+| Buffy | S472 | deepseek-v4-flash | Fixing the date-bomb test family (B-2026-09-10-4) — tests only, zero product paths |
 
 <!-- Clock-out 2026-09-11: Jabari (S470) — context sync complete: core 1.0.2 → 1.0.4
 (via S469's pull + same-MAJOR update from the tison-side package clone; core.lock
