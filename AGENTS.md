@@ -74,10 +74,12 @@ If you read nothing else, obey these rules:
 6. **Know which kind of file you're in.** *Append-only* logs
    (`office/agents/sessions.md`, `office/plans/decisions.md`,
    `office/flaws/log.md`, `office/inefficiencies/log.md`) grow at the bottom — never edit
-   or delete past entries. `office/tasks/backlog.md` is a live queue: append
-   open items, delete a line when its item is finished (the completion
-   record is the session entry + commit, not a tombstone); `ledger-mem
-   closeout` sweeps tombstones a session left checked off.
+   or delete past entries. `office/tasks/backlog.md` is a live queue
+   arranged as priority-grouped tables: add each open item as a row in
+   its priority table (High/Medium/Low, `ID | Summary`), delete the row
+   when its item is finished (the completion record is the session
+   entry + commit, not a tombstone); `ledger-mem closeout` sweeps
+   checked-off tombstones from legacy checkbox-format backlogs.
    *Update-in-place* registries
    (`system/ai-models.md`, `system/environments.md`) have one entry per key:
    correct them by **editing** the entry, never by appending a duplicate

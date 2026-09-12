@@ -127,14 +127,15 @@ File inventory, write modes, and scopes. **Write modes:**
 - **append-only** — entries are only added at the bottom; corrections
   are appended, never edited in. Sole exception: byte-identical
   duplicate entries may be removed, leaving a one-line note in place.
-- **live queue** — open work only. New items append at the bottom; a
-  line is deleted when its item is finished or no longer relevant.
-  Never delete a line whose item is still open (git history keeps every
-  removed line, so nothing is lost). The only live-queue file is
+- **live queue** — open work only. New items are added as rows in their
+  priority table (High/Medium/Low — see "The backlog" below); a row is
+  deleted when its item is finished or no longer relevant. Never delete
+  a row whose item is still open (git history keeps every removed row,
+  so nothing is lost). The only live-queue file is
   `office/tasks/backlog.md`; completion records live in
   `office/agents/sessions.md` and the commits, not in the backlog.
-  `ledger-mem closeout` sweeps checked-off tombstones a session forgot
-  to delete.
+  `ledger-mem closeout` still sweeps checked-off `- [x]` tombstones
+  from legacy checkbox-format backlogs.
 - **overwrite** — current-state only; replace the content, history
   lives in the append-only logs.
 - **update-in-place** — structured records with one entry per key,
@@ -157,7 +158,7 @@ File inventory, write modes, and scopes. **Write modes:**
 | `agents/sessions.md` | append-only (current office) | project | One entry per session: agent, model, platform, task, commits, outcome |
 | `agents/roster.md` | update-in-place (current office) | project | Team roster — the "who's in the office *now*" board. Every session (solo included) adds its row at check-in and pushes it before product work; removes the row (clocks out) at session end. Who was on duty *when* lives in `agents/sessions.md` + this file's git history. Name and codename each unique in the office; `ledger-mem check` enforces it. Identity is *claimed* at check-in (fresh name + codename you pick), never *inferred* from a model/harness-string match — model strings are shared across sessions, so duplicate model values are normal. Never reset or trimmed: the whole office is frozen verbatim at close |
 | `tasks/current.md` | overwrite | project | The one task in progress — a lock only in single-agent mode |
-| `tasks/backlog.md` | live queue (append / delete-when-done) | project | Open items for future sessions only — a finished item's line is deleted; its completion record is the session entry + commit. Office-scoped: still-open items are re-seeded into the next office at close |
+| `tasks/backlog.md` | live queue (priority-grouped tables; add/delete rows) | project | Open items for future sessions only — one row per item in its priority table (High/Medium/Low, ID + Summary); a finished item's row is deleted, its completion record is the session entry + commit. Office-scoped: still-open items are re-seeded into the next office at close |
 | `plans/decisions.md` | append-only | project | ADR-style decisions — respected, not relitigated. Decisions still in force are re-seeded into the next office and recorded in the office's permanent record |
 | `flaws/log.md` | append-only | project→package | Friction with the protocol/`.context_ledger/` system itself; flows upstream |
 | `flaws/README.md` | generated | project | The flaws-vs-inefficiencies split rule (pointer to this schema) |
@@ -191,6 +192,69 @@ comment at the top (seeded from `core/templates/memory/`). **Read the
 template before writing; never invent formats.** If a file's in-repo
 template comment and this schema's mode column disagree, this schema
 wins.
+
+### The backlog: arrangement + workstream view
+
+`office/tasks/backlog.md` is **arranged, not a checkbox list**: open
+items live as rows in priority-grouped tables, so the shape of the work
+is visible the moment the file opens. The file is arranged exactly like
+this:
+
+    ## Open Items
+
+    ### High Priority
+
+    | ID | Summary |
+    |----|---------|
+    | B-2026-08-15-12 | Three-tier classification: tier decides whether the feature boots |
+
+    ### Medium Priority
+
+    | ID | Summary |
+    |----|---------|
+    | B-2026-08-17-9 | OUTPUT tokens: cap file_read injection + uniform choke-point cap |
+
+    ### Low Priority
+
+    | ID | Summary |
+    |----|---------|
+    | B-2026-07-31-10 | Non-coding capability roadmap |
+
+- **One row per open item, in its priority table.** Priority is the
+  table an item sits in (High / Medium / Low); when unsure, Medium.
+- **ID every row:** `B-<added YYYY-MM-DD>-<n>`, n = that date's next
+  sequence in the file. Stable IDs are what make cross-references and
+  workstream clustering possible. Legacy checkbox-format items keep
+  their line until next touched; re-row them with an ID then.
+- **The Summary cell carries the context** — enough for a fresh agent
+  to act without chat history — with status qualifiers in the text
+  ("partial — features present, lib not replaced", "done, pending
+  sign-off", "deferred by owner", "advisory").
+- **Finished = delete the row.** The backlog holds open work only; the
+  completion record is the session entry + commit. There are no
+  checkboxes in the file, so there is nothing to "check off" — a row
+  that remains is open work. (`ledger-mem closeout` still sweeps
+  checked-off `- [x]` tombstones from pre-1.0.5 checkbox-format
+  backlogs.)
+- **Workstream view — derived, never stored.** When the backlog is
+  large (roughly 20+ rows) or the user asks for a planning pass, render
+  the workstreams: numbered clusters of items attacking the same
+  problem ("Code Block / Code Display (3 items → 1 effort)"), each
+  listing its item IDs, a one-line rationale, dedupe/partial notes
+  ("treat as the same effort; dedupe when picked up"), and an ordering
+  suggestion when one exists ("ship measurement first — you can't
+  optimize what you can't measure"). Close with a summary table:
+
+  | Workstream | Items | Estimated Effort |
+  |------------|-------|------------------|
+  | Token efficiency | 6 | Large |
+
+  …plus a leverage note: which workstreams touch the most surface
+  (e.g., "affects every agent turn") and what is currently blocking
+  (e.g., the one item blocking the exit gate). Count the mapping
+  ("70 items → ~12 workstreams"). Workstreams are an analysis of the
+  rows, never a second copy of them — an item has one home (its
+  priority-table row), so finishing it stays a single delete.
 
 ### Reading order (session start)
 

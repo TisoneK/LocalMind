@@ -31,7 +31,7 @@ model, and what went wrong before.
 1. **Read `.context_ledger/` before touching anything; check in at the roster before working; update it before ending.** (Steps 3, 15–17 — the roster is the "who's in the office" board; sign it and push before product work, clock out at wrap-up. An empty board does not prove you're alone: a live row you didn't write means a peer is here.)
 2. **Two zones under `.context_ledger/`:** `core/` is the vendored protocol — **read-only, never write one byte there** (it updates only as a whole tree via `core/bin/ledger-sync`); `memory/` is this project's writable memory. Nothing needs to be cloned or fetched to run a session — the protocol travels inside the repo.
 3. **Two surfaces, never one commit:** project code and `.context_ledger/` memory are staged and committed separately — `git add .context_ledger/` for memory, explicit paths for project. Never `git add -A` with both dirty.
-4. **Know which kind of memory file you're in.** *Append-only* logs (`sessions.md`, `inefficiencies/log.md`, `decisions.md`, `flaws/log.md`) only grow — before committing one, its `git diff` shows no removed lines. `backlog.md` is a **live queue**: open work only — append new items, delete a line when its item is finished (the completion record is the session entry + commit, never a tombstone in the backlog). *Update-in-place* registries (`system/ai-models.md`, `system/environments.md`) hold one entry per key — **correct them by editing the entry, never by appending a duplicate row/block** (the old value is safe in git history). Appending to an update-in-place file is the same mistake as editing an append-only one. `ledger-mem check` catches a duplicated key.
+4. **Know which kind of memory file you're in.** *Append-only* logs (`sessions.md`, `inefficiencies/log.md`, `decisions.md`, `flaws/log.md`) only grow — before committing one, its `git diff` shows no removed lines. `backlog.md` is a **live queue**: open work only — add new items as rows in their priority table, delete the row when its item is finished (the completion record is the session entry + commit, never a tombstone in the backlog). *Update-in-place* registries (`system/ai-models.md`, `system/environments.md`) hold one entry per key — **correct them by editing the entry, never by appending a duplicate row/block** (the old value is safe in git history). Appending to an update-in-place file is the same mistake as editing an append-only one. `ledger-mem check` catches a duplicated key.
 5. **No secret values in any tracked file** — including inside recorded commands (`x-access-token:...` never lands in `environments.md`).
 6. **Commit each logical change, push after each commit, ask permission for neither.** (Pitfall #30)
 7. **A missing credential is a missing input — ask for it up front, not after the failure.** (Pitfall #34)
@@ -562,8 +562,9 @@ git log --oneline -20
 **Step 15 — Update `.context_ledger/memory/office/tasks/`**
 - In single-agent mode, clear `.context_ledger/memory/office/tasks/current.md` — mark the session's task done (or blocked, with the blocker). In collaboration mode, leave peers' task state untouched and emit a `release` or `handoff` event for each claimed scope.
 - **Clock out — when you are actually leaving.** Remove your row from `.context_ledger/memory/office/agents/roster.md` in this closing memory commit — the board shows who is in the office *now*, and a row left behind sends the next agent hunting for a peer who has left. Your visit is still on record: the session entry and git history keep it. `ledger-mem check` warns if a session entry was appended while your row still claims the office. **But leaving the board and finishing a unit of work are not the same event.** The session is not over until the user releases it (Pitfall #30), so if you expect a follow-up, keep your row live and clock out later. If you *did* clock out and the user brings more work, you have left and returned: **check back in first** (see the check-in rule above) — re-add your row before any edit, under the same name and codename, and extend rather than duplicate your Step 17 entry. If you ran in an isolated collaboration worktree, tear down your topology before leaving: remove the product worktree you created (`git worktree remove ../<project>-<agent-id>` — run `git status` inside it first; `--force` only on a clean tree) and delete your product branch (`git branch -d`, which refuses an unmerged branch; `git push origin --delete` too if you pushed it). Never touch a peer's worktree, and the coordination *branch* stays — it is the session's event trail, which later agents fetch to continue.
-- Append every open item you couldn't finish to `.context_ledger/memory/office/tasks/backlog.md` (append at the bottom; the backlog is a live queue of open work, not a log). Include enough context that a fresh agent can act on the item without this session's chat history.
-- If this session completed an existing backlog item, **delete its line** from `backlog.md` — the backlog holds only undone or partially done work. The completion record is this session's `agents/sessions.md` entry and the commit itself; git history preserves the removed line. Never delete a line whose item is still open. Leftover tombstones — a prior session checked the box (`- [x]`) instead of deleting — are swept by `ledger-mem closeout` (dry run by default; `--confirm` deletes).
+- Append every open item you couldn't finish to `.context_ledger/memory/office/tasks/backlog.md` — **add a row to its priority table** (High/Medium/Low; unsure → Medium) with an ID `B-<added date>-<n>` and a Summary cell that gives a fresh agent enough context to act without this session's chat history. The backlog is a live queue of open work, not a log.
+- If this session completed an existing backlog item, **delete its row** from `backlog.md` — the backlog holds only undone or partially done work. The completion record is this session's `agents/sessions.md` entry and the commit itself; git history preserves the removed row. Never delete a row whose item is still open. (Legacy checkbox-format backlogs: a checked-off `- [x]` line a session left behind is swept by `ledger-mem closeout` — dry run by default; `--confirm` deletes.)
+- **The backlog is arranged, not a dump.** `backlog.md` holds one row per open item in priority-grouped `ID | Summary` tables — the file itself, not just the report. When planning over a large backlog (or the user asks), render the derived **workstream view**: numbered clusters of related items with a one-line rationale, ordering advice, and a `Workstream | Items | Estimated Effort` summary table. Full spec: `.context_ledger/core/schemas/ledger-schema.md` → "The backlog: arrangement + workstream view".
 
 **Step 16 — Update `.context_ledger/memory/system/` + `.context_ledger/memory/user/` + `.context_ledger/memory/office/plans/`**
 - `.context_ledger/memory/system/environments.md`: add/update the block for the environment you ran on (sandbox/OS, runtime versions, package manager, anything the next agent needs to reproduce your setup). Refresh its last-verified date and record the commands you verified work (install / test / lint / dev).
@@ -594,7 +595,7 @@ git log --oneline -20
 - One-paragraph summary of what was done.
 - Commits made (count + SHA range).
 - Key findings by severity.
-- Open items for the next session (mirroring `.context_ledger/memory/office/tasks/backlog.md`).
+- Open items for the next session (mirroring `.context_ledger/memory/office/tasks/backlog.md` — already priority-grouped; add the workstream view when planning).
 - Remind the user to rotate the PAT.
 
 **Step 19 — Unset the PAT**
@@ -643,7 +644,7 @@ rm -f .context_ledger/memory/secrets/github-pat   # if you stored it there in St
 │   │   │       └── notes.md   # session-scoped detail — research, dead ends, reasoning
 │   │   ├── tasks/
 │   │   │   ├── current.md     # the task being worked on right now (one at a time, overwrite; the session lock)
-│   │   │   └── backlog.md     # live queue of open items — delete a line when its item is done (ledger-mem closeout sweeps leftovers)
+│   │   │   └── backlog.md     # live queue of open items, priority-grouped tables — delete the row when its item is done (ledger-mem closeout sweeps legacy checkbox tombstones)
 │   │   ├── plans/
 │   │   │   └── decisions.md   # append-only ADR-style architectural decisions
 │   │   ├── inefficiencies/
@@ -697,7 +698,7 @@ authoritative spec for every file (mode, scope, ownership) is
 | You have... | Write it to... | Mode |
 |---|---|---|
 | A review/finding about the codebase | `.context_ledger/memory/office/reviews/YYYY-MM-DD-review.md` | new file per session |
-| An open item you can't finish now | `.context_ledger/memory/office/tasks/backlog.md` | append (remove the line when done) |
+| An open item you can't finish now | `.context_ledger/memory/office/tasks/backlog.md` | add a row to its priority table (remove the row when done) |
 | The task you're starting/finishing | `.context_ledger/memory/office/tasks/current.md` | overwrite |
 | An architectural decision | `.context_ledger/memory/office/plans/decisions.md` | append (ADR) |
 | Project friction (tool failure, flaky test, env quirk, dependency pain) | `.context_ledger/memory/office/inefficiencies/log.md` | append |
@@ -715,7 +716,7 @@ authoritative spec for every file (mode, scope, ownership) is
 
 ### Rules
 
-1. **Append-only logs are append-only.** `sessions.md`, `inefficiencies/log.md`, and `decisions.md` never lose entries. If a past entry was wrong, append a correction referencing it — don't erase history. (`backlog.md` is the one live queue: delete a line only when its item is finished.)
+1. **Append-only logs are append-only.** `sessions.md`, `inefficiencies/log.md`, and `decisions.md` never lose entries. If a past entry was wrong, append a correction referencing it — don't erase history. (`backlog.md` is the one live queue: delete a row only when its item is finished.)
 2. **No secrets in tracked files.** `.context_ledger/` is committed to git. Record env var *names* and where secrets live in shared files — never values. Values the agent needs live only in `.context_ledger/memory/secrets/`, whose own `.gitignore` keeps them out of the repo (rules in its README). No PATs, API keys, or connection strings anywhere else.
 3. **`chore(ledger):` commit prefix.** Context updates are not features or fixes. Keep them out of the changelog. One exception: review reports in `.context_ledger/memory/office/reviews/` commit as `docs(review):` (Step 13) — they're a deliverable, not bookkeeping.
 4. **Friction logging is mandatory — and split by surface.** Project friction goes in `inefficiencies/log.md`; workflow/protocol friction goes in `flaws/log.md` (see `flaws/README.md` for the split, and how flaws flow back to the package repo). Both honest, every session. Wasted time you don't log is time the next agent wastes again.
@@ -838,7 +839,7 @@ protocol lives inside the project and travels with every clone.
 
 ### Prior Agent Context (from `.context_ledger/`)
 - **Last session:** _(date, agent, model, outcome — from `agents/sessions.md`)_
-- **Open backlog items:** _(count + the ones relevant to this session — from `tasks/backlog.md`)_
+- **Open backlog items:** _(count + the ones relevant to this session — from `tasks/backlog.md`, arranged in priority-grouped tables; cluster into workstreams for a planning view)_
 - **Known traps:** _(from `inefficiencies/log.md` — anything that will bite this session)_
 - **Standing decisions:** _(from `plans/decisions.md` — anything constraining this session's fixes)_
 
@@ -1113,7 +1114,7 @@ Append-only. Never overwrite. Start each section with `---`.
 
 ### End-of-session gates (before Step 19 unsets the PAT)
 
-- [ ] `.context_ledger/memory/office/tasks/current.md` cleared, open items appended to `backlog.md` (Step 15) in single-agent mode; collaboration mode releases/handoffs each claim without clearing a peer's task
+- [ ] `.context_ledger/memory/office/tasks/current.md` cleared, open items added as backlog rows (Step 15) in single-agent mode; collaboration mode releases/handoffs each claim without clearing a peer's task
 - [ ] Roster row removed (clocked out) in `.context_ledger/memory/office/agents/roster.md` (Step 15)
 - [ ] Own product worktree(s) removed + branch deleted after merge (`git worktree list` clean; coordination branch kept — Step 15)
 - [ ] `.context_ledger/memory/system/` + `.context_ledger/memory/user/` + `.context_ledger/memory/office/plans/` updated (Step 16)
@@ -1145,7 +1146,7 @@ Append-only. Never overwrite. Start each section with `---`.
 19. **Don't forget to strip the token after push** — the push workflow re-adds the token to the remote URL; strip it immediately after so it's not persisted in `.git/config`.
 20. **Don't skip reading `.context_ledger/` (Step 3)** — rediscovering what a prior agent already documented is the #1 logged inefficiency. Read first, verify second, work third.
 21. **Don't put secret values in tracked `.context_ledger/` files** — the directory is committed to git. Values belong only in `.context_ledger/memory/secrets/` (self-gitignored — verify with `git check-ignore` before writing); everywhere else, names and locations only.
-22. **Don't edit append-only logs** — `sessions.md`, `inefficiencies/log.md`, `decisions.md` grow by appending. Wrong entries get appended corrections, not deletions. (`backlog.md` is not in this set — it's a live queue: delete a line when its item is done.)
+22. **Don't edit append-only logs** — `sessions.md`, `inefficiencies/log.md`, `decisions.md` grow by appending. Wrong entries get appended corrections, not deletions. (`backlog.md` is not in this set — it's a live queue: delete a row when its item is done.)
 23. **Don't unset the PAT before the `.context_ledger/` updates are pushed** — Steps 15–17 need one final push; Step 19 comes last.
 24. **Don't skip the inefficiency log because the session went "fine"** — friction you absorbed silently is friction the next agent hits blind.
 25. **Don't guess your own model version** — system prompts often don't state it, and guesses propagate across sessions as wrong data. If the user filled in Pre-Flight's Agent Identity, copy it verbatim. If not, ask once in chat. If the user doesn't know, record `unknown` — never fabricate a version number.
@@ -1198,7 +1199,7 @@ By the end of the session provide:
 - Performance optimizations
 - Security observations
 - Technical debt identified
-- Open items for the next session (mirrored in `.context_ledger/memory/office/tasks/backlog.md`)
+- Open items for the next session (mirrored in `.context_ledger/memory/office/tasks/backlog.md` — priority-grouped tables)
 - Recommended next steps
 - Updated `.context_ledger/` (session entry, inefficiencies, tasks, system/plans — Steps 15–17)
 

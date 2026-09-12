@@ -10,6 +10,35 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 1.0.5 — 2026-09-12
+
+**The backlog is arranged, not a checkbox list.** `tasks/backlog.md`
+used to be a flat list of `- [ ]` lines where related items hid each
+other and nothing showed priority; the supervisor wanted the file
+itself to show the shape of the work (format PATCH).
+
+- **The file is now priority-grouped tables** (both editions' Step 15,
+  the schema's new "The backlog: arrangement + workstream view"
+  section, and the `tasks/backlog.md` template): one row per open item
+  in its **High / Medium / Low** table, each row `ID | Summary` with a
+  stable ID `B-<added YYYY-MM-DD>-<n>` and a Summary cell that carries
+  the full context plus status qualifiers ("partial", "deferred by
+  owner"). Finished = delete the row; there are no checkboxes, so
+  nothing can be "checked off" — a row that remains is open work.
+- **Existing backlogs do not need a migration commit**: legacy
+  checkbox-format items keep their line until next touched; re-row
+  them with an ID then. `ledger-mem closeout`/`check` still sweep and
+  flag checked-off `- [x]` tombstones, so old-format files keep their
+  tooling.
+- **The workstream view is derived, never stored**: when planning over
+  a large backlog (or the user asks), render numbered clusters of
+  related items — one-line rationale, dedupe/ordering notes, and a
+  `Workstream | Items | Estimated Effort` summary table — but an item's
+  only home stays its priority-table row, so finishing it remains a
+  single delete.
+
+---
+
 ## 1.0.4 — 2026-09-11
 
 **Session reports read like they were written for a person.** The
