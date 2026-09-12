@@ -26,7 +26,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
 | Kojo | S471 | glm-5.3-flash | Diagnosing owner-reported glm-5.3-flash >60s silent thinking in chat (bankofai) vs qwen3.8-flash |
-| Omari | S472 | glm-5.3-flash | Frontend: thinking-block UI does not format the LLM's thought (peer Kojo S471 owns the backend side) |
+| Omari | S472 | glm-5.3-flash | Frontend thinking-block fix LANDED (f58d90f9): thought renders via shared markdown pipeline; session open pending owner verification — peer Kojo S471 on backend |
 
 <!-- Clock-out 2026-09-11: Buffy (S472) — B-2026-09-10-4 CLOSED: the date-bomb
 family (3 tests) now derives its grounded/fabricated date answers from the

@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260912T025342Z-omari-zcode-glm-5.3-flash-win-s472-99b7dd6d",
+  "type": "release",
+  "session": "localmind-thinker-ui-20260912",
+  "agent": "omari-zcode-glm-5.3-flash-win-s472",
+  "created": "2026-09-12T02:53:43Z",
+  "issue": "thinker-ui-format",
+  "body": "Claim 20260912T013526Z-omari-zcode-glm-5.3-flash-win-s472-6e584307 released. Fix shipped on main: f58d90f9 (fix(ui): render the thinking block's thought through the shared markdown pipeline) + 5729cf6b (docs(changelog)). ROOT CAUSE: answers rendered via MarkdownContent (repairMarkdown -> ReactMarkdown + remarkGfm + themed renderers) but ThinkingBlock dumped the thought as a raw text node. FIX: extracted the themed markdown pipeline verbatim into frontend/src/components/shared/MarkdownContent.tsx (ChatMessage keeps using it unchanged) and routed the thought through it; streaming caret, copy-raw, [Label] step-line chip, auto-scroll and collapse all preserved. VERIFICATION: tsc -b --noEmit rc=0; eslint . --max-warnings 53 rc=0 (exactly 53, no net-new); vite build rc=0; vitest ThinkingBlock 14/14 + TurnTimeline + buildAgentPhase green. Full-suite vitest failures are PRE-EXISTING FLAKE in untouched files (baseline full run on the stashed tree fails the same class of files; every suspect passes in isolation; ci-check.sh runs no vitest, exit gate unaffected). Scope note for Kojo (S471): the owner's backend symptoms (glm-5.3-flash silent >60s thinking, agent-workspace non-persistence after 78fadbcc) remain yours; this release covers the UI formatting surface only.",
+  "paths": [],
+  "refs": ["20260912T013526Z-omari-zcode-glm-5.3-flash-win-s472-6e584307", "f58d90f9", "5729cf6b"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
