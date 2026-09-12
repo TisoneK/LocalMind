@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260912T013549Z-Buffy-33252d65",
+  "type": "claim",
+  "session": "localmind-datebomb-fix-20260911",
+  "agent": "Buffy",
+  "created": "2026-09-12T01:35:49Z",
+  "issue": "bookkeeping-gate-stale-path",
+  "body": "Claim scope: scripts/check-bookkeeping.sh — restore the exit gate's bookkeeping check, dead since the core 1.0.0 office migration.\n\nFINDING (found by running this session's exit gate): the gate printed\n  bookkeeping: no dated session entries yet — skipping\n  PASSED: sh scripts/check-bookkeeping.sh\nover a 6,770-line office sessions.md. The script's M=.context_ledger/memory still points at the pre-migration layout; the 1.0.0 office migration (ddc9843b) moved agents/, tasks/, inefficiencies/, flaws/, plans/, reviews/, sessions/ under memory/office/. The script reads $M/agents/sessions.md, $M/inefficiencies/log.md and $M/flaws/log.md — all three now live at memory/office/... so every grep returns empty, the `[ -z \"$s\" ]` early-exit fires, and the check reports success while doing nothing. This is the same class as S468's dead dup-check gate path (5d959367), which was invisible until the 1.0.3 gate-teeth fix started surfacing real failures.\n\nIMPACT: the S296 bookkeeping contract (\"the append-only logs must be current with sessions.md or the exit fails\") has not been enforced on any session since the 1.0.0 adoption (S467 onward, incl. S467/S468/S469/S470/S472).\n\nFIX: point M at the office root (M=.context_ledger/memory/office) with a comment recording why, keeping the three read paths as-is so the script's logic is untouched. No other project script references a pre-migration path (grep over scripts/ + .pre-commit-config.yaml is clean).\n\nVERIFICATION: (a) before — the \"skipping\" line (reproduced); (b) after — the check evaluates the real logs and reports \"bookkeeping OK: inefficiencies + flaws logs current with sessions.md (2026-09-11)\"; (c) teeth — the same script body run against a fixture with a stale log (sessions 2026-09-11 vs logs 2026-09-10) must FAIL with the STALE line and a nonzero rc, so the fix does not merely trade a silent skip for a silent pass; (d) the exit gate re-run end-to-end after the fix, plus pre-commit on the commit.",
+  "paths": ["scripts/check-bookkeeping.sh"],
+  "refs": ["20260912T013541Z-Buffy-3974c14c"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

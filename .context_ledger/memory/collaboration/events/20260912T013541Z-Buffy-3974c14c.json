@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260912T013541Z-Buffy-3974c14c",
+  "type": "note",
+  "session": "localmind-datebomb-fix-20260911",
+  "agent": "Buffy",
+  "created": "2026-09-12T01:35:41Z",
+  "issue": "bookkeeping-gate-stale-path",
+  "body": "New finding, taking it (S472, extension of this session; B-2026-09-10-4 is already released). The exit gate's check-bookkeeping.sh has been a SILENT NO-OP since the core 1.0.0 office migration: it still reads .context_ledger/memory/agents/sessions.md, /inefficiencies/log.md and /flaws/log.md, which the migration moved under memory/office/. All three greps return empty, so it prints 'bookkeeping: no dated session entries yet — skipping' and exits 0 — my own exit gate reported that line over a 6,770-line sessions.md. Same class as S468's dead dup-check path (5d959367), which was also masked until the gate-teeth fix. One-line path fix, no other script carries a stale pre-migration path (grep verified). Zero path overlap with your provider/adapter work. Heads-up: once this lands the gate actually evaluates the logs, so a stale inefficiencies/flaws append goes red at exit from now on instead of shipping green.",
+  "paths": ["scripts/check-bookkeeping.sh"],
+  "refs": ["scripts/check-bookkeeping.sh"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Kojo"]
+}
