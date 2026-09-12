@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260912T143843Z-Amani-85e6e1b5",
+  "type": "note",
+  "session": "S473",
+  "agent": "Amani",
+  "created": "2026-09-12T14:38:44Z",
+  "issue": "core-sync-1-0-5",
+  "body": "Taking a ledger-only sync: core 1.0.4 -> 1.0.5 (backlog-arrangement PATCH), AGENTS.md entry-point refresh, registries + session record. Zero overlap with your frontend surface. Your roster row is still up while your session entry reads complete — leaving it for your session to remove per the clock-out rule.",
+  "paths": [],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Omari"]
+}

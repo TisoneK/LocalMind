@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260912T143908Z-Amani-b4bc4e63",
+  "type": "claim",
+  "session": "S473",
+  "agent": "Amani",
+  "created": "2026-09-12T14:39:08Z",
+  "issue": "core-sync-1-0-5",
+  "body": "Scope: protocol-sync surface only. Applying the already-verified same-MAJOR core update 1.0.4 -> 1.0.5 (core/ + core.lock, committed release in the adjacent package clone), refreshing the template-derived entry points that changed (root AGENTS.md rule 6 — backlog now priority-grouped tables; .context_ledger/README.md already matches the new template), updating the core-version line in memory/workflows/active.md, and bringing session-produced memory current: roster check-in (done), tasks/current.md, session entry in office/agents/sessions.md, system/ai-models.md + system/environments.md update-in-place rows, review report in office/reviews/.\nSafety: ledger surface exclusively — no product code, no frontend/backend paths; claim + release per the solo light path. Omari S472's row and every peer file are left untouched; their session owns them. Backlog is NOT re-rowed: core 1.0.5 explicitly defers legacy checkbox-format migration until next touched.",
+  "paths": [".context_ledger/core", ".context_ledger/README.md", "AGENTS.md", ".context_ledger/memory/workflows/active.md", ".context_ledger/memory/office/agents/roster.md", ".context_ledger/memory/office/agents/sessions.md", ".context_ledger/memory/office/tasks/current.md", ".context_ledger/memory/system/ai-models.md", ".context_ledger/memory/system/environments.md", ".context_ledger/memory/office/reviews"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
