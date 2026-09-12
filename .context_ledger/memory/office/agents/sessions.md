@@ -37,3 +37,13 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** none new — the full set is this office's backlog (69 rows) plus the owner-decision items named in the permanent record (grep_search pick; frontend vitest determinism; whether to file the Tier-1 import items; three "done, pending sign-off" frontend rows awaiting the owner's eye: B-2026-08-24-13, B-2026-08-24-14, B-2026-08-25-6).
 - **Report:** `.context_ledger/memory/office/reviews/2026-09-12-review-s1-close.md`
 - **Notes:** one inefficiency logged (the Bash tool truncating a ~90-line multi-heredoc command — split heredoc appends into one-per-command from now on; the Write-tool pattern already covers backslash content).
+
+---
+## 2026-09-12 — Session 2
+- **Agent:** Kwame (ZCode local) | **Model:** qwen3.8-flash (per system prompt `18ae0130-10c3-4a72-ac96-e46e6f4b7bc0/qwen3.8-flash`) | **Platform:** Windows 11 (10.0.26200 x64) | **Role:** engineer | **Core:** 1.0.5
+- **Task:** protocol sync on the supervisor's command (kickoff Step 1): pull the project, verify the vendored core, check for drift.
+- **Commits:** 2 (992ac777..clock-out)
+- **Outcome:** done — `git pull --ff-only` fast-forwarded 39ffab8a..d279b36c (the pulled history already carried the core bump to 1.0.5 and Session 1's office-001 close + re-seed); `ledger-sync verify` OK on 1.0.5 (every file matches MANIFEST.sha256, all ports parse); `ledger-sync status`: locked 1.0.5, update source (`C:\Users\tison\Dev\context-ledger\core`) reports 1.0.4 — older than the vendored core, "nothing to do". No core update or migration needed; no product work — the only changes this session are its own bookkeeping commits.
+- **Open items:** none from the sync. Observation for the owner: the local package-upstream checkout sits behind the project's vendored core (1.0.4 vs 1.0.5) — if the package repo is meant to be the release source for updates, the 1.0.5 content needs back-porting there.
+- **Notes:** none
+- **Report:** none (sync-only session; chat summary delivered)

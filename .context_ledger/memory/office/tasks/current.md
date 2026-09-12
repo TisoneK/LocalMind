@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-09-12 — Kwame (S2) / qwen3.8-flash
-- **Task:** protocol sync (kickoff Step 1) — pull, `ledger-sync verify`, drift check
-- **Status:** in-progress
+- **Session:** —
+- **Task:** none — no session in progress (Session 2 complete: protocol sync — core 1.0.5 verified, upstream older, nothing to update)
+- **Status:** idle
