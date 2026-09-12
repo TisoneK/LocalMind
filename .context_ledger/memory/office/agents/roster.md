@@ -36,7 +36,6 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
-| Amani | S1 | glm-5.3-flash | Session 1: carried the office-001 close (backlog re-rowed per 1.0.5, first ledger-history close, this office re-seeded); finishing bookkeeping |
 
 **Clock out when your session ends**: remove your row in the closing
 `chore(ledger):` commit. The board shows who is in the office *now*;
