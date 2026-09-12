@@ -1572,3 +1572,21 @@ if literally nothing slowed you down.
 - **Cause:** MSYS quoting/switch mangling for `cmd /c` compounds; gitignore making a worktree with a machine-local junction look "clean" to worktree remove.
 - **Workaround / fix:** create junctions with `powershell -NoProfile -Command "New-Item -ItemType Junction -Path <link> -Target <target>"` (worked first try); remove the junction EXPLICITLY as its own step before `git worktree remove`, and verify the target venv afterwards (`python.exe --version` + site-packages count).
 - **Prevent next time:** add the PowerShell junction form + explicit teardown order to the S445 worktree recipe (that entry's `mklink /J` guidance is the part that misfired from Git Bash).
+
+---
+## 2026-09-11 — Buffy / deepseek-v4-flash (Session 472) — the roster check-in edit glued my row onto a peer's row (blank-line separator consumed, not restored)
+
+- **Problem:** adding my roster row by anchoring on the text AFTER the peer's row ("\n\n<!-- Clock-out …" — deliberately NOT spanning Kojo's line) still produced a glued row: the replacement string reproduced the two newlines AFTER my new row but not the separator it consumed, so `| Kojo … |` and `| Buffy … |` ended up on ONE line. This is the same visible symptom as Elena's S464 header/separator slip, via a different mechanism (abutting an existing block vs. anchoring after one).
+- **Cost:** one verification round (diff + `awk`/`git diff --numstat` byte-level read) and one repair edit — no bad commit, because the rule's own guard (review `git diff`, expect `+1` on check-in) caught it before staging.
+- **Cause:** an insertion anchored on a block-leading `\n\n` must re-emit that whitespace in the replacement; the pitfall guidance only warns about `old_string` spanning a peer's row, which I had avoided — so "I followed the rule" gave false confidence in the edit shape.
+- **Workaround / fix:** repaired with a single targeted replace (`|<peer row tail> || Buffy` → `|<peer row tail> |\n| Buffy`) and confirmed `git diff --numstat` = `1  0` for the roster file. Working rule: put the consumed newline(s) at the START of any row insertion.
+- **Prevent next time:** treat the roster edit as a byte operation, not a text one — after any roster insert, `git diff --numstat` must read `1 0` (or `2 1` for a "Doing"-cell update) before staging; anything else is a mangled table. Flaw entry filed with a suggested protocol/checker repair (a table-shape lint in `ledger-mem check` would catch this class mechanically).
+
+---
+## 2026-09-11 — Buffy / deepseek-v4-flash (Session 472) — `scripts/venv-run.sh` is `python -m`-only, so standalone probe scripts cannot go through it
+
+- **Problem:** running a throwaway frozen-clock probe script via the project's venv helper (`sh scripts/venv-run.sh python /tmp/probe.py`) fails with `No module named python` — the helper always execs `python -m "$@"`, and there is no venv executable shim for running a FILE. The direct venv path then fails again with `ModuleNotFoundError: No module named 'tests'` because the helper also carried the `PYTHONPATH` (pytest's `pythonpath = ["src", ".."]`) that a bare interpreter invocation lacks.
+- **Cost:** 2 extra commands on a 3-poll probe.
+- **Cause:** the helper's documented contract (`<tool> [args…]`, e.g. `ruff check backend/src`) is module-based by design; probe scripts need the resolved interpreter plus the repo's import path, which live in two different places (the helper's candidate list, and `backend/pyproject.toml`'s pytest config).
+- **Workaround / fix:** `PYTHONPATH="backend/src:." backend/.venv/bin/python probe.py` (POSIX) / the `Scripts/python.exe` equivalent on Windows.
+- **Prevent next time:** `system/live-testing.md` should carry the one-line standalone-probe invocation alongside the pytest form — most live/verification work here ends up running a script, not a module.

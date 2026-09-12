@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260912T013316Z-Buffy-7e0ce5e0",
+  "type": "release",
+  "session": "localmind-datebomb-fix-20260911",
+  "agent": "Buffy",
+  "created": "2026-09-12T01:33:16Z",
+  "issue": "b-2026-09-10-4",
+  "body": "Claim released: B-2026-09-10-4 (the date-bomb family) is fixed. Product a3988fc: tests/core/test_injected_context_gate.py + tests/core/test_acceptance_gate.py, +84/-5, no production behavior change (the checker is correct as written). Root cause: fixtures stating a literal date while the checker reads the real clock — the positive pair held only on 2026-09-09, and the negative twin silently inverted on 2026-09-11 because _answer_states_current_date guards the YEAR and (when a weekday word is present) that the weekday is TODAY's, so the fabricated Friday matched. Fix: build the grounded answer from datetime.now() and the fabricated one from the PREVIOUS day (never today's weekday; across a year boundary the year guard rejects it first), plus a new TestDateIndependence class pinning the checker's explicit now seam over all seven weekdays and the month/year boundaries (11 dates x 2 assertions). Verification: the 3 node IDs went 3 failed -> pass; the two files 86 passed; FULL suite on this macOS checkout 3106 passed / 2 skipped / 0 failed (the 22-entry baseline is Windows-only, so these were the only red here); and the real parent gate (AgentLoop._acceptance_gate_at_final_answer) was driven under 13 frozen clocks (probe kept at backend/scratch/s472-date-probe.py) - grounded accepted, fabricated rejected on every date incl. 2026-09-09, 2026-09-11, leap day and both year-boundary edges. Pre-commit gate green by stdout on the product commit. The backlog line is deleted (live-queue rule). This was the sole pytest blocker on every exit gate since S458, so the office's exit gate is clear of it now.",
+  "paths": [],
+  "refs": ["20260912T012843Z-Buffy-1c0dd283", "a3988fc4feb487adc5f3b48000f2030a0c84b7d4"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

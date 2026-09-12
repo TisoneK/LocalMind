@@ -625,7 +625,6 @@ item remains open.
 
 ---
 
-- [ ] **B-2026-09-10-4** (P2, test hermeticity — S458 finding at exit gate): **Two "grounded date" acceptance-gate tests hard-code the day they were written — time-bomb failures the day after.** `tests/core/test_injected_context_gate.py::TestGroundedClass::test_date_question_with_real_weekday` and `tests/core/test_acceptance_gate.py::test_gate_accepts_zero_tool_date_answer_without_replan` pass the literal "Today is **Wednesday, September 9, 2026**" and expect validity against the REAL clock — both failed 2026-09-10 (proved in isolation: 2 failed in 2.47s). These are the ONLY two NEW failures in ci-check beyond the documented 22-failure Windows baseline (S458 run, 24 failed / 3023 passed); S457's macOS run was green because the dates still matched. Fix shape: compute the expected date string in-test (`datetime.now()`) or freeze the clock at the seam the checker reads — never hard-code today's date in a test that consults the real clock. (Set by S458, 2026-09-10) **Addendum (S465, 2026-09-11):** the exit gate's NEW-failure set shows a THIRD member of this family — `tests/core/test_acceptance_gate.py::test_gate_still_rejects_zero_tool_fabricated_date` — same hard-coded-date root cause, same fix shape; this item's scope is now all three, still the sole exit-gate pytest blocker.
 
 ---
 
