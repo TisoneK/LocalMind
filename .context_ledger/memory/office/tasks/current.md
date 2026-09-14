@@ -13,5 +13,5 @@ entry and backlog before starting.
 -->
 
 - **Session:** —
-- **Task:** none — no session in progress (Session 2 complete: protocol sync + core re-sync — vendored core migrated 1.0.5 → 1.0.6, sign-in-first entrypoints regenerated and pushed `f0982f82`)
+- **Task:** none — no session in progress (Session 3 complete: context sync — vendored core migrated 1.0.6 → 1.1.1; kickoff.md/AGENTS.md regenerated from the new templates with facts refilled; roster board upgraded to Status columns at sign-in)
 - **Status:** idle

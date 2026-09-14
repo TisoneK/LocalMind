@@ -30,3 +30,7 @@ records.
 - A removed summary line MUST have a corresponding permanent entry in
   agents/sessions.md — never delete the only record of a session.
 -->
+
+---
+- **2026-09-14 — Session 3** — Njeri / qwen3.8-flash — context sync done: vendored core migrated 1.0.6 → 1.1.1 (roster Status columns, entrance check-in, door-triggered office close); kickoff.md + AGENTS.md regenerated with facts refilled. No product work.
+  Detail: .context_ledger/memory/office/reviews/2026-09-14-review-s3-sync.md

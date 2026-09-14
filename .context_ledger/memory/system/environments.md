@@ -20,7 +20,7 @@ block (and its "last verified" date) every time you run on it again.
 
 ---
 ---
-## Tison's local Windows machine (last verified 2026-09-12)
+## Tison's local Windows machine (last verified 2026-09-14)
 
 - **Identify by:** OS is Windows; Tisone's dev account; hostname `DESKTOP-3LRR8MD`; repo checkouts seen: `C:\Users\Lameck\Tisone\LocalMind` (S449-S462) AND `C:\Users\tison\Dev\LocalMind` (S421-S449 era, again live 2026-09-11 S465) — both paths are the same Windows 11 box; check `pwd` rather than assuming either.
 - **OS:** Windows 11 (PowerShell, Git Bash available)
