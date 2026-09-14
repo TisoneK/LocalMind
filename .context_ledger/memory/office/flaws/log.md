@@ -47,3 +47,12 @@ stays here as a live trap.
   owners are the next core maintainer pass.
 - **Status:** open (carried; not re-verified this session beyond the original
   entries — read the full context in `history/office-001/flaws/log.md`).
+
+---
+## 2026-09-14 — Njeri / qwen3.8-flash (S003) — clean-session silence vs the bookkeeping gate's staleness teeth
+
+- **Flaw:** core 1.1.0's log compaction says "a clean session appends nothing" to the friction logs (both editions + schema), but this project's configured exit gate (`scripts/check-bookkeeping.sh`, itself an S296-era fix for bookkeeping drift) FAILS when the friction logs' newest date trails `sessions.md` — so a genuinely clean session is mechanically forced to append exactly what the compaction rule calls noise.
+- **Symptom:** S003's exit gate failed once on `STALE: inefficiencies/log.md ... flaws/log.md`; the checker's own hint ("an explicit '## date — none this session' counts") reconciles them only for the session that discovers it.
+- **Root cause:** the compaction rule and the staleness checker encode different definitions of "current" — one is content (only real friction earns a block), the other is a date watermark. Neither references the other.
+- **Suggested fix:** the package should state the reconciliation: either the editions note that projects whose bookkeeping gate watermarks by date require the explicit one-line clean entry (compaction's "appends nothing" means "no friction block", the watermark line still counts), or `check-bookkeeping.sh`'s shipped guidance should move into the schema so projects inherit the same reading.
+- **Status:** open

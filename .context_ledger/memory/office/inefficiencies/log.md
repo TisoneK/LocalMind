@@ -37,3 +37,8 @@ never makes an entry eligible.
 - **Cause:** (1) the Bash tool's command string on this Windows box collapses doubled backslashes before heredoc/inline-script content is written — the same family as the `cmd //c` argument mangling (S460) and the `$VAR`-path mangle (S416); any check that strips escapes before counting also cannot distinguish "escaped pipe" from "raw pipe". (2) very long compound commands are not delivered intact.
 - **Workaround / fix:** (1) anything containing backslashes — regexes, escaped pipes, Windows paths — goes through the Write tool into a script file, then runs; the checker counts RAW pipes per row (pipe not preceded by a backslash) instead of stripping escapes first; it caught the one genuine defect (regex literals inside B-2026-08-20-8) on the first try. (2) one heredoc append per Bash command; verify each file's tail immediately after appending.
 - **Prevent next time:** never verify escaping with a tool that eats the escapes; never bundle multiple heredoc appends into one command on this box; when a heredoc warns "delimited by end-of-file", assume the LAST files in the command are corrupted or missing and check every tail before committing.
+
+---
+## 2026-09-14 — Njeri / qwen3.8-flash (S003)
+
+- **Problem:** none this session — a clean sync-only session (core 1.0.6 → 1.1.1 migration + bookkeeping). The only slip was self-inflicted and caught instantly: a sed with the wrong spacing silently no-op'd on one placeholder (re-checked, fixed with a corrected pattern), and the backslash-mangling trap already logged above bit exactly once (a `--body-file C:\...` path) — the logged forward-slash workaround applied first try, zero extra cost.
