@@ -113,6 +113,11 @@ preclose_checklist() {
   say "    Accomplished / Decisions still in force / Open threads"
   say "  - re-seed open threads that still matter into the NEW office's files"
   say "    (backlog / flaws / decisions) — the only carryover there is"
+  say "  - re-seeded entries describe the work in plain words: they never cite"
+  say "    this office's session numbers or codenames (S014, Session 12) —"
+  say "    those live in the frozen copy the new office never reads; the new"
+  say "    office's numbering starts clean (codenames from S001, entries from"
+  say "    Session 1)"
   say "The new office starts from empty skeletons; durable files do not rotate."
 }
 
@@ -151,7 +156,8 @@ cmd_status() {
   say "archive/:        $_acount tarball(s) (cap $_ak)"
   if [ "$_c" -ge "$_gs" ]; then
     say ""
-    say "A close is DUE (>= office_size). Run: ledger-history close   (then --confirm)"
+    say "A close is DUE (>= office_size). The next worker through the door runs it"
+    say "before working: ledger-history close   (then --confirm)"
   fi
   [ "$_acount" -gt "$_ak" ] && say "gc is DUE: archive/ over cap. Run: ledger-history gc --confirm"
   return 0

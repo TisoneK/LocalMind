@@ -4,12 +4,21 @@ Friction caused by the `.context_ledger/` system or the protocol itself. See
 `README.md` in this directory for the split between `flaws/` and
 `inefficiencies/`.
 
-Append-only, but prunable to cold storage: once an entry is explicitly
-marked `RESOLVED` / `superseded` / fixed, move it **verbatim** into
-`archive.md` in this directory so startup reads only the live entries.
-`ledger-mem prune` reports which entries are archive-eligible (`--list`
-names them); age alone never makes an entry eligible — an unresolved flaw
-stays here as a live trap.
+Append-only, but compactable — the log never grows without bound:
+
+- **Resolved entries move verbatim** to cold storage: once an entry is
+  explicitly marked `RESOLVED` / `superseded` / fixed, cut it unchanged
+  into `archive.md` in this directory so startup reads only the live
+  entries. Age alone never makes an entry eligible — an unresolved flaw
+  stays here as a live trap.
+- **Repeats roll up:** when 3+ entries describe the same recurring
+  protocol trap, append ONE consolidated `Recurring` entry — the pattern,
+  how many times, the current workaround — and move the individual
+  entries verbatim into `archive.md`. The live log keeps the pattern, not
+  the repeats.
+
+`ledger-mem prune` reports log sizes, archive-eligible entries (`--list`
+names them), and roll-up candidates.
 
 <!-- TEMPLATE — copy below the last entry:
 ---

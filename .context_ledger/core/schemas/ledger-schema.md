@@ -125,8 +125,15 @@ trail) and never rotate.
 File inventory, write modes, and scopes. **Write modes:**
 
 - **append-only** — entries are only added at the bottom; corrections
-  are appended, never edited in. Sole exception: byte-identical
-  duplicate entries may be removed, leaving a one-line note in place.
+  are appended, never edited in. Sanctioned exceptions, all of them
+  **compaction** (see "Append-only logs: compaction, not hoarding"
+  below): byte-identical duplicate entries may be removed, leaving a
+  one-line note in place; explicitly closed entries (`RESOLVED` /
+  `superseded` / fixed) move **verbatim** into the log's companion
+  `archive.md`; and 3+ entries describing the same recurring thing roll
+  up into one `Recurring` entry with the instances moved verbatim into
+  the archive. Every moved line survives unchanged in the archive and in
+  git history — compaction relocates, it never rewrites.
 - **live queue** — open work only. New items are added as rows in their
   priority table (High/Medium/Low — see "The backlog" below); a row is
   deleted when its item is finished or no longer relevant. Never delete
@@ -155,14 +162,14 @@ File inventory, write modes, and scopes. **Write modes:**
 
 | Path (under `.context_ledger/memory/office/`) | Mode | Scope | Holds |
 |---|---|---|---|
-| `agents/sessions.md` | append-only (current office) | project | One entry per session: agent, model, platform, task, commits, outcome |
-| `agents/roster.md` | update-in-place (current office) | project | Team roster — the "who's in the office *now*" board. Every session (solo included) adds its row at check-in — at the entrance, before the deep read, not after analysis — and pushes it; the push claims the codename (the earlier commit keeps a colliding number; the later worker fixes their own row to the next free codename). Removes the row (clocks out) at session end. Who was on duty *when* lives in `agents/sessions.md` + this file's git history. Name and codename each unique in the office; `ledger-mem check` enforces it. Identity is *claimed* at check-in (fresh name + codename you pick), never *inferred* from a model/harness-string match — model strings are shared across sessions, so duplicate model values are normal. Never reset or trimmed: the whole office is frozen verbatim at close |
+| `agents/sessions.md` | append-only (current office) | project | One entry per session: agent, model, platform, task, commits, outcome. Bounded by the office itself: the door-triggered close (see Office lifecycle) keeps it at `office_size` entries or fewer |
+| `agents/roster.md` | update-in-place (current office) | project | Team roster — the "who's in the office *now*" board. Every session (solo included) adds its row at check-in — at the entrance, before the deep read, not after analysis — and pushes it; the push claims the codename (the earlier commit keeps a colliding number; the later worker fixes their own row to the next free codename). Columns: Name; codename `S<NNN>`; model; Doing (what you're on); **Status** — one short word, `Working` at check-in, edited in place to `Done` or `Blocked` as the work moves; **Status detail** — the one line the next worker needs (for `Working`: the stage or step reached; for `Done`: the outcome and extent, "Shipped: …"; for `Blocked`: what you're waiting on and from whom). Clock out (remove the row) when actually leaving — a finished session that stays live shows `Done` + its shipped outcome. Who was on duty *when* lives in `agents/sessions.md` + this file's git history. Name and codename each unique in the office; `ledger-mem check` enforces that and warns on an empty Status cell. Identity is *claimed* at check-in (fresh name + codename you pick), never *inferred* from a model/harness-string match — model strings are shared across sessions, so duplicate model values are normal. Never reset or trimmed: the whole office is frozen verbatim at close |
 | `tasks/current.md` | overwrite | project | The one task in progress — a lock only in single-agent mode |
 | `tasks/backlog.md` | live queue (priority-grouped tables; add/delete rows) | project | Open items for future sessions only — one row per item in its priority table (High/Medium/Low, ID + Summary); a finished item's row is deleted, its completion record is the session entry + commit. Office-scoped: still-open items are re-seeded into the next office at close |
-| `plans/decisions.md` | append-only | project | ADR-style decisions — respected, not relitigated. Decisions still in force are re-seeded into the next office and recorded in the office's permanent record |
-| `flaws/log.md` | append-only | project→package | Friction with the protocol/`.context_ledger/` system itself; flows upstream |
+| `plans/decisions.md` | append-only (compactable) | project | ADR-style decisions — respected, not relitigated. Decisions still in force are re-seeded into the next office and recorded in the office's permanent record. Superseded ADRs move verbatim to `plans/archive.md` |
+| `flaws/log.md` | append-only (compactable) | project→package | Friction with the protocol/`.context_ledger/` system itself; flows upstream. A clean session appends nothing; closed entries move verbatim to `flaws/archive.md`; 3+ entries on the same recurring trap roll up into one `Recurring` entry |
 | `flaws/README.md` | generated | project | The flaws-vs-inefficiencies split rule (pointer to this schema) |
-| `inefficiencies/log.md` | append-only | project | Friction with the project's code, env, deps |
+| `inefficiencies/log.md` | append-only (compactable) | project | Friction with the project's code, env, deps — real friction only (a clean session appends nothing). Closed entries move verbatim to `inefficiencies/archive.md`; 3+ entries on the same recurring thing roll up into one `Recurring` entry |
 | `reviews/YYYY-MM-DD-*.md` | new file per session | project | Session reports (deliverables — commit as `docs(review):`) |
 | `reviews/README.md` | generated | project | Naming + report structure (pointer to this schema) |
 | `sessions/README.md` | generated | project | Session-scoped memory rules, disposable principle, promotion rule |
@@ -256,6 +263,44 @@ this:
   rows, never a second copy of them — an item has one home (its
   priority-table row), so finishing it stays a single delete.
 
+### Append-only logs: compaction, not hoarding
+
+`agents/sessions.md`, `plans/decisions.md`, `flaws/log.md`, and
+`inefficiencies/log.md` are append-only — corrections are appended,
+never edited in — but append-only is not a license to hoard. Four
+mechanisms keep every one of them small enough that the session-start
+read stays cheap:
+
+- **Clean sessions append nothing.** A session that hit no friction adds
+  no block to `flaws/log.md` or `inefficiencies/log.md` — "none this
+  session" entries are noise, not history. The session's honesty lives
+  in its `agents/sessions.md` entry; only real friction earns a block.
+- **Closed entries move verbatim to the archive.** Once an entry is
+  explicitly marked `RESOLVED` / `superseded` / fixed, it is cold
+  history: cut it unchanged into the log's companion archive
+  (`flaws/archive.md`, `inefficiencies/archive.md`, `plans/archive.md`).
+  Startup reads only the active log; the archive stays in git,
+  grep-able. Manual cut-and-paste, never automatic — and only an
+  explicit closed marker makes an entry eligible; age alone never does.
+  An unresolved flaw stays in the active log: it is a live trap the next
+  agent must see.
+- **Repeats roll up.** When a log holds 3+ entries describing the same
+  recurring thing (same failing tool, same root cause, same protocol
+  trap), append ONE consolidated `Recurring` entry — the pattern, how
+  many times, the current workaround — and move the individual entries
+  verbatim into the archive. The live log keeps the pattern, not the
+  repeats.
+- **The office bounds the session registry.** `agents/sessions.md` needs
+  none of the above within a healthy office: the door-triggered close
+  (see Office lifecycle) freezes it at `office_size` entries or fewer,
+  and `sessions/SUMMARY.md` prunes at ~40 lines as before.
+
+`ledger-mem prune` reports each log's size, the archive-eligible
+entries (`--list` names them), and roll-up candidates — advisory only;
+the moves are the agent's edit, and every moved line survives unchanged
+in the archive and in git history. Compaction relocates; it never
+rewrites or deletes context.
+
 ### Reading order (session start)
 
 The check-in short-circuits this order: read `agents/roster.md` and the
@@ -295,9 +340,14 @@ stable. **Durable files never rotate:** `user/`, `system/`,
 
 The **roster** is the team board for the current office: **every session
 (solo included) checks in** — picks a human name, adds a row (Name,
-codename `S<NNN>`, model, what they're doing), and pushes it at the door,
-before the deep read and any product work — and **clocks out** by removing the row in the closing
-memory commit, so the board shows who is in the office *now*. Who was on
+codename `S<NNN>`, model, what they're doing, a `Working`/`Done`/`Blocked`
+**Status**, and a one-line **Status detail**: how far the work has got,
+what shipped, or what's blocking), and pushes it at the door,
+before the deep read and any product work. The Status cells are the
+at-a-glance coordination signal — each worker edits their own row's
+cells in place as the work moves, so the next live worker sees what is
+finished, what is in flight at which stage, and what is blocked without
+asking. Clocking out removes the row in the closing memory commit, so the board shows who is in the office *now*. Who was on
 duty *when* is the duty log's job: append-only `agents/sessions.md`
 entries plus the roster file's own git history (check-in commit opens a
 shift, clock-out closes it). Each agent presents itself by that name in
@@ -336,6 +386,27 @@ permanent record — the same promotion rule as session notes, applied at
 the office boundary. This is what lets a closed office be archived and
 eventually deleted without losing institutional knowledge: the permanent
 record plus the durable files remember what matters.
+
+**Re-seed content, not record numbers.** A re-seeded backlog row,
+decision, or log entry must stand alone: it never cites the closed
+office's session numbers or codenames ("as fixed in S014", "see Session
+12") — those point into the frozen copy, which the new office never
+reads. Describe the work and its state in plain words; the permanent
+record (`history/office-<NNN>.md`, "Open threads") is the bridge between
+the two offices. The new office's own numbering starts clean — codenames
+from `S001`, session entries from `Session 1`, ADRs and backlog IDs from
+1.
+
+**The door trigger — a full office closes at check-in.** Closing at
+`office_size` is not optional tidy-up the next session might get to:
+the worker whose check-in read finds `agents/sessions.md` past
+`office_size` (default 20 — the codename they would claim is past S020)
+runs the close right after their check-in push, before the deep read and
+any analysis, re-seeds the open threads, and signs the fresh office's
+board. `ledger-history status` and `ledger-gates checkpoint` warn when a
+close is due, but the warning is a backstop — the trigger fires at the
+door because an over-full registry is exactly how a fresh session gets
+misdirected by stale numbers.
 
 ---
 

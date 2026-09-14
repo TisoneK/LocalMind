@@ -118,7 +118,7 @@ verify_tree() { # $1 = a core dir; returns 0 clean, 3 mismatch
   # manifest stays byte-compatible across LF checkouts (macOS/Linux) and CRLF
   # copies (files copied outside git on Windows, where .gitattributes does not
   # reach); LF-only files hash identically, so manifest values never change.
-  # The manifest itself is CR-stripped before parsing (B-2026-08-30-17).
+  # The manifest itself is CR-stripped before parsing.
   _mf=$(mktemp 2>/dev/null) || _mf="$1/.MANIFEST.lf.$$"
   tr -d '\r' < "$1/MANIFEST.sha256" > "$_mf" 2>/dev/null || cp "$1/MANIFEST.sha256" "$_mf"
   _rc=0; _shown=0

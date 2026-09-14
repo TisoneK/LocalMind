@@ -1,8 +1,10 @@
-# Inefficiency Log (append-only, mandatory)
+# Inefficiency Log (append-only — real friction only)
 
-Every session appends one block — honestly. Friction you absorb silently
-is friction the next agent hits blind. "None this session" is valid only
-if literally nothing slowed you down.
+Append a block **only when something actually slowed you down** — a clean
+session appends nothing (its `agents/sessions.md` entry is the record;
+"none this session" blocks are noise, not history). But when something
+bit you, the block is mandatory and honest: friction you absorb silently
+is friction the next agent hits blind.
 
 Most inefficiencies are project-local (an environment quirk, a one-off
 cost) and stay here. When one is actually **protocol-level** — the core
@@ -11,11 +13,20 @@ workflow itself made you slower and every project would hit it — mark it
 `flaws/`) into the package for an upstream fix. Unmarked entries are
 never harvested.
 
-Append-only, but prunable to cold storage: once an entry is explicitly
-marked `RESOLVED` / `superseded` / fixed, move it **verbatim** into
-`archive.md` in this directory so startup reads only the live entries.
-`ledger-mem prune` reports which entries are archive-eligible; age alone
-never makes an entry eligible.
+Append-only, but compactable — the log never grows without bound:
+
+- **Resolved entries move verbatim** to cold storage: once an entry is
+  explicitly marked `RESOLVED` / `superseded` / fixed, cut it unchanged
+  into `archive.md` in this directory so startup reads only the live
+  entries. Age alone never makes an entry eligible.
+- **Repeats roll up:** when 3+ entries describe the same recurring thing
+  (same failing tool, same root cause), append ONE consolidated
+  `Recurring` entry — the pattern, how many times, the current
+  workaround — and move the individual entries verbatim into
+  `archive.md`. The live log keeps the pattern, not the repeats.
+
+`ledger-mem prune` reports log sizes, archive-eligible entries (`--list`
+names them), and roll-up candidates.
 
 <!-- TEMPLATE — copy below the last entry:
 ---

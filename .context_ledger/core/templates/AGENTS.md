@@ -44,13 +44,25 @@ If you read nothing else, obey these rules:
 5. **Check in first — at the entrance, before any analysis.** Every session
    (solo or collaboration) adds or updates its row in
    `memory/office/agents/roster.md` — real name you pick (unique per office),
-   codename `S<NNN>`, model, one line on what you're on — and pushes it
+   codename `S<NNN>`, model, one line on what you're on, and a Status
+   (`Working` at sign-in, then `Done` or `Blocked`) with a one-line
+   status detail (the stage reached, what shipped — "Shipped: …", or the
+   blocker) — and pushes it
    BEFORE reading protocol or product code: the startup read comes after
    your row is on the board, because two workers who read first both see
    an empty office, both take the same codename, and meet mid-session
-   fighting over the main tree. The push claims the codename — whoever's
+   fighting over the main tree. Keep your row's Status cells current as
+   the work moves — the next live worker reads them to coordinate with
+   you at a glance. The push claims the codename — whoever's
    check-in commit lands first keeps it; on a collision fix your row to
-   the next free number, never drop a peer's row. Then choose the mode
+   the next free number, never drop a peer's row. And if the session registry you read at the door is already
+   past `office_size` sessions (default 20 — your codename would be
+   past S020), the office is full: close it before working
+   (`ledger-history close`, dry run then `--confirm`), fill the
+   permanent record, re-seed open threads into the fresh office —
+   re-seeded entries describe the work in plain words and never cite
+   old session numbers or codenames — then sign the new board;
+   codenames restart at `S001`. Then choose the mode
    from evidence. Roster edits are additive — your row only: a live
    row you didn't write is a colleague's check-in, not sample text — never
    adopt a peer's name, never let an edit span a peer's row, review the
@@ -81,7 +93,12 @@ If you read nothing else, obey these rules:
 6. **Know which kind of file you're in.** *Append-only* logs
    (`office/agents/sessions.md`, `office/plans/decisions.md`,
    `office/flaws/log.md`, `office/inefficiencies/log.md`) grow at the bottom — never edit
-   or delete past entries. `office/tasks/backlog.md` is a live queue
+   or delete past entries. They also never grow without bound — compact
+   them: a clean session appends nothing to the friction logs; entries
+   explicitly marked `RESOLVED`/`superseded`/fixed move verbatim into the
+   log's `archive.md`; 3+ entries hitting the same recurring thing roll up
+   into one `Recurring` entry (instances archived verbatim);
+   `ledger-mem prune` reports all three. `office/tasks/backlog.md` is a live queue
    arranged as priority-grouped tables: add each open item as a row in
    its priority table (High/Medium/Low, `ID | Summary`), delete the row
    when its item is finished (the completion record is the session
@@ -103,10 +120,16 @@ If you read nothing else, obey these rules:
    prefixes; editing `.context_ledger/` = `chore(ledger):` (reports:
    `docs(review):`). Never mix both surfaces in one commit. Collaboration
    events are separate immutable context commits. And keep the surfaces
-   apart in *content* too: never cite `.context_ledger` vocabulary (an ADR number,
-   a bug ID, a `.context_ledger/` path) in a product docstring or comment — it's a
-   dangling pointer for anyone reading only the product repo. `ledger-mem
-   lint` flags it in your staged diff.
+   apart in *content* too — strictly: never cite `.context_ledger`
+   vocabulary (an ADR number, a bug ID, a `.context_ledger/` path) in a
+   product docstring or comment; it's a dangling pointer for anyone
+   reading only the product repo. `ledger-mem lint` flags it in your
+   staged diff; `ledger-mem lint --tree` sweeps the whole product tree.
+   **A leak found from an earlier session is stripped on sight** — drop
+   the reference (state the reason in plain words if one was being
+   pointed at), commit the strip as a normal product fix, and continue
+   the session; never leave a known leak in place or defer it to a
+   backlog.
 9. **The session is not done until everything is committed AND pushed**,
    the session is logged in `.context_ledger/memory/office/agents/sessions.md`, and
    `.context_ledger/memory/office/tasks/current.md` is cleared. Clock out too: remove

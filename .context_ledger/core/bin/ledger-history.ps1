@@ -116,6 +116,11 @@ function Show-PrecloseChecklist {
   Say '    Accomplished / Decisions still in force / Open threads'
   Say "  - re-seed open threads that still matter into the NEW office's files"
   Say '    (backlog / flaws / decisions) - the only carryover there is'
+  Say '  - re-seeded entries describe the work in plain words: they never cite'
+  Say "    this office's session numbers or codenames (S014, Session 12) -"
+  Say '    those live in the frozen copy the new office never reads; the new'
+  Say "    office's numbering starts clean (codenames from S001, entries from"
+  Say '    Session 1)'
   Say 'The new office starts from empty skeletons; durable files do not rotate.'
 }
 
@@ -151,7 +156,11 @@ function Cmd-Status {
   }
   Say "history/:        $(Count-OfficeDirs) frozen office(s) readable, $(Count-Records) permanent record(s) (keep $hk)"
   Say "archive/:        $(Count-Archives) tarball(s) (cap $ak)"
-  if ($c -ge $gs) { Say ''; Say 'A close is DUE (>= office_size). Run: ledger-history close   (then --confirm)' }
+  if ($c -ge $gs) {
+    Say ''
+    Say 'A close is DUE (>= office_size). The next worker through the door runs it'
+    Say 'before working: ledger-history close   (then --confirm)'
+  }
   if ((Count-Archives) -gt $ak) { Say 'gc is DUE: archive/ over cap. Run: ledger-history gc --confirm' }
 }
 

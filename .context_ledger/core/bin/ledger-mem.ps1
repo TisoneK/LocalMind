@@ -33,14 +33,21 @@ function Usage {
     '',
     '  check   duplicate keys in the update-in-place registries',
     '          (ai-models.md by Agent+Model, environments.md by Identify-by;',
-    '          roster.md by Name and codename) plus a warn-only board-vs-',
-    '          duty-log audit: a roster row whose Session N is already in',
-    '          agents/sessions.md means the session never clocked out,',
-    '          and a duplicated Session N means a resumed session re-logged',
+    '          roster.md by Name and codename) plus warn-only audits: a',
+    '          roster row with no Status cell (the at-a-glance column), a',
+    '          roster row whose Session N is already in agents/sessions.md',
+    '          means the session never clocked out, and a duplicated',
+    '          Session N means a resumed session re-logged',
     '  lint    .context_ledger vocabulary (ADR-N, bug IDs, .context_ledger/ paths) leaking',
-    '          into the staged product diff',
-    '  prune   advise archiving resolved/superseded entries out of the',
-    '          append-only durable logs; --list names them. Reports only.',
+    '          into product artifacts - the staged diff by default; --tree',
+    '          sweeps every tracked product file (strip leaks old sessions left)',
+    '  prune   advise log compaction: each append-only durable log''s size',
+    '          (flaws, inefficiencies, decisions), which entries are',
+    '          explicitly resolved/superseded (move them verbatim to the',
+    "          log's archive.md), and which logs hold 3+ entries hitting",
+    '          the same recurring thing (roll up into one Recurring entry,',
+    "          instances archived verbatim); --list names them. Never",
+    '          moves or deletes - reports only.',
     '  closeout delete finished backlog items (- [x] tombstones) from the',
     '          tasks/backlog.md live queue - open work stays. Dry run by',
     '          default (lists the tombstones); --confirm deletes. Every',
@@ -105,9 +112,13 @@ function Check-Environments {
 }
 
 function Check-Roster {
+  # Rows are | Name | Codename | Model | Doing | Status | Status detail |.
+  # Name + codename must be unique in the office; a real row (codename
+  # S<NNN>) with an empty or missing Status cell draws a warn-only nudge
+  # (legacy pre-1.1.0 four-column rows warn too; they fail nothing).
   $f = Join-Path $officeDir 'agents/roster.md'
   if (-not (Test-Path -LiteralPath $f)) { return $true }
-  $nseen = @{}; $nwhere = @{}; $cseen = @{}; $cwhere = @{}; $ln = 0
+  $nseen = @{}; $nwhere = @{}; $cseen = @{}; $cwhere = @{}; $nostat = @{}; $ln = 0
   foreach ($raw in Get-Content -Encoding UTF8 -LiteralPath $f) {
     $ln++
     $line = $raw.TrimEnd("`r")
@@ -118,10 +129,17 @@ function Check-Roster {
     if ($code -notmatch '^[Ss][0-9]+$') { continue }
     if ($nseen.ContainsKey($name)) { $nseen[$name]++; $nwhere[$name] += " $ln" } else { $nseen[$name] = 1; $nwhere[$name] = "$ln" }
     if ($cseen.ContainsKey($code)) { $cseen[$code]++; $cwhere[$code] += " $ln" } else { $cseen[$code] = 1; $cwhere[$code] = "$ln" }
+    $st = if ($cells.Count -ge 8) { $cells[5].Trim() } else { '' }
+    if ($st -eq '') { $nostat[$code] = "$ln" }
   }
   $dup = $false
   foreach ($k in $nseen.Keys) { if ($nseen[$k] -gt 1) { ErrLine ('DUP roster.md: name "{0}" used by {1} rows (lines {2}) - one name per office; pick another, or edit your own row' -f $k, $nseen[$k], $nwhere[$k].Trim()); $dup = $true } }
   foreach ($k in $cseen.Keys) { if ($cseen[$k] -gt 1) { ErrLine ('DUP roster.md: codename "{0}" on {1} rows (lines {2}) - one row per session codename; edit your row instead of adding a second' -f $k, $cseen[$k], $cwhere[$k].Trim()); $dup = $true } }
+  # The warn goes straight to the console, not Say/Write-Output: the check
+  # dispatcher captures this function's output into $ok3, which would
+  # silently swallow any Write-Output warning (the DUP errors above survive
+  # because ErrLine writes to stderr).
+  foreach ($k in $nostat.Keys) { [Console]::Out.WriteLine(('WARN roster.md: codename {0} has no Status - the board''s at-a-glance column (Working/Done/Blocked + a status-detail line) is empty; edit your row' -f $k)) }
   return (-not $dup)
 }
 
@@ -224,26 +242,52 @@ function Invoke-Closeout {
 }
 
 function Invoke-Lint {
+  param([switch]$Tree)
   if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Die 'lint needs git on PATH' }
   $root = (& git -C $projectDir rev-parse --show-toplevel 2>$null)
   if (-not $root) { Die 'lint must run inside the project git repo' }
-  $diff = (& git -C $root diff --cached -U0 --no-color 2>$null)
-  $file = ''; $n = 0
-  foreach ($line in $diff) {
-    if ($line -match '^\+\+\+ ') { $file = $line -replace '^\+\+\+ b/', '' -replace '^\+\+\+ ', ''; continue }
-    if ($line -match '^\+' -and $line -notmatch '^\+\+\+') {
-      if ($file -match '^\.context_ledger/' -or $file -eq '/dev/null') { continue }
-      $s = $line.Substring(1)
-      $pat = ''
-      if ($s -match 'ADR-[0-9]') { $pat = 'an ADR reference' }
-      elseif ($s -match 'B-[0-9]{4}-[0-9]{2}-[0-9]') { $pat = 'a bug-ID reference' }
-      elseif ($s -match '\.context_ledger/') { $pat = 'a .context_ledger/ path' }
-      elseif ($s.ToLower() -match 'per adr') { $pat = '"per ADR"' }
-      if ($pat -ne '') { ErrLine ('LEAK: {0} cites {1}: {2}' -f $file, $pat, $s); $n++ }
+  $n = 0
+  if ($Tree) {
+    # sweep every tracked file outside .context_ledger/ (leaks an old session left)
+    $files = @(@(& git -C $root ls-files 2>$null) | Where-Object { $_ -and $_ -notmatch '^\.context_ledger/' })
+    if ($files.Count -eq 0) { Say 'lint passed: no tracked product files to sweep'; return $true }
+    foreach ($rel in $files) {
+      $full = Join-Path $root $rel
+      if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { continue }
+      $ln = 0
+      foreach ($s in Get-Content -Encoding UTF8 -LiteralPath $full) {
+        $ln++
+        $pat = ''
+        if ($s -match 'ADR-[0-9]') { $pat = 'an ADR reference' }
+        elseif ($s -match 'B-[0-9]{4}-[0-9]{2}-[0-9]') { $pat = 'a bug-ID reference' }
+        elseif ($s -match '\.context_ledger/') { $pat = 'a .context_ledger/ path' }
+        elseif ($s.ToLower() -match 'per adr') { $pat = '"per ADR"' }
+        if ($pat -ne '') { ErrLine ('LEAK: {0}:{1} cites {2}: {3}' -f ($rel -replace '\\','/'), $ln, $pat, $s); $n++ }
+      }
+    }
+  } else {
+    $diff = @(& git -C $root diff --cached -U0 --no-color 2>$null)
+    $file = ''
+    foreach ($line in $diff) {
+      if ($line -match '^\+\+\+ ') { $file = $line -replace '^\+\+\+ b/', '' -replace '^\+\+\+ ', ''; continue }
+      if ($line -match '^\+' -and $line -notmatch '^\+\+\+') {
+        if ($file -match '^\.context_ledger/' -or $file -eq '/dev/null') { continue }
+        $s = $line.Substring(1)
+        $pat = ''
+        if ($s -match 'ADR-[0-9]') { $pat = 'an ADR reference' }
+        elseif ($s -match 'B-[0-9]{4}-[0-9]{2}-[0-9]') { $pat = 'a bug-ID reference' }
+        elseif ($s -match '\.context_ledger/') { $pat = 'a .context_ledger/ path' }
+        elseif ($s.ToLower() -match 'per adr') { $pat = '"per ADR"' }
+        if ($pat -ne '') { ErrLine ('LEAK: {0} cites {1}: {2}' -f $file, $pat, $s); $n++ }
+      }
     }
   }
-  if ($n -eq 0) { Say 'lint passed: no .context_ledger vocabulary (ADR-N, bug IDs, .context_ledger/ paths) in the staged product diff'; return $true }
-  ErrLine 'lint failed: product code must stand on its own. State the reason in plain words; the ADR or bug-ID link belongs in .context_ledger/memory, not the source. Memory references code, never the reverse.'
+  if ($n -eq 0) {
+    if ($Tree) { Say 'lint passed: no .context_ledger vocabulary (ADR-N, bug IDs, .context_ledger/ paths) in any tracked product file' }
+    else { Say 'lint passed: no .context_ledger vocabulary (ADR-N, bug IDs, .context_ledger/ paths) in the staged product diff' }
+    return $true
+  }
+  ErrLine 'lint failed: product code must stand on its own. State the reason in plain words; the ADR or bug-ID link belongs in .context_ledger/memory, not the source. Memory references code, never the reverse. Stripping a found leak is a safe fix - do it, then continue.'
   return $false
 }
 
@@ -251,28 +295,49 @@ function Invoke-Prune {
   param([bool]$List)
   if (-not (Test-Path -LiteralPath $memoryDir)) { Say 'ledger-mem: no memory dir (nothing to prune)'; return }
   $eligible = $false
-  foreach ($rel in @('flaws/log.md', 'inefficiencies/log.md')) {
+  foreach ($rel in @('flaws/log.md', 'inefficiencies/log.md', 'plans/decisions.md')) {
     $f = Join-Path $officeDir $rel
     if (-not (Test-Path -LiteralPath $f)) { continue }
-    $total = 0; $lines = 0; $inseg = $false; $closed = $false; $heading = ''; $cand = @()
+    $total = 0; $lines = 0
+    $segs = @()
+    $inseg = $false; $closed = $false; $heading = ''; $fp = ''
     foreach ($raw in Get-Content -Encoding UTF8 -LiteralPath $f) {
       $lines++
       $line = $raw.TrimEnd("`r")
       if ($line -match '^## ') {
-        if ($inseg -and $closed) { $cand += $heading }
-        $inseg = $true; $closed = $false; $heading = $line; $total++
+        if ($inseg) { $segs += [pscustomobject]@{ Heading = $heading; Closed = $closed; Fp = $fp } }
+        $inseg = $true; $closed = $false; $heading = $line; $total++; $fp = ''
         continue
       }
       if ($inseg -and ($line -match 'RESOLVED|[Ss]uperseded|[Ff]ixed in package|no longer (a )?(flaw|issue)')) { $closed = $true }
+      if ($inseg -and $fp -eq '' -and $line -match '^[ ]*[-*]?[ ]*[*][*](Problem|Flaw):[*][*][ ]*(.+)$') {
+        $t = $Matches[2].Trim().ToLower().Replace("`t", ' ')
+        while ($t.Contains('  ')) { $t = $t.Replace('  ', ' ') }
+        $fp = $t
+      }
     }
-    if ($inseg -and $closed) { $cand += $heading }
+    if ($inseg) { $segs += [pscustomobject]@{ Heading = $heading; Closed = $closed; Fp = $fp } }
+    $cand = @($segs | Where-Object { $_.Closed } | ForEach-Object { $_.Heading })
     $c = $cand.Count
+    $fpseen = @{}; $fpwhere = @{}
+    foreach ($seg in $segs) {
+      if ($seg.Fp -eq '') { continue }
+      if ($fpseen.ContainsKey($seg.Fp)) { $fpseen[$seg.Fp]++; $fpwhere[$seg.Fp] += (' || ' + $seg.Heading) }
+      else { $fpseen[$seg.Fp] = 1; $fpwhere[$seg.Fp] = (' || ' + $seg.Heading) }
+    }
     Say ('{0} - {1} entries ({2} lines); {3} marked resolved/superseded -> archive-eligible.' -f $rel, $total, $lines, $c)
+    $dir = $rel -replace '[^/]*$', ''
     if ($c -gt 0) {
-      $dir = $rel -replace '[^/]*$', ''
       Say ('  move the resolved entries to {0}archive.md; startup then reads only the active log.' -f $dir)
       if ($List) { foreach ($h in $cand) { Say ('    - {0}' -f $h) } }
       $eligible = $true
+    }
+    foreach ($k in $fpseen.Keys) {
+      if ($fpseen[$k] -ge 3) {
+        $short = $k; if ($short.Length -gt 70) { $short = $short.Substring(0, 70) }
+        Say ('  roll-up: {0} entries hit the same recurring thing ({1}) - append one Recurring entry, move the instances to {2}archive.md.' -f $fpseen[$k], $short, $dir)
+        if ($List) { Say ('    - {0}' -f $fpwhere[$k]) }
+      }
     }
   }
   if ($eligible) {
@@ -299,7 +364,11 @@ switch ($Command) {
     exit 1
   }
   'lint' {
-    if (Invoke-Lint) { exit 0 } else { exit 1 }
+    foreach ($a in $RestArgs) {
+      if ($a -notin @('--tree', '-h', '--help')) { Die "unknown argument '$a'" }
+    }
+    if ($RestArgs -contains '-h' -or $RestArgs -contains '--help') { Usage }
+    if (Invoke-Lint -Tree:($RestArgs -contains '--tree')) { exit 0 } else { exit 1 }
   }
   'prune' {
     Invoke-Prune -List:($RestArgs -contains '--list')

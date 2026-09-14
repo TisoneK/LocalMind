@@ -10,6 +10,89 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 1.1.1 — 2026-09-13
+
+**A comment cleaned by the rule 1.1.0 just enforced.** The one-way-linkage
+sweep applied to the package's own code: `ledger-sync` cited a backlog bug
+ID (`B-2026-08-30-17`) in a source comment. That ID resolves only in this
+repo's own `tasks/backlog.md`, which is never vendored into a consumer's
+`core/` — so the reference was a dangling pointer for every downstream
+reader, the exact defect `ledger-mem lint --tree` now hunts. The reason was
+already stated in plain words; only the ID tail is removed. No behavior
+change.
+
+- **Migration:** none. `ledger-sync update` to 1.1.1; the vendored
+  `core/` rehashes (MANIFEST regen), memory untouched.
+
+---
+
+## 1.1.0 — 2026-09-13
+
+**At-a-glance coordination, self-closing offices, compactable logs, and a
+real one-way-linkage sweep.** Four supervisor-requested changes that make
+the office legible to the next worker and stop memory from growing
+without bound (MINOR — all backward-compatible: legacy four-column rosters
+and old-office re-seeds keep working).
+
+- **Roster gains `Status` + `Status detail` columns** (roster template,
+  schema roster spec + JSON, both editions' binding rule 1 / Step 3
+  check-in / light path / Step 15 clock-out, AGENTS digest rule 5, kickoff
+  Step 2): `Working` at sign-in, edited in place to `Done` (what shipped,
+  e.g. "Shipped: core 1.1.0 self-hosted") or `Blocked` (the blocker), with
+  a detail line for the stage reached. The board becomes the next live
+  worker's at-a-glance picture of who's where. `ledger-mem check` warns
+  (never fails) when a real row has an empty or missing Status cell —
+  legacy rows warn too. A pre-existing 4-column roster keeps working; add
+  the two cells on the next edit.
+- **A full office closes itself at the door** (both editions' Step 3 door
+  bullet + Step 17 lifecycle, schema Office lifecycle "door trigger",
+  AGENTS digest rule 5, kickoff Step 2, `ledger-history` status + pre-close
+  checklist): the worker whose check-in read finds `agents/sessions.md`
+  past `office_size` (default 20 — their codename would be past S020) runs
+  `ledger-history close` right after their check-in push, before the deep
+  read — not skippable to "finish this task first". **Re-seeded backlog /
+  decision / log entries describe the work in plain words and never cite
+  the closed office's session numbers or codenames** (those live in the
+  frozen `history/` copy the new office never reads); the new office's
+  numbering restarts clean (codenames from S001, entries from Session 1,
+  ADRs and backlog IDs from 1).
+- **Append-only logs compact, they don't hoard** (schema append-only mode
+  + new "compaction, not hoarding" subsection + four table rows, both
+  editions' rule 4 / Rules #1 / Step 17 / Pitfall #39, flaws +
+  inefficiencies log templates, AGENTS digest rule 6): a clean session
+  appends nothing to the friction logs; entries marked
+  `RESOLVED`/`superseded`/fixed move **verbatim** to the log's
+  `archive.md` (flaws, inefficiencies, and now decisions →
+  `plans/archive.md`); 3+ entries hitting the same recurring thing roll up
+  into one `Recurring` entry with the instances archived. Every moved line
+  survives in the archive and in git — compaction relocates, never
+  rewrites. `ledger-mem prune` now reports all three signals and covers
+  `plans/decisions.md`, in both ports.
+- **One-way linkage is enforced and swept** (both editions' gate-lint step
+  + Pitfall #44, AGENTS digest rule 8, schema.json `oneWayLinkage`):
+  product code must never carry `.context_ledger` vocabulary (ADR numbers,
+  bug IDs, `.context_ledger/` paths, "per ADR"). `ledger-mem lint` gains
+  `--tree`, sweeping every tracked product file (excluding
+  `.context_ledger/`) and reporting `file:line`, so leaks an **earlier
+  session** left become visible — the staged-diff mode only ever caught new
+  ones. A found leak is stripped on sight as a safe fix, then the session
+  continues; never tolerated, never backlogged.
+
+**Tool ports:** `ledger-mem` (check roster-Status warn, prune decisions +
+roll-ups, lint `--tree`) and `ledger-history` (status door rule, pre-close
+no-leak checklist) — PowerShell ports mirror the shell tools and share the
+manifest. A ps1-only gotcha fixed along the way: the roster-Status warn
+must write to `[Console]::Out`, not `Say`, because `check` captures the
+function's output stream into its return value and would swallow the
+warning. **Migration:** none required — update and carry on; old rosters,
+old office re-seeds, and old logs all keep working, and the new rules
+apply from the next session.
+
+**Verified:** suite 34/34 (sh + ps1) on Windows and POSIX, `ledger-sync
+verify` green, gates passed.
+
+---
+
 ## 1.0.6 — 2026-09-12
 
 **The check-in happens at the entrance, not after working.** The

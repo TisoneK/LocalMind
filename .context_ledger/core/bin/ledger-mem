@@ -37,15 +37,21 @@ usage() {
   say ""
   say "  check   duplicate keys in the update-in-place registries"
   say "          (ai-models.md by Agent+Model, environments.md by Identify-by;"
-  say "          roster.md by Name and codename) plus a warn-only board-vs-"
-  say "          duty-log audit: a roster row whose Session N is already in"
-  say "          agents/sessions.md means the session never clocked out,"
-  say "          and a duplicated Session N means a resumed session re-logged"
+  say "          roster.md by Name and codename) plus warn-only audits: a"
+  say "          roster row with no Status cell (the at-a-glance column), a"
+  say "          roster row whose Session N is already in agents/sessions.md"
+  say "          means the session never clocked out, and a duplicated"
+  say "          Session N means a resumed session re-logged"
   say "  lint    .context_ledger vocabulary (ADR-N, bug IDs, .context_ledger/ paths) leaking"
-  say "          into the staged product diff"
-  say "  prune   advise archiving resolved/superseded entries out of the"
-  say "          append-only durable logs (flaws, inefficiencies); --list"
-  say "          names them. Never moves or deletes — reports only."
+  say "          into product artifacts — the staged diff by default; --tree"
+  say "          sweeps every tracked product file (strip leaks old sessions left)"
+  say "  prune   advise log compaction: each append-only durable log's size"
+  say "          (flaws, inefficiencies, decisions), which entries are"
+  say "          explicitly resolved/superseded (move them verbatim to the"
+  say "          log's archive.md), and which logs hold 3+ entries hitting"
+  say "          the same recurring thing (roll up into one Recurring entry,"
+  say "          instances archived verbatim); --list names them. Never"
+  say "          moves or deletes — reports only."
   say "  closeout delete finished backlog items (- [x] tombstones) from the"
   say "          tasks/backlog.md live queue — open work stays. Dry run by"
   say "          default (lists the tombstones); --confirm deletes. Every"
@@ -114,9 +120,12 @@ check_environments() {
   ' "$_f"
 }
 
-# team roster: a row is | Name | Codename | Model | Doing |. Both the name and
-# the codename must be unique within the current office. A real row has an
-# S<NNN> codename in column 2 (this skips the header, separator, and template).
+# team roster: a row is | Name | Codename | Model | Doing | Status | Status
+# detail |. Both the name and the codename must be unique within the current
+# office, and the Status cells are the at-a-glance coordination signal — a
+# real row (codename S<NNN>) with an empty or missing Status cell draws a
+# warn-only nudge (legacy pre-1.1.0 four-column rows warn too; they fail
+# nothing). This skips the header, separator, and template.
 check_roster() {
   _f=$OFFICE_DIR/agents/roster.md
   [ -f "$_f" ] || return 0
@@ -129,6 +138,9 @@ check_roster() {
       if (code !~ /^[Ss][0-9]+$/) next
       nseen[name]++; nwhere[name] = nwhere[name] " " FNR
       cseen[code]++; cwhere[code] = cwhere[code] " " FNR
+      st = (n >= 7) ? c[6] : ""
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", st)
+      if (st == "") nostat[code] = nwhere[code]
     }
     END {
       d = 0
@@ -138,6 +150,8 @@ check_roster() {
       for (k in cseen) if (cseen[k] > 1) {
         printf "DUP roster.md: codename \"%s\" on %d rows (lines%s) — one row per session codename; edit your row instead of adding a second\n", k, cseen[k], cwhere[k] | "cat 1>&2"; d++
       }
+      for (k in nostat)
+        printf "WARN roster.md: codename %s has no Status — the board'"'"'s at-a-glance column (Working/Done/Blocked + a status-detail line) is empty; edit your row\n", k
       exit (d > 0) ? 1 : 0
     }
   ' "$_f"
@@ -208,12 +222,14 @@ check_dup_sessions() {
   return 0
 }
 
-# prune — advise archiving resolved history out of the append-only durable
-# logs so startup stops re-reading cold, closed entries. It NEVER moves or
-# deletes anything (that stays a human/agent edit); it reports how large each
-# log is and which entries are explicitly marked resolved/superseded/fixed —
-# the archive-eligible ones. Move those to a companion archive.md (still
-# grep-able); the active log is what startup reads. Age alone is never a
+# prune — advise log compaction out of the append-only durable logs so
+# startup stops re-reading cold, closed entries and repeated friction. It
+# NEVER moves or deletes anything (that stays a human/agent edit); it
+# reports, per log (flaws, inefficiencies, decisions): the log's size, the
+# entries explicitly marked resolved/superseded/fixed (move those verbatim
+# to a companion archive.md, still grep-able), and logs holding 3+ entries
+# with the same normalized Problem/Flaw line (roll them up into one
+# Recurring entry, instances archived verbatim). Age alone is never a
 # reason to archive — only an explicit closed marker is.
 prune() {
   _list=0
@@ -226,20 +242,40 @@ prune() {
   done
   [ -d "$MEMORY_DIR" ] || { say "ledger-mem: no memory dir (nothing to prune)"; return 0; }
   _eligible=0
-  for _rel in flaws/log.md inefficiencies/log.md; do
+  for _rel in flaws/log.md inefficiencies/log.md plans/decisions.md; do
     _f=$OFFICE_DIR/$_rel
     [ -f "$_f" ] || continue
     awk -v rel="$_rel" -v list="$_list" '
-      function flush() { if (inseg && closed) { c++; cand[c] = heading } }
-      /^## / { flush(); inseg = 1; closed = 0; heading = $0; total++; next }
+      function norm(s) {
+        s = tolower(s)
+        gsub(/[[:space:]]+/, " ", s)
+        sub(/[[:space:]]+$/, "", s)
+        return s
+      }
+      function flush() {
+        if (inseg && closed) { c++; cand[c] = heading }
+        if (fp != "") { fpseen[fp]++; fpwhere[fp] = fpwhere[fp] " || " heading }
+      }
+      /^## / {
+        flush(); inseg = 1; closed = 0; heading = $0; total++; fp = ""; next
+      }
       inseg && /RESOLVED|[Ss]uperseded|[Ff]ixed in package|no longer (a )?(flaw|issue)/ { closed = 1 }
+      inseg && fp == "" && /^[[:space:]]*[-*]?[[:space:]]*\*\*(Problem|Flaw):\*\*/ {
+        fp = $0
+        sub(/^[[:space:]]*[-*]?[[:space:]]*\*\*(Problem|Flaw):\*\*[[:space:]]*/, "", fp)
+        fp = norm(fp)
+      }
       END {
         flush()
         printf "%s — %d entries (%d lines); %d marked resolved/superseded → archive-eligible.\n", rel, total, NR, c
+        dir = rel; sub(/[^\/]*$/, "", dir)
         if (c > 0) {
-          dir = rel; sub(/[^\/]*$/, "", dir)
           printf "  move the resolved entries to %sarchive.md; startup then reads only the active log.\n", dir
           if (list == 1) for (i = 1; i <= c; i++) printf "    - %s\n", cand[i]
+        }
+        for (k in fpseen) if (fpseen[k] >= 3) {
+          printf "  roll-up: %d entries hit the same recurring thing (%.70s) — append one Recurring entry, move the instances to %sarchive.md.\n", fpseen[k], k, dir
+          if (list == 1) printf "    - %s\n", fpwhere[k]
         }
         exit (c > 0) ? 10 : 0
       }
@@ -311,30 +347,70 @@ closeout() {
   say "Commit as: chore(ledger): close out finished backlog items"
 }
 
+# lint — .context_ledger vocabulary must never leak into product artifacts:
+# a product file (anything outside .context_ledger/) has to stand on its own
+# for someone who cloned only the product repo, so an ADR-N, a bug ID, a
+# ".context_ledger/" path, or "per ADR" in its source is a dangling pointer.
+# Default mode scans the STAGED diff (the new lines you're about to commit);
+# `--tree` sweeps every tracked file outside .context_ledger/ so leaks an old
+# session left behind become visible — strip them (a safe fix), then continue.
 lint() {
-  [ $# -eq 0 ] || { case "$1" in -h|--help) usage ;; *) die "unknown argument '$1'" ;; esac; }
+  _mode=staged
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --tree) _mode=tree; shift ;;
+      -h|--help) usage ;;
+      *) die "unknown argument '$1'" ;;
+    esac
+  done
   command -v git >/dev/null 2>&1 || die "lint needs git on PATH"
   _root=$(git -C "$PROJECT_DIR" rev-parse --show-toplevel 2>/dev/null) \
     || die "lint must run inside the project git repo"
-  git -C "$_root" diff --cached -U0 --no-color 2>/dev/null | awk '
-    /^\+\+\+ /{ f=$0; sub(/^\+\+\+ b\//, "", f); sub(/^\+\+\+ /, "", f); next }
-    /^\+/ && !/^\+\+\+/ {
-      if (f ~ /^\.context_ledger\// || f == "/dev/null") next
-      s = substr($0, 2)
-      pat = ""
-      if (s ~ /ADR-[0-9]/) pat = "an ADR reference"
-      else if (s ~ /B-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9]/) pat = "a bug-ID reference"
-      else if (s ~ /\.context_ledger\//) pat = "a .context_ledger/ path"
-      else if (tolower(s) ~ /per adr/) pat = "\"per ADR\""
-      if (pat != "") { printf "LEAK: %s cites %s: %s\n", f, pat, s | "cat 1>&2"; n++ }
-    }
-    END { exit (n > 0) ? 1 : 0 }
-  '
-  _rc=$?
-  if [ "$_rc" -eq 0 ]; then
-    say "lint passed: no .context_ledger vocabulary (ADR-N, bug IDs, .context_ledger/ paths) in the staged product diff"
+  _rc=0
+  if [ "$_mode" = tree ]; then
+    # every tracked file outside .context_ledger/, one awk pass, file:line reported
+    _files=$(git -C "$_root" ls-files | grep -v '^\.context_ledger/' || true)
+    [ -n "$_files" ] || { say "lint passed: no tracked product files to sweep"; return 0; }
+    # cd to root so FNR/paths are repo-relative and files resolve
+    ( cd "$_root" && printf '%s\n' "$_files" \
+        | tr '\n' '\0' \
+        | xargs -0 awk '
+            {
+              s = $0
+              pat = ""
+              if (s ~ /ADR-[0-9]/) pat = "an ADR reference"
+              else if (s ~ /B-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9]/) pat = "a bug-ID reference"
+              else if (s ~ /\.context_ledger\//) pat = "a .context_ledger/ path"
+              else if (tolower(s) ~ /per adr/) pat = "\"per ADR\""
+              if (pat != "") { printf "LEAK: %s:%d cites %s: %s\n", FILENAME, FNR, pat, s | "cat 1>&2"; n++ }
+            }
+            END { exit (n > 0) ? 1 : 0 }
+          ' ) || _rc=1
   else
-    err "lint failed: product code must stand on its own. State the reason in plain words in the docstring/comment; the ADR or bug-ID link belongs in .context_ledger/memory, not the source. Memory references code, never the reverse."
+    git -C "$_root" diff --cached -U0 --no-color 2>/dev/null | awk '
+      /^\+\+\+ /{ f=$0; sub(/^\+\+\+ b\//, "", f); sub(/^\+\+\+ /, "", f); next }
+      /^\+/ && !/^\+\+\+/ {
+        if (f ~ /^\.context_ledger\// || f == "/dev/null") next
+        s = substr($0, 2)
+        pat = ""
+        if (s ~ /ADR-[0-9]/) pat = "an ADR reference"
+        else if (s ~ /B-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9]/) pat = "a bug-ID reference"
+        else if (s ~ /\.context_ledger\//) pat = "a .context_ledger/ path"
+        else if (tolower(s) ~ /per adr/) pat = "\"per ADR\""
+        if (pat != "") { printf "LEAK: %s cites %s: %s\n", f, pat, s | "cat 1>&2"; n++ }
+      }
+      END { exit (n > 0) ? 1 : 0 }
+    '
+    _rc=$?
+  fi
+  if [ "$_rc" -eq 0 ]; then
+    if [ "$_mode" = tree ]; then
+      say "lint passed: no .context_ledger vocabulary (ADR-N, bug IDs, .context_ledger/ paths) in any tracked product file"
+    else
+      say "lint passed: no .context_ledger vocabulary (ADR-N, bug IDs, .context_ledger/ paths) in the staged product diff"
+    fi
+  else
+    err "lint failed: product code must stand on its own. State the reason in plain words in the docstring/comment; the ADR or bug-ID link belongs in .context_ledger/memory, not the source. Memory references code, never the reverse. Stripping a found leak is a safe fix — do it, then continue."
   fi
   return "$_rc"
 }
