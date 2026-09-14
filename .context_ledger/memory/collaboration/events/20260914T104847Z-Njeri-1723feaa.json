@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260914T104847Z-Njeri-1723feaa",
+  "type": "claim",
+  "session": "S003",
+  "agent": "Njeri",
+  "created": "2026-09-14T10:48:47Z",
+  "issue": "context-sync",
+  "body": "Sync context (supervisor directive) — kickoff Steps 1–2. Migrated the vendored core 1.0.6 → 1.1.1 (same MAJOR, safe): ledger-sync update, entrypoints regenerated from the new templates (kickoff.md, AGENTS.md) with facts refilled, active.md core ref bumped. Scope is .context_ledger/ only — no product code touched. Solo board: roster was empty at check-in; the office registry reads 2 sessions so this claim is S003's. Verification: ledger-sync verify OK on 1.1.1; pre-commit gate green.",
+  "paths": [".context_ledger"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
