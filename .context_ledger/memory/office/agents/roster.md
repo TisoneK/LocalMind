@@ -31,11 +31,12 @@ is your stable session tag.
 - **Doing** — one line: your role / persona / what you're on right now.
 
 <!-- TEMPLATE — one row per person in this office:
-| <Name> | S<NNN> | <model id> | <what you're doing> |
+| <Name> | S<NNN> | <model id> | <what you're doing> | Working | <stage reached / shipped outcome / blocker> |
 -->
 
-| Name | Codename | Model | Doing |
-|------|----------|-------|-------|
+| Name | Codename | Model | Doing | Status | Status detail |
+|------|----------|-------|-------|--------|---------------|
+| Njeri | S003 | qwen3.8-flash | Context sync — migrated core to 1.1.1 at the door; continuing kickoff per standing Target | Working | Step 2 check-in pushed; deep read + protocol load next |
 
 **Clock out when your session ends**: remove your row in the closing
 `chore(ledger):` commit. The board shows who is in the office *now*;
