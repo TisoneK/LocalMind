@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260914T105416Z-Njeri-9ee7faea",
+  "type": "release",
+  "session": "S003",
+  "agent": "Njeri",
+  "created": "2026-09-14T10:54:16Z",
+  "issue": "context-sync",
+  "body": "Context sync complete: core 1.0.6→1.1.1 migrated (verify green), kickoff.md + AGENTS.md regenerated with facts refilled, active.md core ref bumped, roster Status columns live, solo light path followed. Ledger surface only; pre-commit and exit gates green. Session 3 logged at ed195aa4.",
+  "paths": [],
+  "refs": ["20260914T104847Z-Njeri-1723feaa", "e4c19911", "ed195aa4"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
