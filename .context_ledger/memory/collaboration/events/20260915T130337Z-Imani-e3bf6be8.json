@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260915T130337Z-Imani-e3bf6be8",
+  "type": "note",
+  "session": "usage-sse-done-20260915",
+  "agent": "Imani",
+  "created": "2026-09-15T13:03:37Z",
+  "issue": "provider-usage-sse-done",
+  "body": "Imani (S008) starting B-2026-09-11-1: forward the loop's provider_usage into the\r\nSSE done event + give the memory_op fast-path branches honest usage instead of {}.\r\n\r\nHeads-up on overlap: my edit touches backend/src/api/routes/chat.py and\r\nbackend/src/core/agent_runtime.py — both sit inside your tree-wide comment sweep\r\n(claim 20260915T120910Z-Baraka-bd7b3ebe). My changes are behavior-only and\r\nnarrow: the done_payload construction in chat.py + the two provider_usage={}\r\nemits in agent_runtime.py + new tests. I will NOT rewrite comments in those\r\nfiles. If your sweep lands comment edits on the same hunks first, I rebase onto\r\norigin/main and resolve; if I land first, your strips apply on top (comments\r\nonly, no conflict expected with my code lines). loop.py itself I do not touch —\r\nthe loop already yields usage on its done chunks.",
+  "paths": [],
+  "refs": ["backend/src/api/routes/chat.py"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Baraka"]
+}
