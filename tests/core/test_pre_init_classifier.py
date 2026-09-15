@@ -1,4 +1,4 @@
-"""Session 337 — pre-init classifier tests.
+"""Pre-init classifier tests.
 
 Tests the 4 root-cause cluster guards:
   A. hallucination-class prompts → direct refusal
@@ -351,7 +351,7 @@ class TestPressuredReask:
         assert o.mode is None
 
 
-# ── Session 344 (B-2026-08-22-5): Cluster F — vague imperative → clarify ──
+# ── Session 344: Cluster F — vague imperative → clarify ──
 
 
 class TestClusterFVagueImperative:
@@ -389,7 +389,7 @@ class TestClusterFVagueImperative:
         "Make the button green in index.html",
         "Build a todo app with Python and SQLite",
         "Use the shell tool to list the files",
-        # B-2026-08-30-14: a named tool/capability + web-navigation is concrete —
+        # A named tool/capability + web-navigation is concrete —
         # "use browser, navigate to wikipedia" is actionable, NOT a vague ask.
         "Use browser agent, navigate to wikipedia and do random browsing",
         "Open reddit and browse the front page",
@@ -434,7 +434,7 @@ class TestClusterFVagueImperative:
         assert o.mode == "clarify"
 
 
-# ── Cluster G (B-2026-08-25-9): unresolved reference → clarify ───────────────
+# ── Cluster G: unresolved reference → clarify ───────────────
 
 
 class TestClusterGUnresolvedReference:

@@ -3,7 +3,7 @@
 Session 338 — Multi-guard collision tests.
 
 Tests what happens when MULTIPLE pre-init guards match the same prompt.
-The individual guards (Cluster A/B/C/D) all pass on their own (Session 337),
+The individual guards (Cluster A/B/C/D) all pass on their own,
 but the question is: does the system behave correctly when they overlap?
 
 Collision cases (each combines 2+ guards):

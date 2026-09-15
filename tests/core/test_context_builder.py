@@ -176,7 +176,7 @@ def test_shell_state_defaults_enabled_on_config_error():
 
 
 def test_compact_env_context_is_smaller_and_drops_tool_prose():
-    """Session 289: the classify/init call uses a compact env — it must keep
+    """The classify/init call uses a compact env — it must keep
     the essentials (date, OS, working dir) but drop the redundant tool prose
     and hardware lines so the init prompt stays lean on slow local models."""
     full = _build_environment_context()
@@ -241,7 +241,7 @@ def test_full_env_context_still_counts_in_sync_context():
 
 
 def test_include_tool_list_false_drops_tools_prose_keeps_os_hints():
-    """S295: the execute path drops the redundant '## Available Tools' prose
+    """The execute path drops the redundant '## Available Tools' prose
     (kept in the native tools param + in-prompt list) but MUST keep the OS/shell
     hints (unlike compact) — they help code-gen on the shell path."""
     full = _build_environment_context()
@@ -256,7 +256,7 @@ def test_include_tool_list_false_drops_tools_prose_keeps_os_hints():
 
 
 def test_session_workspace_line_injected_when_session_id_given(tmp_path, monkeypatch):
-    """B-2026-08-23-17: the env context tells the agent where THIS session's
+    """The env context tells the agent where THIS session's
     artifacts live (and creates the folder). Absent without a session id."""
     monkeypatch.setenv("LOCALMIND_HOME", str(tmp_path))
     from core.config import settings as _s

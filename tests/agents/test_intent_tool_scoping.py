@@ -64,7 +64,7 @@ def test_shell_scope_excludes_web_and_browse_tools():
     assert "browse" not in scope
     assert "shell" in scope
     assert "git" in scope
-    # Session 400: system_search is the locate-before-listing front door —
+    # System_search is the locate-before-listing front door —
     # always in the local-execution scope (find_path retired from the
     # model-facing surface; internal dispatch keeps Intent.FIND_PATH).
     assert "system_search" in scope
@@ -92,7 +92,7 @@ def test_web_search_scope_keeps_web_tools_and_drops_shell():
 
 def test_editing_intents_keep_best_of_n_family():
     """FILE_WRITE/FILE_EDIT keep the proposal/best-of-N editing family
-    (B-2026-08-02-7/11) — those are real coding-agent features."""
+     — those are real coding-agent features."""
     for intent in (Intent.FILE_WRITE, Intent.FILE_EDIT):
         scope = INTENT_TOOL_SCOPES[intent]
         assert "best_of_n_edit" in scope
@@ -124,11 +124,11 @@ def test_scoped_defs_respect_intent_scope():
 
 
 def test_description_trims_reduced_total_payload():
-    """The verbose tool descriptions were trimmed (Session 124) — the full
+    """The verbose tool descriptions were trimmed  — the full
     payload stays far below what untrimmed descriptions would cost. Baseline:
     the ORIGINAL pre-trim 24-tool payload was 24,229 chars. Each new tool
-    adds its trimmed description: find_path (Session 125) kept 25 tools
-    under    the baseline; Session 130 (observe) + Sessions 131-132 (calculator,
+    adds its trimmed description: find_path kept 25 tools
+    under the baseline; Session 130 (observe) + Sessions 131-132 (calculator,
     csv, json, sql — B-2026-07-31-10) grew the set to 30 tools / ~25.1K
     chars. The bound is the documented durable ceiling: trims + new tools
     stay net-negative against untrimmed descriptions."""
@@ -176,7 +176,7 @@ async def test_loop_sends_intent_scoped_tools_to_adapter():
 
     assert captured_tools, "chat_with_tools was never called"
     names = {t["function"]["name"] for t in captured_tools["tools"]}
-    # ADR-40 option C: the param is the scoped CORE surface + describe_tool
+    # The param is the scoped CORE surface + describe_tool
     # (long-tail tools in the scope are NOT pre-loaded; the model loads one
     # with describe_tool when it needs it).
     from core.agent.tool_schemas import CORE_TOOL_NAMES
@@ -223,7 +223,7 @@ async def test_loop_respects_explicit_caller_scope_over_intent_scope():
     names = {t["function"]["name"] for t in captured_tools["tools"]}
     # web_search survives even though SHELL intent would normally exclude it
     assert "web_search" in names
-    # ADR-40 option C: the explicit scope's CORE surface + describe_tool.
+    # The explicit scope's CORE surface + describe_tool.
     # Long-tail names inside the scope (git) are NOT pre-loaded — the model
     # loads them via describe_tool; the caller-scope property under test is
     # that a non-SHELL tool (web_search) survived the SHELL intent.

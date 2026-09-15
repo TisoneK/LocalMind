@@ -176,7 +176,7 @@ class TestChat:
         assert "Hello world" in full
 
     def test_forwards_reasoning_prose_as_thinking_token(self, client):
-        """B-2026-08-30-7: the loop yields leak-filtered reasoning prose as
+        """The loop yields leak-filtered reasoning prose as
         StreamChunk(thinking=...); the bridge must forward it as thinking_token
         so the Thinking box shows the model's ACTUAL reasoning (it previously
         dropped the prose and showed only curated tool labels)."""
@@ -221,7 +221,7 @@ class TestChat:
         assert "synthesis reminder" not in toks[0].get("thinking", "")
 
     def test_first_sse_event_is_immediate_control_event(self, client):
-        """ADR-37: no hardcoded narration — the first wire event is an immediate
+        """No hardcoded narration — the first wire event is an immediate
         obs/control event, not a delayed model token or a stage-name status."""
         with _mock_stream():
             r = client.post("/api/chat", data={"message": "inspect the project", "session_id": "t-ack"})
@@ -308,7 +308,7 @@ class TestChat:
         assert intent_events[0]["data"]["primary"] == "web_search"
 
     def test_forwards_tool_call_reasoning_to_sse(self, client):
-        """Session 142: the SSE bridge must forward the plan-step label the
+        """The SSE bridge must forward the plan-step label the
         loop attaches as `reasoning` on tool_call obs events. Before this fix
         the bridge only forwarded `thought` — a silent tool run (no narration)
         rendered a blank `why:` on the step cards even though the plan-step
@@ -498,7 +498,7 @@ class TestChat:
         """
         from core.config import settings
 
-        # B-2026-08-23-17: uploads land in the session's workspace folder
+        # Uploads land in the session's workspace folder
         # (<home>/sessions/<id>/uploads). Point the home at tmp and sabotage
         # THAT path (a file where the dir should be) so mkdir fails and the
         # typed error event fires.
@@ -516,7 +516,7 @@ class TestChat:
         events = _parse_sse(r.text)
         error_events = [e for e in events if e.get("type") == "error"]
         assert error_events
-        # ADR-20 (Session 166): the error payload is now the canonical object;
+        # ADR-20: the error payload is now the canonical object;
         # the friendly message carries the upload context, source is internal.
         err = error_events[0]["error"]
         assert isinstance(err, dict)
@@ -526,7 +526,7 @@ class TestChat:
 
 
 class TestErrorNormalization:
-    """ADR-20 — the SSE error event carries the CANONICAL object, never the
+    """The SSE error event carries the CANONICAL object, never the
     raw provider payload. The friendly message is what reaches the UI; the
     raw string stays in the `raw` debug field."""
 
@@ -637,7 +637,7 @@ class TestSessions:
         assert any(m["role"] == "user" for m in msgs)
 
     def test_history_returns_persisted_turn_artifacts(self, client):
-        """Session 266: thinking / error / toolCalls / performance persisted
+        """Thinking / error / toolCalls / performance persisted
         with the assistant message must survive a reload — the history
         endpoint returns them so the frontend restores the thinking block,
         error card, step pills, and cumulative context counter."""
@@ -677,7 +677,7 @@ class TestSessions:
         # Thinking block survives.
         assert assistant["thinking"] == "Listing projects to answer the request."
         # Error card survives — raw stored string is normalized at the
-        # presentation boundary (ADR-20): canonical object, no raw leak.
+        # presentation boundary: canonical object, no raw leak.
         err = assistant["error"]
         assert isinstance(err, dict)
         assert err["code"] == "rate_limit"
@@ -696,7 +696,7 @@ class TestSessions:
         assert perf["tokensPerSecond"] == pytest.approx(84 / 2.3, rel=0.05)
 
     def test_history_returns_agent_workspace(self, client):
-        """Session 267: the Agent Workspace run tree + phase strip persist
+        """The Agent Workspace run tree + phase strip persist
         with the assistant message and come back from the history endpoint so
         the Agents tab and phase visibility survive a reload."""
         from core.config import settings
@@ -740,7 +740,7 @@ class TestSessions:
         assert assistant["agentPhases"][0]["type"] == "gate_passed"
 
     def test_actions_include_provider_for_badge(self, client):
-        """Session 271: the Actions endpoint returns the winning search engine
+        """The Actions endpoint returns the winning search engine
         so the frontend can render the provider badge on the card."""
         from core.config import settings
         from storage.db import get_shared_store
@@ -783,7 +783,7 @@ class TestToolRegistry:
         from tools.web_search import web_search
         # Mock ALL three racing providers so the test is deterministic and never
         # hits the real network — DDG is the only one with results, so it wins.
-        # B-2026-09-04-3: the result must cover the query term ("test") to clear
+        # The result must cover the query term ("test") to clear
         # the relevance floor (an off-topic set is now discarded, not surfaced).
         with patch(
             "tools.web_search._search_ddg", new_callable=AsyncMock
@@ -882,7 +882,7 @@ class TestToolRegistry:
         assert "getting started" not in status, status
 
     def test_heartbeat_status_names_provider_stall_before_first_byte(self):
-        """S471: provider_call_start with no provider_first_byte and a short
+        """Provider_call_start with no provider_first_byte and a short
         wait is a QUEUE stall, not slow thinking — the status names the
         provider and the wait, not the generic 'still working' text."""
         import time
@@ -899,7 +899,7 @@ class TestToolRegistry:
         assert "switching" not in status, status  # under the offer threshold
 
     def test_heartbeat_status_offers_model_switch_after_stall_threshold(self):
-        """S471: a stall past PROVIDER_OFFER_AFTER_S escalates to the
+        """A stall past PROVIDER_OFFER_AFTER_S escalates to the
         model-switch offer (the owner's 'qwen fallback' ask)."""
         import time
 
@@ -914,7 +914,7 @@ class TestToolRegistry:
         assert "bankofai" in status, status
 
     def test_heartbeat_status_not_a_stall_once_first_byte_arrived(self):
-        """S471: once provider_first_byte is emitted the silence is slow
+        """Once provider_first_byte is emitted the silence is slow
         GENERATION, not a queue — fall through to the neutral text."""
         import time
 

@@ -1,6 +1,6 @@
-"""B-2026-08-24-12: sysinfo reports CPU/RAM/disk/uptime without psutil.
+"""Sysinfo reports CPU/RAM/disk/uptime without psutil.
 
-psutil is now a declared dependency (B-2026-08-24-11), but if it is ever
+psutil is now a declared dependency, but if it is ever
 unavailable (a platform with no wheel, a broken install) the system overview
 must still populate from native/stdlib sources rather than degrading to
 "(requires psutil)". These tests force the no-psutil path.

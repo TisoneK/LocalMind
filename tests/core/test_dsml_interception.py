@@ -129,7 +129,7 @@ def test_is_tool_talk_still_ignores_plain_text():
     assert _is_tool_talk("the sky is blue today") is False
 
 
-# ── Creation-commitment narration (Session 323) ────────────────────────────
+# ── Creation-commitment narration  ────────────────────────────
 # Live trace on deepseek-v4-flash (the user's "create a project" session):
 # after the directory was made, the model ended the turn with "Now I'll
 # create the project files — a modular Python project…" — a commitment to
@@ -149,7 +149,7 @@ def test_is_tool_talk_detects_creation_commitment():
     # "Now I'll write the source modules and tests" (iter-7 of the second trace)
     assert _is_tool_talk("Now I'll write the source modules and tests") is True
     assert _is_tool_talk("I will build the new project package") is True
-    # Session 326 addendum 3: hyphenated/dotted adjectives. The user's live
+    # Hyphenated/dotted adjectives. The user's live
     # Windows trace ended with "Let me create the path-test folder and the two
     # files" (recon only, no file_write) and the panel showed 2/2 as if the
     # task were done — the single-adjective group was \w-only, so "path-test"
@@ -168,7 +168,7 @@ def test_is_tool_talk_ignores_creation_of_non_files():
     assert _is_tool_talk("I created the project files") is False
 
 
-# ── Bare <tool_call> format (Session 195) ──────────────────────────────────
+# ── Bare <tool_call> format  ──────────────────────────────────
 # The live leak: the model emitted
 #   <tool_call>web_search<arg_key>query</arg_key><arg_value>Kitengela ...</arg_value></tool_call>
 # which neither the minimax:tool_call nor the standalone <invoke> patterns

@@ -1,4 +1,4 @@
-"""Session 359 — todo events must survive the S296 lifecycle drain.
+"""Todo events must survive the S296 lifecycle drain.
 
 Root cause (live-found): `_drain_live_lifecycle_events` forwards EVERY
 non-tool obs event as a generic `obs_event` — including todo_created and

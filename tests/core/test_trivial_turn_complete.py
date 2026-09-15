@@ -58,7 +58,7 @@ class TestTrivialTurnComplete:
         completes = [e for e in obs.history() if e.type == "turn_complete"]
         assert len(completes) == 1
         data = completes[0].data
-        # Session 332-C: trivial turns now use the fast-path (canned reply,
+        # Trivial turns now use the fast-path (canned reply,
         # zero LLM calls). intent="chat" reflects that the parent agent did
         # NOT run. agent_mode=False because no parent-agent loop executed.
         assert data["intent"] == "chat"
@@ -91,7 +91,7 @@ class TestTrivialTurnComplete:
         completes = [e for e in obs.history() if e.type == "turn_complete"]
         assert len(completes) == 1
         data = completes[0].data
-        # Session 332-C: conversational questions use the fast-path (one direct
+        # Conversational questions use the fast-path (one direct
         # chat call, no parent-agent loop). intent="chat" reflects that.
         assert data["intent"] == "chat"
         assert data["tokens_approx"] > 0

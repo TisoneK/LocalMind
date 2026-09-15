@@ -1,4 +1,4 @@
-"""ADR-34 B-7: Parent bootstrap + fast public thinker.
+"""Parent bootstrap + fast public thinker.
 
 Validates that the streaming initializer:
 1. Emits a bounded model-owned acknowledgement BEFORE the full decision.
@@ -144,7 +144,7 @@ async def test_streaming_initializer_terminal_error_propagates():
 
 @pytest.mark.asyncio
 async def test_streaming_initializer_resolves_prose_to_direct():
-    """Session 290: unparsable model output resolves to a bounded DIRECT
+    """Unparsable model output resolves to a bounded DIRECT
     answer (execute is opt-in) — a model that replied in prose has that prose
     shown as the answer instead of being dragged into the tool loop."""
     adapter = _FakeAdapter(chunks=["This is not JSON at all, just prose."])
@@ -190,7 +190,7 @@ async def test_streaming_initializer_non_terminal_error_does_not_hang():
             decision = payload
 
     assert decision is not None, "consumer hung — no decision event was put on the queue"
-    # Session 290: a truncated/errored init is not a parseable execute choice,
+    # A truncated/errored init is not a parseable execute choice,
     # so it resolves to a bounded direct answer, never the tool loop.
     assert decision.mode == "direct"
 
@@ -214,7 +214,7 @@ async def test_streaming_initializer_empty_stream_does_not_hang():
             decision = payload
 
     assert decision is not None, "consumer hung on empty stream"
-    # Session 290: empty stream → bounded direct answer, never the tool loop.
+    # Empty stream → bounded direct answer, never the tool loop.
     assert decision.mode == "direct"
     assert decision.response  # a non-empty fallback so the turn completes
 
@@ -428,7 +428,7 @@ def test_parse_initialization_ignores_legacy_fields():
     assert not hasattr(decision, "facts")
     assert not hasattr(decision, "ambiguities")
     assert not hasattr(decision, "tool_names")
-    # plan_steps is a real field now (ADR-49) but the legacy `plan_steps` KEY is
+    # plan_steps is a real field now but the legacy `plan_steps` KEY is
     # NOT its source — only `plan` is — so it stays empty here.
     assert decision.plan_steps == []
     assert decision.objective_line() == "UNDERSTANDING: List projects"

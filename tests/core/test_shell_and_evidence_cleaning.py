@@ -1,4 +1,4 @@
-"""Content-absent shell detection + raw-evidence cleaning (B-2026-09-02).
+"""Content-absent shell detection + raw-evidence cleaning.
 
 Two user-visible fixes from the 'trending stories' trace:
 1. JS-gate / bare-loading pages (content absent) must be treated as boilerplate

@@ -1,5 +1,5 @@
 """
-Tests for ADR-19 P3 (Session 179): LLM-guided value scoring (opt-in).
+Tests for ADR-19 P3: LLM-guided value scoring (opt-in).
 
 Design.md §6: "LLM-guided value scoring of every message — too slow for
 free-tier; the deterministic marker approach is the P0 trade." P3 makes

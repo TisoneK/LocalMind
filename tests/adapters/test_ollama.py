@@ -143,7 +143,7 @@ def test_context_window_unknown_model_defaults(adapter):
     assert adapter.context_window == 8192
 
 
-# ── Bug 3 (Session 289): real context window via /api/show ────────────────
+# ── Bug 3: real context window via /api/show ────────────────
 # phi4-mini:latest (128K real window, 3.8B params) was absent from the static
 # table AND matched no size tag, so it fell to the 8192 default — the sidebar
 # meter read 5248/8192 = 64% for a nearly-empty chat.
@@ -203,7 +203,7 @@ def test_extract_context_length_fallback_excludes_rope_when_no_arch():
 
 
 def test_num_ctx_defaults_to_bounded_declared_window():
-    # Session 291: ONE model-agnostic rule — num_ctx is the declared window
+    # ONE model-agnostic rule — num_ctx is the declared window
     # bounded by the default ceiling, no per-size special-casing. A small model
     # with a huge declared window (phi4-mini, 131072) is bounded, not floored
     # at the old 8192 that made a 5K chat read ~64% full.
@@ -280,7 +280,7 @@ def test_num_ctx_override_zero_is_auto(adapter, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_list_models_excludes_embedding_models(adapter, monkeypatch):
-    # Session 293 (B-2026-08-17-5): embedding models must NOT appear in the
+    # Session 293: embedding models must NOT appear in the
     # chat-model selector. The old `-embed` suffix check missed nomic-embed-text,
     # mxbai-embed-large, all-minilm, bge-m3, etc.
     tags = {"models": [

@@ -1,5 +1,5 @@
 """
-E2E for the classify-flake → answer-from-history fallback (B-2026-08-18-5).
+E2E for the classify-flake → answer-from-history fallback.
 
 Transcript that motivated it: on a follow-up ("Why did you say Arsenal vs Man
 City?") the weak model's classify JSON came back empty, so the turn degraded to

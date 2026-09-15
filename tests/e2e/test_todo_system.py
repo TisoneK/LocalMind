@@ -1,4 +1,4 @@
-"""Session 27: tests for the todo API + engine todo plan emission."""
+"""Tests for the todo API + engine todo plan emission."""
 
 from __future__ import annotations
 
@@ -200,7 +200,7 @@ def test_todos_ordered_by_order_field(app_client):
 
 
 def test_engine_emit_todo_plan_skips_agent_intents(tmp_path, monkeypatch):
-    """ADR-22 (Session 184): Engine._emit_todo_plan does NOT create a static
+    """ADR-22: Engine._emit_todo_plan does NOT create a static
     fallback plan for AGENT_INTENTS — the agent's LLM planner owns the todo
     list now (the agent always plans for AGENT_INTENTS, no more skip_planning
     override). Previously WEB_SEARCH got a static fallback; now it gets the
@@ -232,7 +232,7 @@ def test_engine_emit_todo_plan_skips_agent_intents(tmp_path, monkeypatch):
     obs = ObsCollector()
     session_id = "test-plan-session"
 
-    # ADR-22: WEB_SEARCH is in AGENT_INTENTS — the LLM planner owns the todo
+    # WEB_SEARCH is in AGENT_INTENTS — the LLM planner owns the todo
     # list. The static fallback must NOT fire.
     engine._emit_todo_plan(session_id, Intent.WEB_SEARCH, "trending stories", obs)
 

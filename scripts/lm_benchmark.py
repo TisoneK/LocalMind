@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-LocalMind Benchmark Suite harness (Session 336).
+LocalMind Benchmark Suite harness.
 
 Boots LocalMind on isolated port 8765 + scratch LOCALMIND_HOME,
 fires each test prompt, captures SSE, scores against pass criteria.
@@ -114,7 +114,7 @@ def _single_token_event(parsed):
     return parsed["event_type_counts"].get("token", 0) <= 2  # 1 streaming, 1 final
 
 
-# Session 344: the CAT2 clarify criterion used to pass on a bare "what"/"which"
+# The CAT2 clarify criterion used to pass on a bare "what"/"which"
 # substring — narration like "I'll start by exploring the project structure to
 # understand WHAT needs fixing" contains "what" and PASSED without ever asking
 # anything (the 336 run's CAT2 9/10 was partly this artifact). A real clarifying
@@ -307,7 +307,7 @@ TESTS = [
         "forbidden": ["writing code"],
         "pass_criteria": [
             ("answer is substantive (planning)", lambda p: len(p["final_text"]) > 200),
-            # Session 337: tightened the "no code" check — ASCII-art architecture
+            # Tightened the "no code" check — ASCII-art architecture
             # diagrams use box-drawing chars + triple-backtick fences, which
             # tripped the old regex. Real code = function/class definitions
             # with actual Python/JS syntax, not markdown fences around diagrams.

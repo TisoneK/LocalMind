@@ -1,4 +1,4 @@
-"""ADR-20 — error normalizer tests.
+"""Error normalizer tests.
 
 The normalizer is pure and deterministic, so the full classification table
 is unit-testable without any live provider. These tests lock the canonical
@@ -162,7 +162,7 @@ class TestGenericAndInternal:
         ],
     )
     def test_every_code_round_trips_through_canonical(self, raw):
-        # Review fix (Session 168): re-normalizing ANY canonical object must
+        # Review fix: re-normalizing ANY canonical object must
         # pass through untouched — friendly messages don't contain their own
         # keywords, so re-classification would flip the code to generic.
         canonical = normalize_error(raw)
@@ -171,7 +171,7 @@ class TestGenericAndInternal:
         assert again == canonical
 
     def test_exception_raw_is_json_serializable(self):
-        # Review fix (Session 168): `raw` must survive json.dumps if the
+        # Review fix: `raw` must survive json.dumps if the
         # canonical object ever crosses the SSE wire directly.
         import json
 
@@ -218,7 +218,7 @@ class TestMessages:
 
 
 class TestProviderEnvelopes:
-    """ADR-21 — ANY provider's error JSON envelope normalizes the same way.
+    """ANY provider's error JSON envelope normalizes the same way.
 
     The classifier is provider-agnostic: the provider's structured
     error-type/code token (from the JSON envelope) is consulted before the
@@ -349,7 +349,7 @@ class TestProviderEnvelopes:
         assert err["code"] == CONTEXT_OVERFLOW
 
     def test_unknown_type_generic_stays_provider_shaped(self):
-        # ADR-21: an error from a provider envelope keeps source=model_provider
+        # An error from a provider envelope keeps source=model_provider
         # even when nothing classifies — the UI says "the model provider".
         err = normalize_error(
             'openai returned 400: {"error":{"type":"weird_error",'

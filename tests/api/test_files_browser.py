@@ -1,4 +1,4 @@
-"""B-2026-08-23-18: the Files-tab browser endpoints.
+"""The Files-tab browser endpoints.
 
 GET    /api/files/search  — recursive name search under a root, capped at 200
 DELETE /api/files         — delete a file or EMPTY folder the user chose

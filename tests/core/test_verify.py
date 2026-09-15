@@ -321,7 +321,7 @@ def test_format_gate_results_empty():
     assert format_gate_results([]) == ""
 
 
-# ── Windows separator tolerance (Session 330) ───────────────────────────────
+# ── Windows separator tolerance  ───────────────────────────────
 
 
 def test_file_criterion_matches_backslash_evidence():

@@ -131,7 +131,7 @@ def test_create_action_stores_todo_id(store):
 
 
 def test_action_provider_roundtrips(store):
-    """Session 271: the winning search engine is stored on the action row —
+    """The winning search engine is stored on the action row —
     set on create or via the done-event update — and survives list_actions."""
     store.ensure_session("s1")
     # Provider known at create time.
@@ -176,7 +176,7 @@ def test_message_roundtrips_thinking_error_tool_calls_metrics(store):
     assert len(history) == 1
     m = history[0]
     assert m.thinking == "First step\n\nSecond step"
-    # Session 290: the ADR-36 opening acknowledgement round-trips too.
+    # The ADR-36 opening acknowledgement round-trips too.
     assert m.acknowledgement == "I'll list your projects and summarise them."
     assert m.error == "zen returned 429: quota exceeded"
     assert m.tool_calls == [
@@ -218,7 +218,7 @@ def test_messages_without_artifacts_still_roundtrip_plain(store):
 
 
 def test_message_roundtrips_agent_runs_and_phases(store):
-    """Session 267: the Agent Workspace run tree + phase strip persist with
+    """The Agent Workspace run tree + phase strip persist with
     the assistant message and round-trip through get_history and
     get_recent_history so the Agents tab survives a reload."""
     runs = [
@@ -325,7 +325,7 @@ def test_messages_without_diff_or_candidates_roundtrip_none(store):
 
 
 def test_observation_save_get_roundtrips(store):
-    """Session 267: the merged observation + snapshot summary persist to the
+    """The merged observation + snapshot summary persist to the
     observations table (one row per session, latest turn wins) and the two
     writers do not clobber each other."""
     assert store.get_observation("s1") is None

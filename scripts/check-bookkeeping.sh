@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Bookkeeping gate (Session 296): fail the exit if the append-only logs are
+# Bookkeeping gate: fail the exit if the append-only logs are
 # STALE relative to the session log. The protocol requires appending
 # inefficiencies/log.md AND flaws/log.md every session (an explicit
 # "## <date> — none this session" counts), but those two are the least

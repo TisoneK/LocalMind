@@ -1,4 +1,4 @@
-"""Tests for the server-side Agent Workspace reconstruction (Session 267).
+"""Tests for the server-side Agent Workspace reconstruction.
 
 The Agents tab (run tree) and phase strip are frontend-only live state, so the
 runtime rebuilds them from the request's obs events at persist time. These

@@ -1,4 +1,4 @@
-"""ADR-19 task-aware context policy tests (Session 160).
+"""ADR-19 task-aware context policy tests.
 
 Covers:
   1. policy_for() per-task tables + legacy no-op default.
@@ -101,7 +101,7 @@ def test_intent_fallback():
 
 
 def test_chat_hint_corrected_on_non_chat_routing():
-    # ADR-19 x ADR-22 re-key (Session 186): 'chat' is the no-tool fallback,
+    # ADR-19 x ADR-22 re-key: 'chat' is the no-tool fallback,
     # so a canonical 'chat' hint on a non-CHAT routing is a misclassification.
     # Corrected to the intent fallback when the caller KNOWS the routing.
     assert resolve_task_type("chat", intent="SHELL") == "code"
@@ -149,6 +149,6 @@ def test_parse_none_is_legacy():
 
 
 # ── 4. Legacy dispatcher task_type parse tests removed ─────────────────────
-# The ThinkingDispatcher was deleted (Session 239). task_type parsing is
+# The ThinkingDispatcher was deleted. task_type parsing is
 # covered above by parse_task_type_from_plan; the agent loop settles
 # task_type itself (see core.agent.loop task_type_settled event).

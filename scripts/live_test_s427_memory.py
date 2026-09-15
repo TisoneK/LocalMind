@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S427: memory-evidence live trace — replays the user's EPL transcript.
+"""Memory-evidence live trace — replays the user's EPL transcript.
 
 Three turns on ONE session (multi-turn), isolated port 8766 + scratch
 LOCALMIND_HOME, per memory/system/live-testing.md:

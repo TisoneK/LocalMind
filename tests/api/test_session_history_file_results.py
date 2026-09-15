@@ -1,4 +1,4 @@
-"""B-2026-08-23-3: the history endpoint must surface the files the agent wrote.
+"""The history endpoint must surface the files the agent wrote.
 
 The live `done` SSE carries the last written path, but the stored message only
 kept user-attached files. The tool-call timeline is the durable record —

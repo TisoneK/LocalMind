@@ -1,5 +1,5 @@
 """
-ADR-22 P1 (Session 190) — session episode memory tests.
+ADR-22 P1  — session episode memory tests.
 
 The system-level session distillation layer (invisible to users):
   - store roundtrip / upsert / latest_episode / sessions_needing_episode

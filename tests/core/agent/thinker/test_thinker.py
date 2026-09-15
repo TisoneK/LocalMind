@@ -1,4 +1,4 @@
-"""Tests for the Thinker module (ADR-42) — the agent's reasoning backbone."""
+"""Tests for the Thinker module  — the agent's reasoning backbone."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from core.agent.thinker.prompt import build_thinker_messages
 from core.models import StreamChunk
 
 
-# ── Prompt anchors on the real request, not a generic fallback (S263) ─────────
+# ── Prompt anchors on the real request, not a generic fallback  ─────────
 def test_prompt_shows_user_request_even_when_objective_is_generic():
     ev = Evidence(
         objective="Determine and complete the user's request.",  # init fallback
@@ -134,7 +134,7 @@ class _MockAdapter:
 
 @pytest.mark.asyncio
 async def test_consult_streams_prose_but_never_the_json():
-    """ADR-57 slice 1 (S425): the consult's prose reasoning streams live as
+    """ADR-57 slice 1: the consult's prose reasoning streams live as
     `thinking` chunks — no call runs silent — but the JSON structure NEVER
     surfaces (Session 324's leak, now enforced structurally: surfacing stops
     at the JSON marker). The structured analysis still parses so the loop can

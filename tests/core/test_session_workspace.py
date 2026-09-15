@@ -1,4 +1,4 @@
-"""B-2026-08-23-17: per-session workspace folders.
+"""Per-session workspace folders.
 
 Each session owns <localmind_home>/sessions/<sanitized_id>/ — created on first
 session touch, deleted with the session, and never able to escape the workspace

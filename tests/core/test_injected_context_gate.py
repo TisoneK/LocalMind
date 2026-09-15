@@ -66,7 +66,7 @@ class TestGroundedClass:
     def test_date_question_with_real_weekday(self):
         # The answer is built from the real clock: the checker compares it
         # against the real clock, so a literal date here is only true on the
-        # day it was written (B-2026-09-10-4).
+        # day it was written.
         assert zero_tool_turn_is_valid(
             "What day of the week is it today?",
             _grounded_date_answer(datetime.datetime.now()),
@@ -157,7 +157,7 @@ class TestDateIndependence:
     calendar day, not just the day it was written. These pins walk the
     explicit `now` seam over each weekday plus the month and year boundaries:
     the grounded answer is accepted and the previous day's date is rejected on
-    every one of them (B-2026-09-10-4).
+    every one of them.
     """
 
     REQUEST = "What day of the week is it today?"

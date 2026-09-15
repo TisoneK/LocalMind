@@ -563,7 +563,7 @@ def test_phase1_reasoning_cap_ends_stream_cleanly_not_tail(monkeypatch):
     assert "tail reasoning" not in thinking, (
         "Phase 2b resumed the unbounded tail after the 500-chunk reasoning "
         "cap — a stuck model would stream reasoning until a timeout errors "
-        "the turn into the provider-error path (B-2026-08-20-20)"
+        "the turn into the provider-error path "
     )
     # Clean end: done=True and NO error — the loop's empty-reasoning recovery
     # requires a clean stream (an error chunk would take the provider-error path).
@@ -622,7 +622,7 @@ def test_phase1_reasoning_cap_still_streams_content_when_present(monkeypatch):
     assert text.count("word") == 30
 
 
-# ── API-key live resolution (Session 112) ─────────────────────────────────
+# ── API-key live resolution  ─────────────────────────────────
 # ProviderConfig.api_key is a BAKED DEFAULT only — the env value is resolved
 # at CONSTRUCTION time via key_env. The old import-time freeze made the
 # adapter keep using a stale key after the env var was deleted (the root
@@ -703,7 +703,7 @@ class TestNullToolCallsDelta:
         async def fake_send_streaming(url, payload, headers=None, timeout=None):
             mock_resp = MagicMock()
             mock_resp.status_code = 200
-            # Session 116: enforce httpx ONE-SHOT stream semantics so the
+            # Enforce httpx ONE-SHOT stream semantics so the
             # test catches the double-read bug (Phase 2 re-iterating an
             # already-consumed response). Permissive mocks let the old
             # broken code pass.
@@ -809,7 +809,7 @@ class TestTextStreamWithoutDone:
         assert any(c.done for c in chunks), "a done chunk must be yielded"
 
 
-# ── 3. tool_choice passthrough + graceful degrade (Session 238) ──────────
+# ── 3. tool_choice passthrough + graceful degrade  ──────────
 
 
 class TestToolChoicePassthrough:

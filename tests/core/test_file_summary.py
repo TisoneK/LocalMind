@@ -1,4 +1,4 @@
-"""B-2026-08-23-7: the final answer's deterministic file-task summary.
+"""The final answer's deterministic file-task summary.
 
 Derived from the actual tool timeline (file_write → created with bytes,
 edit_file/propose_write_file → modified) so the user SEES the file facts next

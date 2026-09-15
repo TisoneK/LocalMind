@@ -1,4 +1,4 @@
-"""Session 342 — pre-tool Thinker consult in the parent-agent loop.
+"""Pre-tool Thinker consult in the parent-agent loop.
 
 Root cause fixed: the Thinker ran only (a) on the conversational fast-path
 (agent_runtime, S354) and (b) in the loop AFTER a tool produced an
@@ -7,7 +7,7 @@ therefore had NO structured understanding pass — the model free-associated
 "I'll start by exploring…" (narration-without-action, CONV-05/06) or
 fabricated under "just guess" pressure (CONV-11).
 
-NOTE (Session 344): the original motivating messages ("Fix my project.",
+NOTE: the original motivating messages ("Fix my project.",
 "Improve the system.") are since handled DETERMINISTICALLY by Cluster F in
 pre_init_classifier (vague imperative → clarify, zero model calls), so the
 Thinker tests below use a concrete-but-zero-tool task to exercise the
@@ -56,7 +56,7 @@ class _AnalysisThinker:
 
 
 class _StreamingThinker(_AnalysisThinker):
-    """S425: also streams prose reasoning as thinking chunks (the ADR-57
+    """Also streams prose reasoning as thinking chunks (the ADR-57
     slice-1 consult contract) and records the Evidence it was handed."""
 
     def __init__(self, timeout_secs=30.0):
@@ -331,7 +331,7 @@ async def test_pressured_reask_returns_direct_refusal_without_model_call():
     assert not any(e.type == "tool_call" for e in obs.history())
 
 
-# ── Session 344 (B-2026-08-22-5): Cluster F loop wiring ──
+# ── Session 344: Cluster F loop wiring ──
 
 
 @pytest.mark.asyncio
@@ -484,7 +484,7 @@ async def test_posttool_thinker_consults_once_across_many_tools():
         ):
             pass
 
-    # ADR-57 slice 2 (S428): the once-per-turn guard is GONE — a consult
+    # ADR-57 slice 2: the once-per-turn guard is GONE — a consult
     # fires after every successful tool (bounded by the in-flight rule +
     # per-turn cap) and each one completes and is absorbed. SHELL is not a
     # direct-retrieval intent, so the pre-tool consult (iteration 0) also
@@ -715,7 +715,7 @@ async def test_failed_tool_consult_blocks_next_call():
 
 @pytest.mark.asyncio
 async def test_consult_reasoning_streams_to_user():
-    """ADR-57 slice 1 (S425): the pre-tool consult's prose reasoning reaches
+    """ADR-57 slice 1: the pre-tool consult's prose reasoning reaches
     the run() output as thinking chunks (the ThinkingBlock's channel) — the
     consult is no longer a silent serial call. The structured JSON tail still
     never appears (the Thinker stops at the marker)."""

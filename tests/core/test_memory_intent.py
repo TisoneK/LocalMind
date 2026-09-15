@@ -1,4 +1,4 @@
-"""Session 342 — memory-write intent recognition + candidate extraction tests."""
+"""Memory-write intent recognition + candidate extraction tests."""
 from __future__ import annotations
 
 from core.memory_intent import (

@@ -80,7 +80,7 @@ class TestForceFinalAnswerEmptyStream:
         )
         text = "".join(c.text for c in chunks)
         assert text.strip(), "Fallback text must be non-empty"
-        # B-2026-08-20-14: the fallback is now a CLEAN user-facing message
+        # The fallback is now a CLEAN user-facing message
         # that points to the Actions panel. Raw tool evidence (shell, permission
         # denied) lives in the Actions panel, NOT the chat bubble. Assert the
         # clean message is produced (not a silent fail or raw dump).
@@ -114,7 +114,7 @@ class TestForceFinalAnswerEmptyStream:
         assert len(chunks) >= 1
         text = "".join(c.text for c in chunks)
         assert text.strip()
-        # B-2026-08-20-14: the fallback is now a clean user-facing message.
+        # The fallback is now a clean user-facing message.
         # It no longer suggests "switch models" (that was the old debug
         # contract). It says "try again or rephrase" — honest + concise.
         assert "try again" in text.lower() or "rephrase" in text.lower() or "retry" in text.lower(), (
@@ -145,7 +145,7 @@ class TestForceFinalAnswerEmptyStream:
 
         text = "".join(c.text for c in chunks)
         assert "I created the repo" in text
-        # B-2026-08-20-14: the old debug phrases are gone entirely.
+        # The old debug phrases are gone entirely.
         # The clean fallback never contains them.
         assert "couldn't synthesize" not in text.lower()
         assert "empty response" not in text.lower()
@@ -233,7 +233,7 @@ class TestForceFinalAnswerEmptyStream:
             ),
             AgentStep(
                 iteration=4, thought="", tool_name="shell",
-                tool_input="git add . && git commit -m 'initial'",
+                tool_input="git add. && git commit -m 'initial'",
                 observation="",  # empty observation — maybe this is the problem?
                 tool_failed=False, retry_count=0, latency_ms=200,
             ),
@@ -252,7 +252,7 @@ class TestForceFinalAnswerEmptyStream:
         text = "".join(c.text for c in chunks)
         assert text.strip()
 
-        # B-2026-08-20-14: the fallback is now a CLEAN user-facing message.
+        # The fallback is now a CLEAN user-facing message.
         # Raw tool evidence (shell, mkdir, git init, file_write) lives in the
         # Actions panel, NOT the chat bubble. Assert the clean message points
         # the user to the Actions panel.
@@ -353,7 +353,7 @@ class TestSummarizeTraceForUser:
         assert "Permission denied" in result
 
     def test_surfaces_thinker_analysis_when_present(self):
-        """B-2026-08-16-12: when the Thinker already computed an analysis, the
+        """When the Thinker already computed an analysis, the
         degraded fallback must surface it — not discard the correct synthesis.
         This is the exact user repro: the Thinker worked out the answer (free
         space, not enough for 50 GB), then the final synthesis call failed."""
@@ -387,7 +387,7 @@ class TestSummarizeTraceForUser:
         assert "rate-limited the final synthesis call" in result
 
     def test_thinker_analysis_block_absent_when_empty(self):
-        """B-2026-08-16-12: when the Thinker produced no analysis (empty
+        """When the Thinker produced no analysis (empty
         string), the fallback must look exactly as before — no dangling
         'already worked out' header."""
         from core.agent.loop import AgentStep, AgentTrace
@@ -564,7 +564,7 @@ class TestEndToEndSilentFailureScenario:
             "failure' bug the user reported."
         )
         full_text = "".join(c.text for c in chunks)
-        # B-2026-08-20-14: the fallback is now a CLEAN user-facing message.
+        # The fallback is now a CLEAN user-facing message.
         # It no longer contains raw tool names or "switch models" suggestions.
         # It says "I found the information... Actions panel... retry."
         assert full_text.strip(), f"Fallback must be non-empty, got: {full_text!r}"
@@ -647,7 +647,7 @@ class TestWorkReport:
         assert not trace.work_report().needs_report("Created hello.py successfully.")
 
     def test_substantive_answer_never_triggers_report(self):
-        # Session 122: the user-reported case — a correct, substantive answer
+        # The user-reported case — a correct, substantive answer
         # that does NOT quote raw evidence tokens must never get the
         # "Worker report — tool execution evidence:" recap appended. The
         # trace already lives in the inline action cards + Actions tab; the
@@ -729,7 +729,7 @@ class TestSynthesisFailureFallback:
 
         text = loop._synthesis_failure_fallback(trace, observation_log="", timed_out=True)
 
-        # B-2026-08-20-14: the fallback is now a CLEAN user-facing message.
+        # The fallback is now a CLEAN user-facing message.
         # Raw tool evidence (shell, file_write, mkdir) lives in the Actions
         # panel. The chat bubble says "I found the information... Actions panel."
         assert "try again" in text.lower() or "rephrase" in text.lower() or "found" in text.lower(), (
@@ -741,7 +741,7 @@ class TestSynthesisFailureFallback:
         text = loop._synthesis_failure_fallback(
             trace=None, observation_log="[Tool: shell | Status: BLOCKED]", timed_out=False
         )
-        # B-2026-08-20-14: clean message — the observation_log content is in
+        # Clean message — the observation_log content is in
         # the Actions panel, not the chat bubble.
         assert "try again" in text.lower() or "rephrase" in text.lower() or "found" in text.lower(), (
             f"Fallback should be clean user-facing message, got: {text!r}"
@@ -756,7 +756,7 @@ class TestSynthesisFailureFallback:
         )
 
 
-# ── 6. Timeout/exception handlers yield trace evidence (Session 94) ───────
+# ── 6. Timeout/exception handlers yield trace evidence  ───────
 
 
 class TestSynthesisFailureHandler:
@@ -810,7 +810,7 @@ class TestSynthesisFailureHandler:
                 chunks.append(chunk)
 
         full_text = "".join(c.text for c in chunks)
-        # B-2026-08-20-14: the timeout handler now yields a CLEAN user-facing
+        # The timeout handler now yields a CLEAN user-facing
         # message. Raw tool evidence (shell, mkdir) lives in the Actions panel.
         # Assert the turn produced a non-empty honest message (not a silent
         # fail or raw dump).

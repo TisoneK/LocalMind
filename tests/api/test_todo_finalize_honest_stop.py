@@ -1,5 +1,5 @@
 """
-Session 330 (B-2026-08-20-23): _finalize_plan_todos must NOT flip the
+Session 330: _finalize_plan_todos must NOT flip the
 remaining goal items to complete when the acceptance gate ended the turn
 with an honest stop (unmet criteria). Flipping them would re-lie the
 self-mutating checklist — the panel would read 100% on a turn that did

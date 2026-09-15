@@ -1,4 +1,4 @@
-"""Session 135 addendum — unit tests for the shared core.cache.TTLCache.
+"""Unit tests for the shared core.cache.TTLCache.
 
 Consolidates the TTL-cache behavior previously inlined per-file (dispatcher
 plan cache, health reachability, installed-programs) into one tested

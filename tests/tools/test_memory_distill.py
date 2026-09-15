@@ -1,4 +1,4 @@
-"""B-2026-08-30-4: memory_op must not persist a raw paste as a single "fact".
+"""Memory_op must not persist a raw paste as a single "fact".
 
 Root cause (live session syn-0): "Remember this source" + a pasted 6KB weather
 JSON dump stored the ENTIRE blob verbatim as one memory. `_distill_fact` now

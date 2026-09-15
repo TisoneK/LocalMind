@@ -149,7 +149,7 @@ def test_snapshot_diff_since_mark_turn_start(git_repo):
     # Make a new commit (use shell=True for the && chain)
     (git_repo / "feature.py").write_text("x = 1\n")
     subprocess.run(
-        "git add . && git commit -m feature",
+        "git add. && git commit -m feature",
         cwd=str(git_repo),
         shell=True,
         check=True,

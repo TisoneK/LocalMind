@@ -1,5 +1,5 @@
 """
-Tests for ADR-8 Phase 4 (Session 34): task-type-based agent selection.
+Tests for ADR-8 Phase 4: task-type-based agent selection.
 
 Per ADR-8 Principle 1: "Classification by task type, not tool. 'Create
 hello world repo' is a *coding* task → CodingAgent — not a SHELL

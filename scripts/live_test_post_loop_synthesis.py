@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Session 308 live verification — post-loop evidence synthesis.
 
-Before (Session 307): glm-4.5-flash executed real tools (describe_tool → shell)
+Before: glm-4.5-flash executed real tools (describe_tool → shell)
 but ended with a 0-char final answer (recovery cap hit, no synthesis fired).
 
 After (this session): the post-loop synthesis should fire and produce a real

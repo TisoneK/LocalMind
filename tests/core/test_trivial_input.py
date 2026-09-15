@@ -237,7 +237,7 @@ def test_leading_trailing_whitespace():
 
 
 # ── Conversational questions (Session 68 / ADR-11 fast-path) ────────────────
-# B-2026-08-09-1: obviously-conversational questions must short-circuit to a
+# Obviously-conversational questions must short-circuit to a
 # single direct chat call, skipping the ThinkingDispatcher's LLM
 # capability-inference call (verified root cause of ~40s "What can you do?"
 # latency — two sequential LLM calls). The detector is deliberately
@@ -552,7 +552,7 @@ async def test_conversational_response_streamed_error_chunk_is_normalized():
     """A streamed provider error (429/auth) must surface in the fallback —
     but as the canonical friendly message, never as the raw provider payload.
     The raw error is forwarded on chunk.error so the SSE boundary emits the
-    error card (ADR-20/21)."""
+    error card ."""
 
     async def mock_chat(messages, intent="chat", **kwargs):
         yield MagicMock(text="", done=True, error="zen returned 429: rate limit")
@@ -576,7 +576,7 @@ async def test_conversational_response_streamed_error_chunk_is_normalized():
 @pytest.mark.asyncio
 async def test_trivial_response_zen_payload_never_leaks_raw_json():
     """The exact user-reported case: the full Zen 429 JSON payload must not
-    appear in the fallback text — only the friendly message (Session 171).
+    appear in the fallback text — only the friendly message.
     (Session 187: uses "yes" — a yes_no intent that still streams through
     the adapter — since pure social intents no longer call the LLM.)"""
 

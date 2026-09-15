@@ -58,7 +58,7 @@ def test_browser_agent_config():
     cfg = agent.config()
     assert cfg.name == "browser"
     assert cfg.tools_enabled is True
-    # Scoped toolset: browse + delegate (ADR-8 Phase 3) + skill (B-2026-08-02-12)
+    # Scoped toolset: browse + delegate (ADR-8 Phase 3) + skill 
     assert cfg.allowed_tools == BROWSER_TOOLS
     assert cfg.allowed_tools == frozenset({Intent.BROWSE.value, "delegate", "skill"})
     assert cfg.allowed_tools.issubset(AGENT_ALLOWED_TOOLS)
@@ -196,10 +196,10 @@ def test_browser_tools_is_subset_of_agent_allowed():
 def test_browser_tools_browse_plus_delegate():
     """The browser agent's scoped toolset is browse + delegate + skill.
 
-    ADR-8 Phase 3 (Session 34): added 'delegate' so the browser agent
+    ADR-8 Phase 3: added 'delegate' so the browser agent
     can hand off research/coding sub-tasks to the appropriate agent
     instead of trying to do them itself (it has no shell/file tools).
-    B-2026-08-02-12 (Session 84): 'skill' is universal to all agents.
+    B-2026-08-02-12: 'skill' is universal to all agents.
     """
     assert BROWSER_TOOLS == frozenset({Intent.BROWSE.value, "delegate", "skill"})
 

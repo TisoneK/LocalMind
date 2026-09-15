@@ -1,6 +1,6 @@
 """ADR-40 option C regression tests: on-demand long-tail tool loading.
 
-B-2026-08-16-2 (Session 252): the 16 long-tail tools (browse, delegate*,
+B-2026-08-16-2: the 16 long-tail tools (browse, delegate*,
 sql, csv, json, best_of_n_edit, propose_*, subgoal, skill, diagnostics)
 are NOT sent in the native `tools` param on every call. The model loads
 one with `describe_tool(name)` (the `skill`-loader pattern); the loop
@@ -54,7 +54,7 @@ def test_tier_split_covers_catalog_exactly() -> None:
                  "propose_str_replace", "propose_write_file", "apply_proposed_edit",
                  "add_subgoal", "update_subgoal", "create_plan", "skill", "diagnostics"):
         assert name in LONG_TAIL_TOOL_NAMES
-    # Session 411: the 6 tools moved from core to long-tail
+    # The 6 tools moved from core to long-tail
     for name in ("git", "process", "web_research", "observe", "sysinfo", "calculator"):
         assert name in LONG_TAIL_TOOL_NAMES
     # the always-present core set (Session 411: git removed — now on-demand)
@@ -139,7 +139,7 @@ async def test_describe_tool_loads_long_tail_schema() -> None:
 
 @pytest.mark.asyncio
 async def test_describe_tool_core_tool_not_loaded() -> None:
-    # Session 411: git moved to LONG_TAIL — use "shell" (still CORE) as the
+    # Git moved to LONG_TAIL — use "shell" (still CORE) as the
     # example of a core tool that describe_tool should NOT re-load.
     result = await dispatch(Intent.DESCRIBE_TOOL, "shell")
     assert result is not None and result.success
@@ -149,7 +149,7 @@ async def test_describe_tool_core_tool_not_loaded() -> None:
 
 @pytest.mark.asyncio
 async def test_describe_tool_core_tool_does_not_redump_schema() -> None:
-    """B-2026-08-30-13: describe_tool on a CORE tool must NOT re-dump the full
+    """Describe_tool on a CORE tool must NOT re-dump the full
     schema (it's already in the tools list) — that ~3k dump for browse overflowed
     the context window. Return a short 'call it directly' nudge instead."""
     for name in ("browse", "web_fetch"):
@@ -196,7 +196,7 @@ def test_note_described_tool_uses_metadata_not_contextvar() -> None:
 class _OnDemandAdapter:
     """Stub adapter: describe_tool on call 1, sql on call 2, final text.
 
-    Uses `sql` as the on-demand example — browse is CORE now (B-2026-08-30-13),
+    Uses `sql` as the on-demand example — browse is CORE now,
     so it's always present and no longer exercises the describe_tool→load path.
     """
 

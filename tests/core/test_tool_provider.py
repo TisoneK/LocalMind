@@ -1,4 +1,4 @@
-"""Tests for the loop's ``_tool_provider`` metadata hook (Session 271).
+"""Tests for the loop's ``_tool_provider`` metadata hook.
 
 The Actions card shows which backend engine answered (e.g. web_search's
 winning search engine) as a badge. The provider is read from the tool result's

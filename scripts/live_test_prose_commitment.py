@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Session 307 live verification — prose-commitment detector + re-prompt.
 
-Before (Session 306): glm-4.5-flash produced 'I'll describe the shell tool...'
+Before: glm-4.5-flash produced 'I'll describe the shell tool...'
 prose preamble without emitting a tool_call; loop accepted the prose as final.
 
 After (this session): the detector should fire on iter=1, inject a [TOOL

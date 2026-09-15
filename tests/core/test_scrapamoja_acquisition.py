@@ -105,7 +105,7 @@ async def test_render_unavailable_returns_failure(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_web_research_runs_scrapamoja_at_most_once(monkeypatch):
-    """Regression (B-2026-09-02): the heavy stealth render must NOT run per
+    """Regression: the heavy stealth render must NOT run per
     source in web_research's multi-source loop (it stacked ~65s per thin source
     and blew whole turns past the provider rate limit). It runs at most ONCE, as
     a final fallback, after the cheap static+browser strategies fail on every

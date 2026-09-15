@@ -39,9 +39,9 @@ def test_every_intent_is_mapped():
 def test_list_intent_mappings_covers_all_intents():
     """list_intent_mappings() returns one entry per ROUTING Intent.
 
-    ADR-8 Phase 3 (Session 34) + B-2026-08-02-6 (Session 81) +
-    B-2026-08-02-7 (Session 82) + B-2026-08-02-8 (Session 83) +
-    B-2026-08-02-12 (Session 84) + B-2026-08-02-11 (Session 86): the
+    ADR-8 Phase 3  + B-2026-08-02-6  +
+    B-2026-08-02-7  + B-2026-08-02-8  +
+    B-2026-08-02-12  + B-2026-08-02-11: the
     DELEGATE / DELEGATE_PARALLEL / PROPOSE_EDIT / PROPOSE_WRITE /
     APPLY_PROPOSED / ADD_SUBGOAL / UPDATE_SUBGOAL / CREATE_PLAN / SKILL /
     BEST_OF_N_EDIT intents are meta-tool intents (the agent calls the

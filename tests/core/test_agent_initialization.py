@@ -35,7 +35,7 @@ def test_parse_execute_decision_parses_plan_ignores_other_legacy_fields():
     assert isinstance(decision, InitializationDecision)
     assert decision.mode == "execute"
     assert decision.objective == "Find the current weather"
-    # `plan` IS parsed now (ADR-49) — the legacy `plan_steps` KEY is not.
+    # `plan` IS parsed now  — the legacy `plan_steps` KEY is not.
     assert decision.plan_steps == ["Search Kitengela weather today", "Fetch a reliable result"]
     assert "legacy key must be ignored" not in decision.plan_steps
     assert not hasattr(decision, "tool_names")
@@ -85,7 +85,7 @@ def test_parse_clarify_decision_requires_one_question():
 
 
 def test_unparseable_output_resolves_to_direct_not_execute():
-    # Session 290: execute is OPT-IN. An unparseable classify output must NOT
+    # Execute is OPT-IN. An unparseable classify output must NOT
     # drag any model into the tool loop — a model that ignored the JSON
     # contract and just replied in prose has its prose shown as the answer.
     decision = parse_initialization("Hello! How can I help you today?")
@@ -307,7 +307,7 @@ async def test_understanding_narrates_workspace_not_chat_thinking():
 
 
 def test_initialization_prompt_is_classify_only():
-    """Step 1 (ADR-38): the init prompt classifies the tier only — tool
+    """Step 1: the init prompt classifies the tier only — tool
     names, plans, and upfront assessment fields are gone (they emerge
     mid-loop on gathered evidence)."""
     prompt = build_initialization_prompt(

@@ -1,4 +1,4 @@
-"""ADR-18 P2 failure-memory tests (Session 175) — the Remember stage.
+"""ADR-18 P2 failure-memory tests  — the Remember stage.
 
 Covers:
   1. classify_failure — deterministic what-failed-and-why from a trace
@@ -364,7 +364,7 @@ async def test_engine_persists_failure_and_recalls_it(tmp_path, monkeypatch):
         return _stream()
 
     async def chat(messages, temperature=0.4, intent=None, **kwargs):
-        # Session 290: the parent init resolves to EXECUTE only on an explicit,
+        # The parent init resolves to EXECUTE only on an explicit,
         # parseable decision — return one so the loop actually runs and can hit
         # the cap (the failure this test asserts). An empty/garbled init now
         # (correctly) resolves to a bounded DIRECT answer, which would skip the

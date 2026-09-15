@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""ADR-18 P0 acceptance-gate live smoke (Session 158).
+"""ADR-18 P0 acceptance-gate live smoke.
 
 Drives a real coding task through the RUNNING server's /api/chat SSE
 stream and reports on the acceptance-gate artifacts:

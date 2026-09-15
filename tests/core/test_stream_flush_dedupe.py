@@ -1,4 +1,4 @@
-"""B-2026-09-02 — gated live-streaming slice 1 (ADR-57): the flush helper.
+"""Gated live-streaming slice 1: the flush helper.
 
 Live traces (scripts/live_test_stream_gating.py, bankofai + zai) proved the
 streamed happy path end-to-end. These unit tests pin the dedupe arithmetic

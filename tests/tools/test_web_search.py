@@ -140,7 +140,7 @@ async def test_web_search_exception_returns_graceful_error():
 def test_searxng_instance_list_expands_and_dedupes():
     """The configured URL (comma-separated supported) is tried first, then the
     curated public fallbacks — deduped, configured wins ordering."""
-    urls = _searxng_instance_list(" https://my.instance.org , https://searx.be ")
+    urls = _searxng_instance_list(" https://my.instance.org, https://searx.be ")
     assert urls[:2] == ["https://my.instance.org", "https://searx.be"]
     # Curated fallbacks follow, without duplicating configured entries.
     for fb in DEFAULT_SEARXNG_FALLBACKS:
@@ -475,7 +475,7 @@ async def test_race_relevance_beats_a_faster_offtopic_provider():
 
 @pytest.mark.asyncio
 async def test_race_discards_off_topic_fallback_below_floor():
-    """B-2026-09-04-3: if NO provider clears the bar AND the best held set is
+    """If NO provider clears the bar AND the best held set is
     below the fallback floor (< half the distinctive terms), it is DISCARDED —
     returning off-topic junk (here: banking/electric-current pages for a weather
     query, coverage 0/3) is worse than no results. The old behavior surfaced it;

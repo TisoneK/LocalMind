@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Session 306 — clean GLM native tool trace after provider recovery.
+"""Clean GLM native tool trace after provider recovery.
 
 Live-verify on z.ai/glm-4.5-flash that the warm kernel + describe_tool
 bootstrap executes a real tool task end-to-end:

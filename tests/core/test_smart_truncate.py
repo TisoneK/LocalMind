@@ -1,6 +1,6 @@
 """smart_truncate: table-aware, line-boundary truncation.
 
-Regression (B-2026-09-01): a blunt text[:cap] severed data tables mid-row
+Regression: a blunt text[:cap] severed data tables mid-row
 (EPL standings lost rows 5-16), so the model chased more sources. smart_truncate
 cuts on a line boundary and keeps a table that straddles the cut whole.
 """

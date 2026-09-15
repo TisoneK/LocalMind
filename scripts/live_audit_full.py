@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Session 313 — thorough end-to-end system audit (real-user walkthrough).
+"""Thorough end-to-end system audit (real-user walkthrough).
 
 Boots the real app on isolated 8765 + z.ai/glm-4.5-flash and walks through
 a realistic user session. Captures SSE + log + latency for every interaction.

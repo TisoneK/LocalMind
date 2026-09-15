@@ -1,4 +1,4 @@
-"""Session 438 — evidence-sufficient → answer-only call.
+"""Evidence-sufficient → answer-only call.
 
 Live baseline (bankofai/qwen3.8-flash, weather turn): after web_fetch put the
 wttr.in JSON in the transcript, the loop still burned a full tool-schema-bearing

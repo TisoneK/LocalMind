@@ -1,4 +1,4 @@
-"""B-2026-08-25-1: local-discovery routing must cover the whole search space.
+"""Local-discovery routing must cover the whole search space.
 
 `_LOCAL_DISCOVERY_RE` forces first-person "find/where/what-on-my-machine"
 questions to the agent (so system_search runs) instead of a tool-less

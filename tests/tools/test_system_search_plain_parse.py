@@ -1,4 +1,4 @@
-"""B-2026-08-25-1: system_search parses a leading operation keyword.
+"""System_search parses a leading operation keyword.
 
 Weak models (and the shell→system_search redirect) hand the tool plain text
 like "largest /Users/x" rather than JSON. Without keyword parsing that ran a

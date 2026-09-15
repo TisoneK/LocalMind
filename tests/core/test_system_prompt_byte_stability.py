@@ -11,7 +11,7 @@ stable prefix. Consequences pinned here:
   intent switches) and across time (no dynamic values).
 - The tail carries the moved sections with their pre-Step-2 rendering
   (same section text, only the position changed).
-- Memory facts and intent history were ALREADY tail content (Session 245);
+- Memory facts and intent history were ALREADY tail content;
   they must not leak back into the baseline.
 - Native-bootstrap parent turns keep their compact self-contained prompt.
 """

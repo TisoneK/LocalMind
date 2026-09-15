@@ -1,5 +1,5 @@
 """
-Shell propagates a command FAILURE as a real tool error (B-2026-08-18-10).
+Shell propagates a command FAILURE as a real tool error.
 
 Shell used to return success=True even when a command timed out or exited
 nonzero (the failure was buried as "Command failed: ..." in the output), so the

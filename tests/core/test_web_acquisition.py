@@ -1,4 +1,4 @@
-"""Session 340 — web acquisition system tests.
+"""Web acquisition system tests.
 
 Tests the WebAcquisitionRouter's progressive escalation:
   static_fetch → browser_read → fallback

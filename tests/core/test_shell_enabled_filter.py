@@ -1,4 +1,4 @@
-"""B-2026-08-23-4 — when the shell tool is DISABLED the model must not see a
+"""When the shell tool is DISABLED the model must not see a
 callable shell schema.
 
 The loop removes ``shell`` from the scoped tool surface before composing the

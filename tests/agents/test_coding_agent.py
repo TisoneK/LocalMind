@@ -61,7 +61,7 @@ def test_coding_agent_description_is_concrete():
 def test_coding_agent_build_context_returns_string():
     """build_context returns a non-empty string with the coding playbook.
 
-    ADR-8 Phase 2 (Session 34): build_context() now loads the coding
+    ADR-8 Phase 2: build_context() now loads the coding
     playbook from agents/coding/playbook.md (was a static header in
     Phase 1). The playbook's "## Coding Playbook" section appears in
     the context string along with the constraints (read-before-write,
@@ -183,11 +183,11 @@ def test_coding_tools_has_ten_tools():
     """The coding agent's scoped toolset is exactly 23 tools.
 
     Sessions 41-49 added git, process, and diagnostics; Session 81 added
-    delegate_parallel (B-2026-08-02-6); Session 82 added the three
-    propose-stage tools (B-2026-08-02-7); Session 83 added the three
-    subgoal scratchpad tools (B-2026-08-02-8); Session 84 added skill
+    delegate_parallel; Session 82 added the three
+    propose-stage tools; Session 83 added the three
+    subgoal scratchpad tools; Session 84 added skill
     (B-2026-08-02-12, universal); Session 86 added best_of_n_edit
-    (B-2026-08-02-11); Session 125 added find_path (name-match search);
+    ; Session 125 added find_path (name-match search);
     Session 130 added observe (B-2026-07-31-9, desktop awareness);
     Sessions 131-132 added calculator/csv/json/sql (B-2026-07-31-10, data tools).
     """
@@ -250,7 +250,7 @@ def test_is_coding_done_phase1_always_false():
 def test_coding_and_browser_have_different_toolsets():
     """CodingAgent and BrowserAgent have disjoint PRIMARY toolsets.
 
-    ADR-8 Phase 3 (Session 34): both agents have the shared `delegate`
+    ADR-8 Phase 3: both agents have the shared `delegate`
     tool, but their PRIMARY tools (the non-delegate tools) are disjoint.
     """
     from agents.browser import BROWSER_TOOLS

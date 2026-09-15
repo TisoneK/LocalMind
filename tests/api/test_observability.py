@@ -124,7 +124,7 @@ async def test_observability_without_any_data_returns_empty_optional_field(monke
 
 @pytest.mark.asyncio
 async def test_fallback_never_leaks_cross_session_metrics(monkeypatch):
-    """B-2026-08-09-5: with no per-session observation, the endpoint must NOT
+    """With no per-session observation, the endpoint must NOT
     return another session's intent/latency from the intent-keyed MetricsStore
     aggregate (the old fallback returned the first intent with any requests)."""
     class _Metrics:
@@ -152,7 +152,7 @@ async def test_fallback_never_leaks_cross_session_metrics(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_observability_falls_back_to_persisted_observation(monkeypatch, tmp_path):
-    """Session 267: after a backend restart the in-memory cache is empty, but
+    """After a backend restart the in-memory cache is empty, but
     the observation persisted at turn end (observations table) must still feed
     the Observe panel — intent/latency/timings and the snapshot summary."""
     from core.config import settings

@@ -138,7 +138,7 @@ class TestFinalAnswerRescue:
 
     @pytest.mark.asyncio
     async def test_synthesis_stream_preserves_interior_word_spaces(self):
-        """Session 246: the final-synthesis path ran the TRIMMING
+        """The final-synthesis path ran the TRIMMING
         `_strip_minimax_tool_calls` per streamed delta, which .strip()s each
         chunk and welds words together ("Herearethetrending"). The stream
         variant must be used so boundary spaces survive the join."""
@@ -169,7 +169,7 @@ class TestFinalAnswerRescue:
 
     @pytest.mark.asyncio
     async def test_synthesis_leaked_dsml_markup_is_stripped(self):
-        """Session 148: the browser-validated run leaked a raw
+        """The browser-validated run leaked a raw
         <｜DSML｜tool_calls> block into the final answer because the rescue
         path only ran the system-leak filter. The strip must apply."""
         loop = AgentLoop(adapter=MagicMock())

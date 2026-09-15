@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Session 404 — detached full-suite benchmark run (survives terminal disconnect).
+# Detached full-suite benchmark run (survives terminal disconnect).
 # Loads the bankofai key from the secrets dir into the environment; the key is
 # never echoed, logged, or committed.
 #

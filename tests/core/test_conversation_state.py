@@ -1,4 +1,4 @@
-"""Session 339 — conversation-state + memory-relevance gating tests.
+"""Conversation-state + memory-relevance gating tests.
 
 Tests the 6 invariants the user specified:
   1. A new conversation begins without an assumed topic.
