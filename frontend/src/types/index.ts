@@ -588,6 +588,10 @@ export interface PerformanceMetrics {
   cachedTokens?: number;
   /** LLM calls that reported usage this turn (multi-call agent turns). */
   llmCalls?: number;
+  /** Per-category token shares of the LAST model call's prompt (system prompt,
+   *  tool schemas, history, ...), scaled to the provider-reported prompt total.
+   *  Absent/empty when the turn never reached the agent loop (fast path). */
+  contextBreakdown?: Record<string, number>;
 }
 
 export interface ModelOption {

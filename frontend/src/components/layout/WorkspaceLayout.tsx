@@ -510,6 +510,7 @@ export function WorkspaceLayout() {
           contextWindowSize={currentModel?.contextWindow}
           contextTokens={meterBasisTokens}
           cachedTokens={cachedTokensForMeter}
+          contextBreakdown={lastMetrics?.contextBreakdown}
           fileDiffs={fileDiffs}
         />
       </div>

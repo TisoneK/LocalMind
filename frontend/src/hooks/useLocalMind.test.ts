@@ -419,6 +419,75 @@ describe('useChat SSE obs_event routing', () => {
     unmount();
   });
 
+  it('turn_complete provider_usage carries the per-category context breakdown', () => {
+    const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+
+    act(() => {
+      onChunk()(JSON.stringify({
+        obs_event: {
+          type: 'turn_complete',
+          data: {
+            tokens_approx: 9,
+            prompt_tokens_approx: 3500,
+            total_latency_ms: 2300,
+            provider_usage: {
+              prompt_tokens: 3500,
+              context_breakdown: { system_prompt: 1200, tool_schemas: 800, history: 1500 },
+            },
+          },
+        },
+      }));
+    });
+    act(() => onDone()());
+
+    expect(result.current.lastMetrics?.contextBreakdown).toEqual({
+      system_prompt: 1200,
+      tool_schemas: 800,
+      history: 1500,
+    });
+
+    unmount();
+  });
+
+  it('the final metrics event upgrades the breakdown in place', () => {
+    const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+
+    act(() => {
+      onChunk()(JSON.stringify({
+        obs_event: {
+          type: 'turn_complete',
+          data: {
+            tokens_approx: 9,
+            prompt_tokens_approx: 3500,
+            total_latency_ms: 2300,
+            provider_usage: { context_breakdown: { system_prompt: 1200 } },
+          },
+        },
+      }));
+    });
+    act(() => onDone()());
+
+    act(() => {
+      onChunk()(JSON.stringify({
+        type: 'metrics',
+        metrics: {
+          tokens_approx: 9,
+          prompt_tokens_approx: 3500,
+          total_latency_ms: 2300,
+          context_breakdown: { system_prompt: 1200, tool_schemas: 800, history: 1500 },
+        },
+      }));
+    });
+
+    expect(result.current.lastMetrics?.contextBreakdown).toEqual({
+      system_prompt: 1200,
+      tool_schemas: 800,
+      history: 1500,
+    });
+
+    unmount();
+  });
+
   it('resetSession returns the context counter and stats to a clean slate', () => {
     const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
 

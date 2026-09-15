@@ -1383,6 +1383,11 @@ export function useChat(
                     const _llmCalls = Number(
                       obsData.llm_calls ?? _providerUsage.llm_calls ?? 0
                     ) || 0;
+                    // Per-category context shares ride provider_usage.
+                    const _breakdown = (_providerUsage.context_breakdown
+                      && typeof _providerUsage.context_breakdown === 'object')
+                      ? _providerUsage.context_breakdown as Record<string, number>
+                      : undefined;
                     if (_tokens > 0 || _latency > 0) {
                       const _elapsed_s = _latency / 1000;
                       // tokens_approx is the RESPONSE (completion) token count.
@@ -1416,6 +1421,9 @@ export function useChat(
                             ? _cachedTokens
                             : prev?.cachedTokens || 0,
                           llmCalls: _llmCalls > 0 ? _llmCalls : prev?.llmCalls || 0,
+                          contextBreakdown: _breakdown && Object.keys(_breakdown).length > 0
+                            ? _breakdown
+                            : prev?.contextBreakdown,
                         };
                       });
                     }
@@ -1596,6 +1604,10 @@ export function useChat(
                 // final metrics event too (0 when the provider omits it).
                 const _cachedTokens = Number(m.cached_tokens || 0);
                 const _llmCalls = Number(m.llm_calls || 0);
+                const _mBreakdown = (m.context_breakdown
+                  && typeof m.context_breakdown === 'object')
+                  ? m.context_breakdown as Record<string, number>
+                  : undefined;
                 if (_tokens > 0 || _latency > 0) {
                   const _elapsed_s = _latency / 1000;
                   setLastMetrics((prev) => {
@@ -1619,6 +1631,9 @@ export function useChat(
                         ? _cachedTokens
                         : prev?.cachedTokens || 0,
                       llmCalls: _llmCalls > 0 ? _llmCalls : prev?.llmCalls || 0,
+                      contextBreakdown: _mBreakdown && Object.keys(_mBreakdown).length > 0
+                        ? _mBreakdown
+                        : prev?.contextBreakdown,
                     };
                   });
                 }

@@ -20,6 +20,18 @@ import { localmindClient } from '@/lib/localmind/client';
 // Intent classification is no longer a product-facing surface — the
 // Agent Workspace is the canonical live UI for agent state.
 
+// Category labels for the context-usage breakdown panel. Keys match the
+// backend's per-category estimator (context_breakdown).
+const BREAKDOWN_LABELS: Record<string, string> = {
+  system_prompt: 'System prompt',
+  turn_context: 'Turn context',
+  tool_schemas: 'Tool schemas',
+  history: 'Conversation history',
+  current_message: 'Current message',
+  tool_results: 'Tool results',
+  turn_additions: 'Loop injections',
+};
+
 interface HealthState {
   status: 'online' | 'offline' | 'checking';
   version?: string;
@@ -68,6 +80,11 @@ interface CenterPanelProps {
    *  input tokens (0 when the provider doesn't report caching). Shows the
    *  cached share next to the occupancy percentage. */
   cachedTokens?: number;
+  /** Per-category token shares of the last model call's prompt (empty/absent
+   *  when the turn never reached the agent loop). Clicking the occupancy
+   *  meter opens a breakdown panel so the user can see WHAT fills the
+   *  window — system prompt, tool schemas, history, tool results, ... */
+  contextBreakdown?: Record<string, number>;
   /** B-2026-08-23-18: per-path diff hunks captured this turn (preview Diff mode). */
   fileDiffs?: Record<string, DiffData>;
   /** B-2026-08-23-34: Current chat mode. */
@@ -89,6 +106,7 @@ export function CenterPanel({
   contextWindowSize,
   contextTokens,
   cachedTokens,
+  contextBreakdown,
   fileDiffs,
   chatMode,
   onChatModeChange,
@@ -202,6 +220,30 @@ export function CenterPanel({
     ? Math.min(100, Math.round((cachedTokens / contextTokens) * 100))
     : 0;
 
+  // Context-usage breakdown: the meter shows ONE occupancy number; clicking
+  // it opens the per-category shares so the user can see WHAT fills the
+  // window (system prompt, tool schemas, history, tool results, ...). The
+  // entries come pre-scaled from the backend to the provider-reported prompt
+  // total of the last call; percentages are shares of that call.
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const breakdownEntries = (() => {
+    const b = contextBreakdown ?? {};
+    const total = Object.values(b).reduce((s, v) => s + (Number(v) || 0), 0);
+    if (total <= 0) return [] as { key: string; label: string; tokens: number; pct: number }[];
+    return Object.entries(b)
+      .filter(([, v]) => Number(v) > 0)
+      .sort((a, c) => Number(c[1]) - Number(a[1]))
+      .map(([key, tokens]) => ({
+        key,
+        label: BREAKDOWN_LABELS[key] ?? key.replace(/_/g, ' '),
+        tokens: Number(tokens),
+        pct: Math.round((Number(tokens) / total) * 100),
+      }));
+  })();
+  const toggleBreakdown = () => {
+    if (breakdownEntries.length > 0) setBreakdownOpen((o) => !o);
+  };
+
   // Clean up model name for display: remove internal suffixes, format nicely
   const rawModelName = selectedModel?.name || selectedModel?.id || '';
   const displayModelName = rawModelName
@@ -235,11 +277,14 @@ export function CenterPanel({
           {/* Context-window occupancy meter — the confidence badge was removed:
               it duplicated the Observe panel's Intent Classification section
               and was low-value as an always-on number. The window meter is the
-              actionable one (predicts degradation / compaction). */}
+              actionable one (predicts degradation / compaction). Clicking it
+              opens the per-category breakdown when the backend reported one. */}
+          <div className="relative flex items-center gap-3">
           {windowSize && occupancyPct !== null && (cachedTokens || 0) > 0 && (
             <div
-              className="flex items-center gap-1.5"
-              title={`Last model call: ${(contextTokens || 0).toLocaleString()} / ${windowSize.toLocaleString()} context tokens (${occupancyPct}%). ${(cachedTokens || 0).toLocaleString()} of them were served from the provider's prompt cache at ~10% of the price. The stats corner's prompt counter is the session cumulative — calls re-send history, so per-turn prompts overlap rather than stack.`}
+              className={`flex items-center gap-1.5${breakdownEntries.length ? ' cursor-pointer' : ''}`}
+              onClick={toggleBreakdown}
+              title={`Last model call: ${(contextTokens || 0).toLocaleString()} / ${windowSize.toLocaleString()} context tokens (${occupancyPct}%). ${(cachedTokens || 0).toLocaleString()} of them were served from the provider's prompt cache at ~10% of the price. The stats corner's prompt counter is the session cumulative — calls re-send history, so per-turn prompts overlap rather than stack.${breakdownEntries.length ? ' Click for the per-category breakdown.' : ''}`}
             >
               <span className="text-[9px] text-brand-green-muted uppercase tracking-wider">Context</span>
               <div className="w-14 h-1.5 rounded-full bg-brand-border overflow-hidden">
@@ -259,8 +304,9 @@ export function CenterPanel({
           )}
           {windowSize && occupancyPct !== null && !(cachedTokens || 0) && (
             <div
-              className="flex items-center gap-1.5"
-              title={`Last model call: ${(contextTokens || 0).toLocaleString()} / ${windowSize.toLocaleString()} context tokens (${occupancyPct}%). The stats corner's prompt counter is the session cumulative — calls re-send history, so per-turn prompts overlap rather than stack.`}
+              className={`flex items-center gap-1.5${breakdownEntries.length ? ' cursor-pointer' : ''}`}
+              onClick={toggleBreakdown}
+              title={`Last model call: ${(contextTokens || 0).toLocaleString()} / ${windowSize.toLocaleString()} context tokens (${occupancyPct}%). The stats corner's prompt counter is the session cumulative — calls re-send history, so per-turn prompts overlap rather than stack.${breakdownEntries.length ? ' Click for the per-category breakdown.' : ''}`}
             >
               <span className="text-[9px] text-brand-green-muted uppercase tracking-wider">Context</span>
               <div className="w-14 h-1.5 rounded-full bg-brand-border overflow-hidden">
@@ -277,8 +323,9 @@ export function CenterPanel({
               percentage — a meter against a guessed denominator lies. */}
           {!windowSize && (contextTokens || 0) > 0 && (
             <div
-              className="flex items-center gap-1.5"
-              title={`Last model call: ${(contextTokens || 0).toLocaleString()} tokens. The model's context window is unknown (the provider doesn't report it and it isn't in the registry), so no percentage is shown — a meter against a guessed denominator would lie.`}
+              className={`flex items-center gap-1.5${breakdownEntries.length ? ' cursor-pointer' : ''}`}
+              onClick={toggleBreakdown}
+              title={`Last model call: ${(contextTokens || 0).toLocaleString()} tokens. The model's context window is unknown (the provider doesn't report it and it isn't in the registry), so no percentage is shown — a meter against a guessed denominator would lie.${breakdownEntries.length ? ' Click for the per-category breakdown.' : ''}`}
             >
               <span className="text-[9px] text-brand-green-muted uppercase tracking-wider">Context</span>
               <span className="text-[10px] font-mono text-brand-green-soft">
@@ -286,6 +333,44 @@ export function CenterPanel({
               </span>
             </div>
           )}
+          {/* Per-category breakdown popover (last model call). */}
+          {breakdownOpen && breakdownEntries.length > 0 && (
+            <div className="absolute right-0 top-full mt-1.5 z-30 w-64 rounded-md border border-brand-border bg-brand-bg-panel p-2.5 shadow-xl">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[9px] uppercase tracking-wider text-brand-green-muted">
+                  Context — last model call
+                </span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setBreakdownOpen(false); }}
+                  className="text-brand-green-muted hover:text-brand-green-soft"
+                  aria-label="Close context breakdown"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+              {breakdownEntries.map((e) => (
+                <div key={e.key} className="mb-1.5 last:mb-0">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-brand-green-soft">{e.label}</span>
+                    <span className="font-mono text-brand-green-muted">
+                      {e.tokens.toLocaleString()} · {e.pct}%
+                    </span>
+                  </div>
+                  <div className="h-1 rounded-full bg-brand-border overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-brand-green/70"
+                      style={{ width: `${Math.min(100, e.pct)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+              <div className="text-[9px] leading-snug text-brand-green-muted mt-1.5 pt-1.5 border-t border-brand-border">
+                Shares of the last call's prompt, scaled to the provider-reported
+                total. Estimates per category — the total is exact.
+              </div>
+            </div>
+          )}
+          </div>
           {/* Memory badge */}
           <div className="flex items-center gap-1.5" title={`Memory: ${memoryCount} facts loaded`}>
             <Brain className="h-3 w-3 text-brand-amber" />
