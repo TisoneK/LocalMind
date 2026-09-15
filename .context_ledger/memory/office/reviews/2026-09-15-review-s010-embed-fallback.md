@@ -59,6 +59,14 @@ graceful offline degradation.
   pre-existing failures (cp1252 locale — documented in B-2026-09-15-19,
   clears under `PYTHONUTF8=1`; 2 loop-surface dedup failures owned by the
   vocab-sweep/loop work). None on this surface.
+- **Exit gate (ci-check, full suite, `PYTHONUTF8=1`, on the shipped tree):**
+  22 failed / 3112 passed — every failure inside the documented
+  nondeterministic `tests/tools` baseline (`pytest-baseline.txt`,
+  B-2026-09-09-7), ZERO outside it, none on this surface. The 2 loop-surface
+  dedup tests that failed the targeted `tests/core` run PASSED here,
+  confirming their nondeterminism (owned by the loop/vocab-sweep work, not
+  this fix). ruff / tsc / eslint (53/53) / conflict-markers / backlog-dups /
+  bookkeeping all green.
 - **LIVE (isolated harness, Ollama genuinely down on this machine):**
   - BEFORE (no cloud config): `POST /api/memory` → **503**, log shows the
     exact backlog line `[embed] Failed: All connection attempts failed`.
