@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 
 STEERING_QUEUE_MAX = 10
 
-# Session 266: the persisted tool-call timeline must respect the same
+# The persisted tool-call timeline must respect the same
 # presentation boundary as the SSE bridge (chat.py): delegated child output
 # is intermediate model context, not user-facing content.
 _INTERNAL_DELEGATION_TOOLS = frozenset({"delegate", "delegate_parallel", "delegate_inline"})
@@ -422,7 +422,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             if len(self._last_observation_snapshots) >= 200:
                 self._last_observation_snapshots.pop(next(iter(self._last_observation_snapshots)))
             self._last_observation_snapshots[session_id] = snapshot
-            # Session 267: persist the snapshot summary to the DB so the
+            # Persist the snapshot summary to the DB so the
             # Observe panel survives a backend restart (the in-memory cache
             # is capped and dies with the process).
             try:
@@ -477,7 +477,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
     async def _persist_user_safe(self, session_id: str, message: str, **file_data) -> None:
         """Fire-and-forget wrapper around _persist_user for the turn-init path.
 
-        B-2026-08-17-10 (Session 312): the user-message DB write is NOT on the
+        The user-message DB write is NOT on the
         critical path to the first LLM token (the prompt is assembled from
         get_history + the `message` arg, not from the persisted row). Running
         it in a background task removes a serial DB write from the pre-first-
@@ -533,7 +533,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         diff_data: Optional[dict] = None,
         candidates: Optional[list] = None,
     ) -> None:
-        # Session 266: an error turn persists an (empty-text) assistant message
+        # An error turn persists an (empty-text) assistant message
         # carrying the canonical error object — the history endpoint returns it
         # so the error card survives a reload. Allow empty text ONLY when an
         # error is attached; a bare empty message is still skipped.
@@ -564,8 +564,8 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         """Extract the parent's opening acknowledgement from the obs trace.
 
         The loop emits it as an ``agent_initialization_ack`` obs event
-        (loop.py). Persisting it lets the ADR-36 opening line survive a reload,
-        the same way thinking/tool pills do (Session 290)."""
+        (loop.py). Persisting it lets the opening acknowledgement line survive a reload,
+        the same way thinking/tool pills do."""
         try:
             for evt in collector.history():
                 if evt.type == "agent_initialization_ack":
@@ -603,7 +603,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
     async def _recent_memory_facts(self, limit: int = 5) -> list[str]:
         """Newest-first recent facts — the primitive for referential
         conversational follow-ups ("What's it?"), where recency beats
-        semantic similarity (S427: the fact was written one minute before
+        semantic similarity (the fact was written one minute before
         the follow-up and a semantic query for "What's it?" missed it)."""
         try:
             rows = await self._memory.list_all_with_metadata()
@@ -708,7 +708,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             logger.debug("[agent-runtime] anomaly detection skipped", exc_info=True)
 
         self._last_observation[session_id] = merged
-        # Session 267: persist the merged observation to the DB — the
+        # Persist the merged observation to the DB — the
         # observability endpoint falls back to it on a cache miss (backend
         # restart survival). Snapshot summary is written separately by
         # build_observation_snapshot.
@@ -733,7 +733,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         allowed_tool_names: Optional[set[str]] = None,
     ) -> AsyncIterator[StreamChunk]:
         """Run one user turn through the LocalMind parent agent."""
-        # B-2026-08-23-17 follow-up: bind the session id for the WHOLE turn so
+        # Bind the session id for the WHOLE turn so
         # every tool the agent calls defaults its artifact writes into the
         # session's workspace folder (cleared in finally, even on GeneratorExit).
         #
@@ -811,7 +811,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 adapter=settings.localmind_adapter,
                 model=active_parent_model() or "(default)",
             )
-        # S426: a 'chat' hint is not a routing hint the parent discards — it
+        # A 'chat' hint is not a routing hint the parent discards — it
         # is the UI agreeing the turn is conversational, and the fast-path
         # below HONORS it. Only explicit TOOL hints (the user picked a tool)
         # are announced as ignored.
@@ -823,7 +823,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 reason="parent agent owns tool selection",
             )
 
-        # Session 337 — pre-init deterministic guards run BEFORE the
+        # Pre-init deterministic guards run BEFORE the
         # trivial/conversational fast-path. This catches the 4 root-cause
         # clusters (hallucination refusal, analyze-only, pressure-induced
         # fabrication, impossible constraints) even when the prompt would
@@ -835,7 +835,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
 
         _pre_init_override = classify_pre_init(message)
 
-        # Session 342: deterministic memory-write path.
+        # Deterministic memory-write path.
         # The user's principle:
         #   > EXPLICIT MEMORY REQUESTS ARE ACTION REQUESTS,
         #   > NOT SUGGESTIONS FOR THE LLM TO CONSIDER.
@@ -866,7 +866,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             )
             _gen_start = time.monotonic()
 
-            # S427 — evidence-grounded resolution for REFERENTIAL writes.
+            # Evidence-grounded resolution for REFERENTIAL writes.
             # "Remember the source for EPL table" stored the literal phrase
             # and confirmed it; the URL the user meant was in the conversation
             # and was never consulted. A bare referent cannot be persisted
@@ -981,7 +981,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             _memory_success = False
             try:
                 from tools.memory_tool import memory_op as _mem_op
-                # Session 359: pass the classifier's pre-extracted content and
+                # Pass the classifier's pre-extracted content and
                 # memory_type through — re-extracting inside memory_op with the
                 # simpler regex corrupts the fact ("note down my project" →
                 # stores "down my project") and always tags it "semantic".
@@ -999,16 +999,16 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     f"Error: {_mem_exc}"
                 )
 
-            # Session 342: NEVER fake-confirm. Only say "remembered" if the
+            # NEVER fake-confirm. Only say "remembered" if the
             # operation actually succeeded.
             if not _memory_success:
-                # Session 356: don't show a technical error message — just
+                # Don't show a technical error message — just
                 # acknowledge naturally. The user said something personal
                 # ("I prefer concise answers") and getting a technical error
                 # breaks the conversation.
                 _response_text = "Got it — I'll keep that in mind."
             elif _memory_intent.needs_resolution and _content_to_store:
-                # S427 false-confirmation guard: the confirmation must show
+                # False-confirmation guard: the confirmation must show
                 # the RESOLVED fact, not a bare "Remembered: <phrase>" — the
                 # user must be able to see what will actually be recalled.
                 _response_text = f"Remembered: {_content_to_store}"
@@ -1071,7 +1071,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             yield StreamChunk(text="", done=True)
             return
 
-        # Session 359: load the session's CURRENT persisted todo list ONCE
+        # Load the session's CURRENT persisted todo list ONCE
         # so BOTH the conversational fast-path ("what todos are left?") and
         # the parent-agent loop ("mark the task as complete") can see the
         # real checklist instead of hunting in chat history.
@@ -1081,7 +1081,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             logger.debug("[agent-runtime] todo state load skipped", exc_info=True)
             current_todos = []
 
-        # Session 332-C: fast-path for trivial inputs (greetings/thanks/
+        # Fast-path for trivial inputs (greetings/thanks/
         # farewells — zero LLM call) and obviously-conversational questions
         # ("What can you do?", "Give me three ideas for ...") — one direct
         # chat call, bypassing the parent-agent loop entirely.
@@ -1096,14 +1096,14 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # does NOT suppress the fast-path: it is the UI's own conversational
         # classification from client.ts classifyClientIntent, and the
         # deterministic detectors below remain the real gate), OR (c) the
-        # pre-init classifier returned an override mode (Session 337 —
-        # Cluster A/D overrides must reach the parent agent loop's
+        # pre-init classifier returned an override mode (the
+        # pre-init overrides must reach the parent agent loop's
         # direct-return path, not the fast-path's chat call).
         #
-        # S426: the original `not client_intent` gate disabled the fast-path
+        # The original `not client_intent` gate disabled the fast-path
         # for the UI's OWN chat hint, so every greeting sent from the
         # Electron app paid the full init+Thinker+iteration pipeline (live:
-        # 75.0s on bankofai for "Hi") — the exact regression S206 closed.
+        # 75.0s on bankofai for "Hi") — the exact regression closed earlier.
         # The hint that was designed to cooperate with this path was the
         # thing suppressing it.
         _conversational_hint = client_intent in (None, "", "chat")
@@ -1115,7 +1115,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 trivial_response,
             )
             # _approx_tokens is already imported at module top (line 35).
-            # Session 333: do NOT re-import here — a local `from X import Y`
+            # Do NOT re-import here — a local `from X import Y`
             # makes Y function-local, shadowing the module-level import for
             # the ENTIRE function (Python scoping rule), and breaking the
             # parent-agent path's prompt-token estimate at line 1192 when
@@ -1132,7 +1132,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             except Exception:
                 _hist_dicts = []
 
-            # S427: recent stored memories for referential follow-ups
+            # Recent stored memories for referential follow-ups
             # ("What's it?" after "Remember the source…"). Needed on BOTH
             # fast-path legs: a trivial-shaped acknowledgment ("ok", "sure")
             # can carry an evidence requirement, and the one-call reply must
@@ -1148,7 +1148,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 logger.info(
                     "[agent-runtime] fast-path(%s) for %r", _path, message[:60]
                 )
-                # Session 333: emit stage_timings matching the test contract
+                # Emit stage_timings matching the test contract
                 # (intent_classify skipped — no classifier runs; tool_select/
                 # execute skipped — no tools; generate done with real latency
                 # measured at the end). Previously emitted a "fast_path"
@@ -1168,7 +1168,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
 
                 # The conversational fast path streams the answer DIRECTLY —
                 # no pre-answer Thinker consult. The consult ran serially
-                # here (Session 354), putting its full wall-clock in front of
+                # here, putting its full wall-clock in front of
                 # the first visible token, and the gating classifier (regex)
                 # decided WHICH messages paid it — every phrasing the regex
                 # missed stalled the turn 5-15s (measured live: 8.7s on
@@ -1191,7 +1191,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
 
                 _response_chunks: list[str] = []
                 _fast_usage: dict[str, int] = {}
-                # S471 first-byte watchdog signal: the transport heartbeat
+                # First-byte watchdog signal: the transport heartbeat
                 # (chat.py _heartbeat_status_text) must tell "the provider has
                 # sent ZERO bytes — we're stuck in its queue" apart from "the
                 # model is thinking/generating slowly." The owner-reported
@@ -1272,7 +1272,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # provider was unreachable, which made NO provider call and
                 # must persist honest zeros rather than dressing a string
                 # lookup up as provider token counts (the sidebar's tok/s and
-                # latency aggregates read these numbers, and the S431 export
+                # latency aggregates read these numbers, and the export
                 # proved fabricated 5/8-token "provider" calls reconcile into
                 # polluting averages). The display contract (nonzero prompt
                 # estimate on the Observe panel) is kept by
@@ -1285,7 +1285,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     # Zero provider tokens: nothing was sent to a model.
                     _prompt_tokens = 0
                     _completion_tokens = 0
-                    # Session 111 display contract — the Observe panel keeps
+                    # Display contract — the Observe panel keeps
                     # a nonzero prompt estimate on greeting turns. These are
                     # clearly-labeled approx fields for display; the
                     # persisted metrics and provider aggregates above stay
@@ -1382,7 +1382,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 yield StreamChunk(text="", done=True, usage=_fast_usage)
                 return
 
-        # B-2026-08-17-10 (Session 312): maximize turn-init parallelism so the
+        # Maximize turn-init parallelism so the
         # first LLM token streams ASAP. Three changes vs the prior serial path:
         #
         # 1. _persist_user is fire-and-forget. It writes the user's message to
@@ -1415,7 +1415,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             )
         )
 
-        # B-2026-08-17-10 (Session 312): the turn-init concurrent task. Runs
+        # The turn-init concurrent task. Runs
         # ALL DB reads + memory retrieval + attachment parsing in parallel,
         # overlapped with the adapter setup below. The task is created FIRST
         # (before the cwd sync + adapter setup) so it gets a head start.
@@ -1446,7 +1446,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     return ParentSession(session_id=session_id)
 
             async def _load_facts_and_attach():
-                # Session 339: gate memory retrieval by conversation state.
+                # Gate memory retrieval by conversation state.
                 # A casual opener ("Hi", "How's it going?") or the first turn
                 # of a new chat must NOT trigger memory retrieval — memory
                 # should enrich the conversation, not choose its topic.
@@ -1582,12 +1582,12 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # rebuilt here. The AgentLoop adds dynamic environment/workspace
         # context and the native bootstrap capability surface.
         #
-        # ADR-52 phase 2: the per-chat ParentSession's rolling summary is
+        # The per-chat ParentSession's rolling summary is
         # injected as a system message BEFORE the recent tail. The summary
         # compacts older turns so long conversations stay bounded in the
         # prompt while the most recent turns remain verbatim below. The
         # session was loaded concurrently with memory/attachment retrieval
-        # in _gather_nonessential (B-2026-08-17-10) and survives backend
+        # in _gather_nonessential and survives backend
         # restart via the persisted store.
         summary_section = parent_session.to_prompt_section()
         prompt_messages: list[dict] = []
@@ -1627,7 +1627,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         parent = self._parent_agent or ParentAgent(adapter=adapter, loop=self._agent_loop)
         requested_tools = frozenset(allowed_tool_names) if allowed_tool_names is not None else AGENT_ALLOWED_TOOLS
         parent_tools = requested_tools.intersection(AGENT_ALLOWED_TOOLS)
-        # B-2026-08-20-23 / Session 330: the FIXED goal checklist. Derive the
+        # The FIXED goal checklist. Derive the
         # user's concrete deliverables from the message (deterministic, zero
         # LLM calls) and hand them to the loop as BOTH the Todos panel plan
         # (fixed denominator — never mutated by what ran) and the acceptance
@@ -1640,7 +1640,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             derive_goal_tree,
         )
 
-        # Session 382 follow-up (workspace steering): resolve bare path
+        # Workspace steering: resolve bare path
         # tokens in the goal derivation onto the session workspace, so the
         # goals/route/gate/panel all reference the EXACT destination a
         # free-tier model should write to (not a home-relative guess).
@@ -1656,14 +1656,14 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 _ws_base = None
 
         goal_items = derive_goal_items(message, base_dir=_ws_base)
-        # B-2026-08-23-8: the goal tree — each goal plus its ordered
+        # The goal tree — each goal plus its ordered
         # sub-goals (route → prep → write → verify). Derived once with the
         # flat checklist (same immutable denominator); handed to the loop
         # as plain dicts {goal, sub_goals} so the Todos panel can render
         # the route nested under each goal and the model sees the ordered
         # path. Empty when nothing concrete was derived — same condition
         # as `goal_items`.
-        # B-2026-08-23-11: each goal carries a user-facing `title` and
+        # Each goal carries a user-facing `title` and
         # each sub-goal a {content, title} pair — the Todos panel shows
         # the short titles, the agent context/persistence keeps the full
         # content (paths, commands).
@@ -1683,7 +1683,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 goals="; ".join(goal_items)[:400],
             )
         response_chunks: list[str] = []
-        # Session 266: accumulate the reasoning trace so the persisted message
+        # Accumulate the reasoning trace so the persisted message
         # carries the thinking block the user saw (survives reload). The loop
         # streams thinking as "start"/"end" markers plus token text — mirror
         # the frontend's phase-separator behavior (\n\n between phases).
@@ -1709,7 +1709,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             extra = time.monotonic() - _think_seg if _think_seg is not None else 0.0
             return round((_think_accum + extra) * 1000)
 
-        # B-2026-08-24-16: capture a Chat→Agent switch offer emitted by the loop
+        # Capture a Chat→Agent switch offer emitted by the loop
         # (direct mode + action request) so it survives into the terminal done
         # chunk below (the runtime rebuilds that chunk, dropping loop metadata).
         _switch_to_agent: Optional[dict] = None
@@ -1736,7 +1736,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # success criteria (completion gated on evidence against
                 # these items). None when nothing concrete was derived.
                 plan_steps=goal_items or None,
-                # B-2026-08-23-8: the same goals decomposed into an ordered
+                # The same goals decomposed into an ordered
                 # sub-goal route, rendered nested in the Todos panel and
                 # injected into the model context so the agent follows the
                 # fastest+safest ordered path.
@@ -1748,7 +1748,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # criteria-verified stop would end the turn with a bare
                 # "✓ n/n" summary before the model writes its synthesis.
                 skip_head_gate=bool(goal_items),
-                # Session 359: the persisted todos from previous turns — the
+                # The persisted todos from previous turns — the
                 # model must know its own checklist to act on it.
                 todo_state=current_todos,
                 session_id=session_id,
@@ -1778,7 +1778,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # parent runtime's completion bookkeeping turn a provider
                 # failure into the generic "no usable answer" fallback.
                 if chunk.error:
-                    # Session 266: persist the failed turn (error card must
+                    # Persist the failed turn (error card must
                     # survive reload). chat.py normalizes the raw string at
                     # the presentation boundary; we store it verbatim.
                     agent_runs, agent_phases = build_workspace_artifacts(
@@ -1813,7 +1813,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             collector.emit("agent_loop_error", error=exc.raw[:120], terminal=True)
             # chat.py owns the one canonical normalization/presentation
             # boundary; keep the raw adapter string internal to this chunk.
-            # Session 266: still persist the failed turn so the error card
+            # Still persist the failed turn so the error card
             # survives reload.
             agent_runs, agent_phases = build_workspace_artifacts(
                 collector, task=message, root_error=exc.raw
@@ -1864,10 +1864,10 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             usage.get("completion_tokens", 0) or _approx_tokens(response_text)
         )
         if not response_text:
-            # Session 419: name the budget that actually bound — a
+            # Name the budget that actually bound — a
             # wall-clock break is NOT an iteration-cap break, and telling
             # the user the wrong one sends them down the wrong remedy
-            # (the Session 32 misdiagnosis lesson).
+            # (the misdiagnosis lesson learned earlier).
             _limit_evt = next(
                 (
                     evt
@@ -1929,7 +1929,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             logger.debug("[agent-runtime] reflection skipped", exc_info=True)
         total_ms = round((time.monotonic() - started) * 1000)
 
-        # B-2026-08-23-7: deterministic file-task summary appended to the final
+        # Deterministic file-task summary appended to the final
         # answer. Derived from the ACTUAL tool timeline (file_write → created,
         # edit_file → modified) so the facts survive even when the model forgets
         # to mention its writes — same evidence philosophy as the goal-checklist
@@ -1950,10 +1950,10 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         final_text = response_text + _file_summary if _file_summary else response_text
         if _file_summary:
             yield StreamChunk(text=_file_summary, done=False)
-        # Session 266: persist the turn's artifacts (thinking, tool-call pills,
+        # Persist the turn's artifacts (thinking, tool-call pills,
         # per-turn metrics) with the assistant message so a reload restores the
         # thinking block, step cards, and the cumulative context counter.
-        # Session 267: also persist the Agent Workspace run tree + phase strip
+        # Also persist the Agent Workspace run tree + phase strip
         # so the Agents tab and phase visibility survive a reload.
         agent_runs, agent_phases = build_workspace_artifacts(collector, task=message)
         _thinking_text = "".join(thinking_parts) or None
@@ -1983,7 +1983,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             diff_data=_collect_diff(collector),
             candidates=_collect_candidates(collector),
         )
-        # ADR-52 phase 2: fold this turn into the per-chat ParentSession and
+        # Fold this turn into the per-chat ParentSession and
         # persist. The rolling summary compacts older turns; the recent tail
         # holds the last N pairs verbatim. Skip when the turn produced no
         # usable response (the empty-response fallback path already wrote a
@@ -2035,13 +2035,13 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             latency_ms=total_ms,
         )
 
-        # Session 344 Phase 3: Presentation Intelligence — classify the
+        # Presentation Intelligence — classify the
         # response's presentation type and emit structured blocks alongside
         # the text stream. The frontend renders these natively (tables, charts,
         # diagrams, metrics) instead of forcing everything through Markdown.
         # The agent decides WHAT to show; the UI decides HOW it looks.
         #
-        # Session 346: do NOT emit a TextBlock that duplicates the text already
+        # Do NOT emit a TextBlock that duplicates the text already
         # streamed via token events — that causes a double-reply in the UI.
         # Only emit structured blocks (table, chart, diagram, metric, etc.)
         # when the presentation type is NOT plain text. For TEXT responses,

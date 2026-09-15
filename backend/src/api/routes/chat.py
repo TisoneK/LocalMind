@@ -47,15 +47,15 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 _INTERNAL_DELEGATION_TOOLS = frozenset({"delegate", "delegate_parallel", "delegate_inline"})
-LIVE_PROGRESS_INTERVAL_S = 5  # Session 352: was 15s — too long, user stays in the dark
-# S471: seconds a fast-path provider call may hold with ZERO bytes sent
+LIVE_PROGRESS_INTERVAL_S = 5  # raised from 15s — too long, user stays in the dark
+# seconds a fast-path provider call may hold with ZERO bytes sent
 # before the heartbeat escalates from "waiting for provider" to the
 # model-switch offer. Healthy bankofai calls answer in 2-5s; 15s+ TTFBs
-# and the owner-reported 107s stall are queue congestion (S471 probes).
+# and the owner-reported 107s stall are queue congestion (provider probes).
 PROVIDER_OFFER_AFTER_S = 30
 LIVE_TOOL_EVENT_TYPES = frozenset({"tool_call", "tool_status", "terminal_output"})
 
-# B-2026-08-24-4: retain fire-and-forget background tasks. asyncio.create_task
+# retain fire-and-forget background tasks. asyncio.create_task
 # only holds a WEAK reference to the task, so a task whose return value is
 # discarded can be garbage-collected before it runs. The title refine is
 # spawned this way at the tail of the SSE stream — in Agent mode (no classify
@@ -95,9 +95,9 @@ def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 
-# B-2026-08-24-1: curated per-tool narration for the user's Thinking box. Plain
+# curated per-tool narration for the user's Thinking box. Plain
 # language, no internal wiring — what the agent is DOING, keyed on the tool. The
-# raw model chain-of-thought is no longer streamed (B-2026-08-24-6); these lines
+# raw model chain-of-thought is no longer streamed; these lines
 # are what the box shows instead.
 _TOOL_NARRATION: dict[str, str] = {
     "sysinfo": "Checking your system",
@@ -132,7 +132,7 @@ def _narration_sse(tool_name: str, status: str) -> str | None:
     """SSE for the status area: a curated line when a tool STARTS. None when the
     tool is internal or the event isn't a start.
 
-    B-2026-08-30-7: moved from thinking_token to status_update — the Thinking
+    moved from thinking_token to status_update — the Thinking
     box is for the model's actual reasoning (leak-filtered thinking chunks
     from the loop), not curated tool labels. status_update is the documented
     progress channel (useLocalMind.ts case 'status_update' → statusText)."""
@@ -147,9 +147,9 @@ def _narration_sse(tool_name: str, status: str) -> str | None:
 def _thinking_token_sse(text: str) -> str:
     """SSE for the Thinking box: the loop's leak-filtered reasoning prose.
 
-    B-2026-08-30-7: the loop already filters system-leak XML before yielding
+    the loop already filters system-leak XML before yielding
     reasoning chunks (loop.py StreamChunk.thinking sites); the bridge drops
-    them (B-2026-08-24-6), so the box only ever showed curated labels.
+    them, so the box only ever showed curated labels.
     Forward the filtered prose as thinking_token — the channel the frontend
     maps into message.thinking (CenterPanel ThinkingBlock).
 
@@ -183,7 +183,7 @@ def _tool_call_payload(evt, session_id: str) -> dict:
     args_str = data.get("tool_args", "")
     args_hash = f"-{hashlib.md5(args_str.encode()).hexdigest()[:6]}" if args_str else ""
     action_id = f"tc-{tool}-iter{iteration}{args_hash}"
-    # Session 271: which backend engine answered (e.g. web_search's winning
+    # which backend engine answered (e.g. web_search's winning
     # provider) — carried on the done/failed obs event by the loop.
     provider = data.get("provider") or None
 
@@ -261,7 +261,7 @@ async def _drain_live_tool_events(obs: ObsCollector, session_id: str):
 def _bridge_todo_event(evt, session_id) -> list[str]:
     """Persist + emit the DEDICATED todo SSE for a todo obs event.
 
-    Session 359: the S296 lifecycle drain forwards EVERY non-tool obs event as
+    the lifecycle drain forwards EVERY non-tool obs event as
     a generic obs_event — including todo_created/todo_completed — so the
     dedicated todo SSE (which drives the frontend Todos panel) and the DB
     persist never ran, and the end-of-turn todo_completed upserted plan-0 with
@@ -269,7 +269,7 @@ def _bridge_todo_event(evt, session_id) -> list[str]:
     bridging the main text-chunk handler uses.
     """
     if evt.type == "todo_created":
-        # B-2026-08-23-11: persist the FULL content (paths/commands the
+        # persist the FULL content (paths/commands the
         # agent needs) while the UI text stays short. The loop emits
         # `text` (user-facing title) + `content` (full); when only `text`
         # exists (legacy callers) it fills both.
@@ -321,7 +321,7 @@ def _bridge_todo_event(evt, session_id) -> list[str]:
                 }
             )
         ]
-    # Session 27 legacy trio — same treatment (persist + dedicated SSE).
+    # legacy trio — same treatment (persist + dedicated SSE).
     if evt.type in ("todo_added", "todo_updated", "todo_cleared"):
         try:
             if evt.type == "todo_cleared":
@@ -340,10 +340,10 @@ def _bridge_todo_event(evt, session_id) -> list[str]:
 
 
 def _drain_live_lifecycle_events(obs: ObsCollector, session_id: str = ""):
-    """S296: stream the NON-tool obs events LIVE during pending waits.
+    """stream the NON-tool obs events LIVE during pending waits.
 
     Previously only tool events (`_drain_live_tool_events`) drained here; every
-    other obs event — the init/plan/thinker/loop lifecycle, the Session-181
+    other obs event — the init/plan/thinker/loop lifecycle, the
     phase decisions, stage timings, intent, anomalies — stayed buffered in the
     collector until the next real TEXT chunk. On an execute turn the first text
     IS the final answer, so the Agents-tab phase strip and the Observe panel
@@ -352,7 +352,7 @@ def _drain_live_lifecycle_events(obs: ObsCollector, session_id: str = ""):
     so `drain()` returns exactly the lifecycle remainder — the same events, and
     the same obs_event SSE shape, the main text-chunk handler would emit.
 
-    Session 359: todo events ALSO get their dedicated SSE here (not just the
+    todo events ALSO get their dedicated SSE here (not just the
     generic obs_event) — otherwise they never reach the Todos panel or DB when
     the turn produces no intermediate text chunks."""
     for evt in obs.drain():
@@ -369,7 +369,7 @@ def _drain_live_lifecycle_events(obs: ObsCollector, session_id: str = ""):
             )
 
 
-# B-2026-08-24-15: obs events that mean the turn ended WITHOUT finishing its
+# obs events that mean the turn ended WITHOUT finishing its
 # work — on any of these, the remaining plan todos must NOT be auto-completed
 # (that would read as a false 100%). agent_loop_done ALSO counts when it carries
 # hit_limit=True (iteration limit).
@@ -394,12 +394,12 @@ def _turn_did_not_finish(history) -> bool:
 
 
 def _finalize_plan_todos(session_id: str, skip: bool = False) -> list[dict]:
-    """Session 121: mark any plan todos the loop didn't explicitly advance as
+    """mark any plan todos the loop didn't explicitly advance as
     complete. The plan covers the whole turn, so when the turn ends the
     remaining steps are done (or moot) — this makes the persisted Todos panel
     agree with reality instead of leaving trailing "pending" rows.
 
-    Session 330: `skip=True` when the acceptance gate ended the turn with an
+    `skip=True` when the acceptance gate ended the turn with an
     HONEST STOP (unmet goal criteria — the loop emitted
     `agent_loop_gate_honest_stop`). Flipping the remaining plan todos then
     would re-lie the self-mutating checklist: the unmet goal items would
@@ -434,7 +434,7 @@ def _heartbeat_status_text(obs: ObsCollector, live_tool_events: bool) -> str:
     → "getting started"; tools have run → "working with tools"; otherwise
     → neutral still-working.
 
-    S471: a provider that has not sent a SINGLE byte (the social fast
+    a provider that has not sent a SINGLE byte (the social fast
     path's `provider_call_start` with no `provider_first_byte`) is a
     queue stall, not slow thinking — the bankofai glm-5.3-flash case sat
     107s before the first byte and read as silent pondering. Name the
@@ -531,14 +531,14 @@ async def _event_stream(
     obs = ObsCollector()
     file_path_written = None
     file_name_written = None
-    # Session 330: set when the acceptance gate ended the turn with unmet
+    # set when the acceptance gate ended the turn with unmet
     # goal criteria (agent_loop_gate_honest_stop). Captured from the
     # collector's non-destructive history BEFORE the final drain; both
     # _finalize_plan_todos call sites skip flipping plan todos on an honest
     # stop so the unmet goal items stay pending (no false 100%).
     _incomplete_turn = False
 
-    # B-2026-08-23-17 follow-up: bind the session id at the TRANSPORT boundary.
+    # bind the session id at the TRANSPORT boundary.
     # _with_keepalives below advances the engine generator via a FRESH child
     # task per __anext__ (create_task(iterator.__anext__())), and each child
     # task copies the context of the task that created it — the task running
@@ -564,7 +564,7 @@ async def _event_stream(
     _last_sent_time = time.monotonic()
     _KEEPALIVE_INTERVAL_S = 15  # seconds between keepalive comments
 
-    # ADR-37: no hardcoded narration here. The frontend's own neutral
+    # no hardcoded narration here. The frontend's own neutral
     # status fallback ("Working on it…" / "Thinking") covers the gap before
     # the first real model event; the immediate obs_event (agent_runtime_start)
     # is the wire-level acknowledgement for slow/cold clients and proxies.
@@ -611,7 +611,7 @@ async def _event_stream(
                     live_tool_events = True
                     yield live_event
                     _last_sent_time = time.monotonic()
-                # S296: also stream the lifecycle/phase/Observe events live, so
+                # also stream the lifecycle/phase/Observe events live, so
                 # the Agents tab + Observe panel update DURING the turn instead
                 # of all at once after the final answer.
                 for live_event in _drain_live_lifecycle_events(obs, session_id):
@@ -628,7 +628,7 @@ async def _event_stream(
 
             if disconnect and await disconnect():
                 logger.info(f"Client disconnected for session {session_id}")
-                # B-2026-08-02-2 (A2): the client closed the stream — stop
+                # the client closed the stream — stop
                 # the backend work too (previously the AgentLoop kept running
                 # until the wall-clock/iteration cap). Best-effort.
                 try:
@@ -660,7 +660,7 @@ async def _event_stream(
                     _status = evt.data.get("status", "running")
                     _iteration = evt.data.get("iteration", "")
                     _latency_ms = evt.data.get("latency_ms", "")
-                    # ADR-18 P3 (Session 176): which sub-agent performed this
+                    # which sub-agent performed this
                     # tool call (delegation streaming). Empty for parent tools.
                     _agent = evt.data.get("agent", "") or None
                     _output = _visible_tool_output(
@@ -668,11 +668,11 @@ async def _event_stream(
                         _agent,
                         evt.data.get("output", ""),
                     )
-                    # Session 120: which plan todo this action serves.
+                    # which plan todo this action serves.
                     _todo_id = evt.data.get("todo_id") or None
-                    # Session 122: the model's reasoning that led to this tool call.
+                    # the model's reasoning that led to this tool call.
                     _thought = evt.data.get("thought") or None
-                    # Session 142: the plan-step label — the 'why' for the
+                    # the plan-step label — the 'why' for the
                     # action. The loop attaches it as `reasoning` on every
                     # tool_call obs event (falls back to the model's thought
                     # on silent runs). MUST be forwarded here or the frontend
@@ -692,11 +692,11 @@ async def _event_stream(
 
                         _args_hash = "-" + hashlib.md5(_args_str.encode()).hexdigest()[:6]
                     _tc_id = f"tc-{_tool}-iter{_iteration}{_args_hash}"
-                    # Session 118: persist to the actions store so the Actions
+                    # persist to the actions store so the Actions
                     # panel shows real history across reloads (was a stub that
                     # returned []). Best-effort — never break the stream.
                     try:
-                        # Session 118 review: only create rows for EXPLICIT
+                        # only create rows for EXPLICIT
                         # started-like statuses. Events with a defaulted
                         # "running" status (no status field) and empty input
                         # are phantom — recording them created junk rows.
@@ -741,13 +741,13 @@ async def _event_stream(
                             },
                         }
                     )
-                    # B-2026-08-24-1: curated narration line for the Thinking box.
+                    # curated narration line for the Thinking box.
                     _narr = _narration_sse(_tool, _status)
                     if _narr:
                         yield _narr
 
-                # Session 27 legacy trio — shared todo bridging (also used by
-                # the S296 lifecycle drain so these survive no-text turns too).
+                # legacy trio — shared todo bridging (also used by
+                # the lifecycle drain so these survive no-text turns too).
                 for extra in _bridge_todo_event(evt, session_id):
                     yield extra
 
@@ -761,8 +761,8 @@ async def _event_stream(
                 if evt.type == "thinking_done":
                     yield _sse({"type": "thinking_end"})
 
-                # Session 359: shared todo bridging — persist + emit the
-                # dedicated todo SSE (also used by the S296 lifecycle drain).
+                # shared todo bridging — persist + emit the
+                # dedicated todo SSE (also used by the lifecycle drain).
                 for extra in _bridge_todo_event(evt, session_id):
                     yield extra
 
@@ -787,7 +787,7 @@ async def _event_stream(
                         }
                     )
 
-                # Session 123: bridge anomaly obs events to a top-level SSE
+                # bridge anomaly obs events to a top-level SSE
                 # event so the Observe panel can ALERT (stall / token leak)
                 # instead of silently displaying bad numbers. The frontend
                 # accumulates these into the observation's `anomalies` list.
@@ -842,13 +842,13 @@ async def _event_stream(
                 # sole authoritative signal; the frontend renders it via the
                 # 'error' event handler.
                 #
-                # ADR-20 (Session 166): the raw provider payload never crosses
+                # the raw provider payload never crosses
                 # the presentation boundary. chunk.error stays a string for all
                 # internal consumers; this is the ONE place it becomes the
                 # canonical error object (code/message/retryable/raw) the
                 # frontend renders as a friendly card.
                 #
-                # Session 401 (field live-test, bankofai CF 403): the agent
+                # field live-test (bankofai CF 403): the agent
                 # loop's abort path yields a USER-FACING fallback text together
                 # with the error field ("The model ran into an issue… try
                 # again"). Adapters' error chunks carry text="", so only the
@@ -886,10 +886,10 @@ async def _event_stream(
                 _response_chunks.append(chunk.text)
                 _last_sent_time = time.monotonic()
 
-            # 2. Thinking — B-2026-08-30-7: forward the loop's leak-filtered
+            # 2. Thinking — forward the loop's leak-filtered
             # reasoning prose as thinking_token so the Thinking box shows the
             # model's ACTUAL reasoning again (it had shown only curated tool
-            # labels since B-2026-08-24-6). The loop filters system-leak XML;
+            # labels). The loop filters system-leak XML;
             # the bridge adds a scaffold-prose guard (answer_is_internal_
             # scaffold) because plain-prose scaffold refs pass the XML filter.
             # Lifecycle markers still bridge to thinking_start/thinking_end.
@@ -926,12 +926,12 @@ async def _event_stream(
                     pending = chunk.metadata.get("pending_write")
                     if pending:
                         done_payload["requires_confirmation"] = pending
-                    # B-2026-08-24-16: Chat mode asked to switch to Agent for an
+                    # Chat mode asked to switch to Agent for an
                     # action — the frontend renders an Accept/Decline gate.
                     switch = chunk.metadata.get("switch_to_agent")
                     if switch:
                         done_payload["switch_to_agent"] = switch
-                    # Session 344 Phase 3: emit structured response blocks
+                    # emit structured response blocks
                     # so the frontend can render tables, charts, diagrams
                     # natively instead of forcing everything through Markdown.
                     response_blocks = chunk.metadata.get("response_blocks")
@@ -977,7 +977,7 @@ async def _event_stream(
             # being buffered by the server's write buffer.
             await asyncio.sleep(0)
 
-        # Session 330 + B-2026-08-24-15: capture whether the turn ended WITHOUT
+        # capture whether the turn ended WITHOUT
         # finishing its work, before the destructive flush. Don't flip the
         # remaining plan todos to "completed" on any such ending — an honest
         # stop (unmet criteria), a classified failure (iteration cap / tool
@@ -1021,9 +1021,9 @@ async def _event_stream(
                     }
                 )
 
-        # Session 121: the plan covers the whole turn — mark any plan todos
+        # the plan covers the whole turn — mark any plan todos
         # the loop didn't advance as complete, live (the finally block repeats
-        # the DB update for aborted/disconnected streams). Session 330: skip
+        # the DB update for aborted/disconnected streams). skip
         # on an honest stop — unmet goal items must stay pending (no false
         # 100%), and the loop already completed the passed ones itself.
         for _td in _finalize_plan_todos(session_id, skip=_incomplete_turn):
@@ -1031,10 +1031,10 @@ async def _event_stream(
 
     except Exception as exc:
         logger.error(f"[chat] stream error: {exc}", exc_info=True)
-        # Session 31: GUARANTEE — always yield SOMETHING to the user.
+        # GUARANTEE — always yield SOMETHING to the user.
         # If the engine crashed before producing any output, yield an
         # error token + done so the frontend shows the error and resets.
-        # ADR-20 (Sessions 166/168): normalize ONCE and reuse the friendly
+        # normalize ONCE and reuse the friendly
         # message — the raw exception text used to leak into the content,
         # AND `_guarantee_persist_assistant` persisted only a generic line.
         # Now the token (and thus the persisted reply) carries the canonical
@@ -1046,7 +1046,7 @@ async def _event_stream(
         yield _sse({"type": "done"})
 
     finally:
-        # B-2026-08-23-17 follow-up: unbind the transport-level session
+        # unbind the transport-level session
         # contextvar (paired with the set at the top of this generator).
         # Must run in this stable task's context — the token was created here.
         try:
@@ -1066,10 +1066,10 @@ async def _event_stream(
             )
         except Exception:
             pass  # Never let cleanup crash the SSE stream
-        # Session 121: mark any plan todos the loop didn't explicitly advance
+        # mark any plan todos the loop didn't explicitly advance
         # as done — the plan covers the whole turn, so a turn that ended (even
         # via abort/timeout) means the remaining steps are done or moot.
-        # Session 330: skip on an honest stop (same reason as above).
+        # skip on an honest stop (same reason as above).
         # Best-effort DB-only here (no yield in finally); the live SSE update
         # is emitted on the normal completion path above.
         try:
@@ -1087,7 +1087,7 @@ async def _event_stream(
     # refine (refine_title_async) is only a fallback for when the classify
     # call produced no title.
     #
-    # Intent-gated (Session 22): trivial greetings/thanks stay "New Chat"
+    # Intent-gated: trivial greetings/thanks stay "New Chat"
     # until a substantive turn. We (re)title when the message is substantive
     # AND the session has no real title yet — is_first (whose Stage-1 echo
     # placeholder is not a real title) or a still-placeholder title.
@@ -1114,7 +1114,7 @@ async def _event_stream(
                 # Classify emitted no title (e.g. Agent mode skips the classifier,
                 # or an unparseable classify that fell back to a direct answer) —
                 # fall back to the LLM refine. Retained so it isn't GC'd before it
-                # runs (B-2026-08-24-4 — the agent-turn "stuck on New Chat" bug).
+                # runs (the agent-turn "stuck on New Chat" bug).
                 _spawn_background(refine_title_async(session_id, message))
                 logger.info(
                     f"[title] no classify title — LLM refinement scheduled for {session_id[:8]}"
@@ -1135,7 +1135,7 @@ async def _event_stream(
 async def abort_session(session_id: str):
     """Request cancellation of a session's in-flight agent turn.
 
-    B-2026-08-02-2 (A2): sets the session's abort event; AgentLoop.run()
+    sets the session's abort event; AgentLoop.run()
     raises AgentAbortedError at the next iteration boundary and the engine
     yields a clean "⏹ Stopped by user." response. The frontend Stop button
     already closes the SSE stream (AbortController) — this endpoint makes
@@ -1150,7 +1150,7 @@ async def abort_session(session_id: str):
 async def steer_session(session_id: str, message: str = Body(..., embed=True)):
     """Queue a steering message for a session's in-flight agent turn.
 
-    B-2026-08-02-5 (A5): the message is drained by AgentLoop.run() at the
+    the message is drained by AgentLoop.run() at the
     next iteration boundary of the running turn — the agent sees it as a
     new user prompt and continues instead of being aborted and re-run. If
     no turn is currently running, the message waits for the next one.
@@ -1196,7 +1196,7 @@ async def chat(
                     status_code=413,
                     detail=f"File too large. Maximum {settings.localmind_max_file_size_mb} MB.",
                 )
-            # B-2026-08-23-17: uploads live in the session's workspace folder
+            # uploads live in the session's workspace folder
             # (<localmind_home>/sessions/<id>/uploads) so they're deleted with
             # the chat and never collide across sessions. The shared
             # ~/LocalMind/uploads dir is no longer used.
@@ -1241,7 +1241,7 @@ async def chat(
                 # Keep upload failures on the same typed SSE contract as
                 # engine/adapter failures so the frontend renders the error
                 # instead of silently completing an empty assistant bubble.
-                # ADR-20 (Session 166): upload failures are internal-domain —
+                # upload failures are internal-domain —
                 # normalize with source_hint so a "connection reset" inside
                 # the upload isn't mislabeled as a provider outage.
                 yield _sse(

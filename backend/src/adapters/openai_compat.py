@@ -110,7 +110,7 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     "glm-5-turbo": 128000,
     "glm-4.7": 128000,
     # ZenMux — aggregated models (provider/model-name format).
-    # ADR-9: IMPLEMENTED BUT UNTESTED. Context windows are the underlying
+    # IMPLEMENTED BUT UNTESTED. Context windows are the underlying
     # model's, sourced from the provider's documentation. Unknown models
     # fall back to "default": 32768.
     "x-ai/grok-4.5": 131072,
@@ -129,7 +129,7 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     "moonshotai/kimi-k3": 262144,
     "minimax/minimax-m3": 128000,
     # BankOfAI (B.AI) — multi-model aggregator (api.bankofai.io),
-    # OpenAI-compatible. ADR-55: model IDs are LOWERCASE (live-confirmed:
+    # OpenAI-compatible. Model IDs are LOWERCASE (live-confirmed:
     # "deepseek-v4-flash" → 200, "DeepSeek-V4-Flash" → 404 model_not_found).
     # Context windows: deepseek-v4-flash = 1M tokens, hy3 = 256K. Free
     # promo models are time-limited (not a stable tier) and revert to paid.
@@ -145,7 +145,7 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# /models TTL cache (shared TTLCache — was class-level dicts before Session 136)
+# /models TTL cache (shared TTLCache — previously class-level dicts)
 # ─────────────────────────────────────────────────────────────────────────────
 # The provider /models endpoint is fetched by BOTH health_check() and
 # list_models(). At startup the frontend polls /api/health every 1.5s,
@@ -160,14 +160,14 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
 # 60s, so an adapter TTL of 30s caps worst-case outage-detection lag at
 # ~90s (route 60s + adapter 30s) while still cutting the fetch burst
 # from 20+ to ~2/min.
-# Session 240: the longest a transient 429 may block an interactive turn.
+# The longest a transient 429 may block an interactive turn.
 # A short per-minute burst (retry in a few seconds) is worth waiting out —
 # it recovers invisibly. A longer window is surfaced as a clean rate-limit
 # error instead, so the user is never stuck behind an uncancellable hang.
 _MAX_TRANSIENT_429_WAIT = 10.0
 
 
-# ─── B-2026-09-03 Prompt Assembly Audit (env-gated, zero-cost when off) ──────
+# ─── Prompt Assembly Audit (env-gated, zero-cost when off) ──────────────────
 # Milestone: Context Engineering & Prompt Efficiency (P0). The user-visible
 # symptom: 3 trivial turns ("Hi"/"How are you") reported ~19.4K prompt tokens
 # with ~164 completion tokens — the budget is spent re-sending context, not
@@ -292,7 +292,7 @@ def _audit_record(
 def _flatten_message_content(messages):
     """Convert block-style message content (``[{"type":"text","text":...,
     "cache_control":...}]``) back to a plain string. Degrades prompt-cache
-    markers (Session 245 Lever 2) when a provider/proxy rejects the block
+    markers when a provider/proxy rejects the block
     format. Returns a NEW message list, or ``None`` when nothing was in block
     form (i.e. there is nothing to retry)."""
     if not isinstance(messages, list):
@@ -461,12 +461,12 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
     # compatible. Model format: "provider/model-name" (e.g. "x-ai/grok-4.5",
     # "anthropic/claude-opus-5", "google/gemini-3.6-flash").
     #
-    # ADR-9 (Session 33): IMPLEMENTED BUT UNTESTED. The smoke test is
+    # IMPLEMENTED BUT UNTESTED. The smoke test is
     # BLOCKED — the free plan returns 403 on all chat completions ("No
     # API Request access"). A paid plan (Pro $20/mo, Max $100/mo, or
     # Ultra $400/mo) is required for API access. When the user upgrades,
-    # re-run the smoke test (ADR-9 Step 5) before marking this as tested.
-    # Per the flaw log (Session 31/33): do NOT claim this works without
+    # re-run the smoke test before marking this as tested.
+    # Do NOT claim this works without
     # a real-API smoke test.
     "zenmux": ProviderConfig(
         name="zenmux",
@@ -626,7 +626,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
     # Gemini, DeepSeek, GLM, Qwen, Kimi, MiniMax, Grok, etc. Auth:
     # Authorization: Bearer <key> — the default Bearer header covers it.
     #
-    # ADR-55 + Session 321: the canonical API domain is api.bankofai.io
+    # The canonical API domain is api.bankofai.io
     # (the b.ai → bankofai.io brand consolidation). Model IDs are LOWERCASE
     # (live-confirmed: "deepseek-v4-flash" → 200, "DeepSeek-V4-Flash" →
     # 404 model_not_found). The "free" models are rotating time-limited
@@ -664,7 +664,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
     # which upstreams they enabled; `default_model` below is only a fallback).
     # Model IDs are provider-prefixed (`nvidia/deepseek-ai/deepseek-v4-flash`,
     # `openai/gpt-oss-120b`); a bare id like "deepseek-chat" is rejected 400
-    # "Ambiguous model" (Session 405 live-test). The default is OmniRoute's own
+    # "Ambiguous model" (live-test finding). The default is OmniRoute's own
     # `auto/best-coding` meta-router — it always resolves to a currently-LIVE
     # upstream (direct nvidia/* ids churn through frequent EOL) and supports
     # tool-calling (live-verified: it emitted a real get_weather tool_call
@@ -672,7 +672,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
     # CAVEAT for the agent loop: OmniRoute's tool-calling is per-upstream —
     # `native`, prompt-`emulated`, or `none` (tools silently dropped). Route to
     # a NATIVE tool-calling model for agent work; `emulated`/`none` upstreams
-    # will also reject `tool_choice` (see B-2026-08-25-13). Ref: github.com/
+    # will also reject `tool_choice`. Ref: github.com/
     # diegosouzapw/OmniRoute, omniroute.online.
     "omniroute": ProviderConfig(
         name="omniroute",
@@ -712,7 +712,7 @@ PROVIDER_KEY_ENVS: dict[str, str] = {
 }
 
 
-# ── Session 23: thinking/response separation helper ──────────────────────────
+# ── Thinking/response separation helper ─────────────────────────────────────
 # Models that support "thinking mode" (GLM, DeepSeek, Qwen, etc.) stream
 # their internal reasoning in delta.reasoning_content and the final answer
 # in delta.content. The previous code merged both into `text`:
@@ -946,10 +946,10 @@ class OpenAICompatAdapter(BaseAdapter):
     def _zai_thinking_payload(self, model: str) -> dict | None:
         """Decide the z.ai ``thinking`` request param for a GLM model.
 
-        ADR-41 (Session 253): GLM is a capable reasoning model, and we were
+        GLM is a capable reasoning model, and we were
         crippling it by unconditionally sending ``thinking: {type: disabled}``
         — a workaround for the ThinkingDispatcher's 10s timeout, a component
-        DELETED in Session 239. With thinking OFF the same model that does
+        DELETED since. With thinking OFF the same model that does
         full agentic work in Copilot emits ~28 terse tokens in our harness.
         Thinking now defaults ON for z.ai, tunable via the Settings UI
         (settings.json) or ``LOCALMIND_THINKING`` (``enabled``/``disabled``)
@@ -1018,7 +1018,7 @@ class OpenAICompatAdapter(BaseAdapter):
         """True when this adapter's calls run with the model's reasoning ON.
 
         The agent loop reads this to (a) gate the mid-loop Thinker consult and
-        (b) pick a thinking-aware per-call timeout (ADR-41): reasoning streams
+        (b) pick a thinking-aware per-call timeout: reasoning streams
         many tokens before the answer, so a short fixed cap would truncate
         mid-thought.
 
@@ -1045,16 +1045,16 @@ class OpenAICompatAdapter(BaseAdapter):
         Add provider-specific parameters to the API request payload.
 
         Z.ai (GLM): GLM is a reasoning model. Thinking/reasoning now DEFAULTS
-        ON (ADR-41) so capable models actually use their reasoning — the old
+        ON so capable models actually use their reasoning — the old
         unconditional disable was a workaround for the ThinkingDispatcher's
-        10s timeout, a component deleted in Session 239, and it made
+        10s timeout, a component long since deleted, and it made
         GLM-4.5-flash emit ~28 terse tokens instead of agentic answers.
         Tunable via LOCALMIND_THINKING=disabled. When the model supports it
         (GLM-5.2+), an optional LOCALMIND_REASONING_EFFORT bounds reasoning
         tokens (max/xhigh/high/medium/low/minimal/none for 5.2;
         max/high/low for 5.3) instead of letting thinking run unbounded.
         """
-        # Session 260: a ONE-SHOT override forces thinking OFF for the NEXT call
+        # A ONE-SHOT override forces thinking OFF for the NEXT call
         # only, then clears itself. The empty-after-reasoning recovery sets it so
         # a model that "thinks but doesn't act" (GLM ground truth: streams ~73
         # reasoning tokens then 0 content, `ended=True`) is made to emit the
@@ -1077,7 +1077,7 @@ class OpenAICompatAdapter(BaseAdapter):
                 payload["thinking"] = thinking
         from core.config import settings as _settings
 
-        # Session 262: the "thinking level" — reasoning_effort bounds how much
+        # The "thinking level" — reasoning_effort bounds how much
         # the model reasons (max/high/medium/low/minimal/none), instead of the
         # binary on/off that let glm-4.5-flash think unbounded for 200s+ (user
         # feedback: "it thinks too hard — there should be thinking levels, not
@@ -1137,12 +1137,12 @@ class OpenAICompatAdapter(BaseAdapter):
         out of credits) rather than a transient per-minute burst that a short
         wait recovers.
 
-        ADR-32: a permanent 429 must NOT be retried — retrying only burns the
+        A permanent 429 must NOT be retried — retrying only burns the
         backoff window and, across an agent loop's several calls, tens of
         seconds, before surfacing an error the user could have seen in the
         first round-trip.
 
-        Session 240 correction: the previous version treated the bare words
+        Correction: the previous version treated the bare words
         ``quota`` / ``free tier`` / ``exceeded your current`` as permanent. But
         gemini's *per-minute* free-tier 429 contains exactly those words AND an
         explicit short retry window ("retry in 48.86s") — a recoverable burst
@@ -1158,7 +1158,7 @@ class OpenAICompatAdapter(BaseAdapter):
         # bare word "billing" is deliberately NOT a marker — gemini's per-minute
         # throttle boilerplate says "please check your plan and billing details"
         # on EVERY 429, including a 2.8s burst, so matching it hard-failed
-        # recoverable throttles (Session 240). Only specific exhaustion phrases
+        # recoverable throttles. Only specific exhaustion phrases
         # qualify.
         hard_markers = (
             "insufficient_quota",
@@ -1223,7 +1223,7 @@ class OpenAICompatAdapter(BaseAdapter):
         reasoning_effort_retry = True
         request_payload = payload
         if _audit_enabled():
-            # B-2026-09-03: prompt assembly audit — record the EXACT outgoing
+            # Prompt assembly audit — record the EXACT outgoing
             # request once per call (attempt 0), before any retry-field
             # mutation.tool_choice/stream_options/cache_control retries only
             # REMOVE fields, so attempt-0 is the maximal payload and the
@@ -1273,7 +1273,7 @@ class OpenAICompatAdapter(BaseAdapter):
                             self._provider_name,
                         )
                         continue
-                    # Session 238: some providers reject the tool_choice field
+                    # Some providers reject the tool_choice field
                     # (or a specific value like "required"). Retry once
                     # without it so the forced-tool first iteration degrades
                     # to the previous (unforced) behavior instead of failing
@@ -1292,7 +1292,7 @@ class OpenAICompatAdapter(BaseAdapter):
                             self._provider_name,
                         )
                         continue
-                    # Session 245 Lever 2: a provider/proxy that doesn't
+                    # A provider/proxy that doesn't
                     # understand cache_control content-parts may 400. Flatten any
                     # block-style message content back to a plain string and
                     # retry once, so prompt-cache markers stay additive.
@@ -1310,7 +1310,7 @@ class OpenAICompatAdapter(BaseAdapter):
                                 self._provider_name,
                             )
                             continue
-                    # Session 262: a GLM version that doesn't support the
+                    # A GLM version that doesn't support the
                     # reasoning_effort "thinking level" (e.g. <5.2), or an
                     # always-thinking model that rejects an "off" level
                     # (GLM-5.3: "该模型始终思考…请使用 low、high 或 max", code
@@ -1338,7 +1338,7 @@ class OpenAICompatAdapter(BaseAdapter):
 
             # Got 429 — read the body so we can distinguish a transient
             # per-minute burst (worth a short retry) from a permanent quota /
-            # billing exhaustion (daily or free-tier limit). ADR-32: a
+            # billing exhaustion (daily or free-tier limit). A
             # permanent 429 must NOT be retried — retrying only burns the
             # backoff window (and, across an agent loop, tens of seconds)
             # before surfacing an error the user could have seen instantly.
@@ -1475,7 +1475,7 @@ class OpenAICompatAdapter(BaseAdapter):
         intent: str = "chat",
         **kwargs,
     ) -> AsyncIterator[StreamChunk]:
-        # Session 26: validate kwargs — previously unsupported kwargs
+        # Validate kwargs — previously unsupported kwargs
         # (like stream=True) were silently swallowed into **kwargs,
         # causing bugs that were impossible to trace. Now: log a warning
         # so callers know their kwarg is being ignored.
@@ -1507,7 +1507,7 @@ class OpenAICompatAdapter(BaseAdapter):
         return "claude" in m or "anthropic" in m
 
     def _mark_system_cacheable(self, messages: list[dict]) -> list[dict]:
-        """Session 245 Lever 2: on the OpenAI-compat path, mark the FIRST
+        """On the OpenAI-compat path, mark the FIRST
         system message (the byte-stable prefix from Lever 1) with
         ``cache_control`` so Anthropic-family models cache it. Non-Anthropic
         models (OpenAI, gemini) cache the stable prefix AUTOMATICALLY and need
@@ -1574,7 +1574,7 @@ class OpenAICompatAdapter(BaseAdapter):
         # Collect tool names (used later for mid-stream tool-call detection).
         tool_names = {t.get("function", {}).get("name", "") for t in tools}
 
-        # Session 249: DO NOT inject a text copy of the tool descriptions into
+        # DO NOT inject a text copy of the tool descriptions into
         # the system prompt. It was added as a fallback for providers that
         # don't support the native `tools` parameter — but we ALWAYS send that
         # parameter below, and every configured provider is OpenAI-compatible
@@ -1587,7 +1587,7 @@ class OpenAICompatAdapter(BaseAdapter):
         # if such a provider is ever configured.
         enhanced_messages = list(messages)
 
-        # Session 31 (root cause found via real-model testing):
+        # Root cause found via real-model testing:
         # DeepSeek-v4-flash-free (via Zen) and possibly other providers
         # reject requests where the last message is a `tool` role — they
         # return HTTP 400 "Upstream request failed". This breaks the agent
@@ -1623,7 +1623,7 @@ class OpenAICompatAdapter(BaseAdapter):
 
         payload = {
             "model": self._model,
-            # Session 245 Lever 2: mark the stable system prefix cacheable for
+            # Mark the stable system prefix cacheable for
             # Anthropic-family models (no-op string passthrough for others,
             # which cache automatically).
             "messages": self._mark_system_cacheable(enhanced_messages),
@@ -1640,11 +1640,11 @@ class OpenAICompatAdapter(BaseAdapter):
         if tools:
             payload["tools"] = tools
 
-        # Session 238 (Thinker/Agent rebuild Step 0): honor an explicit
+        # Honor an explicit
         # tool_choice. The parent loop passes tool_choice="required" on the
         # FIRST tool iteration so models that would otherwise answer directly
         # or return empty on the first tool call (gemini-2.5-flash via this
-        # OpenAI-compat endpoint, Session 237 trace) are forced to emit a
+        # OpenAI-compat endpoint, seen live) are forced to emit a
         # tool call. This parameter was previously accepted but silently
         # ignored — every OpenAI-compatible provider supports the standard
         # tool_choice values ("auto" / "required" / "none" / a specific
@@ -1711,7 +1711,7 @@ class OpenAICompatAdapter(BaseAdapter):
             _DETECTION_CHUNK_LIMIT = 10
             chunks_read = 0
             _safety_error = None  # set if Gemini/other provider blocks via safety filter
-            # B-2026-08-20-20: set when Phase 1 breaks at the 500-chunk
+            # Set when Phase 1 breaks at the 500-chunk
             # reasoning cap (reasoning-only, no content, no tool_calls). The
             # cap means the model is STUCK in a thinking loop — Phase 2b must
             # NOT resume the unbounded tail (it would keep streaming reasoning
@@ -1721,7 +1721,7 @@ class OpenAICompatAdapter(BaseAdapter):
             # (nudge with the original question) gets the turn.
             _reasoning_cap_hit = False
 
-            # B-2026-08-16-13 (Session 282, found via live trace on
+            # Found via live trace on
             # z.ai/glm-4.5-flash): Phase 1 and Phase 2b MUST share ONE line
             # iterator. httpx's `is_stream_consumed` flips True at the START
             # of iteration (aiter_raw sets it before yielding anything), NOT
@@ -1753,7 +1753,7 @@ class OpenAICompatAdapter(BaseAdapter):
                     delta = choice.get("delta", {})
                     chunks_read += 1
 
-                    # Check for tool calls in the delta. Session 116 (real-
+                    # Check for tool calls in the delta. A real-
                     # model smoke test): providers commonly emit a first
                     # assistant delta with `tool_calls: null` (or an empty
                     # list). The old `"tool_calls" in delta` guard treated
@@ -1773,7 +1773,7 @@ class OpenAICompatAdapter(BaseAdapter):
                             if tc.get("function", {}).get("arguments"):
                                 tool_call_buffers[idx]["arguments"] += tc["function"]["arguments"]
 
-                    # Session 23: route reasoning_content to `thinking`, content
+                    # Route reasoning_content to `thinking`, content
                     # to `text`. Never merge them — merging leaks the model's
                     # internal reasoning (which quotes the system prompt,
                     # including user PII) into the chat response.
@@ -1833,7 +1833,7 @@ class OpenAICompatAdapter(BaseAdapter):
                 #    (partial match) — if we see even the start of a tool call, keep reading
                 # 3. After 15 chunks with no sign of tool calling, break confidently
                 #
-                # Session 31 (root cause found via real-model testing):
+                # Root cause found via real-model testing:
                 # DeepSeek-v4-flash-free produces 80+ reasoning chunks BEFORE
                 # the tool_call delta arrives. The break at chunks_read >= 15
                 # was firing during the reasoning phase, falling through to
@@ -1873,7 +1873,7 @@ class OpenAICompatAdapter(BaseAdapter):
                     elif not _full_text_so_far and chunks_read >= 500:
                         # Reasoning-only for 500 chunks with no content or
                         # tool_calls — model is stuck thinking. Break to avoid
-                        # infinite loop. B-2026-08-20-20: flag the break so
+                        # infinite loop. Flag the break so
                         # Phase 2b does NOT resume the unbounded tail (see the
                         # flag's doc above) — the loop's empty-reasoning
                         # recovery handles the reasoning-then-empty shape.
@@ -1881,7 +1881,7 @@ class OpenAICompatAdapter(BaseAdapter):
                         logger.warning(
                             "[adapter] Phase 1 read 500 chunks of reasoning with no "
                             "content or tool_calls — breaking to avoid infinite loop "
-                            "(B-2026-08-20-20: ending stream cleanly for empty-reasoning recovery)"
+                            "(ending stream cleanly for empty-reasoning recovery)"
                         )
                         break
                     # else: keep reading — either chunks_read < 15, or we've
@@ -1905,7 +1905,7 @@ class OpenAICompatAdapter(BaseAdapter):
             # return ToolCallResult.
             if tool_call_detected:
                 # Drain remaining lines to get full tool call args.
-                # Session 116 (real-model smoke test): the httpx stream is
+                # Seen in the real-model smoke test: the httpx stream is
                 # ONE-SHOT — Phase 1 already consumed it (it only exits via
                 # finish_reason=tool_calls, [DONE], or exhaustion, which all
                 # mean the args are COMPLETE). Re-iterating raises
@@ -1935,7 +1935,7 @@ class OpenAICompatAdapter(BaseAdapter):
                                         tool_call_buffers[idx]["name"] = tc["function"]["name"]
                                     if tc.get("function", {}).get("arguments"):
                                         tool_call_buffers[idx]["arguments"] += tc["function"]["arguments"]
-                            # Session 23: separate reasoning from content
+                            # Separate reasoning from content
                             _content, _reasoning = _extract_content_and_reasoning(delta)
                             if _reasoning:
                                 # Reasoning goes to a separate buffer — not
@@ -2060,7 +2060,7 @@ class OpenAICompatAdapter(BaseAdapter):
             _raw_parts = list(raw_content_parts)  # snapshot for JSON fallback
             _tool_names = tool_names  # captured for mid-stream detection
             _usage = usage_metadata  # updated by the live stream closure
-            # B-2026-08-16-13: hand Phase 1's line iterator to Phase 2b so it
+            # Hand Phase 1's line iterator to Phase 2b so it
             # can RESUME the still-open stream where Phase 1 paused (httpx
             # streams are one-shot — a fresh aiter_lines() raises
             # StreamConsumed, and is_stream_consumed is True from the moment
@@ -2132,11 +2132,11 @@ class OpenAICompatAdapter(BaseAdapter):
                     # silently dropped for every text response Phase 1 broke
                     # out of mid-stream (z.ai/GLM: reasoning first, then
                     # content in many small chunks → final answers truncated
-                    # to ~16 tokens — B-2026-08-16-13). A FRESH
+                    # to ~16 tokens). A FRESH
                     # aiter_lines() would raise StreamConsumed (one-shot), so
                     # we resume the shared generator instead; `_phase1_exhausted`
                     # is the only reliable "the stream really ended" signal.
-                    # B-2026-08-20-20: after the 500-chunk reasoning cap fired
+                    # After the 500-chunk reasoning cap fired
                     # (`_reasoning_cap_hit`), do NOT resume the tail — the
                     # model is stuck thinking; reading on just streams more
                     # reasoning until a timeout errors the turn. Ending here
@@ -2157,7 +2157,7 @@ class OpenAICompatAdapter(BaseAdapter):
                                 _usage.update(_normalize_usage(obj.get("usage")))
                                 _choice = obj.get("choices", [{}])[0]
                                 delta = _choice.get("delta", {})
-                                # Session 23: separate reasoning from content
+                                # Separate reasoning from content
                                 _content, _reasoning = _extract_content_and_reasoning(delta)
                                 # Bug C fix: explicitly handle empty content deltas.
                                 # Some providers send delta.content="" as keepalives.
@@ -2329,7 +2329,7 @@ class OpenAICompatAdapter(BaseAdapter):
                         usage_metadata.update(_normalize_usage(obj.get("usage")))
                         choice = obj.get("choices", [{}])[0]
                         delta = choice.get("delta", {})
-                        # Session 23: separate reasoning from content
+                        # Separate reasoning from content
                         _content, _reasoning = _extract_content_and_reasoning(delta)
                         if _reasoning:
                             yield StreamChunk(text="", thinking=_reasoning, done=False, usage=dict(usage_metadata))
@@ -2388,7 +2388,7 @@ class OpenAICompatAdapter(BaseAdapter):
         system_messages = [m for m in messages if m.get("role") == "system"]
         non_system_messages = [m for m in messages if m.get("role") != "system"]
 
-        # Join ALL system messages (Session 245 Lever 1 added a second,
+        # Join ALL system messages (the token-efficiency work added a second,
         # trailing turn-context system message after the stable prefix; taking
         # only [0] would drop the environment/workspace/task-state context).
         system_content = "\n\n".join(
@@ -2414,7 +2414,7 @@ class OpenAICompatAdapter(BaseAdapter):
             "stream": True,
         }
         if system_content:
-            # Session 245 Lever 2: mark the system prefix cacheable. Anthropic
+            # Mark the system prefix cacheable. Anthropic
             # caches everything up to the last cache_control breakpoint, billing
             # it once then reading at ~10% on later calls. The prefix is now
             # byte-stable (Lever 1), so this actually hits.
@@ -2450,7 +2450,7 @@ class OpenAICompatAdapter(BaseAdapter):
                 # NON-STREAMING response shape — streaming deltas never have a
                 # top-level `content` array, so every chunk was silently dropped
                 # and the user saw a blank response.
-                # B-2026-08-09-14 (Session 90): usage_metadata is populated
+                # usage_metadata is populated
                 # from message_delta usage frames; it must be initialized here —
                 # a missing init was a latent NameError that would crash every
                 # Anthropic streaming request (found by the new CI check).
