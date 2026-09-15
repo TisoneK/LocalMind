@@ -1,5 +1,5 @@
 """
-Delegate Parallel tool — B-2026-08-02-6 (B1): parallel delegation primitive.
+Delegate Parallel tool — parallel delegation primitive.
 
 Borrowed from Codebuff's `spawn_agents` + `Promise.allSettled` pattern.
 The single-target `delegate` tool is HANDOFF (the calling agent blocks
@@ -89,7 +89,7 @@ async def _run_child(packet: DelegationInstructionPacket, adapter, depth: int, o
     Depth/run_id are set inside this coroutine — asyncio task isolation
     keeps them scoped to this child even under gather().
 
-    `obs` (ADR-18 P3): the parent's ObsCollector; the child runs with a
+    `obs`: the parent's ObsCollector; the child runs with a
     ChildObsProxy so its user-visible tool activity streams into the UI.
     """
     parent_run_id = get_current_run_id()
@@ -125,7 +125,7 @@ async def _run_child(packet: DelegationInstructionPacket, adapter, depth: int, o
             error_type="not_found",
         )
 
-    # B-2026-08-02-10 (C1): per-agent model routing — each child uses its
+    # Per-agent model routing — each child uses its
     # LOCALMIND_AGENT_MODEL_<NAME> override when configured (AgentConfig-
     # declared models resolve inside BaseAgent.run()); else the parent's
     # adapter. Never raises — a bad override falls back to the parent.
@@ -153,7 +153,7 @@ async def _run_child(packet: DelegationInstructionPacket, adapter, depth: int, o
             error_type="construction_failed",
         )
 
-    # B-2026-08-02-9 (B4): each child runs its OWN AgentLoop, which publishes
+    # Each child runs its OWN AgentLoop, which publishes
     # its own inline-mutation scope (overwriting the parent's in this
     # context). Restore the parent's scope when the child exits.
     _parent_inline_scope = get_inline_mutation_scope()
@@ -177,7 +177,7 @@ async def _run_child(packet: DelegationInstructionPacket, adapter, depth: int, o
                 available_tools=[],
                 confidence=1.0,
                 allowed_tool_names=child_allowed_tools,
-                obs=child_obs,  # ADR-18 P3: stream the child's work into the UI
+                obs=child_obs,  # stream the child's work into the UI
             ):
                 if chunk.text:
                     chunks.append(chunk.text)
@@ -348,7 +348,7 @@ async def delegate_parallel(message: str) -> ToolResult:
             error_type="adapter_unavailable",
         )
 
-    # ADR-18 P3: the parent's ObsCollector streams all children's work.
+    # The parent's ObsCollector streams all children's work.
     parent_obs = get_current_obs()
     _emit_delegation(
         parent_obs,
@@ -449,5 +449,5 @@ register_tool(
     description=_DESCRIPTION,
     cost=1.5,  # parallel fan-out is the most expensive primitive
     latency_ms=5000,  # rough estimate — children run concurrently
-    parallelizable=True,  # B-2026-08-02-6: this IS the parallel primitive
+    parallelizable=True,  # this IS the parallel primitive
 )

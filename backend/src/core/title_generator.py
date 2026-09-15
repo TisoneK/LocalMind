@@ -7,7 +7,7 @@ Two-stage approach:
 
 Stage 2 fires as a background asyncio task so it never blocks the response stream.
 
-Session 22 fix: title-gen is now intent-gated, not turn-count-gated. If
+Title-gen is intent-gated, not turn-count-gated. If
 the first message is trivial (greeting/thanks/farewell/yes-no/acknowledgment),
 Stage 2 is skipped — the placeholder "New Chat" stays until a substantive
 message arrives. The LLM title-gen fires on the first non-trivial message,
@@ -33,7 +33,7 @@ def generate_title_smart(message: str, intent: str | None = None) -> str:
     shows something while the LLM-generated title is being computed.
     Returns a short cleaned version of the user message, max 35 chars.
 
-    Session 22: trivial inputs (greetings/thanks/farewells) return "New Chat"
+    Trivial inputs (greetings/thanks/farewells) return "New Chat"
     as the placeholder, NOT the greeting text. This prevents the sidebar
     from filling up with "Hi" / "Hello" / "Quick hello" — the title stays
     "New Chat" until a substantive message triggers the LLM title-gen.
@@ -64,7 +64,7 @@ def generate_title_smart(message: str, intent: str | None = None) -> str:
         if clean.startswith(prefix) or clean.startswith(prefix.lower()):
             return "Error — try again"
 
-    # Session 22: trivial inputs (greetings/thanks/farewells/yes-no/
+    # Trivial inputs (greetings/thanks/farewells/yes-no/
     # acknowledgments) return "New Chat" — the LLM title-gen will fire
     # on the first substantive message instead. This prevents the sidebar
     # from filling up with "Hi" / "Hello" / "ok" / "thanks" placeholders
@@ -147,7 +147,7 @@ async def refine_title_async(session_id: str, message: str) -> None:
     completes. Uses the same adapter as the main engine — respects
     LOCALMIND_ADAPTER setting.
 
-    Session 22: this function now checks is_trivial_input() first and
+    This function now checks is_trivial_input() first and
     returns immediately for greetings/thanks/farewells — no LLM call
     wasted on "Hi". The title-gen fires on the first SUBSTANTIVE message,
     not on turn 1 blindly.
@@ -155,7 +155,7 @@ async def refine_title_async(session_id: str, message: str) -> None:
     from adapters import get_adapter
     from core.config import settings
 
-    # Session 22: skip trivial inputs entirely — don't waste an LLM call
+    # Skip trivial inputs entirely — don't waste an LLM call
     # on "Hi" / "Hello" / "thanks". The title stays "New Chat" until a
     # substantive message triggers this function.
     try:
@@ -257,7 +257,7 @@ def should_generate_title(session_id: str, message_role: str) -> bool:
 
 def should_refine_title(message: str, current_title: str | None = None) -> bool:
     """
-    Session 22: decide whether to fire the LLM title-gen for this message.
+    Decide whether to fire the LLM title-gen for this message.
 
     Title-gen should fire when:
     - The message is non-trivial (not a greeting/thanks/farewell/yes-no/

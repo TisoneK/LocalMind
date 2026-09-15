@@ -70,7 +70,7 @@ _MODEL_CONTEXT_WINDOWS: dict[str, int] = {
 # Default ceiling for num_ctx when the operator hasn't set an explicit override.
 # A model's DECLARED window can be huge (phi4-mini declares 131072) but sending
 # that as num_ctx makes Ollama pre-allocate the full KV cache — live-measured on
-# phi4-mini (S291): num_ctx 8192→13s load, 32768→29s, 131072→84s. So we give the
+# phi4-mini: num_ctx 8192→13s load, 32768→29s, 131072→84s. So we give the
 # model a real working window (not the old 8192 special-case that made a 5K chat
 # read ~64% full) but bound it so a small model with a giant declared window
 # doesn't pay an 84s load. Model- and env-agnostic: ONE rule for every model,
@@ -181,7 +181,7 @@ def _smart_num_ctx(model: str, context_window: int, intent: str = "chat") -> int
 
 
 # Cache for available models — avoids hitting /api/tags on every request.
-# Shared module-level TTLCache (class-level before Session 136): instances are
+# Shared module-level TTLCache (was class-level): instances are
 # cheap and recreated often, so the cache must live at module scope to be
 # effective. Failures are NOT cached (only a successful fetch is stored), so a
 # recovering Ollama is detected promptly.
@@ -202,7 +202,7 @@ def _extract_context_length(show_payload: dict) -> int | None:
 
     Ollama reports it under ``model_info`` as ``"<arch>.context_length"``
     (e.g. ``"phi3.context_length"``, ``"llama.context_length"``) — the arch
-    prefix varies per model. Live-verified on phi4-mini (S291): model_info
+    prefix varies per model. Live-verified on phi4-mini: model_info
     carries BOTH ``phi3.context_length`` (131072, the real window) AND
     ``phi3.rope.scaling.original_context_length`` — the latter ALSO ends in
     ``.context_length``, so a naive suffix match can return the wrong (rope)
@@ -776,7 +776,7 @@ class OllamaAdapter(BaseAdapter):
         2. /api/chat with a minimal message — generates 1 token then stops.
            Works on all models that support the chat endpoint.
         """
-        # S295 (latency): warm the KV cache at the SAME num_ctx real requests
+        # Latency: warm the KV cache at the SAME num_ctx real requests
         # use, or the first request forces a full reload. Warmup previously
         # omitted num_ctx → Ollama loaded at its small default (~2048/4096) while
         # the first real chat sends up to 32768, costing a 13–29s cold reload the
@@ -860,7 +860,7 @@ class OllamaAdapter(BaseAdapter):
         """Return names of locally available Ollama CHAT/generation models.
 
         Embedding models are excluded — they use the separate /api/embeddings
-        endpoint and must not appear in the chat-model selector (Session 293:
+        endpoint and must not appear in the chat-model selector (live finding:
         `mxbai-embed-large:latest` was leaking in). The `-embed` suffix check
         missed them; embedding models carry one of _EMBED_NAME_HINTS anywhere in
         the name (nomic-embed-text, mxbai-embed-large, all-minilm, bge-m3, …).

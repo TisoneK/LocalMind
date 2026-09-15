@@ -1,4 +1,4 @@
-"""Thinker data contracts (ADR-42, building on ADR-36/38).
+"""Thinker data contracts.
 
 The Thinker is the agent's backbone: a silent, read-only analyst that reasons
 on GATHERED EVIDENCE — never the raw request — and returns a structured
@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 class Evidence:
     """What the Thinker reasons ON — the gathered state so far.
 
-    Session 354: extended to support pre-tool understanding. The Thinker
+    Extended to support pre-tool understanding. The Thinker
     can now reason about the user's REQUEST itself (intent, context,
     conversation history) even when no tools have run yet. This was the
     root cause of Gemini's failure on 'How's the going' — the fast-path
@@ -29,9 +29,9 @@ class Evidence:
     observations: str = ""       # the real gathered evidence (tool results / observation log)
     last_action: str = ""        # the tool/action that produced the newest evidence
     iteration: int = 0           # which loop step this consult happens at
-    # Session 354: conversation history for pre-tool understanding
+    # Conversation history for pre-tool understanding
     conversation_history: str = ""  # recent user/assistant turns for context
-    # S425 continuity: this turn's EARLIER Thinker analysis (the compact
+    # Continuity: this turn's EARLIER Thinker analysis (the compact
     # facts/next-step summary the loop already computed). Feeding it back is
     # what makes the reasoning compound across consults instead of restarting
     # from scratch — the owner's "thinking is isolated" fix.
@@ -43,7 +43,7 @@ class Evidence:
         - Real tool evidence exists (observations), OR
         - The user's message itself is worth reasoning about (pre-tool understanding)
 
-        Session 354: previously this returned False when no tools had run,
+        Previously this returned False when no tools had run,
         which meant the Thinker never fired on the conversational fast-path
         or on the first iteration before any tool was called. The model
         then had no understanding layer and produced clarification loops.
@@ -54,7 +54,7 @@ class Evidence:
 @dataclass
 class Ambiguity:
     """Something still unclear AFTER looking at the evidence, paired with the
-    reasonable default to proceed with. ADR-36: the agent proceeds on the
+    reasonable default to proceed with. The agent proceeds on the
     default and stays transparent — it does not block to ask unless guessing
     would risk a wrong irreversible action."""
 

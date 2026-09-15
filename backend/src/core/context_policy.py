@@ -1,8 +1,8 @@
-"""Task-aware context policy — ADR-19 (design.md, Session 159-160).
+"""Task-aware context policy.
 
 LocalMind compresses context POSITIONALLY today (`context_compactor` keeps
 the newest N tool results; `summarizer` LLM-summarizes the oldest 50% with
-one generic prompt). ADR-19 makes allocation TASK-AWARE: a pure, deterministic
+one generic prompt). This makes allocation TASK-AWARE: a pure, deterministic
 policy maps the current task type to what MUST stay verbatim, what CAN be
 stubbed, and (eventually, OFF by default in P0) what CAN be dropped.
 
@@ -13,7 +13,7 @@ so wiring the policy into the compactor/summarizer is a NO-OP until a task
 type is explicitly resolved (locked decision: per-task tables, seeded from
 a global default with per-task overrides).
 
-Locked decisions (Session 159):
+Locked decisions:
   - Full P0 scope (build order steps 1-6).
   - The agent loop settles an explicit `task_type` (from a plan block or
     the intent/domain fallback) and keys the policy on it.
@@ -86,7 +86,7 @@ class ContextPolicy:
     max_keep: int = 6
     allow_drop: bool = False
 
-    # Matching semantics (Session 160 review): keep/drop markers are matched
+    # Matching semantics: keep/drop markers are matched
     # CASE-INSENSITIVE substring against the tool-result content. Tables
     # therefore avoid redundant mixed-case pairs — one lowercase form is
     # enough. Greedy bare tokens ('.py', 'must', 'assert') are avoided on
@@ -239,7 +239,7 @@ def resolve_task_type(
     """
     if task_type and task_type.strip().lower() in TASK_TYPES:
         resolved = task_type.strip().lower()
-        # ADR-19 x ADR-22 re-key (Session 186): a canonical 'chat' hint on a
+        # Re-key: a canonical 'chat' hint on a
         # NON-CHAT routing is definitionally a misclassification — 'chat' is
         # the no-tool fallback, so a tool-bearing intent (SHELL/CODE_EXEC/
         # WEB_*) can never settle to it. Only applied when the caller KNOWS
@@ -273,7 +273,7 @@ def parse_task_type_from_plan(
 ) -> str:
     """Sanitize a dispatcher-provided task_type (str or None) to canonical.
 
-    Mirrors the ADR-18 success_criteria parse pattern (lenient, capped,
+    Mirrors the success_criteria parse pattern (lenient, capped,
     defaulting to '' when unusable).
     """
     if isinstance(task_type_raw, str):
