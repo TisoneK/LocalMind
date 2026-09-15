@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260915T130338Z-Imani-f3c59bbe",
+  "type": "claim",
+  "session": "usage-sse-done-20260915",
+  "agent": "Imani",
+  "created": "2026-09-15T13:03:38Z",
+  "issue": "provider-usage-sse-done",
+  "body": "Imani (S008) claim for B-2026-09-11-1: make provider per-turn token usage\r\nvisible on the SSE wire.\r\n\r\nScope (behavior change, narrow):\r\n1. backend/src/api/routes/chat.py — the `_event_stream` done branch builds\r\n   `done_payload = {\"type\": \"done\"}` and drops `chunk.usage` entirely.\r\n   Forward the turn's provider usage onto the done event (field\r\n   `provider_usage`, same name the turn_complete obs event uses so the\r\n   benchmark harness's `ev.get(\"provider_usage\") or ev.get(\"usage\")` reads\r\n   it unchanged).\r\n2. backend/src/core/agent_runtime.py — the two memory_op branches emit\r\n   `turn_complete(provider_usage={})` and yield a bare done chunk with no\r\n   usage; the zero-provider-call contract stays honest ({} means \"no\r\n   provider call\", now explicitly), and the done chunks carry the same\r\n   empty usage so the wire event exists with an honest payload.\r\n3. tests — new regression tests pinning: done event carries provider_usage\r\n   on the loop path; synthetic/canned turns carry no fabricated tokens;\r\n   memory_op turns report zero-usage honestly.\r\n\r\nNOT claimed: backend/src/core/agent/loop.py (Baraka/S005 holds it; the loop\r\nalready yields usage on done chunks — no edit needed there).\r\n\r\nNo ADR/behavior risk: additive wire field; frontend consumes what it wants.\r\nLive-verification per the standing bar on isolated port 8765 (never 8000).",
+  "paths": ["backend/src/api/routes/chat.py", "backend/src/core/agent_runtime.py", "tests/api/test_chat.py", "tests/core/test_fastpath_synthetic_metrics.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
