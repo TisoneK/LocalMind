@@ -75,8 +75,15 @@ never makes an entry eligible.
 - **Cause:** (1) Python defaults stdout to the console codepage on Windows;
   the harness's own summary lines are non-ASCII. (2) PS 5.1 + git's argument
   quoting around embedded double quotes.
-- **Workaround / fix:** set the Python IO encoding to UTF-8 in the
-  environment before any harness/benchmark run; write commit messages with
-  embedded quotes or braces to a scratch file and use `git commit -F`.
+- **Workaround / fix:** set the Python UTF-8 mode env var (PEP 540,
+  `PYTHONUTF8=1`) before any harness/benchmark/gate run on this box — it fixes
+  BOTH the stdout codepage AND `read_text()` defaults (five
+  source-grepping tests — `test_tool_execution_failure`,
+  `test_iteration_limit_and_safety`, `test_obs_drain_bug`,
+  `test_empty_agent_fix` — call `read_text()` on files containing a UTF-8
+  emoji (`⏹` = byte 0x8f, invalid in cp1252) and fail ONLY because the default
+  locale is cp1252; under `PYTHONUTF8=1` they pass). `PYTHONIOENCODING=utf-8`
+  alone fixes stdout but NOT `read_text()`. Separately: write commit messages
+  with embedded quotes or braces to a scratch file and use `git commit -F`.
 - **Prevent next time:** both are the standing Windows pattern now — UTF-8 env
   for scripts, `-F` for fiddly messages.
