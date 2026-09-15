@@ -1,11 +1,11 @@
 """
 agents — LocalMind's multi-agent architecture package.
 
-Implements ADR-6 (refines ADR-5): multiple distinct agents (browser,
+Multiple distinct agents (browser,
 coding, research, direct) sharing a common 5-step loop shape, each
 with its own scoped toolset, context builder, and stop condition.
 
-Implements ADR-8 Principle 5 (Session 34, Phase 1): agents are
+Agents are
 directories, not modules. Each agent lives in its own subpackage at
 `agents/<name>/` containing `agent.py` (the class), `context_builder.py`,
 `is_done.py`, `tools.py`, `__init__.py` (re-exports the class), and
@@ -24,7 +24,7 @@ Public API:
     for name, cls in list_agents():
         print(f"{name}: {cls(adapter=None).description()}")
 
-Adding a new agent (ADR-8 Phase 1+):
+Adding a new agent:
     1. Create agents/<name>/agent.py with a BaseAgent subclass
     2. Create agents/<name>/{context_builder,is_done,tools}.py
     3. Update agents/<name>/__init__.py to re-export the class
@@ -55,8 +55,8 @@ from agents.selection import (
 )
 from agents.verifier.agent import VerifierAgent
 
-# Auto-register all built-in agents via directory discovery (ADR-8
-# Principle 5, Session 34 Phase 1). Scans agents/* for subdirectories
+# Auto-register all built-in agents via directory discovery.
+# Scans agents/* for subdirectories
 # with agent.py and registers their classes under the directory name.
 # The explicit imports above (BrowserAgent, CodingAgent, etc.) ensure
 # the agent subpackages are loaded BEFORE auto_discover scans them —

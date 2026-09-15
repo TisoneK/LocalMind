@@ -8,19 +8,19 @@ Gathers coding-specific context before each turn:
     - Memory facts (passed in by the caller)
     - Orchestrator plan (passed in by the caller)
 
-Per ADR-6: each agent supplies its own build_context(). The coding
+Each agent supplies its own build_context(). The coding
 agent's context is codebase-centric, unlike the browser agent (page-
 state-centric) or the research agent (source-tracking-centric).
 
-Per ADR-8 Phase 2 (Session 34): this function ACTUALLY loads the
-playbook file. Phase 1 returned a static header; Phase 2 makes the
+This function ACTUALLY loads the
+playbook file. The first cut returned a static header; this makes the
 playbook load-bearing — the file's contents reach the model's system
 prompt via the `agent_context` parameter of
 `build_agent_system_prompt()`. This is the "the playbook is the value"
-piece of ADR-8 Principle 4.
+principle.
 
 The workspace_state snapshot (git status/diff/build result) is injected
-by AgentLoop.run() per Session 16 — this context_builder does NOT
+by AgentLoop.run() — this context_builder does NOT
 duplicate it. This keeps the context concise for the gemma3:1b-class
 target hardware.
 """
@@ -35,7 +35,7 @@ from core.models import Intent
 
 logger = logging.getLogger(__name__)
 
-# Path to the coding playbook file. Per ADR-8 Phase 2 (Session 34),
+# Path to the coding playbook file.
 # the playbook file moved from backend/data/playbooks/coding.md to
 # agents/coding/playbook.md — co-located with the agent class. The
 # path is resolved relative to this file so it works regardless of
@@ -76,7 +76,7 @@ def build_coding_context(
     """
     Build the coding-agent context string.
 
-    Phase 2 (ADR-8, Session 34): loads the coding playbook file
+    Loads the coding playbook file
     (agents/coding/playbook.md) and returns it as the agent_context
     section. The playbook contains the constraints:
         1. Read before writing
@@ -85,12 +85,11 @@ def build_coding_context(
         4. Follow existing conventions
         5. Small, verifiable changes
 
-    These constraints previously sat on disk UNUSED (per Session 33
-    finding); now they reach the model's system prompt when the
+    These constraints previously sat on disk UNUSED; now they reach the model's system prompt when the
     CodingAgent is selected for SHELL/FILE_*/CODE_EXEC intents.
 
     The workspace_state snapshot (git status/diff/build result) is
-    already injected by AgentLoop.run() per Session 16 — this
+    already injected by AgentLoop.run() — this
     context_builder does NOT duplicate it. This keeps the context
     concise for the gemma3:1b-class target hardware.
     """

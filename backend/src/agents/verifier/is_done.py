@@ -1,11 +1,11 @@
 """
 Verifier agent stop condition.
 
-Per ADR-6: each agent supplies its own is_done(). The verifier's stop
+Each agent supplies its own is_done(). The verifier's stop
 conditions are verification-oriented: all tests pass, acceptance
 criteria met, build/typecheck succeeds, bug reproduced.
 
-ADR-18 P1 (Session 174): real implementation replacing the Phase 1 stub.
+Real implementation replacing the first stub.
 The verifier is the acceptance stage — "an agent saying 'done' should not
 mean the task is done." When the turn carries success criteria (from the
 dispatcher's execution_plan or the model's create_plan), is_done()

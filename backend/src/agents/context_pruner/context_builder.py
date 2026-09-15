@@ -4,7 +4,7 @@ Context pruner agent context builder.
 Loads the pruner playbook (agents/context_pruner/playbook.md) into the
 agent_context. The pruner's run() override performs the rewrite via a
 direct model call, so the playbook is a secondary reference — it is kept
-for consistency with the ADR-8 Phase 2 pattern (every agent directory
+for consistency with the co-located-directory pattern (every agent directory
 owns its playbook) and for future reuse if the pruner ever gains tools.
 """
 

@@ -6,14 +6,14 @@ Gathers browser-specific context before each turn:
     - Recent navigation history
     - Last snapshot summary (interactive elements)
 
-Per ADR-6: each agent supplies its own build_context(). The browser
+Each agent supplies its own build_context(). The browser
 agent's context is page-state-centric, unlike the coding agent (which
 is codebase-index-centric) or the research agent (source-tracking-
 centric).
 
-Phase 1 (this session, Session 15): structural skeleton. The actual
+Structural skeleton for now. The actual
 page-state gathering will be wired in when the BaseAgent.run() loop
-is extracted from AgentLoop (Phase 2). For now, build_context() returns
+is extracted from AgentLoop. For now, build_context() returns
 a minimal browser-context header that the existing AgentLoop can
 ignore.
 """

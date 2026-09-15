@@ -1,7 +1,7 @@
 """
-DirectAgent — what Direct Mode becomes per ADR-6.
+DirectAgent — Direct Mode as a thin wrapper.
 
-Per ADR-8 Principle 5: this class lives inside its agent directory
+This class lives inside its agent directory
 (`agents/direct/agent.py`) alongside its playbook, context_builder,
 tools, is_done, and (Phase 2) persona.
 

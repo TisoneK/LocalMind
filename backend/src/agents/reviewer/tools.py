@@ -1,7 +1,7 @@
 """
 Reviewer agent scoped toolset.
 
-Per ADR-6: each agent has its own scoped toolset. A reviewer agent has
+Each agent has its own scoped toolset. A reviewer agent has
 file_task + git + shell + delegate. It does NOT have code_exec, file_write,
 edit_file, web tools, browser, process, memory, or sysinfo.
 
@@ -9,7 +9,7 @@ The reviewer's tools map to its responsibilities:
   - file_task → read source files under review
   - git       → check what changed (diff against baseline)
   - shell     → run static analysis, linters, quality checks
-  - delegate  → ADR-8 Phase 3: hand off findings to coding/verifier
+  - delegate  → hand off findings to coding/verifier
 
 The reviewer's job is to ASSESS quality, not to build or fix. It reads code,
 checks it against specs and best practices, and reports findings. It does NOT
@@ -26,8 +26,8 @@ REVIEWER_TOOLS: frozenset[str] = frozenset(
         "file_task",
         "git",
         "shell",
-        "delegate",  # ADR-8 Phase 3: hand off findings to other agents
-        "skill",  # B-2026-08-02-12: universal skill tool
+        "delegate",  # hand off findings to other agents
+        "skill",  # universal skill tool
     }
 )
 

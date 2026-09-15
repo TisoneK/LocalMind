@@ -1,11 +1,11 @@
 """
 Coding agent stop condition.
 
-Per ADR-6: each agent supplies its own is_done(). The coding agent's
+Each agent supplies its own is_done(). The coding agent's
 stop condition is criteria-verified / tests-pass / build-succeeds /
 user-says-stop.
 
-ADR-18 P0 (B-2026-08-12-1, Session 156): the acceptance gate. When the
+The acceptance gate. When the
 turn carries success criteria (from the dispatcher's execution_plan or
 the model's create_plan), is_done() evaluates them deterministically
 against the trace's tool evidence + the workspace. The loop stops ONLY
@@ -19,7 +19,7 @@ contract, so this agent's stop behavior is identical there).
 
 The base loop still enforces the hard caps (max_iterations,
 max_wall_clock_secs) regardless of this function's answer — the "OR
-limit" from ADR-5.
+limit" in the loop contract.
 """
 
 from __future__ import annotations

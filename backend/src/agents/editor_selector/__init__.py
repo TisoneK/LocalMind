@@ -1,6 +1,6 @@
 """Editor selector agent subpackage — the best-of-N picker.
 
-Per ADR-8 Principle 5 (Session 34, Phase 1): the agent class lives INSIDE
+The agent class lives INSIDE
 this directory at `agent.py`. The registry auto-discovers directories with
 an `agent.py` whose class name matches <Name>Agent.
 """

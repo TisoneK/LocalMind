@@ -1,6 +1,6 @@
 """Research agent context builder — loads the research playbook file.
 
-Per ADR-8 Phase 2 (Session 34): loads agents/research/playbook.md and
+Loads agents/research/playbook.md and
 returns it as the agent_context. The playbook governs HOW the Research
 Agent uses web_search + web_fetch (enough sources, cross-reference key
 claims, note dates, distinguish facts from opinions, synthesize).

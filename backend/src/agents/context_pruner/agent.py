@@ -1,5 +1,5 @@
 """
-ContextPrunerAgent — B-2026-08-02-9 (B4, inline delegation).
+ContextPrunerAgent — inline delegation.
 
 The context-pruner pattern: an inline agent that rewrites the parent's
 message history in place. It is the FIRST and (for now) ONLY agent with
@@ -21,9 +21,9 @@ replaces the list in place.
 Failure is always fail-safe: an unparseable or structurally invalid
 rewrite leaves the parent's history UNCHANGED.
 
-Per ADR-8 Principle 5: lives in its own agent directory
+Lives in its own agent directory
 (`agents/context_pruner/`) so it is registry-discovered, listable, and —
-thanks to B-2026-08-02-10 (C1) — can be routed to a STRONG model via
+thanks to per-agent model routing — can be routed to a STRONG model via
 `LOCALMIND_AGENT_MODEL_CONTEXT_PRUNER=...` even when the orchestrator is
 local (the spec's explicit model-readiness note).
 """
@@ -204,7 +204,7 @@ class ContextPrunerAgent(BaseAgent):
         parse/validation failure leaves the parent's history unchanged.
         """
         cfg = self.config()
-        # B-2026-08-02-10 (C1): per-agent model routing — the pruner can be
+        # Per-agent model routing — the pruner can be
         # routed to a stronger model via LOCALMIND_AGENT_MODEL_CONTEXT_PRUNER.
         fallback = adapter or self._adapter
         from core.model_router import resolve_agent_adapter

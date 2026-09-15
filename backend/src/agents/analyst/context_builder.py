@@ -7,12 +7,11 @@ Gathers analysis-specific context before each turn:
     - Memory facts (passed in by the caller)
     - Orchestrator plan (passed in by the caller)
 
-Per ADR-6: each agent supplies its own build_context(). The analyst's
+Each agent supplies its own build_context(). The analyst's
 context primes the model to think like a requirements analyst —
 understanding what needs to be built, not how to build it.
 
-The workstation state snapshot is injected by AgentLoop.run() per
-Session 16.
+The workstation state snapshot is injected by AgentLoop.run().
 """
 
 from __future__ import annotations

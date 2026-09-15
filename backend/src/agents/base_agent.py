@@ -1,7 +1,7 @@
 """
 BaseAgent — abstract base class for LocalMind's multi-agent architecture.
 
-Implements ADR-6 (refines ADR-5): multiple distinct agents (coding,
+The multi-agent architecture: multiple distinct agents (coding,
 research, browser, direct) sharing a common 5-step loop shape:
     assemble → call model → parse → execute → observe → repeat
     "until done, blocked, or limit"
@@ -16,10 +16,10 @@ DirectAgent) supplies its own:
 
 What's shared here:
     - The 5-step loop shape
-    - Hard iteration cap + wall-clock cap (ADR-5 requirement)
-    - Token budget & compaction (ADR-5 / B-2026-07-26-2)
+    - Hard iteration cap + wall-clock cap
+    - Token budget & compaction
     - Streaming interface back to the frontend
-    - Permission checking (the upgraded safety_gate from ADR-5)
+    - Permission checking (the upgraded safety_gate)
 
 The parent runtime constructs one AgentLoop and passes it into the selected
 agent. Specialized agents are reached through the parent's delegation tools;
@@ -39,7 +39,7 @@ from core.models import Intent, StreamChunk, ToolResult
 logger = logging.getLogger(__name__)
 
 
-# B-2026-08-09-15 (ADR-15 §1): render an AgentConfig.output_schema as a
+# Render an AgentConfig.output_schema as a
 # literal "return EXACTLY this JSON shape" contract for the model's system
 # prompt. Returns "" when no schema is configured (general agents).
 def render_output_contract(output_schema: Optional[dict]) -> str:
@@ -58,7 +58,7 @@ def render_output_contract(output_schema: Optional[dict]) -> str:
     )
 
 
-# ── Hard caps (ADR-5 requirement: "repeat until done, blocked, OR limit") ────
+# ── Hard caps ("repeat until done, blocked, OR limit") ───────────────────────
 # These prevent a small model from spinning forever on a task it can't solve.
 # Configured here so per-agent subclasses can override if they need more
 # headroom (e.g., a coding agent may need more iterations than a browser agent).
@@ -76,26 +76,26 @@ class AgentConfig:
     max_wall_clock_secs: int = DEFAULT_MAX_WALL_CLOCK_SECS
     # The scoped toolset — a subset of AGENT_ALLOWED_TOOLS. A browser agent
     # shouldn't have shell tools; a coding agent shouldn't have browser tools.
-    # Smaller surface = more reliable selection on small models (ADR-6 point 6).
+    # Smaller surface = more reliable selection on small models.
     allowed_tools: frozenset[str] = field(default_factory=lambda: AGENT_ALLOWED_TOOLS)
     # Whether this agent executes tools at all. DirectAgent sets this to False
     # — it's steps 1-2 only (assemble → model → respond), no tool execution.
     tools_enabled: bool = True
-    # B-2026-08-02-10 (C1) — per-agent model routing. When set, this agent
+    # Per-agent model routing. When set, this agent
     # runs on its own model/adapter instead of the shared one. Both fields
     # are OPTIONAL overrides: the LOCALMIND_AGENT_MODEL_<NAME> env var wins
     # over these, and unset fields fall back to the caller's adapter (the
-    # pre-C1 behavior — every agent on the shared model). Mixing local +
+    # default behavior — every agent on the shared model). Mixing local +
     # cloud adapters is explicit opt-in only; nothing egresses by default.
     model: Optional[str] = None  # e.g. "llama3.1:70b" (uses `adapter` or the current one)
     adapter: Optional[str] = None  # e.g. "zen", "ollama" (uses the provider's configured model)
-    # B-2026-08-02-9 (B4) — inline delegation. ONLY agents with this flag
+    # Inline delegation. ONLY agents with this flag
     # set to True may be spawned via the delegate_inline tool (which lets
     # the child rewrite the PARENT's message history in place — it breaks
     # the strict delegation isolation invariant). Defaults to False; the
     # only built-in opt-in is ContextPrunerAgent.
     allow_inline_mutation: bool = False
-    # B-2026-08-09-15 (ADR-15 §1) — SPECIFIC sub-agent fixed output schema.
+    # SPECIFIC sub-agent fixed output schema.
     # When set, this agent's FINAL answer must be JSON matching exactly
     # this shape (e.g. reviewer: {"issues": [{"severity", "file", "line",
     # "description"}], "verdict"}). The schema is rendered into the agent
@@ -152,14 +152,14 @@ class BaseAgent(ABC):
         Gather and shape context before each turn.
 
         This is the agent's "Column 1 — Shape" from the CODING HARNESS
-        diagram (ADR-5). Each agent type gathers differently:
+        diagram. Each agent type gathers differently:
             - CodingAgent: codebase search/index, @file resolution, AGENTS.md
             - ResearchAgent: web/doc search, source tracking
             - BrowserAgent: page state, DOM snapshot, nav history
             - DirectAgent: nothing (thin wrapper)
 
         Returns a string to inject into the system prompt for the next
-        model call. Per ADR-5, this is also where workspace_state.snapshot()
+        model call. This is also where workspace_state.snapshot()
         gets injected for the coding agent (the feedback loop).
         """
 
@@ -186,14 +186,14 @@ class BaseAgent(ABC):
 
         The base loop also enforces hard caps (max_iterations,
         max_wall_clock_secs) regardless of is_done()'s answer — that's
-        the "OR limit" from ADR-5.
+        the loop's "OR limit".
         """
 
     @abstractmethod
     def description(self) -> str:
         """
         Human-readable description of what this agent does, for the
-        model's tool-calling prompt. Per ADR-6 point 6, this must be
+        model's tool-calling prompt. This must be
         concrete enough that a gemma3:1b-class model can reliably pick
         the right agent from the registry.
         """
@@ -216,45 +216,45 @@ class BaseAgent(ABC):
         orchestrator_context: Optional[str] = None,
         agent_context_override: Optional[str] = None,
         skip_planning: bool = False,
-        # Session 134: when the engine skips the separate planning call
+        # When the engine skips the separate planning call
         # when a caller has an explicit plan, those step labels come through
         # here and seed
         # the Todos panel (same plan-{i} ids the planner would emit).
         # Must be forwarded to AgentLoop.run() — forgetting this param
         # crashes with "got an unexpected keyword argument 'plan_steps'"
-        # (Session 141 regression fix).
+        # (a regression fixed once).
         plan_steps: Optional[list[str]] = None,
-        # ADR-18 P0: typed success criteria from an explicit plan or the
+        # Typed success criteria from an explicit plan or the
         # model's create_plan tool. Forwarded to AgentLoop.run() — the acceptance
         # gate evaluates them against tool evidence; "done" requires
         # receipts. None = no contract (legacy path).
         success_criteria: Optional[list[str]] = None,
-        task_type: str = "",  # ADR-19: explicit task type → context policy
+        task_type: str = "",  # explicit task type → context policy
         allowed_tool_names: Optional[frozenset[str]] = None,
-        steering_queue=None,  # B-2026-08-02-5 (A5): per-session asyncio.Queue
-        abort_signal=None,  # B-2026-08-02-2 (A2): per-session asyncio.Event
-        # Session 178 — pass the engine's AgentOrchestrator through to
+        steering_queue=None,  # per-session asyncio.Queue
+        abort_signal=None,  # per-session asyncio.Event
+        # Pass the engine's AgentOrchestrator through to
         # AgentLoop so its dead replan() can finally be called from the
         # verify-fail path. None = legacy (no orchestrator notification).
         orchestrator=None,
         reformulated_message: str = "",
-        # Session 330: when the caller supplies a harness-derived goal
+        # When the caller supplies a harness-derived goal
         # checklist (success_criteria), the criteria must gate at the
         # FINAL-ANSWER point — never at the iteration head, where a
         # criteria-verified stop would end the turn with a bare "✓ n/n"
         # summary before the model writes its synthesis.
         skip_head_gate: bool = False,
-        # Session 359: the session's current persisted todo list. Forwarded
+        # The session's current persisted todo list. Forwarded
         # to AgentLoop.run() so the agent can see its own environment (what
         # todos exist + status) instead of hunting in chat history.
         todo_state: Optional[list[dict]] = None,
-        # B-2026-08-23-8: the derived goal tree — each plan step plus its
+        # The derived goal tree — each plan step plus its
         # ordered sub-goals (check → prep → write → verify). Forwarded to
         # AgentLoop.run() so the Todos panel renders the route nested under
         # each goal and the model sees the ordered path. None = flat plan
         # only (legacy behavior).
         goal_tree: Optional[list[dict]] = None,
-        # B-2026-08-23-17: session id, forwarded to AgentLoop.run() so the env
+        # Session id, forwarded to AgentLoop.run() so the env
         # context can inject the session's workspace folder.
         session_id: str | None = None,
     ) -> AsyncIterator[StreamChunk]:
@@ -268,8 +268,7 @@ class BaseAgent(ABC):
             ↻ repeat until is_done() returns True, blocked, or hard cap hit
 
         The hard caps (max_iterations, max_wall_clock_secs) are enforced
-        here regardless of is_done()'s answer — that's the "OR limit"
-        from ADR-5.
+        here regardless of is_done()'s answer — that's the loop's "OR limit".
         """
         # Import is local to avoid circular imports at module load time.
         from core.agent.loop import AgentLoop
@@ -285,7 +284,7 @@ class BaseAgent(ABC):
             cfg.max_wall_clock_secs,
         )
 
-        # B-2026-08-02-10 (C1) — per-agent model routing. Resolve this
+        # Per-agent model routing. Resolve this
         # agent's adapter: LOCALMIND_AGENT_MODEL_<NAME> env override, then
         # AgentConfig.model/adapter, else the caller's adapter (unchanged
         # behavior). Applies to the TOP-LEVEL agent and, because every
@@ -333,7 +332,7 @@ class BaseAgent(ABC):
         # loaded by build_context() and reaches the model's system
         # prompt via the `agent_context_section` in
         # build_agent_system_prompt(). Without this call, the playbook
-        # files sit on disk unused (Session 33 finding); with it, they
+        # files sit on disk unused (seen live); with it, they
         # govern HOW the agent uses its scoped tools.
         if agent_context_override is not None:
             # A boot-owned kernel may provide an already-compiled immutable
@@ -382,23 +381,23 @@ class BaseAgent(ABC):
             memory_facts=memory_facts,
             orchestrator_context=orchestrator_context,
             agent_context=agent_context_str,
-            agent_config=cfg,  # ADR-6: pass the scoped toolset + caps
+            agent_config=cfg,  # pass the scoped toolset + caps
             skip_planning=skip_planning,
-            plan_steps=plan_steps,  # Session 134: dispatcher plan reuse
-            # ADR-18 P0: the acceptance gate — pass this agent's real
+            plan_steps=plan_steps,  # dispatcher plan reuse
+            # The acceptance gate — pass this agent's real
             # is_done() (criteria-verified stop) plus any explicit criteria.
             is_done_fn=self.is_done,
             success_criteria=success_criteria,
             task_type=task_type,
             allowed_tool_names=allowed_tool_names,
-            steering_queue=steering_queue,  # B-2026-08-02-5 (A5)
-            abort_signal=abort_signal,  # B-2026-08-02-2 (A2)
-            orchestrator=orchestrator,  # Session 178
-            reformulated_message=reformulated_message,  # Session 178
-            skip_head_gate=skip_head_gate,  # Session 330
-            todo_state=todo_state,  # Session 359
-            goal_tree=goal_tree,  # B-2026-08-23-8
-            session_id=session_id,  # B-2026-08-23-17
+            steering_queue=steering_queue,
+            abort_signal=abort_signal,
+            orchestrator=orchestrator,
+            reformulated_message=reformulated_message,
+            skip_head_gate=skip_head_gate,
+            todo_state=todo_state,
+            goal_tree=goal_tree,
+            session_id=session_id,
         ):
             yield chunk
 
@@ -410,7 +409,7 @@ class BaseAgent(ABC):
         """
         Filter the global tool list down to this agent's scoped allowlist.
 
-        Per ADR-6: a coding agent doesn't have browser tools; a browser
+        A coding agent doesn't have browser tools; a browser
         agent doesn't have shell tools. Smaller surface = more reliable
         selection on small models.
 

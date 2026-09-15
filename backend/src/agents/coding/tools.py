@@ -1,12 +1,12 @@
 """
 Coding agent scoped toolset.
 
-Per ADR-6: each agent has its own scoped toolset. A coding agent has
+Each agent has its own scoped toolset. A coding agent has
 shell + filesystem + code execution tools. It does NOT have web search,
 web fetch, browser, memory_op, or sysinfo — those belong to other
 agents or are secondary during coding tasks.
 
-The scoped toolset is the ADR-6 value: fewer tools for the small model
+The goal is simple: fewer tools for the small model
 to choose from = more reliable selection. A gemma3:1b-class model
 choosing among 5 coding tools is far more reliable than choosing among
 10+ flat tools.
@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from core.agent.constants import AGENT_ALLOWED_TOOLS
 
-# The coding agent's scoped tool allowlist. Per ADR-6, this is a subset
+# The coding agent's scoped tool allowlist. This is a subset
 # of AGENT_ALLOWED_TOOLS — only the tools this agent should be able to
 # call.
 #
@@ -36,7 +36,7 @@ from core.agent.constants import AGENT_ALLOWED_TOOLS
 #   - file_write → create files (Land)
 #   - edit_file  → modify files in-place (Land)
 #   - code_exec  → execute code (Execute)
-#   - delegate   → ADR-8 Phase 3: delegate to research/browser/direct
+#   - delegate   → delegate to research/browser/direct
 #     when the coding task needs another domain (e.g., "write a script
 #     that uses the current weather API" — delegate the weather lookup
 #     to the research agent, then continue coding with the result).
@@ -55,24 +55,24 @@ CODING_TOOLS: frozenset[str] = frozenset(
         "edit_file",
         "code_exec",
         "git",
-        "system_search",  # Session 400: unified local search — single front door (find_path retired from model surface)
-        "observe",  # B-2026-07-31-9: desktop awareness — window/clipboard/apps/state/recent files
-        "calculator",  # B-2026-07-31-10: safe arithmetic — offline, bounded
-        "csv",  # B-2026-07-31-10: bounded CSV parsing — offline, bounded
-        "json",  # B-2026-07-31-10: bounded JSON parse/query — offline, bounded
-        "sql",  # B-2026-07-31-10: read-only SQLite queries — offline, bounded
+        "system_search",  # unified local search — single front door (find_path retired from model surface)
+        "observe",  # desktop awareness — window/clipboard/apps/state/recent files
+        "calculator",  # safe arithmetic — offline, bounded
+        "csv",  # bounded CSV parsing — offline, bounded
+        "json",  # bounded JSON parse/query — offline, bounded
+        "sql",  # read-only SQLite queries — offline, bounded
         "process",
-        "delegate",  # ADR-8 Phase 3: agent-initiated delegation
-        "delegate_parallel",  # B-2026-08-02-6: parallel delegation fan-out
-        "propose_str_replace",  # B-2026-08-02-7: stage an edit proposal (no write)
-        "propose_write_file",  # B-2026-08-02-7: stage a write proposal (no write)
-        "apply_proposed_edit",  # B-2026-08-02-7: write a staged proposal to disk
-        "add_subgoal",  # B-2026-08-02-8: subgoal scratchpad
-        "update_subgoal",  # B-2026-08-02-8: subgoal scratchpad
-        "create_plan",  # B-2026-08-02-8: subgoal scratchpad
-        "skill",  # B-2026-08-02-12: load a skill into context
-        "best_of_n_edit",  # B-2026-08-02-11: N candidate edits → selector → apply winner
-        "diagnostics",  # Session 49: structured failure analysis
+        "delegate",  # agent-initiated delegation
+        "delegate_parallel",  # parallel delegation fan-out
+        "propose_str_replace",  # stage an edit proposal (no write)
+        "propose_write_file",  # stage a write proposal (no write)
+        "apply_proposed_edit",  # write a staged proposal to disk
+        "add_subgoal",  # subgoal scratchpad
+        "update_subgoal",  # subgoal scratchpad
+        "create_plan",  # subgoal scratchpad
+        "skill",  # load a skill into context
+        "best_of_n_edit",  # N candidate edits → selector → apply winner
+        "diagnostics",  # structured failure analysis
     }
 )
 

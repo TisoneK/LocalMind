@@ -1,7 +1,7 @@
 """
 Agent selection — maps Intent → agent name, then looks up the agent class.
 
-Per ADR-6: the intent router / UI picker selects an agent by name from
+The intent router / UI picker selects an agent by name from
 the registry, rather than an if/else buried in a chat handler. This
 module provides the intent-based auto-selection mapping (the fallback
 when the user hasn't explicitly picked an agent via the UI).
@@ -27,7 +27,7 @@ The parent runtime does not use this module for request-time routing.
 It remains a registry lookup utility for UI metadata and explicit child-agent
 selection; the parent delegates through the native delegation tools.
 
-Per ADR-6 point 5: explicit user selection (UI picker) is preferred over
+Explicit user selection (UI picker) is preferred over
 LLM-based routing. This intent-based mapping is the fallback for when
 the user hasn't picked — it's deterministic and free (no extra LLM call).
 """
@@ -61,8 +61,8 @@ logger = logging.getLogger(__name__)
 _INTENT_TO_AGENT: dict[Intent, str] = {
     Intent.SHELL: "coding",
     Intent.FILE_TASK: "coding",
-    Intent.FIND_PATH: "coding",  # Session 125: name-match search routes to coding
-    Intent.SYSTEM_SEARCH: "coding",  # Session 400: unified local search routes to coding
+    Intent.FIND_PATH: "coding",  # name-match search routes to coding
+    Intent.SYSTEM_SEARCH: "coding",  # unified local search routes to coding
     Intent.DIR_EXPLORER: "coding",  # bounded read-only folder inspection routes to coding
     Intent.FILE_WRITE: "coding",
     Intent.FILE_EDIT: "coding",
@@ -72,20 +72,20 @@ _INTENT_TO_AGENT: dict[Intent, str] = {
     Intent.BROWSE: "browser",
     Intent.CHAT: "direct",
     Intent.SYSINFO: "coding",
-    Intent.OBSERVE: "coding",  # B-2026-07-31-9: desktop awareness routes to coding (observe tool)
-    Intent.CALCULATE: "coding",  # B-2026-07-31-10: safe arithmetic routes to coding (calculator)
-    Intent.CSV: "coding",  # B-2026-07-31-10: CSV parsing routes to coding
-    Intent.JSON: "coding",  # B-2026-07-31-10: JSON parse/query routes to coding
-    Intent.SQL: "coding",  # B-2026-07-31-10: SQLite queries route to coding
+    Intent.OBSERVE: "coding",  # desktop awareness routes to coding (observe tool)
+    Intent.CALCULATE: "coding",  # safe arithmetic routes to coding (calculator)
+    Intent.CSV: "coding",  # CSV parsing routes to coding
+    Intent.JSON: "coding",  # JSON parse/query routes to coding
+    Intent.SQL: "coding",  # SQLite queries route to coding
     Intent.MEMORY_OP: "coding",
-    Intent.GIT: "coding",  # Session 41: git operations route to coding agent
-    Intent.PROCESS: "coding",  # Session 42: process management routes to coding agent
-    Intent.GREP_SEARCH: "coding",  # B-2026-08-23-31: grep search routes to coding agent
-    Intent.VERIFY: "verifier",  # Session 43: verification routes to VerifierAgent
-    Intent.REVIEW: "reviewer",  # Session 44: code review routes to ReviewerAgent
-    Intent.DEBUG: "debugger",  # Session 45: debugging routes to DebuggerAgent
-    Intent.ANALYZE: "analyst",  # Session 46: analysis routes to AnalystAgent
-    Intent.DIAGNOSTICS: "coding",  # Session 49: diagnostics routes to coding agent
+    Intent.GIT: "coding",  # git operations route to coding agent
+    Intent.PROCESS: "coding",  # process management routes to coding agent
+    Intent.GREP_SEARCH: "coding",  # grep search routes to coding agent
+    Intent.VERIFY: "verifier",  # verification routes to VerifierAgent
+    Intent.REVIEW: "reviewer",  # code review routes to ReviewerAgent
+    Intent.DEBUG: "debugger",  # debugging routes to DebuggerAgent
+    Intent.ANALYZE: "analyst",  # analysis routes to AnalystAgent
+    Intent.DIAGNOSTICS: "coding",  # diagnostics routes to coding agent
 }
 
 
@@ -94,7 +94,7 @@ def intent_to_agent_name(intent: Intent) -> str:
     Map an Intent to an agent name.
 
     This is the deterministic fallback when the user hasn't explicitly
-    picked an agent via the UI. Per ADR-6 point 5, explicit user
+    picked an agent via the UI. Explicit user
     selection is preferred — but when it's not available, this mapping
     is free (no extra LLM call) and reliable.
 
@@ -148,7 +148,7 @@ def list_intent_mappings() -> list[tuple[Intent, str]]:
 # They classify by task type rather than by individual tool:
 # "browse", "web_fetch", "file_analysis", "system_info",
 # "shell_command" — these map to AGENTS (not intents). This is the
-# Phase 4 routing key.
+# task-type routing key.
 #
 # The request runtime intentionally has no pre-classification stage.
 
@@ -162,16 +162,16 @@ _DOMAIN_TO_AGENT: dict[str, str] = {
     "file_edit": "coding",
     "file_write": "coding",
     "system_info": "coding",  # sysinfo is shell-adjacent; coding agent handles it
-    "observe": "coding",  # B-2026-07-31-9: desktop awareness — coding agent owns the observe tool
+    "observe": "coding",  # desktop awareness — coding agent owns the observe tool
     "shell_command": "coding",
     "code_exec": "coding",
     "memory_op": "coding",
     "chat": "direct",
     "direct": "direct",
-    "verify": "verifier",  # Session 43: verification tasks route to VerifierAgent
-    "review": "reviewer",  # Session 44: code review tasks route to ReviewerAgent
-    "debug": "debugger",  # Session 45: debugging tasks route to DebuggerAgent
-    "analyze": "analyst",  # Session 46: analysis tasks route to AnalystAgent
+    "verify": "verifier",  # verification tasks route to VerifierAgent
+    "review": "reviewer",  # code review tasks route to ReviewerAgent
+    "debug": "debugger",  # debugging tasks route to DebuggerAgent
+    "analyze": "analyst",  # analysis tasks route to AnalystAgent
 }
 
 
@@ -199,14 +199,14 @@ def select_agent_by_task_profile(
     primary_domain: str,
     fallback_intent: Intent,
 ) -> Optional[type]:
-    """ADR-8 Phase 4: select an agent by task type (primary_domain),
+    """Select an agent by task type (primary_domain),
     falling back to intent-based selection.
 
-    Per ADR-8 Principle 1: "Classification by task type, not tool." The
+    The design principle: "Classification by task type, not tool." The
     primary_domain is the task-type
     signal. When available, it takes precedence over the intent-based
     map. When unavailable (empty or unknown), fall back to the intent-
-    based map (Phase 1-3 behavior).
+    based map (the intent-based behavior).
 
     Args:
         primary_domain: the task-type string. May be empty.
@@ -216,9 +216,9 @@ def select_agent_by_task_profile(
     Returns:
         The agent class, or None if neither path resolves.
     """
-    # Try task-type-based selection first (Phase 4)
+    # Try task-type-based selection first
     name = primary_domain_to_agent_name(primary_domain)
     if name is None:
-        # Fall back to intent-based selection (Phase 1-3)
+        # Fall back to intent-based selection
         name = intent_to_agent_name(fallback_intent)
     return get_agent(name)

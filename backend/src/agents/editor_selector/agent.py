@@ -1,5 +1,5 @@
 """
-EditorSelectorAgent — B-2026-08-02-11 (C2, best-of-N editor).
+EditorSelectorAgent — best-of-N editor.
 
 The selector in the best-of-N editing pattern. The coding agent's
 `best_of_n_edit` tool generates N candidate edits (each under a different
@@ -8,9 +8,9 @@ selector is a single model call (no tools) that returns the best pick:
 
     {"choice": <0-based index>, "reason": "...", "suggested_improvements": "..."}
 
-Per ADR-8 Principle 5 (Session 34): lives in its own agent directory
+Lives in its own agent directory
 (`agents/editor_selector/`) so it is registry-discovered, listable, and —
-thanks to B-2026-08-02-10 (C1) — can be routed to a STRONG model via
+thanks to per-agent model routing — can be routed to a STRONG model via
 `LOCALMIND_AGENT_MODEL_EDITOR_SELECTOR=...` even when the orchestrator is
 local (the spec's core motivation: the selector's pick is the highest-risk
 LLM call in the pattern, so it deserves the strongest available model).

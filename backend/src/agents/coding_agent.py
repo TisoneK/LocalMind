@@ -1,6 +1,6 @@
 """Backward-compat shim — re-exports CodingAgent from agents.coding.agent.
 
-Per ADR-8 Phase 1 (Session 34): the CodingAgent class moved INTO its
+The CodingAgent class moved INTO its
 agent directory at `agents/coding/agent.py`. This thin shim preserves
 backward compatibility for any code that imports
 `from agents.coding_agent import CodingAgent` (e.g., the test at

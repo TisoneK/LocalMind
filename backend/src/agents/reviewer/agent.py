@@ -1,7 +1,7 @@
 """
 ReviewerAgent — the code review specialist BaseAgent subclass.
 
-Per ADR-6 (refines ADR-5): a thin subclass of BaseAgent that supplies
+A thin subclass of BaseAgent that supplies
 reviewer-specific context_builder, scoped tools, and is_done().
 
 The reviewer is the agent that ASSESSES quality — it reads code, checks
@@ -54,7 +54,7 @@ class ReviewerAgent(BaseAgent):
             max_wall_clock_secs=300,  # 5 minutes
             allowed_tools=REVIEWER_TOOLS,
             tools_enabled=True,
-            # B-2026-08-09-15 (ADR-15 §1): SPECIFIC sub-agent with a FIXED
+            # SPECIFIC sub-agent with a FIXED
             # output schema. The reviewer must return JSON in exactly this
             # shape — issues with severity/file/line/description plus a
             # verdict — so the parent can parse it without re-reading prose.

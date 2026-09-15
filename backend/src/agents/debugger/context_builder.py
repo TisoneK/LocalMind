@@ -6,13 +6,13 @@ Gathers debug-specific context before each turn:
     - Memory facts (passed in by the caller)
     - Orchestrator plan (passed in by the caller)
 
-Per ADR-6: each agent supplies its own build_context(). The debugger's
+Each agent supplies its own build_context(). The debugger's
 context primes the model to think like a debugger — tracing failures
 through code, isolating root causes, and reproducing errors — not
 building or testing.
 
 The workspace_state snapshot (git status/diff/build result) is injected
-by AgentLoop.run() per Session 16. For the debugger, git diff and log
+by AgentLoop.run() . For the debugger, git diff and log
 are essential — they show what changed that might have introduced the bug.
 """
 

@@ -1,14 +1,14 @@
 """
 BrowserAgent — drives a real headless browser via agent-browser.
 
-Per ADR-6: a thin subclass of BaseAgent that supplies browser-specific
+A thin subclass of BaseAgent that supplies browser-specific
 context_builder, scoped tools, and is_done().
 
-Per ADR-8 Principle 5: this class lives inside its agent directory
+This class lives inside its agent directory
 (`agents/browser/agent.py`) alongside its playbook, context_builder,
 tools, is_done, and (Phase 2) persona.
 
-Why BrowserAgent first (per Session 15 implementation plan):
+Why BrowserAgent first (earliest implementation):
     - The existing backend/src/tools/browser_agent.py is already
       domain-scoped in name (it's called "browser_agent") but
       structured as a tool, not a full agent.

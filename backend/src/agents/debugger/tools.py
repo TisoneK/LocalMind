@@ -1,7 +1,7 @@
 """
 Debugger agent scoped toolset.
 
-Per ADR-6: each agent has its own scoped toolset. A debugger agent has
+Each agent has its own scoped toolset. A debugger agent has
 file_task + git + shell + process + delegate. It does NOT have code_exec,
 file_write, edit_file, web tools, browser, memory, or sysinfo.
 
@@ -10,7 +10,7 @@ The debugger's tools map to its responsibilities:
   - git       → check what changed (diff, log, bisect candidates)
   - shell     → run diagnostic commands, inspect state
   - process   → start/stop services for debugging
-  - delegate  → ADR-8 Phase 3: hand off root cause + fix to coding agent
+  - delegate  → hand off root cause + fix to coding agent
 
 The debugger's job is to FIND root causes, not to fix them. It reads
 error output, traces through code, checks git history for regressions,
@@ -29,8 +29,8 @@ DEBUGGER_TOOLS: frozenset[str] = frozenset(
         "shell",
         "process",
         "delegate",
-        "diagnostics",  # Session 49: structured failure analysis
-        "skill",  # B-2026-08-02-12: universal skill tool
+        "diagnostics",  # structured failure analysis
+        "skill",  # universal skill tool
     }
 )
 
