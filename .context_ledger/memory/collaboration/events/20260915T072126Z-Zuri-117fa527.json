@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260915T072126Z-Zuri-117fa527",
+  "type": "claim",
+  "session": "S004",
+  "agent": "Zuri",
+  "created": "2026-09-15T07:21:26Z",
+  "issue": "context-breakdown",
+  "body": "Per-category context-usage breakdown for the last model call (observability only; no prompt-content changes).",
+  "paths": ["backend/src/core/agent/loop.py", "backend/src/core/agent_runtime.py", "backend/src/api/routes/chat.py", "frontend/src/hooks/useLocalMind.ts", "frontend/src/components/layout/CenterPanel.tsx", "frontend/src/types/index.ts"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

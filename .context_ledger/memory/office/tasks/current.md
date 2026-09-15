@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — no session in progress (Session 3 complete: context sync — vendored core migrated 1.0.6 → 1.1.1; kickoff.md/AGENTS.md regenerated from the new templates with facts refilled; roster board upgraded to Status columns at sign-in)
-- **Status:** idle
+- **Session:** 2026-09-15 — Zuri / qwen3.8-flash
+- **Task:** per-category context-usage breakdown — split the last-call context occupancy into categories (system prompt, tool schemas, turn context, history, tool results, current message) and surface shares in the UI meter (ZCode-style stats)
+- **Status:** in-progress
