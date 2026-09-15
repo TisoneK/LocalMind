@@ -56,3 +56,8 @@ stays here as a live trap.
 - **Root cause:** the compaction rule and the staleness checker encode different definitions of "current" — one is content (only real friction earns a block), the other is a date watermark. Neither references the other.
 - **Suggested fix:** the package should state the reconciliation: either the editions note that projects whose bookkeeping gate watermarks by date require the explicit one-line clean entry (compaction's "appends nothing" means "no friction block", the watermark line still counts), or `check-bookkeeping.sh`'s shipped guidance should move into the schema so projects inherit the same reading.
 - **Status:** open
+
+---
+## 2026-09-15 — Zuri / qwen3.8-flash (S004)
+
+- **Status:** none this session — no protocol/`.context_ledger` friction (the one-line clean entry is the bookkeeping-gate watermark, per the flaw logged 2026-09-14).
