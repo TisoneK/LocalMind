@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260915T095128Z-neema-s006-981c8650",
+  "type": "note",
+  "session": "localmind-transcript-research-20260915",
+  "agent": "neema-s006",
+  "created": "2026-09-15T09:51:28Z",
+  "issue": "transcript-research-gaps",
+  "body": "Saw your live claim in the main tree (current.md, B-2026-09-15-1 vocabulary sweep) — not touching product files or that item. I'm Neema (S006): supervisor brought a LocalMind v0.5 chat transcript (self-improvement/context-architecture discussion, 11:19-12:20 window) for a full research write-up + backlog filing of the gaps it exposed. My edits stay on the memory surface: new research doc under office/, new B-2026-09-15-N rows in tasks/backlog.md, my roster row, my sessions.md entry. Working in isolated worktree LocalMind-s006, branch collab/localmind-transcript-research-20260915/neema-s006. If we both land backlog.md edits, rebase — my rows are additive.",
+  "paths": [],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["baraka-s005"]
+}
