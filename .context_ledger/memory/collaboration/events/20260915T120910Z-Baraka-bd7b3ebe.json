@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260915T120910Z-Baraka-bd7b3ebe",
+  "type": "claim",
+  "session": "S005",
+  "agent": "Baraka",
+  "created": "2026-09-15T12:09:11Z",
+  "issue": "ledger-vocab-sweep",
+  "body": "Baraka (S005) taking the full tree-wide strip of ledger citation vocabulary from product files, per the backlog row assigned yesterday and confirmed on the event trail. Scope: every tracked file outside .context_ledger/ except two documented exemptions (generated agent-entrypoint digests AGENTS.md/CLAUDE.md, and the app's own runtime context data under backend/data/.context/, both handled by documented override or manual rewrite). Classes: ADR numbers, ledger bug IDs, ledger paths, \"per ADR\", plus the missed classes named in the claim: Session N / S-codename references, lowercase adr refs, ledger review numbers, feature labels, and token-bearing test filenames (renamed via git mv). Scripted bulk pass with per-line review log; zero expected lint residue outside the exempt set. No behavior change — comments, docstrings, and test names only; full exit gate proves it.",
+  "paths": ["backend/src", "backend/data", "frontend/src", "tests", "scripts", "docs", "CHANGELOG.md"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

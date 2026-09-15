@@ -14,5 +14,5 @@ entry and backlog before starting.
 
 - **Session:** 2026-09-15 — Baraka / qwen3.8-flash (Asha S007 clocked out; this task belongs to S005, untouched)
 - **Feature:** none
-- **Task:** tree-wide strip of .context_ledger vocabulary from product files (backlog B-2026-09-15-1) — lint hits (ADR refs, bug IDs, ledger paths, "per ADR") plus missed classes (Session N / S<NNN> references, lowercase adr refs, token-bearing filenames); exempt structurally-legit surfaces (generated agent-entrypoint files) via a documented override
+- **Task:** tree-wide strip of .context_ledger vocabulary from product files (backlog B-2026-09-15-1) — lint hits (ADR refs, bug IDs, ledger paths, "per ADR") plus missed classes (Session N / S<NNN> references, lowercase adr refs, token-bearing filenames); exempt structurally-legit surfaces (generated agent-entrypoint files) via a documented override; supervisor directive 2026-09-15: strip by hand with per-comment understanding, no scripted bulk transform; claim event 20260915T120910Z-Baraka-bd7b3ebe
 - **Status:** in-progress (owned by S005)
