@@ -110,7 +110,7 @@ The owner's directive is one of the largest product ideas in this transcript, an
 - **Gap detection → self-generated backlog:** when a failure repeats in a category, surface it (the ledger protocol the owner's dev process runs on is itself the template the agent wants for itself).
 - **Rule evaluation:** stored directives should be revisitable/retirable, not write-once commandments — otherwise the directive-store duplication in §4.4 is its first symptom.
 
-These cross-reference the standing Target's tier-2 list (auto-context building and self-reflection were literally the owner's priority table in-turn: 🔴 auto-context, 🔴 self-reflection, 🟡 automation workflows / data analysis, 🟢 monitoring / reports) — the research should not mint separate rows for what that program already schedules; §11 files one umbrella row + the memory-reliability specifics.
+These cross-reference the standing Target's tier-2 list (auto-context building and self-reflection were literally the owner's priority table in-turn: 🔴 auto-context, 🔴 self-reflection, 🟡 automation workflows / data analysis, 🟢 monitoring / reports) — and they map 1:1 onto the owner's own six-weakness taxonomy (11:54), so §11 files each as its own named row (B-2026-09-15-13…-18) rather than a single umbrella.
 
 ## 7. Behavioral anti-patterns named and evidenced (the "what NOT to do")
 
@@ -139,9 +139,9 @@ Every one below is *demonstrated* in this transcript, not hypothetical — that'
 
 | # | Gap (transcript) | Already tracked? | Filed this session as |
 |---|---|---|---|
-| 1 | Reflection loop | new | B-2026-09-15-5 |
-| 2 | Signal fusion | new | B-2026-09-15-5 (same proactive-cognition surface) + B-2026-09-15-2 |
-| 3 | Gap detection | new | B-2026-09-15-5 |
+| 1 | Reflection loop | new | B-2026-09-15-14 |
+| 2 | Signal fusion | new | B-2026-09-15-13 + B-2026-09-15-2 |
+| 3 | Gap detection | new | B-2026-09-15-16 |
 | 4 | Active memory (pre-action consult) | new | B-2026-09-15-6 |
 | 5 | Skill composition | new | B-2026-09-15-11 (Low, design-first) |
 | 6 | Confidence calibration | new | B-2026-09-15-11 (paired: commit-vs-hedge is one mechanism) |
@@ -159,7 +159,7 @@ The owner's roadmap is coherent and should be recorded as a decision, not left i
 
 ## 11. Backlog filing (this session)
 
-New rows: B-2026-09-15-2 (context bootstrap: geolocation + stable user-context block, High), B-2026-09-15-3 (stable-vs-volatile fact policy, High), B-2026-09-15-4 (memory op reliability: forget/list/upsert + read-back-after-cleanup, High), B-2026-09-15-5 (proactive self-learning loop umbrella, Medium), B-2026-09-15-6 (pre-action memory consult, Medium), B-2026-09-15-7 (turn economy: per-phase budgets + batching + graceful cap degradation, Medium), B-2026-09-15-8 (intent-aware criteria-unmet replan, Medium), B-2026-09-15-9 (consequence-tier destructive-action verification ladder, Medium), B-2026-09-15-10 (sycophancy/self-agreement guard, Medium), B-2026-09-15-11 (skill composition + confidence calibration, Low/design-first), and B-2026-09-15-12 (the §12 questions, Medium/ADVISORY — filed after ship per the owner's relayed instruction "do NOT block on the 3 open questions"). Existing rows updated with transcript evidence: B-2026-09-04-2 (mimo-v2.5 window entry owed), B-2026-08-30-17 (geolocation is the missing fetch half; policy-first warning), B-2026-08-15-12 (the owner independently confirmed the triage tiering — its (c) half gains priority), B-2026-08-30-9 (fixed-cap tension evidenced), B-2026-09-08-8 (agent independently hit the same atomicity lesson from the 400-char cap side).
+New rows: B-2026-09-15-2 (context bootstrap: geolocation + stable user-context block, High), B-2026-09-15-3 (stable-vs-volatile fact policy, High), B-2026-09-15-4 (memory op reliability: forget/list/upsert + read-back-after-cleanup, High), B-2026-09-15-13 (deduction engine, High), B-2026-09-15-14 (self-reflection loop, High), B-2026-09-15-15 (passive profile building / context awareness, High), B-2026-09-15-6 (pre-action memory consult, Medium), B-2026-09-15-7 (turn economy: per-phase budgets + batching + graceful cap degradation, Medium), B-2026-09-15-8 (intent-aware criteria-unmet replan, Medium), B-2026-09-15-9 (consequence-tier destructive-action verification ladder, Medium), B-2026-09-15-10 (sycophancy/self-agreement guard, Medium), B-2026-09-15-16 (skill gap detection, Medium), B-2026-09-15-17 (multi-step planning, Medium), B-2026-09-15-18 (learning transfer, Medium), B-2026-09-15-11 (skill composition + confidence calibration, Low/design-first), and B-2026-09-15-12 (the §12 questions, Medium/ADVISORY — filed after ship per the owner's relayed instruction "do NOT block on the 3 open questions"). **Filing note (supervisor correction, same session):** the first pass filed the owner's 11:54 six-weakness self-assessment as one umbrella row; he re-sent the passage — his taxonomy is the unit, so the umbrella was replaced by six named rows (-13 deduction, -14 reflection, -15 context awareness, -16 gap detection, -17 planning, -18 transfer). Existing rows updated with transcript evidence: B-2026-09-04-2 (mimo-v2.5 window entry owed), B-2026-08-30-17 (geolocation is the missing fetch half; policy-first warning), B-2026-08-15-12 (the owner independently confirmed the triage tiering — its (c) half gains priority), B-2026-08-30-9 (fixed-cap tension evidenced), B-2026-09-08-8 (agent independently hit the same atomicity lesson from the 400-char cap side).
 
 ## 12. Open questions for the owner (not decisions, questions)
 
