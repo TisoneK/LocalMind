@@ -195,7 +195,7 @@ function FileTreeNode({ node, depth, nodes, onToggle, onOpen, onAction }: FileTr
           {formatModified(node.modified)}
         </span>
       )}
-      {/* Per-file actions — visible on hover (B-2026-08-23) */}
+      {/* Per-file actions — visible on hover */}
       <span className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 text-brand-green-muted transition-all">
         <span
           role="button"
@@ -409,7 +409,7 @@ export function FileExplorer({ files, onFileOpen, onFilesChanged }: FileExplorer
         </button>
       </div>
 
-      {/* Recent files (B-2026-08-23-16) */}
+      {/* Recent files */}
       {recent.length > 0 && (
         <div className="pt-0.5">
           <div className="flex items-center gap-1 px-1 py-0.5">

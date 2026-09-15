@@ -20,7 +20,7 @@ interface FilePreviewDialogProps {
   /** Absolute path of the file to preview; null/empty closes the dialog. */
   path: string | null;
   onClose: () => void;
-  /** B-2026-08-23-18: diff hunks captured from edit_file results this turn,
+  /** Diff hunks captured from edit_file results this turn,
    *  keyed by absolute path — powers the Diff mode (before/after). */
   diffs?: Record<string, DiffData>;
 }
@@ -43,8 +43,7 @@ export function FilePreviewDialog({ path, onClose, diffs }: FilePreviewDialogPro
   const [content, setContent] = useState<FileContent | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // B-2026-08-23-18: Preview / Edit / Diff mode switcher. Edit mode
-  // (B-2026-08-23-6 follow-up): text/code files AND spreadsheet cells, saved
+  // Preview / Edit / Diff mode switcher. Edit mode (text/code files AND spreadsheet cells, saved
   // back through the same POST /api/confirm-write gate the agent uses (text
   // via `content`, spreadsheets via the structured `sheets` payload). Diff
   // shows the edit_file hunks captured this turn (DiffBlock).
@@ -99,7 +98,7 @@ export function FilePreviewDialog({ path, onClose, diffs }: FilePreviewDialogPro
   const canEditText = !!content && content.editable === true && !isImage && sheets.length === 0;
   const canEdit = canEditText || canEditSpreadsheet;
   const isSpreadsheet = sheets.length > 0;
-  // B-2026-08-23-18: the diff for THIS file, captured from edit_file results
+  // The diff for THIS file, captured from edit_file results
   // this turn (latest wins). Diff mode is offered only when hunks exist.
   // Windows-tolerance: the hook normalizes keys to forward slashes.
   const fileDiff = path ? diffs?.[path] ?? diffs?.[path.split('\\').join('/')] : undefined;
@@ -231,7 +230,7 @@ export function FilePreviewDialog({ path, onClose, diffs }: FilePreviewDialogPro
           </div>
         </DialogHeader>
 
-        {/* B-2026-08-23-18: Preview / Edit / Diff mode switcher */}
+        {/* Preview / Edit / Diff mode switcher */}
         {(canEdit || hasDiff) && (
           <div className="flex items-center gap-0.5 px-2 pt-1.5 pb-0 border-b border-brand-border/60 shrink-0">
             <button

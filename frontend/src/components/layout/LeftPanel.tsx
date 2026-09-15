@@ -8,7 +8,7 @@ import { stripMarkdownToPreview } from '@/lib/previewText';
 import { ActionHistory } from '@/components/panels/ActionHistory';
 import { FileExplorer } from '@/components/panels/FileExplorer';
 import { TodoList } from '@/components/panels/TodoList';
-// ADR-34 B-11: ObjectivesPanel import removed — the "Autonomous work" block
+// ObjectivesPanel import removed — the "Autonomous work" block
 // is retired from the normal-chat sidebar. The component file is kept in tree
 // for potential re-mount behind a flag.
 import { isActiveToolStatus } from '@/lib/localmind/progress';
@@ -27,7 +27,7 @@ interface LeftPanelProps {
   actions: ActionItem[];
   files: FileNode[];
   todos: TodoItem[];
-  // ADR-34 B-11: objective props are retired from the sidebar. The
+  // Objective props are retired from the sidebar. The
   // useObjectives hook still runs in WorkspaceLayout for backend sync.
   activeToolCalls: ToolCall[];
   models: ModelOption[];
@@ -50,7 +50,7 @@ interface LeftPanelProps {
   /** Called after a file is deleted from the Files tab, so the tree can re-fetch. */
   onFilesChanged?: () => void;
   width?: number;
-  /** B-2026-08-23-18: per-path diff hunks captured this turn (preview Diff mode). */
+  /** Per-path diff hunks captured this turn (preview Diff mode). */
   fileDiffs?: Record<string, DiffData>;
 }
 
@@ -82,7 +82,7 @@ export function LeftPanel({
   fileDiffs,
 }: LeftPanelProps) {
   const [activeTab, setActiveTab] = useState<LeftTab>('chat');
-  // Per-session workspace artifact listings (B-2026-08-23): expanded session
+  // Per-session workspace artifact listings: expanded session
   // ids → their file entries, plus a loading/error flag per id.
   const [expandedSessionFiles, setExpandedSessionFiles] = useState<Record<string, SessionFileEntry[]>>({});
   const [loadingSessionFiles, setLoadingSessionFiles] = useState<Record<string, boolean>>({});
@@ -152,7 +152,7 @@ export function LeftPanel({
     window.setTimeout(() => setCopyState('idle'), 1800);
   };
 
-  // B-2026-08-23: toggle a session's workspace-artifact listing. Files are
+  // Toggle a session's workspace-artifact listing. Files are
   // fetched once on first expand and cached; the toggle collapses back.
   const toggleSessionFiles = async (sessionId: string) => {
     if (expandedSessionFiles[sessionId]) {
@@ -187,7 +187,7 @@ export function LeftPanel({
   // "New Chat" returns the sidebar to the Chat tab so the fresh conversation
   // (and its session list) is immediately visible instead of leaving the user
   // stranded on Actions/Files from the previous chat.
-  // B-2026-08-23-5: ALWAYS consume the flag — even when already on Chat. The
+  // ALWAYS consume the flag — even when already on Chat. The
   // old guard `activeTab !== 'chat'` left forceChatTab=true after a New Chat
   // while on Chat, so the FIRST tool event switched to Actions and this
   // effect (activeTab is a dep) yanked it straight back; only the second
@@ -210,7 +210,7 @@ export function LeftPanel({
     onChatTabShown?.();
   }, [forceChatTab, activeTab, onChatTabShown]);
 
-  // ADR-20 (Session 167): the error card's "Switch model" action dispatches
+  // The error card's "Switch model" action dispatches
   // this event — forward it to the ModelSelector trigger so the dropdown
   // opens, putting the user one click from a different provider/model.
   useEffect(() => {
@@ -297,7 +297,7 @@ export function LeftPanel({
             {!isCompact && tab.label}
           </button>
         ))}
-        {/* B-2026-08-23-26: three-dot overflow menu for additional panels */}
+        {/* Three-dot overflow menu for additional panels */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -684,7 +684,7 @@ export function LeftPanel({
         </div>
       )}
 
-      {/* ADR-34 B-11: the "Autonomous work" / ObjectivesPanel block is
+      {/* The "Autonomous work" / ObjectivesPanel block is
           removed from the normal-chat sidebar. Background objective
           persistence/API remains intact (useObjectives hook still runs,
           backend routes unchanged) — a separate product decision is
@@ -693,7 +693,7 @@ export function LeftPanel({
       {/* Todos — always show so users can add tasks even when the list is empty.
           Previously the `todos.length > 0` condition made it impossible to
           create the first todo via the UI (chicken-and-egg).
-          Session 212 (realtime-alive-ui): keep an EXISTING plan visible while
+          Keep an EXISTING plan visible while
           tools run so the user watches steps check off live; only the empty
           "add a task" state is hidden during active work to reduce clutter. */}
       {(activeToolCalls.filter(tc => isActiveToolStatus(tc.status)).length === 0 || todos.length > 0) && (
@@ -713,7 +713,7 @@ export function LeftPanel({
         </div>
       )}
 
-      {/* File preview dialog — opened by clicking a session artifact (B-2026-08-23) */}
+      {/* File preview dialog — opened by clicking a session artifact */}
       <FilePreviewDialog path={previewPath} onClose={() => setPreviewPath(null)} diffs={fileDiffs} />
     </div>
   );
@@ -725,7 +725,7 @@ function _formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** B-2026-08-23: compact per-session artifact list (flat entries, folder depth indent). */
+/** Compact per-session artifact list (flat entries, folder depth indent). */
 function SessionFileList({ entries, onOpen }: { entries: SessionFileEntry[]; onOpen: (path: string) => void }) {
   if (!entries || entries.length === 0) {
     return (

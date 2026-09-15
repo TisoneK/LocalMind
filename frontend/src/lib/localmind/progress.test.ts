@@ -82,7 +82,7 @@ describe('streamed progress helpers', () => {
   });
 });
 
-describe('formatLatency (B-2026-08-09-4 / ADR-13)', () => {
+describe('formatLatency', () => {
   it('renders sub-second values as whole milliseconds', () => {
     expect(formatLatency(340)).toBe('340ms');
     expect(formatLatency(0.5)).toBe('1ms');
@@ -102,7 +102,7 @@ describe('formatLatency (B-2026-08-09-4 / ADR-13)', () => {
     expect(formatLatency(Infinity)).toBe('—');
   });
 
-  it('formats minutes and hours (B-2026-08-23-21)', () => {
+  it('formats minutes and hours', () => {
     expect(formatLatency(60_000)).toBe('1m');
     expect(formatLatency(90_000)).toBe('1m 30s');
     expect(formatLatency(3_600_000)).toBe('1h');
@@ -111,7 +111,7 @@ describe('formatLatency (B-2026-08-09-4 / ADR-13)', () => {
   });
 });
 
-describe('formatTokens (B-2026-08-23-22)', () => {
+describe('formatTokens', () => {
   it('renders small counts as-is', () => {
     expect(formatTokens(0)).toBe('0');
     expect(formatTokens(42)).toBe('42');

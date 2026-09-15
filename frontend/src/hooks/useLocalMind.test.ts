@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { useChat } from './useLocalMind';
 
-// Regression test for the Observe panel gap (B-2026-08-09-17 follow-up):
+// Regression test for the Observe panel gap:
 // the backend emits structured obs events as {"obs_event": {...}} with NO
 // top-level "type" (backend/src/core/obs.py ObsEvent.to_sse_dict). The
 // frontend SSE switch dispatched only on parsed.type, so case 'obs_event'
@@ -98,7 +98,7 @@ describe('useChat SSE obs_event routing', () => {
     unmount();
   });
 
-  it('captures diff SSE events into fileDiffs and the assistant message (B-2026-08-23-18)', () => {
+  it('captures diff SSE events into fileDiffs and the assistant message', () => {
     const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
 
     act(() => {
@@ -213,7 +213,7 @@ describe('useChat SSE obs_event routing', () => {
     unmount();
   });
 
-  it('surfaces backend anomaly events in liveObservation.anomalies (Session 123)', () => {
+  it('surfaces backend anomaly events in liveObservation.anomalies', () => {
     const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
 
     act(() => {
@@ -239,7 +239,7 @@ describe('useChat SSE obs_event routing', () => {
     unmount();
   });
 
-  it('routes the initialization acknowledgement into chat (ADR-36)', () => {
+  it('routes the initialization acknowledgement into chat', () => {
     const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
 
     act(() => {
@@ -261,7 +261,7 @@ describe('useChat SSE obs_event routing', () => {
     unmount();
   });
 
-  it('accumulates thinking across phase boundaries instead of wiping (Session 146)', () => {
+  it('accumulates thinking across phase boundaries instead of wiping', () => {
     const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
 
     act(() => {
@@ -285,7 +285,7 @@ describe('useChat SSE obs_event routing', () => {
     unmount();
   });
 
-  it('dedupes anomaly events by kind, newest wins (Session 123)', () => {
+  it('dedupes anomaly events by kind, newest wins', () => {
     const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
 
     act(() => {
@@ -312,7 +312,7 @@ describe('useChat SSE obs_event routing', () => {
     unmount();
   });
 
-  // ── Session stats (B-2026-08-11-5 / stats split) ─────────────────────
+  // ── Session stats ─────────────────────
   // The bottom-right corner accumulates per-chat totals (summed tokens,
   // weighted speed, average latency) while each bubble keeps its own
   // per-message line. These tests drive real wire-shaped turn_complete
@@ -521,7 +521,7 @@ describe('useChat SSE obs_event routing', () => {
   });
 });
 
-describe('useChat ADR-20 error normalization', () => {
+describe('useChat error normalization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     streamMock.getSessionHistory.mockResolvedValue([]);
@@ -579,7 +579,7 @@ describe('useChat ADR-20 error normalization', () => {
   });
 });
 
-describe('useChat Agent Workspace restore (Session 267)', () => {
+describe('useChat Agent Workspace restore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -758,7 +758,7 @@ describe('useChat child-agent lifecycle narration (bootup-telemetry follow-up)',
   });
 });
 
-// B-2026-09-04-4: thinking time must EXCLUDE tool-execution time. Thinking spans
+// Thinking time must EXCLUDE tool-execution time. Thinking spans
 // multiple model calls with tools between them; measuring (last − first)
 // thinking-token wall time double-counted the tool time, so "Thinking Ns" + the
 // per-tool durations summed to more than the turn. The timer now pauses while a

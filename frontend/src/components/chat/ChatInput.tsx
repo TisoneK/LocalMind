@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { InputContextMenu } from './InputContextMenu';
 
-// B-2026-08-23-34: Chat mode options.
+// Chat mode options.
 const chatModeOptions = [
   { id: 'auto' as const, label: 'Auto', icon: <Zap className="h-3 w-3" />, tooltip: 'Classifier decides (default)' },
   { id: 'agent' as const, label: 'Agent', icon: <Bot className="h-3 w-3" />, tooltip: 'Always full agent loop' },
@@ -27,11 +27,11 @@ interface ChatInputProps {
   modelName?: string;
   modelProvider?: string;
   /** Retained for the call site; no longer used since the per-message tool
-   *  selector was removed (B-2026-08-24-3). */
+   *  selector was removed. */
   sessionId?: string;
-  /** B-2026-08-23-34: Current chat mode. */
+  /** Current chat mode. */
   chatMode?: string;
-  /** B-2026-08-23-34: Callback to change chat mode. */
+  /** Callback to change chat mode. */
   onChatModeChange?: (mode: 'auto' | 'agent' | 'direct') => void;
 }
 
@@ -65,7 +65,7 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, mo
   const handleSend = () => {
     const msg = input.trim();
     if (!msg || isStreaming) return;
-    // B-2026-08-23-34 + B-2026-08-24-3: the chat-mode picker (Auto/Agent/Chat)
+    // The chat-mode picker (Auto/Agent/Chat)
     // replaced the old per-message tool/intent hint — send just the message.
     onSend(msg);
     setInput('');
@@ -90,7 +90,7 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, mo
     <div className="border-t border-brand-border bg-brand-bg-base">
       {/* Input area */}
       <div className="px-4 pt-3 pb-2">
-        {/* B-2026-08-02-5 (A5): steering without aborting — while the agent
+        {/* Steering without aborting — while the agent
             is running, inject a message at the next step boundary instead of
             abort + re-run. The backend drains it at the next loop iteration. */}
         {isStreaming && onSteer && (
@@ -144,7 +144,7 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, mo
 
           {/* Action buttons */}
           <div className="flex items-center gap-1 shrink-0 pb-0.5">
-            {/* B-2026-08-23-34: Chat mode picker */}
+            {/* Chat mode picker */}
             {onChatModeChange && (
               <div className="relative" ref={modeMenuRef}>
                 <button

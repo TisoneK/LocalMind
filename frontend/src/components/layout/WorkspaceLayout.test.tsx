@@ -34,7 +34,7 @@ const mockPanelProps = vi.hoisted(() => ({
 const mockClient = vi.hoisted(() => ({
   restorePersistedAdapter: vi.fn(),
   getPersistedSettings: vi.fn(() => ({})),
-  // B-2026-08-23-34: WorkspaceLayout loads the persisted chat mode via
+  // WorkspaceLayout loads the persisted chat mode via
   // localmindClient.getSettings() on mount. The mock omitted it, so every
   // test threw "getSettings is not a function" in the effect.
   getSettings: vi.fn().mockResolvedValue({}),
@@ -217,7 +217,7 @@ describe('WorkspaceLayout', () => {
     expect(left.sessions).toEqual([]);
     expect(left.models).toHaveLength(1);
     expect(left.selectedModel).toBe('m1');
-    // ADR-34 B-11: objective props are retired from the sidebar.
+    // Objective props are retired from the sidebar.
     expect(left.objectives).toBeUndefined();
     expect(left.currentSessionId).toBeNull();
     // Callback props are all wired as functions.
@@ -236,7 +236,7 @@ describe('WorkspaceLayout', () => {
     expect(center.health).toMatchObject({ status: 'online', version: '0.5.16' });
     // currentModel fallback resolves to the backend-reported model.
     expect(center.selectedModel).toMatchObject({ id: 'm1', name: 'Model One', provider: 'zen' });
-    // ADR-34 B-10: the intent badge is retired — currentIntent is no longer
+    // The intent badge is retired — currentIntent is no longer
     // a CenterPanel prop. The context-window occupancy meter fills the slot.
     expect(center.currentIntent).toBeUndefined();
     expect(center.currentConfidence).toBeUndefined();
@@ -251,7 +251,7 @@ describe('WorkspaceLayout', () => {
   it('passes the model context window + the LAST CALL prompt to the center meter', () => {
     setup({
       models: [{ id: 'm1', name: 'Model One', provider: 'zen', contextWindow: 32768 }],
-      // S416 addendum (user-reported false 100%): the meter measures the
+      // Addendum (user-reported false 100%): the meter measures the
       // LAST model call's prompt against the window — NOT the session
       // cumulative (prompts re-send history; per-turn prompts overlap,
       // they don't stack). Falls back to sessionStats only when no
@@ -278,7 +278,7 @@ describe('WorkspaceLayout', () => {
     expect(right.isTerminalRunning).toBe(false);
     expect(right.terminalCwd).toBe('/tmp');
     expect(right.metrics).toMatchObject({ totalTokens: 0, latency: 0 });
-    // ADR-34 B-10: the Observe tab is retired — observation and capabilities
+    // The Observe tab is retired — observation and capabilities
     // are no longer RightPanel props. The Agents tab is the canonical surface.
     expect(right.observation).toBeUndefined();
     expect(right.capabilities).toBeUndefined();
@@ -354,7 +354,7 @@ describe('WorkspaceLayout', () => {
     expect(right.terminalLines).toEqual([]);
   });
 
-  it('auto-switches the right panel to the Memory tab when a memory_op tool runs (B-2026-08-23-15)', () => {
+  it('auto-switches the right panel to the Memory tab when a memory_op tool runs', () => {
     setup({
       activeToolCalls: [
         { id: 'call_m1', name: 'memory_op', status: 'running', input: 'store', label: '', duration: undefined },
@@ -365,7 +365,7 @@ describe('WorkspaceLayout', () => {
     expect(right.onMemoryTabShown).toBeTypeOf('function');
   });
 
-  it('does not force the Memory tab for non-memory tools (B-2026-08-23-15)', () => {
+  it('does not force the Memory tab for non-memory tools', () => {
     setup({
       activeToolCalls: [
         { id: 'call_s', name: 'shell', status: 'running', input: 'ls', label: '', duration: undefined },
@@ -376,7 +376,7 @@ describe('WorkspaceLayout', () => {
     expect(right.forceTerminalTab).toBe(true); // shell still switches Terminal
   });
 
-  it('auto-activates the Agents tab when a parent turn starts (ADR-34 B-9)', () => {
+  it('auto-activates the Agents tab when a parent turn starts', () => {
     setup({
       isStreaming: true,
       agentRuns: [
@@ -413,9 +413,9 @@ describe('WorkspaceLayout', () => {
     expect(center.selectedModel).toMatchObject({ id: 'm2', name: 'm2', provider: '' });
   });
 
-  // S416 addendum (user-reported false 100%): the meter basis is the LAST
+  // Addendum (user-reported false 100%): the meter basis is the LAST
   // model call's prompt (liveObservation.contextTokens), NOT the session
-  // cumulative — Session 265's cumulative basis sent the meter to 100%
+  // cumulative — the old cumulative basis sent the meter to 100%
   // after a few short turns. These tests pin the corrected wiring.
   it('meter shows the last call prompt, not the session cumulative', () => {
     setup({
@@ -444,7 +444,7 @@ describe('WorkspaceLayout', () => {
     expect(center.contextTokens).toBe(4000);
   });
 
-  it('does NOT pass observation/capabilities/currentIntent to any panel (ADR-34 B-10)', () => {
+  it('does NOT pass observation/capabilities/currentIntent to any panel', () => {
     // The Observe tab and intent badge are retired. No panel should receive
     // these props — they are internal compat only.
     setup();

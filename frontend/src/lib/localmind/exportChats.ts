@@ -4,7 +4,7 @@
 // file. Serialization is kept pure (no DOM) so it is unit-testable; the actual
 // browser download is a thin, separately-testable helper.
 //
-// B-2026-08-23-3: the export used to be "just chat" — role/content/timestamp
+// The export used to be "just chat" — role/content/timestamp
 // plus bare tool names. The history payload carries much more (thinking,
 // acknowledgement, error, full tool calls with args/output/reasoning/provider,
 // per-turn metrics, agent runs/phases, file results), and the session's todo
@@ -82,7 +82,7 @@ function messageToMarkdown(m: ChatMessage): string[] {
     lines.push('', `> _acknowledgement: ${m.acknowledgement}_`);
   }
 
-  // Session 290: the thinking block (model reasoning) — collapsible in the
+  // The thinking block (model reasoning) — collapsible in the
   // UI; in the export it's a quoted section after the message.
   if (m.thinking) {
     const snippet = m.thinking.length > 1000 ? `${m.thinking.slice(0, 1000)}…` : m.thinking;
@@ -192,7 +192,7 @@ export function sessionsToJson(entries: SessionExport[]): string {
       createdAt: isoFromEpoch(session.createdAtEpoch),
       lastActive: isoFromEpoch(session.lastActiveEpoch ?? session.timestampEpoch),
       messageCount: session.messageCount,
-      // B-2026-08-23-3: the session's task checklist now travels with the chat.
+      // The session's task checklist now travels with the chat.
       todos: (todos ?? []).map((t) => ({
         id: t.id,
         text: t.text,

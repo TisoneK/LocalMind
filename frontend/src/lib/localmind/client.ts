@@ -36,7 +36,7 @@ import type {
 import { createSSEParser } from './sse';
 import type { CapabilitiesResponseWire } from './capabilities-response';
 
-// ─── Client-side intent hint (B-2026-08-09-6 / ADR-11 client half) ──────
+// ─── Client-side intent hint ──────
 // Deterministic, strictly-conservative classifier that suggests a 'chat'
 // intent hint for OBVIOUS conversational sends (greetings, thanks, short
 // non-tool questions) so the backend can skip the dispatcher LLM call.
@@ -86,7 +86,7 @@ const _HINT_MAX_CHARS = 140;
 const _HINT_MAX_WORDS = 20;
 
 /**
- * Deterministic client-side intent hint (B-2026-08-09-6 / ADR-11).
+ * Deterministic client-side intent hint.
  *
  * Returns 'chat' only for obvious conversational sends, else undefined
  * (no hint → the backend runs its normal pipeline). NEVER returns a tool
@@ -130,7 +130,7 @@ interface HealthResponse {
   uptime?: number;
   provider_reachable?: boolean;
   engine_ready?: boolean;
-  // ADR-52 phase 2 (Session 305): distinct parent-kernel readiness.
+  // Distinct parent-kernel readiness.
   // parent_ready is true when the boot kernel built without a degraded
   // state; parent_degraded_reason carries the warmup failure string.
   parent_ready?: boolean;
@@ -565,7 +565,7 @@ class LocalMindClient {
         ? new Date(m.timestamp * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
         : m.timestamp || '',
       timestampEpoch: typeof m.timestamp === 'number' ? m.timestamp : undefined,
-      // Session 266: the persisted tool timeline comes back in the backend's
+      // The persisted tool timeline comes back in the backend's
       // snake_case shape (same as the live SSE tool_call payload) — map it to
       // the frontend ToolCall type so the pills render identically after reload.
       // Undefined stays undefined so message rendering can tell "no pills"
@@ -588,21 +588,21 @@ class LocalMindClient {
           }))
         : undefined,
       fileResults: m.fileResults,
-      // Session 266: restore per-turn artifacts persisted with the assistant
+      // Restore per-turn artifacts persisted with the assistant
       // message — thinking block, error card, and per-message performance
       // (feeds _seedSessionStats → the cumulative context counter).
       thinking: typeof m.thinking === 'string' ? m.thinking : undefined,
-      // Session 290: the ADR-36 opening acknowledgement line — shown live,
+      // The opening acknowledgement line — shown live,
       // now restored so it survives a reload like the thinking block.
       acknowledgement: typeof m.acknowledgement === 'string' ? m.acknowledgement : undefined,
-      // Session 290: the ThinkingBlock render is gated on `isAgent` (the live
+      // The ThinkingBlock render is gated on `isAgent` (the live
       // stream always sets it true for assistant turns). Restored messages had
       // no isAgent, so the persisted thinking block never rendered on reload —
       // mark every restored assistant turn as an agent turn to match live.
       isAgent: m.role === 'assistant' ? true : undefined,
       error: m.error,
       performance: m.performance || undefined,
-      // Session 267: restore the Agent Workspace run tree + phase strip.
+      // Restore the Agent Workspace run tree + phase strip.
       // The backend rebuilds them from the turn's obs events and persists
       // them as already-camelCase AgentRun[] / AgentPhase[] shapes — pass
       // through verbatim so the Agents tab and phase strip survive reload.
@@ -715,7 +715,7 @@ class LocalMindClient {
   }
 
   /**
-   * Queue a steering message for an in-flight agent turn (B-2026-08-02-5/A5).
+   * Queue a steering message for an in-flight agent turn .
    *
    * The backend drains it at the next agent-loop iteration boundary — the
    * agent sees it as a new user prompt and continues its turn instead of
@@ -742,7 +742,7 @@ class LocalMindClient {
   }
 
   /**
-   * Request cancellation of a session's in-flight agent turn (B-2026-08-02-2/A2).
+   * Request cancellation of a session's in-flight agent turn .
    *
    * The backend sets the session's abort event; the agent loop raises at
    * the next iteration boundary and streams a clean "stopped" response —
@@ -820,7 +820,7 @@ class LocalMindClient {
     await this.request(`/api/files?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
   }
 
-  /** Trigger a browser download of a file's raw bytes (B-2026-08-23). */
+  /** Trigger a browser download of a file's raw bytes. */
   downloadFile(path: string): void {
     const url = `${this.baseUrl}/api/files/download?path=${encodeURIComponent(path)}`;
     const a = document.createElement('a');
@@ -831,7 +831,7 @@ class LocalMindClient {
     a.remove();
   }
 
-  /** Open a file with the OS default application (B-2026-08-23-16). */
+  /** Open a file with the OS default application. */
   async openFile(path: string): Promise<{ opened: string }> {
     return this.request<{ opened: string }>('/api/open-file', {
       method: 'POST',
@@ -839,7 +839,7 @@ class LocalMindClient {
     });
   }
 
-  /** Open a folder in the OS file manager (B-2026-08-23-16). */
+  /** Open a folder in the OS file manager. */
   async openFolder(path: string): Promise<{ opened: string }> {
     return this.request<{ opened: string }>('/api/open-folder', {
       method: 'POST',
@@ -1052,7 +1052,7 @@ class LocalMindClient {
         latency: typeof data.latency_ms === 'number' ? data.latency_ms : 0,
         observation,
         stageTimings: mapStageTimings(data.stage_timings),
-        // Session 123: anomalies from the stored observation (array of
+        // Anomalies from the stored observation (array of
         // {kind, severity, title, detail, metrics} — defensive mapping).
         anomalies: Array.isArray(data.anomalies)
           ? data.anomalies.filter((a): a is AnomalyData => !!a && typeof a === 'object' && typeof a.kind === 'string')
@@ -1148,7 +1148,7 @@ class LocalMindClient {
     // `context_window` (snake_case) — map it to `contextWindow` (camelCase)
     // so the top-bar context-window occupancy meter actually renders.
     // Without this mapping the field is silently dropped and the meter
-    // stays empty (Session 153 — dead-on-arrival).
+    // stays empty (dead-on-arrival).
     return {
       current: data.current,
       provider: data.provider,
@@ -1200,7 +1200,7 @@ class LocalMindClient {
     });
   }
 
-  /** Correct an existing fact's content (B-2026-08-23-14 follow-up). */
+  /** Correct an existing fact's content. */
   async updateMemory(factId: string, content: string): Promise<{ updated: boolean; fact_id: string }> {
     return this.request(`/api/memory/${encodeURIComponent(factId)}`, {
       method: 'PATCH',
@@ -1234,22 +1234,22 @@ class LocalMindClient {
     reasoning_plan_timeout: number;
     reasoning_max_wall_clock: number;
     reasoning_effort: string;
-    // B-2026-08-23-19: UI appearance persisted in settings.json.
+    // UI appearance persisted in settings.json.
     theme?: string;
     mode?: string;
     custom_theme?: { name?: string; accent?: string; background?: string; surface?: string; text?: string } | null;
     tone?: number;
-    // B-2026-08-23-27: startup session behavior ("resume" | "new").
+    // Startup session behavior ("resume" | "new").
     startup_session?: string;
-    // B-2026-08-23-34: Chat mode ("auto" | "agent" | "direct").
+    // Chat mode ("auto" | "agent" | "direct").
     chat_mode?: string;
-    // B-2026-08-23-33: Configurable operation permissions.
+    // Configurable operation permissions.
     permissions?: Record<string, boolean>;
   }> {
     return this.request('/api/settings');
   }
 
-  /** B-2026-08-23-34: Set chat mode ("auto" | "agent" | "direct"). */
+  /** Set chat mode ("auto" | "agent" | "direct"). */
   async setChatMode(chatMode: 'auto' | 'agent' | 'direct'): Promise<{ chat_mode: string; message: string }> {
     return this.request('/api/settings/chat-mode', {
       method: 'POST',
@@ -1257,7 +1257,7 @@ class LocalMindClient {
     });
   }
 
-  /** B-2026-08-23-33: Update operation permissions. */
+  /** Update operation permissions. */
   async setPermissions(perms: Record<string, boolean>): Promise<Record<string, boolean> & { message: string }> {
     return this.request('/api/settings/permissions', {
       method: 'POST',
@@ -1265,7 +1265,7 @@ class LocalMindClient {
     });
   }
 
-  /** B-2026-08-23-27: Persist startup session behavior ("resume" | "new"). */
+  /** Persist startup session behavior ("resume" | "new"). */
   async setStartupSession(mode: 'resume' | 'new'): Promise<{ startup_session: string; message: string }> {
     return this.request('/api/settings/startup-session', {
       method: 'POST',
@@ -1391,7 +1391,7 @@ class LocalMindClient {
     await this.request('/api/ollama/url', { method: 'DELETE' });
   }
 
-  // ── B-2026-08-23-28: Embed-model download ───────────────────────────
+  // ── Embed-model download ───────────────────────────
 
   async getOllamaEmbedStatus(): Promise<{
     ollama_available: boolean;
@@ -1509,7 +1509,7 @@ async confirmWrite(
           model: settings.model || '',
         });
       }
-      // B-2026-08-23-19: restore the persisted theme/mode/custom palette/tone
+      // Restore the persisted theme/mode/custom palette/tone
       // from settings.json so the UI matches the last saved appearance.
       if (settings.theme || settings.mode || settings.custom_theme || settings.tone !== undefined) {
         restoreAppearance({

@@ -75,7 +75,7 @@ const MODE_OPTIONS: { id: ModePref; label: string; icon: typeof Sun }[] = [
 
 export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
   const { theme, mode, custom, tone, setTheme, setMode, setCustomTheme, setTone } = useTheme();
-  // B-2026-08-23-19: persist appearance to settings.json on every change so
+  // Persist appearance to settings.json on every change so
   // the theme/tone/custom palette survive restarts (mirrors adapter/model).
   const persistAppearance = useCallback((partial: {
     theme?: string;
@@ -119,7 +119,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
       return false;
     }
   });
-  // ADR-41 (Session 254): reasoning-model thinking policy — mirror of the
+  // Reasoning-model thinking policy — mirror of the
   // backend's Settings fields (GET /api/settings), saved via
   // POST /api/settings/thinking.
   const [thinking, setThinking] = useState<'enabled' | 'disabled'>('enabled');
@@ -142,9 +142,9 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
   const [modelWindow, setModelWindow] = useState<number | null>(null);
   // Shell-tool enable toggle (Bug B — was env-only, now a UI switch).
   const [shellEnabled, setShellEnabled] = useState(false);
-  // B-2026-08-23-27: startup session behavior ("resume" | "new").
+  // Startup session behavior ("resume" | "new").
   const [startupSession, setStartupSession] = useState<'new' | 'resume'>('new');
-  // B-2026-08-23-33: operation permissions.
+  // Operation permissions.
   const [permissions, setPermissions] = useState<Record<string, boolean>>({
     file_read: true,
     file_write: true,
@@ -155,7 +155,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
     web_fetch: true,
     memory_op: true,
   });
-  // B-2026-08-23-28: embed-model download status + progress.
+  // Embed-model download status + progress.
   const [embedStatus, setEmbedStatus] = useState<{ ollama_available: boolean; model_installed: boolean; model_name: string } | null>(null);
   const [embedDownload, setEmbedDownload] = useState<{ status: string; progress: number | null; detail: string } | null>(null);
   const embedPullRef = useRef<{ cancel: () => void } | null>(null);
@@ -192,9 +192,9 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
         // '' = auto (0); a real override shows as its number.
         setNumCtx(settings.num_ctx && settings.num_ctx > 0 ? String(settings.num_ctx) : '');
         setShellEnabled(settings.shell_enabled ?? false);
-        // B-2026-08-23-27: startup session behavior.
+        // Startup session behavior.
         setStartupSession(settings.startup_session === 'resume' ? 'resume' : 'new');
-        // B-2026-08-23-33: operation permissions.
+        // Operation permissions.
         if (settings.permissions && typeof settings.permissions === 'object') {
           setPermissions((prev) => ({ ...prev, ...settings.permissions }));
         }
@@ -233,7 +233,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
             // Non-fatal: ollama routes may 501 for cloud adapters
           }
         }
-        // B-2026-08-23-28: check if embed model needs downloading
+        // Check if embed model needs downloading
         try {
           const est = await localmindClient.getOllamaEmbedStatus();
           setEmbedStatus(est);
@@ -249,7 +249,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
     })();
   }, []);
 
-  // Save the reasoning-model thinking policy (ADR-41) via the backend.
+  // Save the reasoning-model thinking policy via the backend.
   const handleSaveThinking = useCallback(async () => {
     const timeout = Number(reasoningTimeout);
     const planTimeout = Number(reasoningPlanTimeout);
@@ -400,7 +400,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
     }
   }, [embedModel, numCtx, shellEnabled, onSave]);
 
-  // B-2026-08-23-28: download the configured embed model from Ollama.
+  // Download the configured embed model from Ollama.
   const refreshEmbedStatus = useCallback(async () => {
     try {
       const est = await localmindClient.getOllamaEmbedStatus();
@@ -437,7 +437,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
     embedPullRef.current = { cancel };
   }, [onSave, refreshEmbedStatus]);
 
-  // B-2026-08-23-27: persist startup session behavior immediately on toggle.
+  // Persist startup session behavior immediately on toggle.
   const handleChangeStartupSession = useCallback(async (mode: 'new' | 'resume') => {
     setStartupSession(mode);
     try {
@@ -545,7 +545,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
   // re-renders the tree ~every second. With `[onClose]` deps the effect
   // re-ran each second, calling `.focus()` on the modal's first element and
   // yanking focus out of the input you were typing in — you could not paste
-  // into the API key box (Session 233).
+  // into the API key box .
   const onCloseRef = useRef(onClose);
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -720,7 +720,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
               })}
             </div>
 
-            {/* ── B-2026-08-23-19: Custom palette editor ── */}
+            {/* ── Custom palette editor ── */}
             {theme === 'custom' && (
               <div className="mt-3 rounded-lg border border-brand-border bg-brand-bg-panel-alt p-3 space-y-3">
                 <div className="flex items-center justify-between">
@@ -771,7 +771,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
               </div>
             )}
 
-            {/* ── B-2026-08-23-19: UI tone (brightness) ── */}
+            {/* ── UI tone (brightness) ── */}
             <div className="mt-3 flex items-center gap-3 rounded-lg border border-brand-border px-3 py-2.5">
               <label className="w-24 shrink-0 text-xs text-brand-green-soft" htmlFor="ui-tone-slider">
                 Tone
@@ -920,7 +920,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                     No embedding models detected. Pull one, e.g. `ollama pull nomic-embed-text`.
                   </p>
                 )}
-                {/* B-2026-08-23-28: one-click embed model download */}
+                {/* One-click embed model download */}
                 {embedStatus?.ollama_available && !embedStatus.model_installed && !embedDownload && (
                   <button
                     onClick={handleDownloadEmbed}
@@ -1002,7 +1002,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
             </div>
           </section>
 
-          {/* ── B-2026-08-23-27: Startup Session ── */}
+          {/* ── Startup Session ── */}
           <section>
             <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
               <RotateCcw className="h-4 w-4 text-brand-green" />
@@ -1035,7 +1035,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
             </p>
           </section>
 
-          {/* ── Reasoning (ADR-41) ── */}
+          {/* ── Reasoning ── */}
           <section>
             <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
               <Brain className="h-4 w-4 text-brand-green" />
@@ -1365,7 +1365,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
             </section>
           )}
 
-          {/* ── B-2026-08-23-33: Operation Permissions ── */}
+          {/* ── Operation Permissions ── */}
           <section>
             <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
               <Shield className="h-4 w-4 text-brand-green" />

@@ -5,7 +5,7 @@ import { AlertTriangle, ChevronDown, RefreshCw, Settings2 } from 'lucide-react';
 import type { ModelError } from '@/types';
 
 /**
- * ADR-20 error presentation — the friendly face of a model/provider failure.
+ * Error presentation — the friendly face of a model/provider failure.
  *
  * The backend normalizes provider errors into a canonical `ModelError` object
  * (never the raw payload); this card renders what the user should see: what

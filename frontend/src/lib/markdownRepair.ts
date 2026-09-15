@@ -1,5 +1,5 @@
 /**
- * Lightweight markdown repair pass (B-2026-08-09-10).
+ * Lightweight markdown repair pass.
  *
  * The model sometimes emits malformed markdown: an unclosed `**` (renders
  * literally), a bullet lead-in like `-**` with no space, or a stray `**`

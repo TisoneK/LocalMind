@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { TitleBar } from './TitleBar';
 
-describe('TitleBar (ADR-34 B-11 / Session 234)', () => {
+describe('TitleBar', () => {
   beforeEach(() => {
     // Reset the electronAPI mock between tests
     (window as unknown as { electronAPI?: unknown }).electronAPI = undefined;

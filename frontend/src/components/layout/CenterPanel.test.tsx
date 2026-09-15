@@ -54,7 +54,7 @@ describe('findRetryPrompt', () => {
   });
 });
 
-describe('CenterPanel parent-degraded indicator (ADR-52 phase 2 / B-2026-08-20-4)', () => {
+describe('CenterPanel parent-degraded indicator', () => {
   it('does NOT render the degraded indicator when parent is ready', () => {
     render(
       <CenterPanel
@@ -113,7 +113,7 @@ describe('CenterPanel parent-degraded indicator (ADR-52 phase 2 / B-2026-08-20-4
   });
 });
 
-describe('CenterPanel embed-model guide (B-2026-08-23-14)', () => {
+describe('CenterPanel embed-model guide', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     sessionStorage.clear();

@@ -1,5 +1,5 @@
 /**
- * B-2026-08-23-14: MemoryTab wired to the real memory backend.
+ * MemoryTab wired to the real memory backend.
  *
  * Covers the store-fact affordance (onStore → POST /api/memory), the filter
  * box, empty state, and delete.
@@ -94,7 +94,7 @@ describe('MemoryTab', () => {
   });
 });
 
-describe('MemoryTab fact editing (B-2026-08-23-14 follow-up)', () => {
+describe('MemoryTab fact editing', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
@@ -133,7 +133,7 @@ describe('MemoryTab fact editing (B-2026-08-23-14 follow-up)', () => {
   });
 });
 
-describe('MemoryTab semantic recall (B-2026-08-23-14 follow-up)', () => {
+describe('MemoryTab semantic recall', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });

@@ -1,6 +1,6 @@
 /**
  * Shared motion vocabulary for the realtime-alive-ui surfaces
- * (Session 216). The chat Actions timeline, thinking stream, plan
+ * The chat Actions timeline, thinking stream, plan
  * checklist, panel action trace, and agent workspace all animate items
  * in with the same reduced-motion-aware "fade + slide" so the UI reads as
  * one live system. This hook is the single source of that pattern.

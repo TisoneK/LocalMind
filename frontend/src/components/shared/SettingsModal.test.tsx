@@ -186,7 +186,7 @@ describe('SettingsModal', () => {
     });
   });
 
-  it('toggles the shell tool and persists it (Session 292)', async () => {
+  it('toggles the shell tool and persists it', async () => {
     mockClient.getSettings.mockResolvedValue(settingsPayload({ shell_enabled: false }));
     mockClient.getOllamaUrl.mockResolvedValue({ url: 'http://localhost:11434' });
 
@@ -205,7 +205,7 @@ describe('SettingsModal', () => {
     });
   });
 
-  it('num_ctx field reflects the selected model window as its placeholder (Session 292)', async () => {
+  it('num_ctx field reflects the selected model window as its placeholder', async () => {
     mockClient.getSettings.mockResolvedValue(settingsPayload({ num_ctx: 0 }));
     mockClient.getOllamaUrl.mockResolvedValue({ url: 'http://localhost:11434' });
     mockClient.getModels.mockResolvedValue({
@@ -223,7 +223,7 @@ describe('SettingsModal', () => {
     expect(numCtx.value).toBe('');
   });
 
-  it('keeps input focus when the parent re-renders with a new onClose (Session 233)', async () => {
+  it('keeps input focus when the parent re-renders with a new onClose', async () => {
     mockClient.getSettings.mockResolvedValue(settingsPayload());
     mockClient.getOllamaUrl.mockResolvedValue({ url: 'http://localhost:11434' });
 

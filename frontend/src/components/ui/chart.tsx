@@ -6,7 +6,7 @@ import * as RechartsPrimitive from "recharts"
 import { cn } from "@/lib/utils"
 
 // Format: { THEME_NAME: CSS_SELECTOR }
-// LocalMind is dark-only (Session 103) — both themes resolve to no
+// LocalMind is dark-only — both themes resolve to no
 // selector so chart colors defined in `theme.dark` apply at base.
 const THEMES = { light: "", dark: "" } as const
 

@@ -185,7 +185,7 @@ function groupChains(actions: ActionItem[]): ActionItem[][] {
 }
 
 /**
- * Session 121: group chains under the plan todo they serve (one todo owns
+ * Group chains under the plan todo they serve (one todo owns
  * many actions). Chains without a todo_id (legacy data) stay ungrouped.
  */
 function groupChainsByTodo(chains: ActionItem[][]): { todoId: string | null; chains: ActionItem[][] }[] {

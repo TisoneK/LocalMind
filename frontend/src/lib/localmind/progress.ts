@@ -9,7 +9,7 @@ export interface RawTodoEvent {
   order?: number;
   sessionId?: string;
   session_id?: string;
-  /** B-2026-08-23-11: short user-facing label, preferred over content. */
+  /** Short user-facing label, preferred over content. */
   title?: string;
 }
 
@@ -20,7 +20,7 @@ export function isActiveToolStatus(status: ToolStatus | string | undefined): boo
 
 /** Normalize backend todo fields into the UI's canonical shape. */
 export function normalizeTodoEvent(raw: RawTodoEvent): TodoItem | null {
-  // B-2026-08-23-11: the visible label prefers the short title; the full
+  // The visible label prefers the short title; the full
   // content stays available for the agent + tooltips.
   const content = raw.content || raw.text || '';
   const title = raw.title || raw.text || '';
@@ -87,7 +87,7 @@ export function estimateTokens(text: string): number {
  * Adaptive latency formatting shared by every surface that shows time:
  * <1s → whole ms ("340ms"), ≥1s → seconds ("39.9s"),
  * ≥60s → minutes+seconds ("1m 23s"), ≥1h → hours+minutes ("1h 5m").
- * B-2026-08-09-4 / B-2026-08-23-21: natural duration formatting.
+ * Natural duration formatting.
  */
 export function formatLatency(ms: number): string {
   if (!Number.isFinite(ms) || ms <= 0) return '—';
@@ -107,7 +107,7 @@ export function formatLatency(ms: number): string {
 
 /**
  * Compact token count formatting: 128000 → "128K", 1500000 → "1.5M".
- * B-2026-08-23-22: short-form token display across all UI surfaces.
+ * Short-form token display across all UI surfaces.
  */
 export function formatTokens(n: number): string {
   if (!Number.isFinite(n) || n < 0) return '—';

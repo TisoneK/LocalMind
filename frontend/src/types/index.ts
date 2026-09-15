@@ -2,7 +2,7 @@ export type MessageRole = 'user' | 'assistant';
 export type ToolStatus = 'running' | 'started' | 'in_progress' | 'done' | 'failed' | 'pending';
 export type IntentType = 'code' | 'file' | 'chat' | 'search' | 'shell' | 'memory';
 
-// Session 344: Response Block System — structured output from Presentation Intelligence.
+// Response Block System — structured output from Presentation Intelligence.
 import type { ResponseBlock as _ResponseBlock } from './response-blocks';
 export type ResponseBlock = _ResponseBlock;
 
@@ -23,10 +23,10 @@ export interface ToolCall {
   iteration?: number;
   /** Plan todo this tool call serves (one todo → many actions). */
   todoId?: string;
-  /** The model's reasoning that led to this tool call (Session 122). */
+  /** The model's reasoning that led to this tool call . */
   reasoning?: string;
   /** Which backend engine answered (e.g. web_search's winning provider —
-   *  Session 271). Rendered as a badge on the Actions card. */
+   *  Rendered as a badge on the Actions card. */
   provider?: string;
   /** Timestamp when this tool call was first observed (HH:MM format) */
   timestamp?: string;
@@ -41,7 +41,7 @@ export interface ThinkingStep {
 /** One visible parent or delegated child execution in the agent workspace. */
 export type AgentRunStatus = 'running' | 'completed' | 'failed' | 'timed_out' | 'canceled';
 
-/** ADR-34 B-8: bounded evidence entry handed to the parent model. */
+/** Bounded evidence entry handed to the parent model. */
 export interface EvidenceEntry {
   tool: string;
   iteration: number;
@@ -67,7 +67,7 @@ export interface AgentRun {
   completedAt?: number;
   error?: string;
   tools: ToolCall[];
-  /** ADR-34 B-8: evidence entries handed to the parent model after each tool. */
+  /** Evidence entries handed to the parent model after each tool. */
   evidence?: EvidenceEntry[];
   /** Active-agent lifecycle narration (bootup-telemetry session): the
    *  initialization / planning / thinker / loop phases fired by this run,
@@ -82,7 +82,7 @@ export interface PendingWrite {
   filename: string;
 }
 
-/** Canonical model/provider error (ADR-20). The backend's SSE error event
+/** Canonical model/provider error. The backend's SSE error event
  *  carries this object instead of a raw provider payload; the ErrorMessage
  *  card renders it. `raw` is the original provider response, kept for the
  *  collapsed developer details — never rendered as chat content. */
@@ -113,7 +113,7 @@ export interface ChatMessage {
    *  real dates. The display `timestamp` is reduced to HH:MM and must not be
    *  re-parsed — always prefer this field when an absolute time is needed. */
   timestampEpoch?: number;
-  /** ADR-20: canonical error object when this reply failed — rendered as a
+  /** Canonical error object when this reply failed — rendered as a
    *  friendly card (never the raw provider payload). Mutually exclusive with
    *  normal content (error replies stream no tokens). */
   error?: ModelError;
@@ -125,23 +125,23 @@ export interface ChatMessage {
    *  Turn Anatomy strip. Distinct from thinkMs (reasoning) and tool durations. */
   answerMs?: number;
   isAgent?: boolean;
-  /** ADR-36: the Agent's opening acknowledgement, streamed during parent
+  /** The Agent's opening acknowledgement, streamed during parent
    *  initialization. Belongs in chat as the first line of the reply —
    *  distinct from `content` (the final answer that follows tool work). */
   acknowledgement?: string;
   codeBlocks?: CodeBlock[];
   fileResults?: FileResult[];
   pendingWrite?: PendingWrite;
-  /** B-2026-08-24-16: Chat mode asked to switch to Agent for an action.
+  /** Chat mode asked to switch to Agent for an action.
    *  Carries the original user message so Accept can resend it as an agent turn. */
   switchToAgent?: { message: string };
   /** Structured diff data from edit_file tool results */
   diffData?: DiffData;
-  /** Session 30: system status feedback — reflects real pipeline stage
+  /** System status feedback — reflects real pipeline stage
    * (e.g., "Let me search the web...", "Understanding your request...").
    * Distinct from `thinking` which is the model's actual reasoning trace. */
   statusText?: string;
-  /** Per-message performance metadata (B-2026-08-09-3 / ADR-13), attached
+  /** Per-message performance metadata, attached
    * when the turn completes. Optional — messages without it render as before.
    * Latency/tokens are per-TURN, not session-global. */
   performance?: {
@@ -159,11 +159,11 @@ export interface ChatMessage {
     model?: string;
     provider?: string;
   };
-  /** Best-of-N editor candidates (B-2026-08-09-12 / C2 spec step 7), rendered
+  /** Best-of-N editor candidates, rendered
    * as an expandable section in the message. Populated from the tool result
    *  metadata when the backend sends a best_of_n_edit tool result. */
   candidates?: BestOfNCandidate[];
-  /** Session 181 — F4 Frontend Phase Visibility. Agentic phase entries
+  /** Frontend Phase Visibility. Agentic phase entries
    *  surfaced from the backend's now-live obs events:
    *  agent_loop_gate_passed, agent_loop_gate_failed_replan,
    *  orchestrator_replan_start/_done/_failed, agent_loop_failure,
@@ -172,18 +172,18 @@ export interface ChatMessage {
    *  replanning / switching to a different approach" — the literal
    *  difference between a chat-with-tools and an agent. */
   agentPhases?: AgentPhase[];
-  /** Session 344: structured response blocks from the Presentation Intelligence
+  /** Structured response blocks from the Presentation Intelligence
    *  layer. When present, the frontend renders these natively (tables, charts,
    *  diagrams, metrics) instead of forcing everything through Markdown.
    *  The agent decides WHAT to show; the UI decides HOW it looks. */
   responseBlocks?: ResponseBlock[];
-  /** Session 267: the Agent Workspace run tree for this turn (rebuilt
+  /** The Agent Workspace run tree for this turn (rebuilt
    *  server-side from obs events and persisted with the message). The Agents
    *  tab restores the last turn's tree from here on reload. */
   agentRuns?: AgentRun[];
 }
 
-/** Session 181 — F4 Frontend Phase Visibility.
+/** Frontend Phase Visibility.
  *  A single entry in the agent phase strip. Each entry corresponds to
  *  one backend obs event (gate pass/fail, orchestrator replan,
  *  plan node advance, etc.). The strip renders in order so the user
@@ -220,13 +220,13 @@ export interface AgentPhase {
   /** Iteration the phase fired at (1-indexed). Optional — some phases
    *  (plan_created) fire before iteration 1. */
   iteration?: number;
-  /** How many consecutive identical phases this entry collapses (B-2026-08-30-6).
+  /** How many consecutive identical phases this entry collapses.
    *  Undefined/1 = a single occurrence; >1 renders as a "×N" run count so the
    *  lifecycle shows one line instead of the same phase repeated per iteration. */
   count?: number;
 }
 
-/** A single candidate in a best-of-N edit result (B-2026-08-09-12). */
+/** A single candidate in a best-of-N edit result. */
 export interface BestOfNCandidate {
   index: number;
   strategy: string;
@@ -312,7 +312,7 @@ export interface Session {
   timestamp: string;
   messageCount: number;
   active: boolean;
-  /** B-2026-08-23-17: this session's artifact folder (files deleted with the chat). */
+  /** This session's artifact folder (files deleted with the chat). */
   workspacePath?: string;
   /** Human-readable date from the backend (e.g. "14:30" or "Jan 05") */
   formattedDate?: string;
@@ -341,9 +341,9 @@ export interface ActionItem {
   iteration?: number;
   /** Plan todo this action serves (one todo → many actions). */
   todoId?: string | null;
-  /** The model's reasoning that led to this action (Session 122). */
+  /** The model's reasoning that led to this action . */
   reasoning?: string | null;
-  /** Which backend engine answered — badge on the card (Session 271). */
+  /** Which backend engine answered — badge on the card. */
   provider?: string | null;
 }
 
@@ -356,10 +356,10 @@ export interface TodoItem {
   order?: number;
   sessionId?: string;
   subtasks?: TodoItem[];
-  /** B-2026-08-23-11: short user-facing title ("Create a.txt") — shown
+  /** Short user-facing title ("Create a.txt") — shown
    *  instead of the full content when present. */
   title?: string;
-  /** B-2026-08-23-11: the full agent-facing content (paths/commands),
+  /** The full agent-facing content (paths/commands),
    *  kept for tooltips + re-persistence even when a title is shown. */
   content?: string;
 }
@@ -395,7 +395,7 @@ export interface FileNode {
   modified?: string;
 }
 
-/** One entry in a session's workspace artifact listing (B-2026-08-23). */
+/** One entry in a session's workspace artifact listing. */
 export interface SessionFileEntry {
   name: string;
   type: 'file' | 'folder';
@@ -511,14 +511,14 @@ export interface ObservationSummary {
 }
 
 /** A single pipeline stage's real timing, reported by the engine's
- * _StageClock (ADR-12). `status` is authoritative: "done" or "skipped"
+ * _StageClock. `status` is authoritative: "done" or "skipped"
  * (the stage never ran — e.g. Tool Select on a no-tool turn). */
 export interface StageTiming {
   latencyMs: number;
   status: 'done' | 'skipped' | 'running' | 'pending';
 }
 
-/** A detected anomaly on a completed turn (Session 123). The backend's
+/** A detected anomaly on a completed turn. The backend's
  * engine detects these (stall: >60s with near-zero output; token leak:
  * a fresh session inheriting the previous session's context count) and
  * emits them so the Observe panel can ALERT instead of silently showing

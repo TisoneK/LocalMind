@@ -1,5 +1,5 @@
 /**
- * Tests for the ToolSteps Actions timeline (Session 210 — realtime-alive-ui).
+ * Tests for the ToolSteps Actions timeline.
  *
  * The full-mode render groups tool calls into a live "Actions" timeline
  * with a natural-language summary header, a connected step list, and a

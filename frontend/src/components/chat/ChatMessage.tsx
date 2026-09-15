@@ -65,7 +65,7 @@ interface ChatMessageProps {
   /** Re-send the user prompt that produced this assistant reply (regenerate).
    *  Only provided for assistant messages that have a preceding user prompt. */
   onRetry?: () => void;
-  /** B-2026-08-23-18: per-path diff hunks captured this turn (preview Diff mode). */
+  /** Per-path diff hunks captured this turn (preview Diff mode). */
   fileDiffs?: Record<string, DiffData>;
 }
 
@@ -101,7 +101,7 @@ function FileResultChip({
   );
 }
 
-// ── B-2026-08-25-6: compact "applied" card — the normal view after Accept ────
+// ── Compact "applied" card — the normal view after Accept ────
 // The full colored diff collapses to this one-line summary; the diff itself
 // stays reachable via the View-diff toggle (re-opened read-only above/below).
 function DiffAppliedCard({
@@ -224,7 +224,7 @@ function CodeBlockComponent({ code, language, filename }: { code: string; langua
   );
 }
 
-// ── MessageMetrics — per-message latency/token line (B-2026-08-09-3 / ADR-13) ──
+// ── MessageMetrics — per-message latency/token line ──
 // Renders a small muted line under each assistant reply, e.g. `39.9s · 0/321 tok`.
 // Backward-compatible: messages without `performance` (old history, user turns)
 // render exactly as before.
@@ -358,7 +358,7 @@ function PermissionGate({ pending, onResolved }: { pending: PendingWrite; onReso
   );
 }
 
-// B-2026-08-24-16: Chat mode offered to switch to Agent for an action. Accept
+// Chat mode offered to switch to Agent for an action. Accept
 // dispatches a window event (WorkspaceLayout switches mode + resends); Decline
 // keeps Chat mode. Self-contained, modeled on PermissionGate.
 function SwitchToAgentGate({ message }: { message: string }) {
@@ -463,14 +463,14 @@ function MessageActions({
 export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMessageProps) {
   const isUser = message.role === 'user';
 
-  // B-2026-08-23-6: clickable file-result chips open an inline preview dialog
+  // Clickable file-result chips open an inline preview dialog
   // (text/code/markdown/office docs parsed server-side, images as data URLs).
   const [previewPath, setPreviewPath] = useState<string | null>(null);
 
   // Turn Anatomy: clicking a tool segment in the timeline focuses its chip.
   const [toolFocus, setToolFocus] = useState<{ toolId: string; at: number } | null>(null);
 
-  // B-2026-08-23-12: listen for file-preview requests from code block filenames
+  // Listen for file-preview requests from code block filenames
   // and tool step file paths (they dispatch localmind:open-file-preview).
   React.useEffect(() => {
     const handler = (e: Event) => {
@@ -489,7 +489,7 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
     return [];
   }, [message.diffData]);
 
-  // B-2026-08-25-6: Accept collapses the full colored diff into a compact
+  // Accept collapses the full colored diff into a compact
   // "applied" card (the normal view). The full diff stays reachable on
   // demand via the card's View-diff toggle, rendered read-only (no second
   // Accept bar — the change is already acknowledged). Component-local state:
@@ -539,7 +539,7 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
             <span className="text-[9px] text-brand-green-muted">{message.timestamp}</span>
           </div>
 
-          {/* ADR-36: the Agent's opening acknowledgement — streams as the
+          {/* The Agent's opening acknowledgement — streams as the
               first line of the reply, distinct from the final answer
               (`content`) that follows the tool work. */}
           {!isUser && message.acknowledgement && (
@@ -553,7 +553,7 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
             <ThinkingBlock thinking={message.thinking} thinkMs={message.thinkMs} isStreaming={isStreaming} />
           )}
 
-          {/* Session 181 — F4 Frontend Phase Visibility. Agentic phase strip
+          {/* Frontend Phase Visibility. Agentic phase strip
               (plan_created, gate_passed, gate_failed_replan, orchestrator_replan_*,
               plan_node_advanced, agent_loop_failure). Renders between the
               thinking block and the tool cards so the user sees the agent's
@@ -569,7 +569,7 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
               output. Previously the toolCalls array was populated by the SSE
               handler but never rendered, so the user saw only a spinner and
               then a wall of text — the agent's work was invisible. */}
-          {/* ADR-34 B-11: chat shows compact tool chips only — the full
+          {/* Chat shows compact tool chips only — the full
               expandable timeline + per-step code/output cards live in the
               Agent Workspace (the canonical live surface per B-9). This
               removes the duplication where the chat transcript mirrored the
@@ -588,7 +588,7 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
                   onFocusTool={(toolId) => setToolFocus({ toolId, at: Date.now() })}
                 />
               )}
-              {/* ADR-34 B-11: chat stays COMPACT (chips only). The full
+              {/* Chat stays COMPACT (chips only). The full
                   expandable per-action detail lives in the Actions tab /
                   Agent Workspace — never duplicated here. A Turn Anatomy
                   segment click flashes the matching chip. */}
@@ -601,7 +601,7 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
             </>
           )}
 
-          {/* ADR-20: canonical error card — a failed reply renders this
+          {/* Canonical error card — a failed reply renders this
               instead of a raw provider payload. Content is empty on error
               replies (the backend streams no tokens), so the card IS the
               message. Try again re-sends the preceding prompt. */}
@@ -620,7 +620,7 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
             )
           )}
 
-          {/* Session 344: structured response blocks from Presentation Intelligence.
+          {/* Structured response blocks from Presentation Intelligence.
               When the backend emits response_blocks SSE events, render them natively
               (tables, metrics, diagrams, etc.) instead of forcing everything through Markdown. */}
           {message.responseBlocks && message.responseBlocks.length > 0 && !isStreaming && (
@@ -638,7 +638,7 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
           ))}
 
           {/* Diff block — rendered when edit_file produces structured diff hunks.
-              B-2026-08-25-6: pending → full diff with Accept/Reject; accepted →
+              Pending → full diff with Accept/Reject; accepted →
               compact "applied" card (the normal view), with the full diff
               re-openable read-only on demand. */}
           {diffHunks.length > 0 && !diffAccepted && (

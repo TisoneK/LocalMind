@@ -1,5 +1,5 @@
 /**
- * Tests for TodoList (Session 212 — realtime-alive-ui).
+ * Tests for TodoList.
  *
  * The plan checklist shows completion state and, crucially, highlights the
  * step currently executing (a running action under it, or todo.status
@@ -84,7 +84,7 @@ describe('TodoList', () => {
   });
 
   it('renders sub-goal rows nested under their parent without counting them', () => {
-    // B-2026-08-23-8: plan-{i}-sub-{j} rows are ordered guidance under the
+    // plan-{i}-sub-{j} rows are ordered guidance under the
     // parent goal — indented, informational, never part of the n/n
     // denominator (the parent plan rows own the fixed count).
     render(

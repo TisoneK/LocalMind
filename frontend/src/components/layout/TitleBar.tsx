@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * ADR-34 B-11 + Session 234: deliberate LocalMind title-bar chrome.
+ * Deliberate LocalMind title-bar chrome.
  *
  * Replaces the default OS title bar with a minimal, draggable bar:
  * - macOS: `titleBarStyle: 'hiddenInset'` keeps the native traffic lights

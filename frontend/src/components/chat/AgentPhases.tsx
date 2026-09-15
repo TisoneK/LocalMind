@@ -1,6 +1,6 @@
 /**
  * AgentPhases — renders the agent's decision history as a phase strip
- * (Session 181 — F4 Frontend Phase Visibility).
+ * (Frontend Phase Visibility).
  *
  * Each entry corresponds to one backend obs event (gate pass/fail,
  * orchestrator replan, plan node advance, etc.). The strip renders

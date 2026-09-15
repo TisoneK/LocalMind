@@ -1,9 +1,9 @@
 /**
- * Tests for ThinkingBlock (Session 211 — realtime-alive-ui).
+ * Tests for ThinkingBlock.
  *
  * The block renders the model's reasoning; while streaming it stays open
  * with a live indicator, and once finished it shows a duration and the
- * "Approach" label (Session 332-E — was "Thought process", exposing
+ * "Approach" label (was "Thought process", exposing
  * internal reasoning). Structured "[Label] detail" step lines render
  * the label as a chip.
  */
@@ -48,7 +48,7 @@ describe('ThinkingBlock', () => {
     expect(screen.getByText(/From an object/)).toBeInTheDocument();
   });
 
-  it('collapses the reasoning by default once the turn is done (ADR-36)', () => {
+  it('collapses the reasoning by default once the turn is done', () => {
     // Collapse-after-done: when not streaming, the block starts collapsed so
     // only the "Thinking" header shows — not a persistent scrollback.
     render(<ThinkingBlock thinking="hidden reasoning" isStreaming={false} />);
@@ -56,7 +56,7 @@ describe('ThinkingBlock', () => {
     expect(screen.queryByText(/hidden reasoning/)).not.toBeInTheDocument();
   });
 
-  it('expands a collapsed block on click for review (ADR-36)', () => {
+  it('expands a collapsed block on click for review', () => {
     render(<ThinkingBlock thinking="expandable reasoning" isStreaming={false} />);
     expect(screen.queryByText(/expandable reasoning/)).not.toBeInTheDocument();
 
@@ -64,7 +64,7 @@ describe('ThinkingBlock', () => {
     expect(screen.getByText(/expandable reasoning/)).toBeInTheDocument();
   });
 
-  it('bounds the reasoning height with a scrollable container (Session 265)', () => {
+  it('bounds the reasoning height with a scrollable container', () => {
     render(<ThinkingBlock thinking="long reasoning" isStreaming />);
     const scroller = screen.getByTestId('thinking-scroll');
     expect(scroller.className).toContain('max-h-64');
@@ -72,13 +72,13 @@ describe('ThinkingBlock', () => {
     expect(scroller.className).toContain('custom-scrollbar');
   });
 
-  it('copies the full reasoning via the bottom copy button (Session 265)', () => {
+  it('copies the full reasoning via the bottom copy button', () => {
     render(<ThinkingBlock thinking="copyable reasoning" isStreaming />);
     fireEvent.click(screen.getByTitle('Copy reasoning'));
     expect(writeText).toHaveBeenCalledWith('copyable reasoning');
   });
 
-  it('auto-scrolls new reasoning content into view (Session 265)', () => {
+  it('auto-scrolls new reasoning content into view', () => {
     // jsdom has no layout, so scrollHeight is 0 by default; fake it to assert
     // the effect pins scrollTop to the container bottom on content growth.
     const { rerender } = render(<ThinkingBlock thinking="first chunk" isStreaming />);

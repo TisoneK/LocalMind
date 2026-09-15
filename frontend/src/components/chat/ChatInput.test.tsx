@@ -18,7 +18,7 @@ describe('ChatInput', () => {
     await userEvent.type(textarea, 'hello world{enter}');
 
     expect(onSend).toHaveBeenCalledTimes(1);
-    // B-2026-08-24-3: the per-message tool selector was removed — send just
+    // The per-message tool selector was removed — send just
     // the message (the Chat/Agent/Auto mode picker replaces the intent hint).
     expect(onSend).toHaveBeenCalledWith('hello world');
     // Input is cleared after send.

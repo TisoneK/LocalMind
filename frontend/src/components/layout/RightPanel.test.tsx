@@ -1,5 +1,5 @@
 /**
- * B-2026-08-23-15: auto-switch between Terminal / Agents / Memory tabs on
+ * Auto-switch between Terminal / Agents / Memory tabs on
  * activity — with the unconditional-flag-consume fix (forceChatTab pattern).
  *
  * The key regression: a force flag must be consumed EVEN when the user is
@@ -44,7 +44,7 @@ function renderPanel(over: Partial<React.ComponentProps<typeof RightPanel>> = {}
   return render(<RightPanel {...baseProps} {...over} />);
 }
 
-describe('RightPanel force-tab switching (B-2026-08-23-15)', () => {
+describe('RightPanel force-tab switching', () => {
   it('switches to the Terminal tab on forceTerminalTab and consumes the flag', () => {
     const shown = vi.fn();
     const { rerender } = renderPanel({ forceTerminalTab: true, onTerminalTabShown: shown });
@@ -55,7 +55,7 @@ describe('RightPanel force-tab switching (B-2026-08-23-15)', () => {
     expect(shown).toHaveBeenCalledTimes(1);
   });
 
-  it('switches to the Memory tab on forceMemoryTab (B-2026-08-23-15)', () => {
+  it('switches to the Memory tab on forceMemoryTab', () => {
     const shown = vi.fn();
     renderPanel({ forceMemoryTab: true, onMemoryTabShown: shown });
     expect(screen.getByTestId('memory-panel')).toBeInTheDocument();

@@ -1,7 +1,7 @@
 /**
- * useTheme — the runtime theme switcher (Session 218, theming-multi-palette).
+ * useTheme — the runtime theme switcher (multi-palette).
  *
- * S217 shipped six palettes in globals.css, selected by `data-theme`
+ * Six palettes shipped in globals.css, selected by `data-theme`
  * (graphite | iris | warm) and `data-mode` (light | dark) on <html>. This
  * hook is the single source of truth for the user's choice: it persists to
  * localStorage, applies the attributes to <html>, and — for mode 'system' —
@@ -9,7 +9,7 @@
  * the stored choice before first paint (no flash); this module re-applies on
  * load and shares state across components via useSyncExternalStore.
  *
- * Session 377 (B-2026-08-23-19) adds:
+ * Adds:
  *   - `custom`: a user-defined palette {name, accent, background, surface,
  *     text} applied as inline CSS custom properties on <html> when
  *     theme === 'custom' (derived tokens via color-mix in globals.css).
