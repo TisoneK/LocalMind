@@ -46,8 +46,9 @@ usage() {
   say "          into product artifacts — the staged diff by default; --tree"
   say "          sweeps every tracked product file (strip leaks old sessions left)"
   say "  prune   advise log compaction: each append-only durable log's size"
-  say "          (flaws, inefficiencies, decisions), which entries are"
-  say "          explicitly resolved/superseded (move them verbatim to the"
+  say "          (flaws, inefficiencies, decisions), which entries carry a"
+  say "          closed marker on their own Status line (resolved/"
+  say "          superseded/fixed — move them verbatim to the"
   say "          log's archive.md), and which logs hold 3+ entries hitting"
   say "          the same recurring thing (roll up into one Recurring entry,"
   say "          instances archived verbatim); --list names them. Never"
@@ -226,11 +227,16 @@ check_dup_sessions() {
 # startup stops re-reading cold, closed entries and repeated friction. It
 # NEVER moves or deletes anything (that stays a human/agent edit); it
 # reports, per log (flaws, inefficiencies, decisions): the log's size, the
-# entries explicitly marked resolved/superseded/fixed (move those verbatim
-# to a companion archive.md, still grep-able), and logs holding 3+ entries
+# entries whose own Status line carries a closed marker
+# (resolved/superseded/fixed/no longer — move those verbatim to a
+# companion archive.md, still grep-able), and logs holding 3+ entries
 # with the same normalized Problem/Flaw line (roll them up into one
 # Recurring entry, instances archived verbatim). Age alone is never a
-# reason to archive — only an explicit closed marker is.
+# reason to archive — only an explicit closed marker is. Prose elsewhere
+# in an entry is never the marker (an ADR describing the compaction rule
+# mentions those words without being closed), and `<!-- -->` template
+# blocks are never segmented — their placeholder Status lines carry the
+# words literally.
 prune() {
   _list=0
   while [ $# -gt 0 ]; do
@@ -256,10 +262,14 @@ prune() {
         if (inseg && closed) { c++; cand[c] = heading }
         if (fp != "") { fpseen[fp]++; fpwhere[fp] = fpwhere[fp] " || " heading }
       }
+      /^<!--/ { if (!inseg) { intpl = ($0 ~ /-->/) ? 0 : 1; next } }
+      intpl { if ($0 ~ /-->/) intpl = 0; next }
       /^## / {
         flush(); inseg = 1; closed = 0; heading = $0; total++; fp = ""; next
       }
-      inseg && /RESOLVED|[Ss]uperseded|[Ff]ixed in package|no longer (a )?(flaw|issue)/ { closed = 1 }
+      inseg && /^[[:space:]]*[-*]?[[:space:]]*\*\*Status:\*\*/ &&
+        /RESOLVED|[Ss]uperseded|[Ff]ixed in package|no longer (a )?(flaw|issue)/ { closed = 1 }
+      inseg && /^[[:space:]]*[-*]?[[:space:]]*\*\*Fixed in package:\*\*/ { closed = 1 }
       inseg && fp == "" && /^[[:space:]]*[-*]?[[:space:]]*\*\*(Problem|Flaw):\*\*/ {
         fp = $0
         sub(/^[[:space:]]*[-*]?[[:space:]]*\*\*(Problem|Flaw):\*\*[[:space:]]*/, "", fp)

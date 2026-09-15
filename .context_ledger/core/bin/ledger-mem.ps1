@@ -42,8 +42,9 @@ function Usage {
     '          into product artifacts - the staged diff by default; --tree',
     '          sweeps every tracked product file (strip leaks old sessions left)',
     '  prune   advise log compaction: each append-only durable log''s size',
-    '          (flaws, inefficiencies, decisions), which entries are',
-    '          explicitly resolved/superseded (move them verbatim to the',
+    '          (flaws, inefficiencies, decisions), which entries carry a',
+    '          closed marker on their own Status line (resolved/',
+    '          superseded/fixed - move them verbatim to the',
     "          log's archive.md), and which logs hold 3+ entries hitting",
     '          the same recurring thing (roll up into one Recurring entry,',
     "          instances archived verbatim); --list names them. Never",
@@ -300,16 +301,19 @@ function Invoke-Prune {
     if (-not (Test-Path -LiteralPath $f)) { continue }
     $total = 0; $lines = 0
     $segs = @()
-    $inseg = $false; $closed = $false; $heading = ''; $fp = ''
+    $inseg = $false; $closed = $false; $heading = ''; $fp = ''; $intpl = $false
     foreach ($raw in Get-Content -Encoding UTF8 -LiteralPath $f) {
       $lines++
       $line = $raw.TrimEnd("`r")
+      if (-not $inseg -and $line -match '^<!--') { if ($line -notmatch '-->') { $intpl = $true }; continue }
+      if ($intpl) { if ($line -match '-->') { $intpl = $false }; continue }
       if ($line -match '^## ') {
         if ($inseg) { $segs += [pscustomobject]@{ Heading = $heading; Closed = $closed; Fp = $fp } }
         $inseg = $true; $closed = $false; $heading = $line; $total++; $fp = ''
         continue
       }
-      if ($inseg -and ($line -match 'RESOLVED|[Ss]uperseded|[Ff]ixed in package|no longer (a )?(flaw|issue)')) { $closed = $true }
+      if ($inseg -and ($line -match '^[ ]*[-*]?[ ]*[*][*]Status:[*][*]') -and ($line -match 'RESOLVED|[Ss]uperseded|[Ff]ixed in package|no longer (a )?(flaw|issue)')) { $closed = $true }
+      if ($inseg -and ($line -match '^[ ]*[-*]?[ ]*[*][*]Fixed in package:[*][*]')) { $closed = $true }
       if ($inseg -and $fp -eq '' -and $line -match '^[ ]*[-*]?[ ]*[*][*](Problem|Flaw):[*][*][ ]*(.+)$') {
         $t = $Matches[2].Trim().ToLower().Replace("`t", ' ')
         while ($t.Contains('  ')) { $t = $t.Replace('  ', ' ') }

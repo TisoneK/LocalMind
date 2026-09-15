@@ -277,7 +277,7 @@ cmd_verify() {
   fi
   err "CORE INTEGRITY FAILURE — core/ does not match its manifest."
   err "Do not 'fix' core in place. Run: ledger-sync rollback"
-  err "Then log the incident in memory/flaws/log.md and continue."
+  err "Then log the incident in memory/office/flaws/log.md and continue."
   return 3
 }
 
@@ -452,7 +452,7 @@ cmd_rollback() {
   git checkout "$FOUND" -- .context_ledger/core || die "git checkout failed — run: git checkout HEAD -- .context_ledger/core"
   write_lock "$WANT"
   say "core rolled back to $WANT (from commit ${FOUND%????????????????????????????????})"
-  say "log the incident in memory/flaws/log.md, then commit as:"
+  say "log the incident in memory/office/flaws/log.md, then commit as:"
   say "  chore(ledger): roll back core to $WANT"
 }
 
@@ -639,9 +639,15 @@ cmd_harvest() {
     reached=$((reached + 1))
     mem="$repo/.context_ledger/memory"
     [ -d "$mem" ] || mem="$repo/.context/memory"
+    # office-era projects keep the logs under memory/office/ (core 1.0.0);
+    # fall back to the flat pre-office layout. harvest would otherwise read
+    # nothing from any migrated project. overrides/rules.md stays at the
+    # memory root in both layouts.
+    _lg="$mem/office/flaws/log.md";          [ -f "$_lg" ] || _lg="$mem/flaws/log.md"
+    _il="$mem/office/inefficiencies/log.md"; [ -f "$_il" ] || _il="$mem/inefficiencies/log.md"
     RTMP=$(mktemp) || continue
-    nf=$(harvest_source "$mem/flaws/log.md"          'Status:[^A-Za-z]*open'        "flaws (open)"                         "$LEDGER" "$name" "$RTMP" '^## ')
-    ni=$(harvest_source "$mem/inefficiencies/log.md" 'Upstream:[^A-Za-z]*candidate' "inefficiencies (upstream candidate)" "$LEDGER" "$name" "$RTMP" '^## ')
+    nf=$(harvest_source "$_lg" 'Status:[^A-Za-z]*open'        "flaws (open)"                         "$LEDGER" "$name" "$RTMP" '^## ')
+    ni=$(harvest_source "$_il" 'Upstream:[^A-Za-z]*candidate' "inefficiencies (upstream candidate)" "$LEDGER" "$name" "$RTMP" '^## ')
     no=$(harvest_source "$mem/overrides/rules.md"    'core-defect'                  "overrides (core-defect)"             "$LEDGER" "$name" "$RTMP" '^- ')
     sub=$((nf + ni + no))
     if [ "$sub" -gt 0 ]; then

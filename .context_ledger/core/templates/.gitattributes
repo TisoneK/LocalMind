@@ -3,8 +3,8 @@
 # Installed by 'ledger-sync bootstrap'. The vendored core under core/ is
 # integrity-checked byte-for-byte against core/MANIFEST.sha256 (LF-computed).
 # On Windows with core.autocrlf=true, a CRLF checkout makes every hash
-# mismatch and kills the sh manifest parser on '\r'-suffixed filenames
-# (B-2026-08-30-17). Forcing eol=lf keeps the working tree byte-identical to
+# mismatch and kills the sh manifest parser on '\r'-suffixed filenames.
+# Forcing eol=lf keeps the working tree byte-identical to
 # the manifest on every platform. Collaboration event files are parsed line by
 # line by the sh helpers, so they must stay LF too.
 #

@@ -23,7 +23,7 @@ user changes the rules; note the change in your session entry.
 - **Push policy:** <e.g., push to main directly after each commit>
 - **Commit style:** <e.g., Conventional Commits with scope; chore(ledger): for this directory>
 - **Commit granularity:** <e.g., one logical change per commit>
-- **Deliverable:** <e.g., report in .context_ledger/memory/reviews/ + chat summary>
+- **Deliverable:** <e.g., report in .context_ledger/memory/office/reviews/ + chat summary>
 - **Gates:** `.context_ledger/memory/workflows/gates.conf` — checkpoint before each next action; `pre-commit`, `integration`, and `exit` gates are mandatory
 -->
 

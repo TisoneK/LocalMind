@@ -290,7 +290,7 @@ function Cmd-Verify {
   if (-not (Verify-Tree $target)) {
     Err 'CORE INTEGRITY FAILURE -- core/ does not match its manifest.'
     Err 'Do not ''fix'' core in place. Run: ledger-sync rollback'
-    Err 'Then log the incident in memory/flaws/log.md and continue.'
+    Err 'Then log the incident in memory/office/flaws/log.md and continue.'
     exit 3
   }
   if (-not (Parse-Ports $target)) {
@@ -516,7 +516,7 @@ function Cmd-Rollback {
   Get-ChildItem -LiteralPath (Join-Path $PROJECT_DIR '.context_ledger/core') -Recurse -File | ForEach-Object { Convert-ToLf $_.FullName }
   Write-Lock $want
   Say "core rolled back to $want (from commit $($found.Substring(0, [Math]::Min(8, $found.Length))))"
-  Say 'log the incident in memory/flaws/log.md, then commit as:'
+  Say 'log the incident in memory/office/flaws/log.md, then commit as:'
   Say "  chore(ledger): roll back core to $want"
   exit 0
 }
