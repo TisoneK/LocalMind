@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **The context meter now shows what fills the model's working window.** The chat header has always carried one number — how full the model's context is on the latest request — but when it climbed there was no way to learn what was eating it. Clicking the meter now opens a breakdown: the standing instructions, the tool catalogue, the conversation so far, the results the tools returned, and the current question, each with its size and share of the last request. The shares add up to the exact total the model was billed for. Nothing about how the agent works changed — this is purely a window into where the memory goes.
 - **The agent can now look around a folder without a shell command.** Ask "what's in this folder?", "sketch this project's structure", or "is there already a file there?", and it answers with a tidy, bounded listing — names, sizes, and dates — instead of running `dir`/`ls` and pasting whatever pours out. It never opens or reads file contents (looking around is not reading), skips heavyweight clutter like `node_modules` and `.git` (saying so), and if a folder is big it honestly says the sketch stopped early rather than pretending that's everything. Live-checked on a weak free-tier model: it picks this tool for folder questions, and still picks the right search/shell tools for theirs.
 
 ### Changed
