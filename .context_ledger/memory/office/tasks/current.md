@@ -13,5 +13,6 @@ entry and backlog before starting.
 -->
 
 - **Session:** 2026-09-15 — Zuri / qwen3.8-flash
+- **Feature:** context-usage-breakdown
 - **Task:** per-category context-usage breakdown — split the last-call context occupancy into categories (system prompt, tool schemas, turn context, history, tool results, current message) and surface shares in the UI meter (ZCode-style stats)
 - **Status:** in-progress
