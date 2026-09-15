@@ -299,7 +299,7 @@ _NAMED_FOLDER_COMPONENTS = frozenset(
 )
 
 
-# ── Free-tier model payload aliases (Session 376) ────────────────────────────
+# ── Free-tier model payload aliases ────────────────────────────
 # Models (DeepSeek, Claude-style) frequently name the path/content fields
 # differently for file_write. Normalize so the first attempt succeeds instead
 # of writing a wrong file or bouncing a validation error.
@@ -410,7 +410,7 @@ def resolve_write_path(raw_path: str, fallback_filename: str = "") -> Path:
 
     if not raw:
         # No path at all — fall back to the session workspace when one is
-        # active (B-2026-08-23-17), else ~/LocalMind/<filename>.
+        # active, else ~/LocalMind/<filename>.
         return _default_scratch(home, fallback_filename)
 
     parts = _cross_os_parts(raw)
@@ -434,7 +434,7 @@ def resolve_write_path(raw_path: str, fallback_filename: str = "") -> Path:
     # Path.home()), which silently prepended /Users/<me> to a genuine absolute
     # path like /private/tmp/... — so the file landed in the wrong place AND the
     # loop's read-back verification (file_reader, which DOES honor absolute
-    # paths) then failed against the original path (S293, B-2026-08-17-6). A
+    # paths) then failed against the original path (a live-found bug). A
     # native-absolute path is the caller's explicit choice; use it as-is.
     # `Path.is_absolute()` is OS-aware: on POSIX only "/..." is absolute (a
     # Windows "C:\..." is NOT, so it still falls through to the cross-OS
@@ -448,7 +448,7 @@ def resolve_write_path(raw_path: str, fallback_filename: str = "") -> Path:
     # ── 1. Named-folder shorthand: bare name like "Documents" ─────────────────
     if len(dir_parts) == 1 and dir_parts[0].lower() in _NAMED_FOLDER_COMPONENTS:
         canonical = _NAMED_FOLDERS.get(dir_parts[0].lower(), dir_parts[0])
-        # B-2026-08-23-17: "LocalMind" is the APP's own legacy scratch dir,
+        # "LocalMind" is the APP's own legacy scratch dir,
         # not a user-named destination — when a session is active, route it
         # to the session workspace (the model habitually writes "LocalMind/"
         # because the old tool description advertised ~/LocalMind).
@@ -465,7 +465,7 @@ def resolve_write_path(raw_path: str, fallback_filename: str = "") -> Path:
     # ── 2. Home-relative (starts with ~) ─────────────────────────────────────
     if raw.startswith("~"):
         candidate = Path(raw).expanduser()
-        # B-2026-08-23-17: ~/LocalMind is the app's legacy scratch dir (the
+        # ~/LocalMind is the app's legacy scratch dir (the
         # old tool description advertised it). With a session active, route
         # it into the session workspace instead of the user's real home.
         # Other ~/ paths are explicit user destinations — keep verbatim.
@@ -492,7 +492,7 @@ def resolve_write_path(raw_path: str, fallback_filename: str = "") -> Path:
             # Use _NAMED_FOLDERS for canonical casing (e.g. "LocalMind" not "Localmind",
             # "docs" not "Docs").  Fall back to the raw part if somehow not in the map.
             canonical = _NAMED_FOLDERS.get(part.lower(), part)
-            # B-2026-08-23-17: a LocalMind component anywhere in the path is
+            # A LocalMind component anywhere in the path is
             # the app's legacy scratch dir (e.g. "foo/LocalMind/notes.txt")
             # — with a session active, route into the workspace.
             if canonical.lower() == "localmind" and _session_active():
@@ -520,7 +520,7 @@ def resolve_write_path(raw_path: str, fallback_filename: str = "") -> Path:
     # against the user's home directory and auto-create the parent directory.
     # This matches user expectations: "Code/hello.py" → ~/Code/hello.py.
     if dir_parts:
-        # B-2026-08-23-17: strip "." noise — "./notes.txt" is a bare
+        # Strip "." noise — "./notes.txt" is a bare
         # filename, not a named directory. When every remaining component is
         # noise, fall through to the default scratch (session workspace).
         meaningful = [p for p in dir_parts if p not in (".", "")]
@@ -563,7 +563,7 @@ def _is_legacy_scratch_path(raw: str) -> bool:
 def _default_scratch(home: Path, filename: str) -> Path:
     """Default scratch destination for a file with no user-specified path.
 
-    B-2026-08-23-17 follow-up: when a session is active (its id is bound via
+    When a session is active (its id is bound via
     the session-workspace contextvar), the default write lands in the session's
     workspace folder — artifacts stay with the session and are deleted with it.
     Without a session (CLI/tests/legacy callers), the historic
@@ -573,7 +573,7 @@ def _default_scratch(home: Path, filename: str) -> Path:
 
     sid = current_session_id()
     if sid:
-        # B-2026-08-23-25: intermediate scratch files go to .tmp/
+        # Intermediate scratch files go to .tmp/
         tmp = ensure_tmp_dir(sid) / filename
         logger.info("[file_writer] session .tmp scratch: %s", tmp)
         return tmp.resolve()
@@ -712,7 +712,7 @@ async def _do_write(
         # It deliberately does NOT tell the agent whether to verify/read the file
         # back — that phantom instruction ("saved and verified; do not read it
         # back; the write is confirmed") is not the tool's business; the agent
-        # decides based on the actual task (B-2026-08-18-7).
+        # decides based on the actual task.
         return ToolResult(
             content=(
                 f"Wrote {size} bytes ({lines} line{'' if lines == 1 else 's'}) "
@@ -906,7 +906,7 @@ async def write_file(message: str) -> ToolResult:
             final_dest.parent.mkdir(parents=True, exist_ok=True)
 
     # Always write to scratch first, then copy to the final destination.
-    # B-2026-08-23-17 follow-up: scratch = the session's workspace folder when
+    # Scratch = the session's workspace folder when
     # a session is active (artifacts stay with the session and are deleted with
     # it); without a session the historic ~/LocalMind/<filename> is used.
     home = Path(os.path.expandvars(settings.localmind_home)).expanduser().resolve()

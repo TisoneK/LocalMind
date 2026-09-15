@@ -1,5 +1,5 @@
 """
-Text-level helpers for the agent loop (Session 129 decomposition).
+Text-level helpers extracted from the agent loop.
 
 Extracted from ``core/agent/loop.py`` — pure, stateless text functions with
 no dependency on the AgentLoop class:
@@ -68,7 +68,7 @@ def _parse_plan_steps(plan_text: str) -> list[str]:
 
 
 def _is_filler_step(step: str) -> bool:
-    """Session 122: drop generic filler steps the planner sometimes emits
+    """Drop generic filler steps the planner sometimes emits
     ("Run the shell action", "Verify the result") that carry no concrete
     command, path, or tool — they'd pollute the Todos checklist with noise.
 
@@ -129,7 +129,7 @@ _STANDALONE_INVOKE_RE = re.compile(
     re.DOTALL | re.IGNORECASE,
 )
 
-# Bare <tool_call> format (Session 195): the model emits
+# Bare <tool_call> format (seen live): the model emits
 #   <tool_call>web_search<arg_key>query</arg_key><arg_value>Kitengela ...</arg_value></tool_call>
 # instead of the structured tool_calls API or the invoke/parameter form.
 # This leaked RAW into the chat bubble (transcript: "whats the weather like
@@ -210,7 +210,7 @@ def _parse_minimax_tool_call(text: str) -> list[tuple[str, dict, str]]:
 
     # Normalize DeepSeek DSML markup into the standard invoke/parameter form
     # first, so DSML tool calls are intercepted + executed (not streamed as
-    # the final answer — Session 127 smoke caught this on zen/deepseek-v4-flash).
+    # the final answer — a smoke run caught this on zen/deepseek-v4-flash).
     text = _normalize_dsml(text)
 
     # Format 1: Full minimax:tool_call wrapper
@@ -235,7 +235,7 @@ def _parse_minimax_tool_call(text: str) -> list[tuple[str, dict, str]]:
             calls.append((tool_name, args, raw_xml))
 
     # Format 3: bare <tool_call>NAME<arg_key>..</arg_key><arg_value>..</arg_value></tool_call>
-    # (Session 195 — see _TOOL_CALL_RE). args use arg_key/arg_value pairs.
+    # (see _TOOL_CALL_RE). args use arg_key/arg_value pairs.
     if not calls:
         for m in _TOOL_CALL_RE.finditer(text):
             tool_name = m.group(1).strip()
@@ -255,7 +255,7 @@ def _strip_minimax_tool_calls_stream(text: str) -> str:
     an individual streamed delta: a model that streams a JSON value token by
     token emits deltas like ``"Respond"``, ``" to"``, ``" a"`` — stripping each
     one removes the leading spaces, so the concatenation collapses to
-    ``"Respondtoa"`` (Session 231 bug: spaceless thought process + answer). Use
+    ``"Respondtoa"`` (live bug: spaceless thought process + answer). Use
     this per-chunk; use ``_strip_minimax_tool_calls`` only on a complete text.
     """
     text = _normalize_dsml(text)
@@ -391,14 +391,14 @@ _TOOL_TALK_PATTERNS = [
     re.compile(r"\bsearching\.{3,}\b", re.IGNORECASE),  # "Searching..." theatrical animation
     re.compile(r"\bfetching\.{3,}\b", re.IGNORECASE),
     re.compile(r"\blooking up\.{3,}\b", re.IGNORECASE),
-    # Session 323 (B-2026-08-20-20): creation-commitment narration. Live trace
+    # Creation-commitment narration. Live trace
     # on deepseek-v4-flash: the model created the dir via shell, then ended the
     # turn with "Now I'll create the project files — a modular Python project…"
     # — a commitment to file creation with NO file_write/file_task call, and
     # the turn ended with zero files (the user's exact "clever but limited"
     # symptom, second half). Requires a creation verb + a file-like noun so
     # legitimate prose ("I'll create a summary/table") never false-triggers.
-    # Session 326 addendum 3: the single-adjective group was \w-only, so a
+    # Addendum: the single-adjective group was \w-only, so a
     # hyphenated or dotted adjective — "the path-test folder", "the a.txt
     # file" — defeated the pattern and the commitment streamed as a final
     # answer, ending the turn with zero files (user's live Windows trace:
@@ -455,7 +455,7 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
         # todo_write expects the full {"todos": [...]} object as JSON — same
         # pattern as find_path/edit_file. Without this branch the fallback
         # stringifies the todos array with a Python repr (single quotes), which
-        # is not valid JSON and fails the tool's parser (ADR-43).
+        # is not valid JSON and fails the tool's parser.
         return json.dumps(tool_args, ensure_ascii=False)
     elif tool_name == "file_task":
         return tool_args.get("path", "")
@@ -467,7 +467,7 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
         return tool_args.get("command", "")
     elif tool_name == "memory_op":
         operation = tool_args.get("operation", "recall")
-        # Session 359: models often use `query` for recall content (the schema
+        # Models often use `query` for recall content (the schema
         # says `content`). Accept both — otherwise the recall drops its query
         # and the bare "recall" falls through to memory_op's STORE path,
         # persisting junk facts.
@@ -557,7 +557,7 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
         return " ".join(str(v) for v in tool_args.values() if v)
 
 
-# ── Inspection dedup (Session 378) ────────────────────────────────────────────
+# ── Inspection dedup ────────────────────────────────────────────
 # The user's "analyze the dev folder" session exposed the loop re-running
 # near-identical `Get-ChildItem` listings five times: the exact-match
 # fingerprint (tool_input.lower().strip()) missed every repeat because each

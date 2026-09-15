@@ -2,10 +2,10 @@
 
 The request runtime must not decide from prompt-shaped shortcuts whether a
 turn is conversation, clarification, or tool work.  The parent agent's first
-model call owns that decision — but ONLY the tier decision (ADR-37 three-tier:
+model call owns that decision — but ONLY the tier decision (three-tier:
 trivial / needs-thought / needs-tools) plus the opening line and the objective.
 
-ADR-38 (Thinker/Agent rebuild, Step 1): the upfront init call no longer
+The upfront init call no longer
 commits a plan, success criteria, tool names, or facts/ambiguities — the
 old monolithic call reasoned BEFORE any tool ran, so its assessment could
 only narrate assumptions ("assumed dev-folder path"). The plan EMERGES from
@@ -43,21 +43,21 @@ class InitializationDecision:
     clarifying_question: str = ""
     confidence: float = 0.0
     raw: str = ""
-    # ADR-49 (revises ADR-38 for the todo checklist): an ordered list of the
+    # An ordered list of the
     # concrete steps the agent will take, for a multi-step `execute` task. Emitted
     # up front as the live Todos panel and checked off as the agent works. Empty
     # for direct/clarify and single-step tasks.
     plan_steps: list[str] = field(default_factory=list)
-    # B-2026-08-18-5: set when the classify JSON was unparseable AND there was no
+    # Set when the classify JSON was unparseable AND there was no
     # salvageable prose — the `response` is then the generic canned fallback,
     # which IGNORES the conversation. The loop uses this to answer the user's
     # message directly from history instead (so a follow-up like "why did you say
     # X?" isn't met with a context-free "tell me more").
     needs_history_answer: bool = False
-    # ADR-34 B-12: record the init prompt size so init vs execution budgets
+    # Record the init prompt size so init vs execution budgets
     # are measured independently. Set by the streaming initializer.
     init_prompt_chars: int = 0
-    # Session 290: provider-reported usage from the init call. On a DIRECT turn
+    # Provider-reported usage from the init call. On a DIRECT turn
     # the init call IS the whole turn, so this is the turn's real token usage —
     # propagated to the loop so direct turns report actual tokens, not an
     # estimate. Set by the streaming initializer; default empty.
@@ -75,7 +75,7 @@ class InitializationDecision:
         """Render the bounded objective context for the execution model.
 
         No plan, tool list, or criteria — the plan emerges from the loop on
-        gathered evidence (ADR-38 Step 1).
+        gathered evidence (classify-only init).
         """
         if self.objective:
             return f"UNDERSTANDING: {self.objective}"[:1800]
@@ -87,7 +87,7 @@ def build_initialization_prompt(
     env_context: str = "",
     history: Iterable[dict[str, Any]] | None = None,
 ) -> str:
-    """Build the CLASSIFY-ONLY initialization prompt (rebuild Step 1, ADR-38).
+    """Build the CLASSIFY-ONLY initialization prompt.
 
     The init call decides ONLY the tier (direct / clarify / execute), the
     opening acknowledgement, and the one-line objective. It no longer
@@ -281,7 +281,7 @@ def parse_initialization(text: str) -> InitializationDecision:
     ignores the JSON contract and just greets the user now has that greeting
     shown as the answer, which is what it always should have been.
 
-    Rebuild Step 1 (ADR-38): the init is classify-only — no plan is committed;
+    The init is classify-only — no plan is committed;
     the plan emerges from the loop when execute is chosen. Legacy fields
     (facts/ambiguities/tool_names/plan_steps/success_criteria) are ignored.
     """
@@ -296,7 +296,7 @@ def parse_initialization(text: str) -> InitializationDecision:
             raw=raw[:1800],
             # Nothing salvageable → the canned fallback ignores context. Flag it
             # so the loop answers the user's message from the conversation history
-            # instead of the generic "tell me more" (B-2026-08-18-5).
+            # instead of the generic "tell me more".
             needs_history_answer=not salvaged,
         )
 
@@ -315,7 +315,7 @@ def parse_initialization(text: str) -> InitializationDecision:
     except (TypeError, ValueError):
         decision.confidence = 0.0
 
-    # ADR-49: ordered upfront plan → the live Todos panel. Bounded + sanitized;
+    # Ordered upfront plan → the live Todos panel. Bounded + sanitized;
     # a model that omits it (or emits junk) just yields an empty plan (no todos).
     _raw_plan = payload.get("plan")
     if isinstance(_raw_plan, list):
