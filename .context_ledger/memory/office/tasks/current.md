@@ -12,6 +12,7 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — no session in progress (Session 4 complete: context-usage breakdown shipped — per-category shares of the last model call surfaced in the clickable occupancy meter, live-verified on zai; core synced to 1.1.3; B-2026-09-15-1 filed and taken by a peer)
-- **Status:** idle
+- **Session:** 2026-09-15 — Baraka / qwen3.8-flash
+- **Feature:** none
+- **Task:** tree-wide strip of .context_ledger vocabulary from product files (backlog B-2026-09-15-1) — lint hits (ADR refs, bug IDs, ledger paths, "per ADR") plus missed classes (Session N / S<NNN> references, lowercase adr refs, token-bearing filenames); exempt structurally-legit surfaces (generated agent-entrypoint files) via a documented override
+- **Status:** in-progress
