@@ -92,21 +92,21 @@ def _build_environment_context(
     """Build environment context for the agent — system info, date/time, hardware, tools.
 
     ``compact=True`` returns a trimmed block for the parent INITIALIZATION /
-    classify call (Session 289): a classifier choosing direct/clarify/execute
+    classify call: a classifier choosing direct/clarify/execute
     needs the date, OS and working directory — NOT the CPU/Python lines and,
     above all, NOT the "## Available Tools" prose (which is redundant with the
     real tool schemas sent in execute mode and roughly HALVES the init prompt
     on the small local models this app targets).
 
     ``include_tool_list=False`` drops ONLY the "## Available Tools" prose while
-    keeping the OS guidance / common-command hints (S295 latency/token work):
+    keeping the OS guidance / common-command hints (latency/token work):
     on the EXECUTE path that block is a stale THIRD copy of the tool catalog
     (the native `tools` param + the in-prompt "Available tools:" list already
     carry it), costing ~279 tokens on every loop iteration. The OS/shell hints
     it sits next to ARE useful for code-gen, so — unlike ``compact`` — this
     keeps them.
 
-    ``session_id`` (B-2026-08-23-17): when provided, appends the session's
+    ``session_id``: when provided, appends the session's
     workspace folder line so the agent KNOWS where this session's artifact
     files live and defaults its writes there (unless the user asked for a
     specific path).
@@ -163,7 +163,7 @@ def _build_environment_context(
         common_cmds = "Unix commands: `ls`, `cat`, `cp`, `mv`, `mkdir -p`, `rm`, `chmod`, `grep`, `find`"
         shell_name = "bash"
 
-    # ── Shell-tool enabled state (B-2026-08-23-4) ──
+    # ── Shell-tool enabled state ──
     # The model must know BEFORE tool selection whether the shell tool is on.
     # When disabled, it should take alternative routes (code_exec / python,
     # file tools) instead of calling a tool that will reject it. Read the
@@ -195,7 +195,7 @@ def _build_environment_context(
     # ── Python version ──
     py_version = sys.version.split()[0]
 
-    # ── Session workspace (B-2026-08-23-17) ──
+    # ── Session workspace ──
     # The agent must know where THIS session's artifact files live so its
     # default writes land there and stay with the session (deleted with it).
     _workspace_line = ""
@@ -271,7 +271,7 @@ def _build_environment_context(
 
     # The "## Available Tools" prose duplicates the native tools param + the
     # in-prompt tool list; drop it when the caller says so (execute path).
-    # B-2026-08-23-4: when shell is DISABLED, do not advertise it here — the
+    # When shell is DISABLED, do not advertise it here — the
     # model must not even consider SHELL as an option.
     _shell_ad = (
         "- shell: Run system commands (list files, check disk, run scripts)\n"
@@ -350,7 +350,7 @@ def build_system_prompt(intent: Intent, model_context_window: int, session_cwd: 
 # localmind.md lives next to the source tree root (one level above core/).
 # It is injected into every system prompt. Edit localmind.md to update what
 # the model knows about its own capabilities without touching Python code.
-# Memoized (shared TTLCache — was a global + lock before Session 139): loaded
+# Memoized (shared TTLCache — was a global + lock before): loaded
 # lazily on first build(), re-read on a 300s TTL so an edited localmind.md is
 # picked up within 5 minutes, and a not-found miss is cached for 300s too.
 
@@ -362,7 +362,7 @@ def _load_knowledge_doc() -> str:
     Note: the decorator caches ANY non-None return, so the not-found "" is
     also cached (re-checked after the TTL, not every call).
     """
-    # B-2026-08-24-9: resolve cwd-INDEPENDENTLY. The Electron prod app spawns
+    # Resolve cwd-INDEPENDENTLY. The Electron prod app spawns
     # the backend with cwd=backend/ (main.js), so a bare Path.cwd() candidate
     # missed the repo-root localmind.md and the whole knowledge doc (capabilities,
     # tool reference, politeness + self-disclosure rules) silently failed to load

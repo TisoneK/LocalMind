@@ -1,8 +1,8 @@
 """
-ADR-18 P2 — Failure memory (the "Remember" stage, Session 175).
+Failure memory — the loop's "Remember" stage.
 
-Per ADR-18 decision point 5: nothing wrote what-failed-and-why at loop
-end; ADR-7's learning step was never wired into the runtime (memory is
+The gap being closed: nothing wrote what-failed-and-why at loop
+end; the earlier learning decision was never wired into the runtime (memory is
 retrieval-centric). This module closes that gap:
 
   - `classify_failure(trace)` — deterministic what-failed-and-why from
@@ -41,7 +41,7 @@ def classify_failure(trace: object) -> str:
          verified)
       3. tool_failure — at least one tool step failed this run
 
-    B-2026-08-20-18 (Session 318): a tool_failure is only classified as
+    A tool_failure is only classified as
     a failure when the run did NOT produce a final answer. If the model
     recovered from a failed tool (tried a different URL, retried, etc.)
     and produced a real answer, the run is a SUCCESS — emitting
@@ -50,18 +50,18 @@ def classify_failure(trace: object) -> str:
     before classifying tool_failure.
     """
     if getattr(trace, "hit_limit", False):
-        # Session 419: a capped run whose forced synthesis delivered a real
+        # A capped run whose forced synthesis delivered a real
         # answer is a rescued turn, not a failure — same logic as the
-        # B-2026-08-20-18 tool_failure guard below. The old order classified
+        # tool_failure guard below. The old order classified
         # the cap BEFORE the rescue ran, so "Agent loop failed" showed above
         # a complete answer (the "find my CV" transcript).
         final_response = (getattr(trace, "final_response", "") or "").strip()
         if len(final_response) >= 20:
             return ""
-        # Session 419: report WHICH budget ended the loop — the wall-clock
+        # Report WHICH budget ended the loop — the wall-clock
         # break used to be classified as "iteration_limit". The remedies
         # differ (time cap: smaller turns / faster provider; step cap:
-        # continue or raise the step budget), and the Session 32 fallback
+        # continue or raise the step budget), and the fallback
         # contract requires the stated cause to be the real one.
         kind = (getattr(trace, "limit_kind", "") or "").strip()
         if kind == "wall_clock":
@@ -75,7 +75,7 @@ def classify_failure(trace: object) -> str:
     gate_passed = getattr(trace, "gate_passed", None)
     if criteria and gate_passed is False:
         return "criteria_unmet"
-    # B-2026-08-20-18: only classify as tool_failure if the run did NOT
+    # Only classify as tool_failure if the run did NOT
     # produce a final answer. A recovered tool failure (model tried a
     # different approach and succeeded) is a success, not a failure.
     final_response = (getattr(trace, "final_response", "") or "").strip()

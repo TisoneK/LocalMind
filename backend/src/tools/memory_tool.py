@@ -29,7 +29,7 @@ _LIST_PAT = re.compile(
     r"\b(what do you (know|remember)|list (all |my )?facts|show (me )?memory|recall all)\b",
     re.IGNORECASE,
 )
-# Session 359: "recall X" / "search memory for X" — a targeted recall of
+# "recall X" / "search memory for X" — a targeted recall of
 # facts matching X. The schema advertises operation=recall; without this the
 # message fell through to the STORE path and stored "recall" as a junk fact.
 _RECALL_PAT = re.compile(
@@ -37,7 +37,7 @@ _RECALL_PAT = re.compile(
     re.IGNORECASE,
 )
 
-# B-2026-08-30-4: a durable fact should be a short, meaningful statement — not a
+# A durable fact should be a short, meaningful statement — not a
 # raw paste. When the user said "remember this source" + a 6KB weather-JSON dump,
 # the whole blob was stored verbatim as one "fact". Cap the size and distill: a
 # large/dump-shaped blob that contains a URL is almost always "remember THIS
@@ -98,7 +98,7 @@ async def memory_op(
 
     Args:
         message: the raw user message.
-        content: optional pre-extracted fact (Session 342 classifier output).
+        content: optional pre-extracted fact (classifier output).
             When provided, it is stored VERBATIM instead of re-extracting
             with the regex below — the classifier's extraction is more
             accurate ("note down my project" must not store "down my
@@ -152,7 +152,7 @@ async def memory_op(
         )
 
     # ── Recall a fact (targeted search) ──────────────────────────────────
-    # Session 359: the tool advertises operation=recall. Do a keyword match
+    # The tool advertises operation=recall. Do a keyword match
     # over stored facts — this works even when embeddings are unavailable
     # (the fallback store writes plain text; vector search can't find it).
     _recall_m = _RECALL_PAT.match(message)
@@ -214,7 +214,7 @@ async def memory_op(
         )
 
     # ── Store a fact ──────────────────────────────────────────────────────
-    # Use the Session 342 classifier's extraction when provided — it handles
+    # Use the classifier's extraction when provided — it handles
     # cue prefixes the regex misses ("note down", "keep in mind", "remember
     # this:" with punctuation). Without the shared extractor the framing
     # survives ("this: my project is called Falcon. Just acknowledge") and the
@@ -227,7 +227,7 @@ async def memory_op(
             source="memory",
         )
 
-    # B-2026-08-30-4: distill a raw paste to a concise fact (or ask for one)
+    # Distill a raw paste to a concise fact (or ask for one)
     # instead of persisting a wall of text as a single "memory".
     _distilled, _distill_note = _distill_fact(message, fact)
     if _distilled is None:
@@ -260,7 +260,7 @@ async def memory_op(
         },
     )
 
-    # Session 347: fallback to plain SQLite storage when the vector store
+    # Fallback to plain SQLite storage when the vector store
     # fails (sqlite-vec not installed, embedding service unavailable, etc.)
     # The user should never see "Memory storage is unavailable" for a simple
     # "remember this" — the fact is stored as plain text in vector_facts
@@ -296,7 +296,7 @@ async def memory_op(
                 "importance": str(importance),
                 "access_count": "0",
                 "fallback": "true",  # stored without embedding
-                # Session 359: the vector path writes a timestamp; the fallback
+                # The vector path writes a timestamp; the fallback
                 # MUST too, or warm_start_facts treats the fact as ancient and
                 # the agent never sees it (age = now - 0 > 30 days → dropped).
                 "timestamp": str(_time.time()),
@@ -333,7 +333,7 @@ async def memory_op(
 async def _recall_recent(store) -> ToolResult:
     """Surface the most recent stored facts (bare/no-match recall).
 
-    Session 359: a recall intent must NEVER fall through to the store path
+    A recall intent must NEVER fall through to the store path
     (which persisted "recall" as a junk fact). When there's no query or no
     match, show what's actually stored.
     """

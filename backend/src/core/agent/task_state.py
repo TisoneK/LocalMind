@@ -1,7 +1,7 @@
 """
-TaskState — first-class task state for one agent turn (ADR-18 P0).
+TaskState — first-class task state for one agent turn.
 
-B-2026-08-12-1 (P0 acceptance gate): the model should not have to
+The acceptance-gate gap: the model should not have to
 reconstruct task state from conversation history. TaskState is the
 engine-side record the acceptance gate judges — objective, constraints,
 success criteria, phase, progress, evidence, and budget, consolidated
@@ -38,12 +38,12 @@ PHASE_VERIFY = "verify"
 PHASE_FINAL = "final"
 
 
-# ── PlanNode (Session 180 — F3 Structured Planner DAG) ─────────────────────
+# ── PlanNode (Structured Planner DAG) ─────────────────────
 
 
 @dataclass
 class PlanNode:
-    """A single node in a structured plan DAG (Session 180, F3).
+    """A single node in a structured plan DAG.
 
     Replaces the free-text plan that was injected into the system prompt
     (the existing `_plan_stream` path) with a typed node the loop can
@@ -72,7 +72,7 @@ class PlanNode:
 
 @dataclass
 class TaskState:
-    """Engine-side objective truth for one agent turn (ADR-18 P0)."""
+    """Engine-side objective truth for one agent turn."""
 
     objective: str = ""
     constraints: list[str] = field(default_factory=list)
@@ -85,7 +85,7 @@ class TaskState:
     iteration: int = 0
     budget: dict = field(default_factory=dict)
     started_at: float = field(default_factory=time.time)
-    # Session 180 — F3 Structured Planner DAG. The structured plan nodes
+    # Structured Planner DAG. The structured plan nodes
     # the loop advances through. Empty list = no structured plan (legacy
     # behavior; the free-text _plan_stream path still runs as a fallback).
     nodes: list[PlanNode] = field(default_factory=list)
@@ -179,7 +179,7 @@ class TaskState:
                 lines.append(f"  - [ ] {step}")
             for step, error in self.failed:
                 lines.append(f"  - [!] {step} — failed: {error[:120]}")
-        # Session 180 — F3 Structured Planner DAG. Render the plan nodes
+        # Structured Planner DAG. Render the plan nodes
         # as a checklist so the model sees the DAG structure + per-node
         # success criteria every iteration.
         if self.nodes:
@@ -223,7 +223,7 @@ class TaskState:
             "evidence": list(self.evidence),
             "iteration": self.iteration,
             "budget": dict(self.budget),
-            # Session 180 — F3 Structured Planner DAG
+            # Structured Planner DAG
             "nodes": [
                 {
                     "id": n.id,

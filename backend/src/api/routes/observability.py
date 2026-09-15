@@ -1,6 +1,6 @@
 """Observability endpoint - intent, confidence, tool timeline for right panel.
 
-B-2026-08-09-5: the per-session observation cache is the ONLY source of
+The per-session observation cache is the ONLY source of
 intent/latency data. The old session-agnostic MetricsStore aggregate fallback
 was removed because it leaked another session's data.
 """
@@ -53,22 +53,22 @@ class ObservabilityData(BaseModel):
     latency_ms: float = 0
     tool_timeline: List[ToolEvent] = Field(default_factory=list)
     observation: Optional[ObservationSummary] = None
-    # ADR-12 (B-2026-08-09-2): real per-stage timings from the engine's
+    # Real per-stage timings from the engine's
     # _StageClock, folded into the stored observation on turn_complete.
     # Shape: {stage: {"latency_ms": int, "status": "done"|"skipped"|...}}
     stage_timings: Optional[dict] = None
-    # B-2026-08-09-16 (ADR-15 §4): per-tool latency summary folded from
+    # Per-tool latency summary folded from
     # the agent loop's tool_call obs events. Shape:
     # {tool_name: {"calls", "total_ms", "avg_ms", "max_ms", "last_status"}}.
     # Answers the tool-vs-subagent question: is a tool's OWN execution
     # slow, or is the model round-trip around it the real cost?
     tool_timings: Optional[dict] = None
-    # Session 123: anomalies detected on the last completed turn (stall /
+    # Anomalies detected on the last completed turn (stall /
     # token leak). Shape: [{kind, severity, title, detail, metrics}]. The
     # Observe panel renders these as alert cards instead of silently
     # displaying the bad numbers.
     anomalies: Optional[list] = None
-    # ADR-52 phase 2: the ParentSession's rolling summary for this chat.
+    # The ParentSession's rolling summary for this chat.
     # Surfaced so the Observe panel can show what the parent remembers of
     # older turns (the compacted history that's actually in the prompt).
     # None for a fresh chat with no completed turns.
@@ -92,7 +92,7 @@ async def get_observability(session_id: str):
 
     Returns real data from the engine's per-session observation cache,
     populated on every turn_complete event (including trivial/conversational
-    short-circuits since B-2026-08-09-5). Sessions without a stored
+    short-circuits since then). Sessions without a stored
     observation return the empty response — no cross-session aggregate.
     """
     engine = _get_engine()
@@ -100,7 +100,7 @@ async def get_observability(session_id: str):
     # Try the per-session observation cache first
     obs_data = engine._last_observation.get(session_id)
 
-    # Session 267: the in-memory cache dies on backend restart (capped at 200
+    # The in-memory cache dies on backend restart (capped at 200
     # sessions and process-scoped). Fall back to the persisted observation
     # (one row per session, written at turn end) so the Observe panel survives
     # a backend restart. The snapshot dict is stored as the already-serialized
@@ -113,7 +113,7 @@ async def get_observability(session_id: str):
         if persisted:
             obs_data = persisted.get("data")
             snapshot = persisted.get("snapshot")
-            # ADR-52 phase 2: also load the persisted ParentSession so the
+            # Also load the persisted ParentSession so the
             # Observe panel can show the rolling summary even after a backend
             # restart (the in-memory engine state dies; the DB row survives).
             parent_sess = None
@@ -144,7 +144,7 @@ async def get_observability(session_id: str):
 
     if obs_data:
         snapshot = getattr(engine, "_last_observation_snapshots", {}).get(session_id)
-        # ADR-52 phase 2: load the persisted ParentSession for this chat so
+        # Load the persisted ParentSession for this chat so
         # the Observe panel can show the rolling summary alongside the
         # latest turn's metrics.
         parent_sess = None
@@ -172,7 +172,7 @@ async def get_observability(session_id: str):
             parent_session_turn_count=(parent_sess or {}).get("turn_count", 0),
         )
 
-    # B-2026-08-09-5: no per-session observation → return the honest empty
+    # No per-session observation → return the honest empty
     # response. The previous fallback aggregated MetricsStore by INTENT and
     # returned the first intent with any requests — which could show ANOTHER
     # session's intent/latency in this session's Observe panel. MetricsStore is
