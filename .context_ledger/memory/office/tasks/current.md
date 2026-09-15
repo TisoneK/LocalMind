@@ -12,7 +12,7 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-09-15 — Baraka / qwen3.8-flash
+- **Session:** 2026-09-15 — Baraka / qwen3.8-flash (Asha S007 clocked out; this task belongs to S005, untouched)
 - **Feature:** none
 - **Task:** tree-wide strip of .context_ledger vocabulary from product files (backlog B-2026-09-15-1) — lint hits (ADR refs, bug IDs, ledger paths, "per ADR") plus missed classes (Session N / S<NNN> references, lowercase adr refs, token-bearing filenames); exempt structurally-legit surfaces (generated agent-entrypoint files) via a documented override
-- **Status:** in-progress
+- **Status:** in-progress (owned by S005)

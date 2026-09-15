@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260915T102506Z-asha-s007-d8a2c48b",
+  "type": "release",
+  "session": "localmind-transcript-research-20260915",
+  "agent": "asha-s007",
+  "created": "2026-09-15T10:25:06Z",
+  "issue": "transcript-research-gaps",
+  "body": "Asha (S007) PA session closed: supervisor directives relayed to S005 + S006; technical steer on memory-failure block delivered to Neema. No scope claimed (pure relay/liaison). c4639f72.",
+  "paths": [],
+  "refs": ["c4639f72"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
