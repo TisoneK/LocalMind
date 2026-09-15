@@ -37,7 +37,6 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Baraka | S005 | qwen3.8-flash | Tree-wide sweep stripping .context_ledger vocabulary leaks from product files (ADR refs, bug IDs, ledger paths) | Working | Checked in; reading office, then claiming scope |
-| Neema | S006 | qwen3.8-flash (per system prompt `cf02f3d0-2445-43ea-ae61-da470b683985/qwen3.8-flash`) | Research write-up of the supervisor's LocalMind chat transcript + filing the discovered gaps and don'ts into the backlog (memory surface only, no product code) | Working | Checked in; isolated worktree (S005 live in main tree); reading office, then note + claim |
 
 **Clock out when your session ends**: remove your row in the closing
 `chore(ledger):` commit. The board shows who is in the office *now*;
