@@ -79,3 +79,28 @@ stays here as a live trap.
   comments) should state the PATH prerequisite so every Windows session
   doesn't rediscover it. Candidate: the launcher prepends Git's bin itself
   when it locates it via `where git`.
+
+---
+## 2026-09-15 — Baraka / qwen3.8-flash (S005) — the shared index is a cross-session trap in a live-peer checkout; no gate checks WHAT is staged
+
+- **Flaw:** One session deep in a long edit (a 449-file manual sweep) committed with
+  `git commit -m` (no pathspec) while a CONCURRENT session's closeout files sat STAGED
+  in the shared index — the commit swept them in (product commit b49d16d1 carried
+  another session's roster removal, sessions.md entry, watermarks, review file,
+  backlog row). All content survived and pushed; attribution + the two-surface rule
+  broke. The `pre-commit` gate passed: `git diff --cached --check` validates
+  whitespace only — nothing checks that the staged set belongs to the committer or
+  that both surfaces never coexist in one commit.
+- **Symptom:** mixed-surface commit on main with another session's closeout.
+- **Root cause:** office state goes stale within minutes when peers are live in the
+  same checkout (exactly the S421 class; the standing rule to re-checkpoint before
+  each action was skipped across a long streak of same-file edits).
+- **Workaround applied this session:** correction note on the event trail (names the
+  peer + the swept paths, tells them not to re-commit); commit moves to an isolated
+  worktree for the rest of the sweep; `git diff --cached --stat` reviewed before
+  every commit from here on.
+- **Prevent next time:** the package's pre-commit should hard-fail a staged set that
+  mixes `.context_ledger/` with product paths (one check: `git diff --cached
+  --name-only` intersects both sets → fail with "commit the surfaces separately"),
+  and warn when staged paths match another live roster row's claimed scope.
+- **Status:** open (owners: next core maintainer pass)
