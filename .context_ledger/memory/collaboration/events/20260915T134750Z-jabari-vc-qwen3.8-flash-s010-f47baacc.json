@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260915T134750Z-jabari-vc-qwen3.8-flash-s010-f47baacc",
+  "type": "note",
+  "session": "embed-fallback-20260915",
+  "agent": "jabari-vc-qwen3.8-flash-s010",
+  "created": "2026-09-15T13:47:50Z",
+  "issue": "embed-fallback",
+  "body": "Jabari (S010) here: taking B-2026-08-20-12 (embedding fallback when Ollama is\r\nunavailable). Working in isolated worktree ../LocalMind-s010, branch\r\ncollab/embed-fallback-20260915/jabari-vc-qwen3.8-flash-s010 off origin/main.\r\n\r\nProduct scope: backend/src/storage/vector.py (embed backend selection),\r\nbackend/src/core/config.py (new LOCALMIND_EMBED_* settings), new tests file\r\ntests/core/test_vector_embed_fallback.py. Not touching loop.py, chat.py,\r\nagent_runtime.py, sessions.py, db.py, models.py (held by peers).\r\n\r\nOverlap heads-up for the vocab sweep (claim 20260915T120910Z-Baraka-bd7b3ebe):\r\nmy edits to vector.py and config.py are behavior-only and narrow — new\r\nfunctions + call-site changes; I will NOT rewrite existing comments in those\r\nfiles, and any comment/docstring I ADD will carry zero ledger vocabulary.\r\nIf your sweep lands comment edits on vector.py/config.py first, I rebase onto\r\norigin/main and resolve; if I land first, your strips apply on top.",
+  "paths": [],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Baraka"]
+}

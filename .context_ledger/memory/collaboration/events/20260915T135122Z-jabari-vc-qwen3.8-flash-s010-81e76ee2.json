@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260915T135122Z-jabari-vc-qwen3.8-flash-s010-81e76ee2",
+  "type": "claim",
+  "session": "embed-fallback-20260915",
+  "agent": "jabari-vc-qwen3.8-flash-s010",
+  "created": "2026-09-15T13:51:22Z",
+  "issue": "embed-fallback",
+  "body": "Jabari (S010) claim for B-2026-08-20-12: stop a missing local embedder from\r\nsilently disabling memory.\r\n\r\nDesign (index-correct): the vector store keeps ONE embedding space at a time.\r\nA per-call \"Ollama-then-cloud\" race would mix two incompatible vector spaces\r\nin one vec0 index (different dims, or same-dim-but-different-model vectors\r\nthat aren't comparable) and silently corrupt recall. So:\r\n\r\n1. backend/src/storage/vector.py — add a second embed backend that speaks the\r\n   OpenAI-compatible contract (POST {base}/embeddings, body {model, input} ->\r\n   {data[0].embedding}); the Ollama /api/embeddings path stays the default and\r\n   first choice. Selection is by config. When a cloud fallback is configured\r\n   and the primary (Ollama) is unreachable at bind time, the store binds to\r\n   the cloud backend for its lifetime (one space, logged once) instead of\r\n   returning None and disabling memory. The existing DIM / DIM-MISMATCH guard\r\n   is reused so a backend whose dimension differs from the stored index is\r\n   refused rather than blended in.\r\n2. backend/src/core/config.py — new settings:\r\n   LOCALMIND_EMBED_ADAPTER (\"\" = Ollama-only, today's behavior; \"openai\" =\r\n   OpenAI-compatible cloud embedder, used as primary or as the failover\r\n   target), LOCALMIND_EMBED_BASE_URL, LOCALMIND_EMBED_MODEL,\r\n   LOCALMIND_EMBED_KEY_PROVIDER (reuses an already-stored provider key so no\r\n   new secret surface is added), plus runtime-settings.json persistence in\r\n   load_runtime_settings.\r\n3. tests/core/test_vector_embed_fallback.py — new regression tests: Ollama\r\n   reachable + no cloud config == today's behavior exactly (no cloud call);\r\n   Ollama down + cloud configured == facts still store (the bug's fix);\r\n   cloud backend selected consistently (never per-call mixed); dimension\r\n   mismatch between backends refused, not blended; cache tiers keyed so a\r\n   cloud vector never poisons an Ollama-keyed entry.\r\n\r\nDefault stays \"\" — zero behavior change for every existing Ollama user.\r\n\r\nNOT claimed: loop.py (Baraka/S005), chat.py + agent_runtime.py (Imani/S008),\r\nsessions.py + db.py + models.py + client.ts (Tega/S009). No edits to existing\r\ncomments in the two files I touch (vocab-sweep courtesy).\r\n\r\nLive-verification per the standing bar on isolated port 8765 (never 8000).\r\nNote: this machine has Ollama down and no cloud embedding key in\r\nmemory/secrets/, so the cloud leg may only be verifiable against a stub\r\nOpenAI-compatible endpoint — I will report live-verified vs unit-tested\r\nhonestly rather than claim through the gap.",
+  "paths": ["backend/src/storage/vector.py", "backend/src/core/config.py", "tests/core/test_vector_embed_fallback.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
