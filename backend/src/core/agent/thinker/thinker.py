@@ -1,15 +1,15 @@
-"""The Thinker — the agent's reasoning backbone (ADR-42).
+"""The Thinker — the agent's reasoning backbone.
 
 A read-only mid-loop analyst. Given the evidence the agent has gathered, it
 reasons and returns a structured `ThinkerAnalysis` the agent acts on.
 
-ADR-57 slice 1 ("no call runs silent"): the consult's prose reasoning is
+The "no call runs silent" rule: the consult's prose reasoning is
 yielded as `thinking` chunks so the loop can stream it to the ThinkingBlock —
 the user watches the actual decision reasoning, not an empty spinner. The
-surfacing is bounded by the Session 324 contract, which is enforced
+surfacing is bounded by the visible-prose contract, which is enforced
 structurally here rather than by muting everything: reasoning streams ONLY
 until the JSON block begins, and the JSON itself is never yielded (structure
-≠ thought). The prompt echoes that motivated Session 324 are prevented at the
+≠ thought). The prompt echoes that motivated this contract are prevented at the
 source — the prompt forbids restating the role/instructions — while
 `_filter_system_leaks` in the loop stays the second layer.
 

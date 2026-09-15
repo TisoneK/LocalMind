@@ -1,13 +1,13 @@
 """
-WorkspaceState — the ADR-5 feedback service.
+WorkspaceState — the workspace feedback service.
 
-Implements the "Workspace" bar from the CODING HARNESS diagram (ADR-5):
+Implements the "Workspace" bar from the CODING HARNESS diagram:
 pipes git status/diff, build/test/typecheck output, and open-file state
 back into the agent's context every turn. This is the literal difference
 between a harness and a bare API — "observations flow back into context
 every turn."
 
-Why this module exists (ADR-5 thesis):
+Why this module exists:
     A coding agent isn't just "LLM + tool-calling." It's a closed loop
     where the workspace's real state (git diffs, test results, file
     system) continuously feeds back into the context for the next turn.
@@ -23,7 +23,7 @@ What snapshot() returns:
 Design notes:
     - Standalone module — does NOT require the BaseAgent loop extraction
       (Phase 2). Can be wired into the existing AgentLoop.run() with a
-      small surgical change. This delivers the ADR-5 differentiator
+      small surgical change. This delivers the harness differentiator
       without the risky 2926-line refactor.
     - All git operations are subprocess calls with a hard timeout. If
       git isn't available or the cwd isn't a git repo, snapshot()

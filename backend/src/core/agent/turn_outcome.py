@@ -136,7 +136,7 @@ def classify_turn_outcome(
         )
 
     # SYNTHESIZE: evidence exists but the model narrated/hedged instead of answering.
-    # Session 438: under the evidence-sufficient answer-only call, tool
+    # Under the evidence-sufficient answer-only call, tool
     # schemas were deliberately withheld — narration of a further action
     # therefore means the model NEEDS a tool (e.g. a genuinely required
     # second fetch), so the recovery is FORCE_TOOL (schemas restored), the

@@ -1,5 +1,5 @@
 """
-ADR-19 P3 — LLM-guided value scoring (opt-in, Session 179).
+LLM-guided value scoring (opt-in).
 
 Design.md §6 names this slice: "LLM-guided value scoring of every
 message — too slow for free-tier; the deterministic marker approach is

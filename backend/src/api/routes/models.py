@@ -27,7 +27,7 @@ def _model_setting_attr(provider: str) -> str | None:
 
     Derived from PROVIDER_CONFIGS (single source of truth) so a new provider
     is picked up automatically and can never drift out of this map. (The
-    pre-Session-319 hardcoded dict silently omitted ZenMux — added in ADR-9 —
+    the old hardcoded dict silently omitted ZenMux — added with the context-window work —
     so its model field resolved to None here while health.py still had it.)
     """
     from adapters.openai_compat import PROVIDER_CONFIGS
@@ -353,7 +353,7 @@ async def list_embedding_models():
     if current and current not in embed_models:
         embed_models.insert(0, current)
 
-    # B-2026-08-23-14 guide: tell the UI whether the CONFIGURED embed model is
+    # Embed-model guide: tell the UI whether the CONFIGURED embed model is
     # actually pulled, and which pulled alternative to suggest. Without this,
     # the force-insert above hides the mismatch and memory stores silently fail
     # (embedding requests 404 from Ollama). configured_available is True only
@@ -427,7 +427,7 @@ async def select_model(req: SelectModelRequest):
         # Mutate settings in-place — all subsequent Engine instances read from settings
         settings.ollama_model = model
         clear_adapter_cache("ollama")
-        # Session 292: persist under the DEDICATED ollama_model key so the choice
+        # Persist under the DEDICATED ollama_model key so the choice
         # survives a restart (previously the ollama branch never saved — only
         # cloud did — so the selected local model was lost on next launch) and
         # never collides with the cloud `model` key.

@@ -55,7 +55,7 @@ _MINIMAX_BARE_KEYWORD = re.compile(
 )
 
 # Bare <tool_call>NAME<arg_key>..</arg_key><arg_value>..</arg_value></tool_call>
-# (Session 195): a MiniMax/Claude-style tool-call format that leaked RAW into
+# A MiniMax/Claude-style tool-call format that leaked RAW into
 # the chat bubble when the intent was misrouted to the no-tools DIRECT path.
 # Strip the complete block so it can never render as user-facing text.
 _TOOL_CALL_TAG_PATTERN = re.compile(
@@ -97,7 +97,7 @@ def _filter_system_leaks(text: str) -> str:
     cleaned = _MINIMAX_TOOL_CALL_PREFIX.sub("", cleaned)
     cleaned = _MINIMAX_PARTIAL_TAG.sub("", cleaned)
     cleaned = _MINIMAX_BARE_KEYWORD.sub("", cleaned)
-    # Session 195: strip bare <tool_call> blocks (complete + streaming partials)
+    # Strip bare <tool_call> blocks (complete + streaming partials)
     cleaned = _TOOL_CALL_TAG_PATTERN.sub("", cleaned)
     cleaned = _TOOL_CALL_PARTIAL.sub("", cleaned)
     # Collapse runs of blank lines left by removal (max 2 consecutive)

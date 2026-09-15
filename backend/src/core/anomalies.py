@@ -1,11 +1,11 @@
-"""Session 123: anomaly detection for the Observe panel.
+"""Anomaly detection for the Observe panel.
 
 The Observe panel used to be a passive readout — it displayed the numbers
 but never flagged when they were wrong. This module turns the two failure
 shapes the user actually hit into first-class alerts:
 
 1. STALL — a turn that burned 60s+ producing almost no output (the
-   Session 115 "died silently" failure: 108.6s with 23 tokens). Detected
+   The "died silently" failure (108.6s with 23 tokens). Detected
    by throughput: latency > 60s AND completion tokens < 1/sec. A normal
    slow turn (65s / 300 tokens) is NOT flagged — only the near-empty
    burn.

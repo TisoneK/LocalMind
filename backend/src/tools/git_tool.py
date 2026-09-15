@@ -1,7 +1,7 @@
 """
 Git tool — structured Git operations for LocalMind agents.
 
-Phase A (Session 41): exposes 9 semantic Git operations as structured
+Exposes 9 semantic Git operations as structured
 tool calls instead of opaque shell commands. The agent can reason about
 git state using typed operations instead of parsing raw text output.
 

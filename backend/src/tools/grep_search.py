@@ -1,5 +1,5 @@
 """
-Grep-like text search tool (B-2026-08-23-31).
+Grep-like text search tool.
 
 Searches file contents for a pattern (regex or literal) without needing shell access.
 Works even when the shell tool is disabled.

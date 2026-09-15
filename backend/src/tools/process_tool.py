@@ -1,7 +1,7 @@
 """
 Process tool — long-running process management for LocalMind agents.
 
-Phase A (Session 42): enables agents to start, monitor, and stop
+Enables agents to start, monitor, and stop
 long-running processes like `npm run dev`, `uvicorn`, `pytest`,
 `docker compose`, etc. Without this, every process is a one-shot
 shell command — the agent can't start a dev server, wait for it to

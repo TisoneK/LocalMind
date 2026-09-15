@@ -1,6 +1,6 @@
 """
-ADR-19 P2 — Cross-session decision ledger (the "never compress this away"
-store, Session 178).
+Cross-session decision ledger — the "never compress this away"
+store.
 
 Design.md §6 names this slice: a durable store of "decisions that must
 never be compressed away." The user's lossy-compression example — "user

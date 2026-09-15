@@ -1,12 +1,12 @@
 """
-PostExecutionVerifier — last-tool sanity check (ADR-18 P1+, F4).
+PostExecutionVerifier — last-tool sanity check.
 
 PURPOSE
 =======
-ADR-18 P0 wired the `criteria_gate` (verify.py) as the acceptance
+Wiring the `criteria_gate` (verify.py) as the acceptance
 gate. The gate short-circuits when `trace.success_criteria == []`,
-which (per Session 176 audit F2) was the case on ~90% of turns
-BEFORE the GoalInterpreter fallback (Session 177) populated
+which (per an audit) was the case on ~90% of turns
+BEFORE the GoalInterpreter fallback populated
 deterministic criteria.
 
 Even WITH the GoalInterpreter, two edge cases remain:

@@ -1,5 +1,5 @@
 """
-Session 339 — Conversation-state awareness + memory-relevance gating.
+Conversation-state awareness + memory-relevance gating.
 
 The user's diagnosis (verbatim):
   > Memory should enrich the current conversation, not choose its topic.
@@ -71,7 +71,7 @@ class ConversationState:
 # ── Casual/opening prompts that must NOT trigger memory retrieval ───────────
 
 # These are the "Hi" / "How's it going?" / "What's up?" prompts.
-# They're already caught by the trivial fast-path (Session 332-C) when
+# They're already caught by the trivial fast-path when
 # they're short enough, but this module catches the broader pattern:
 # "How's it going" / "How are you doing today" / "What's new" — even when
 # they're long enough to fall through the fast-path.

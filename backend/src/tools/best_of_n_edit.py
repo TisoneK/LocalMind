@@ -1,5 +1,5 @@
 """
-best_of_n_edit tool — B-2026-08-02-11 (C2, best-of-N editor pattern).
+best_of_n_edit tool — best-of-N editor pattern.
 
 Borrowed from Codebuff's `editor-multi-prompt` (agents/editor/best-of-n/
 editor-multi-prompt.ts). Converts "the model's first guess" into "the best

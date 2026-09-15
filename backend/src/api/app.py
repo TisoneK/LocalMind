@@ -4,8 +4,8 @@ FastAPI application factory — v0.3
 Serves the single-file UI from ui/index.html directly (no build step needed).
 
 v0.4: migrated from the deprecated ``@app.on_event("startup"/"shutdown")``
-handlers to a single ``lifespan`` async context manager (B-2026-08-09-13 /
-backlog "FastAPI on_event deprecation"). ``on_event`` was deprecated by
+handlers to a single ``lifespan`` async context manager (the FastAPI
+on_event deprecation fix). ``on_event`` was deprecated by
 FastAPI in favor of ``lifespan``; the migration is behavior-preserving and
 clears the ~81 pytest deprecation warnings caused by the old handlers.
 """
@@ -128,7 +128,7 @@ async def lifespan(app: FastAPI):
     await _chat_engine.startup()
     set_engine_ready()
 
-    # B-2026-08-30-17 Phase 2: refresh the boot-time system-info cache so the
+    # Refresh the boot-time system-info cache so the
     # agent has system knowledge without calling the sysinfo tool. Static fields
     # are written once and skipped on later boots; mutating fields (disk/RAM/
     # uptime) are updated each boot. Best-effort — never blocks startup.

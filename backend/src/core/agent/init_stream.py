@@ -1,4 +1,4 @@
-"""Streaming helpers for parent-agent initialization (ADR-34 B-7).
+"""Streaming helpers for parent-agent initialization.
 
 The initializer must produce visible, bounded, model-owned events as soon as
 the provider starts responding — not a single parsed blob at the end.  These
@@ -98,7 +98,7 @@ def extract_preview(buffer: str) -> InitializationPreview:
 def render_understanding(preview: InitializationPreview, decision_mode: str = "") -> str:
     """Render a bounded, human-readable 'thinker' line from a preview.
 
-    ADR-34: the thinker must be visible and fast, and it must show the model's
+    The thinker must be visible and fast, and it must show the model's
     REASONING about the request — its `objective` ("what the user actually
     wants") — never the answer. The `response` is deliberately NOT surfaced
     here: doing so made the "thought process" identical to the final answer

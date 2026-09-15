@@ -125,7 +125,7 @@ class UpdateMemoryResponse(BaseModel):
 
 @router.patch("/memory/{fact_id}", response_model=UpdateMemoryResponse)
 async def update_memory(fact_id: str, req: UpdateMemoryRequest):
-    """Correct an existing fact's content (B-2026-08-23-14 follow-up).
+    """Correct an existing fact's content.
 
     Re-embeds the corrected text and preserves the fact's original metadata.
     The fact id is derived from the content hash, so it changes — the response

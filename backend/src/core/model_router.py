@@ -38,7 +38,7 @@ from core.models import Intent
 
 logger = logging.getLogger(__name__)
 
-# B-2026-08-02-10 (C1) — per-agent model routing
+# Per-agent model routing
 # ------------------------------------------------
 # Every agent used to share the single configured model. Per-agent routing
 # lets a CodingAgent run a stronger local model, DirectAgent a tiny one,

@@ -1,5 +1,5 @@
 """
-Observe tool — desktop awareness (B-2026-07-31-9, Session 130).
+Observe tool — desktop awareness.
 
 Answers "what's happening right now?" — the observation half of the
 Observe→Think→Decide→Act→Observe→Verify loop. Offline, fast, no model
@@ -14,7 +14,7 @@ Sub-queries (routed by keywords in the query string):
                      minutes under a directory (default cwd/home)
   - all / default  — active_window + system_state + running_apps (top)
 
-Design contract (learned from the Session 124/125 context-flood bugs):
+Design contract (learned from the early context-flood bugs):
   - BOUNDED output by construction: caps on every list (apps, recent
     files), no raw dumps.
   - GRACEFUL DEGRADATION: every sub-query is wrapped; on an unsupported

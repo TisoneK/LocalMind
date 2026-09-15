@@ -1,4 +1,4 @@
-"""Boot-time system-info cache in SQLite (B-2026-08-30-17 Phase 2).
+"""Boot-time system-info cache in SQLite.
 
 Persists the structured snapshot from ``core.system_snapshot`` so the agent has
 system knowledge WITHOUT calling the sysinfo tool. Volatility split:

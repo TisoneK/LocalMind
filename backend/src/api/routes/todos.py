@@ -1,6 +1,6 @@
 """Todos endpoint - task management for left panel TodoList.
 
-Session 27: previously a stub (returned [], didn't persist). Now backed
+Previously a stub (returned [], didn't persist). Now backed
 by a real todos table (migration 006). The engine writes todos here when
 it starts a multi-step task; the UI reads them via GET /todos?session_id=X.
 """
@@ -42,7 +42,7 @@ class TodoItem(BaseModel):
     priority: str = "medium"
     order: int = 0
     timestamp: float
-    title: Optional[str] = None  # B-2026-08-23-11: short user-facing label
+    title: Optional[str] = None  # short user-facing label
 
 
 class CreateTodoRequest(BaseModel):
@@ -50,7 +50,7 @@ class CreateTodoRequest(BaseModel):
     content: str
     priority: str = "medium"
     status: str = "pending"
-    title: Optional[str] = None  # B-2026-08-23-11
+    title: Optional[str] = None
 
 
 class UpdateTodoRequest(BaseModel):
@@ -58,7 +58,7 @@ class UpdateTodoRequest(BaseModel):
     completed: Optional[bool] = None
     status: Optional[str] = None
     priority: Optional[str] = None
-    title: Optional[str] = None  # B-2026-08-23-11
+    title: Optional[str] = None
 
 
 class CreateTodoBatchRequest(BaseModel):

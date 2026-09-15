@@ -1,7 +1,7 @@
 """
 Calculator tool — safe arithmetic evaluation for exact numeric answers.
 
-B-2026-07-31-10 (Data tools slice): offline, deterministic, bounded.
+Offline, deterministic, bounded (Data tools slice).
 
 Design contract:
 - NO eval()/exec() — a whitelist AST walker evaluates only the nodes the

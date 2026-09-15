@@ -1,6 +1,6 @@
 """Structured system snapshot — the data layer for boot-time sysinfo caching.
 
-B-2026-08-30-17 Phase 2: the agent had ZERO system knowledge until it called the
+The agent had ZERO system knowledge until it called the
 `sysinfo` tool (and over-called it). This collects a compact, STRUCTURED snapshot
 split by volatility so the boot cache can store STATIC fields once and refresh
 only the MUTATING ones each boot:
@@ -23,7 +23,7 @@ import time
 
 logger = logging.getLogger(__name__)
 
-# B-2026-08-30-17 Phase 3: the compact `System:` summary is computed ONCE at
+# The compact `System:` summary is computed ONCE at
 # boot (from the DB cache) and held here, so the hot prompt-assembly path injects
 # it without a DB read every turn. Empty until the boot hook sets it.
 _CACHED_SUMMARY = ""

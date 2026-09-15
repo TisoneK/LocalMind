@@ -1,6 +1,6 @@
 """Actions endpoint - tool call history for left panel ActionHistory.
 
-Session 118: replaced the placeholder stub (which returned [] and never
+Replaced the placeholder stub (which returned [] and never
 persisted) with the SQLite-backed actions table in SessionStore. The SSE
 bridge in chat.py records live tool events into this store; the frontend
 polls these endpoints for history across reloads.
@@ -34,9 +34,9 @@ class ActionItem(BaseModel):
     output: Optional[str] = None
     error: Optional[str] = None
     iteration: Optional[int] = None  # agent loop step number (for chaining)
-    todo_id: Optional[str] = None  # plan todo this action serves (Session 120)
-    reasoning: Optional[str] = None  # model's thought that led to this action (Session 122)
-    provider: Optional[str] = None  # which backend engine answered (Session 271)
+    todo_id: Optional[str] = None  # plan todo this action serves 
+    reasoning: Optional[str] = None  # model's thought that led to this action 
+    provider: Optional[str] = None  # which backend engine answered 
 
 
 def _to_action_item(row: dict) -> ActionItem:

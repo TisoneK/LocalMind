@@ -4,8 +4,8 @@ tool results.  P0 Context Engineering, Step 4 (slice 1: the storage engine).
 Why this exists
 ───────────────
 A research-heavy agent turn grows its tool-result history fast (measured
-91 → 4228 tokens in one turn, S410). The plan (context-architecture-research
-addendum, FINDING 7/8 + "Tool-Result Index + Search") is to stop carrying big
+91 → 4228 tokens in one turn). The plan — "Tool-Result Index + Search" —
+is to stop carrying big
 raw outputs inline: index the result, drop a short stub + a pointer into the
 prompt, and let the model pull detail back on demand with a search tool.
 

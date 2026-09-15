@@ -1,5 +1,5 @@
 """
-describe_tool tool — ADR-40 option C: on-demand full-tool-context.
+describe_tool tool — on-demand full-tool-context.
 
 The `skill`-loader pattern applied to the tool catalog: the 16 LONG-TAIL
 tools (browse/delegate/sql/csv/json/best_of_n/propose_*/subgoal/skill/
@@ -53,7 +53,7 @@ async def describe_tool(message: str) -> ToolResult:
         )
 
     if name in CORE_TOOL_NAMES:
-        # B-2026-08-30-13: do NOT re-dump the schema for a core tool — it is
+        # Do NOT re-dump the schema for a core tool — it is
         # already in the model's tools list. Dumping ~2-3k chars here (browse
         # was the worst offender) bloated context and could overflow the window.
         # Return a short nudge to call it directly instead.

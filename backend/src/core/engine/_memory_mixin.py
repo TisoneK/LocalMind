@@ -29,7 +29,7 @@ class _MemoryMixin:
     async def _extract_and_store_facts(
         self, message: str, session_id: str, obs: ObsCollector
     ) -> None:
-        # Session 342: the shared deterministic extractor is the single
+        # The shared deterministic extractor is the single
         # source of truth for cue-prefix removal — the local regex copy
         # missed "remember this:" (colon after the demonstrative) and stored
         # the framing as the fact.
@@ -102,7 +102,7 @@ class _MemoryMixin:
                         )
                     break  # one fact per user message max
 
-        # ── Path 4 (Session 359): deterministic candidate extraction from
+        # ── Path 4: deterministic candidate extraction from
         # chat evidence (corrections, stated preferences, source knowledge
         # from tool outcomes). This is the autonomous "gather correct
         # information from chat evidence" tier — it runs without any explicit

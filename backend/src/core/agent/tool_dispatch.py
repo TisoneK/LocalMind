@@ -18,7 +18,7 @@ from tools import dispatch
 
 logger = logging.getLogger(__name__)
 
-# B-2026-08-23-33: Intent → permission-key mapping. Intents not listed here
+# Intent → permission-key mapping. Intents not listed here
 # are always allowed (e.g. CHAT, SYSINFO, OBSERVE).
 _TOOL_PERMISSION_MAP: dict = {
     Intent.FILE_TASK: "file_read",
@@ -141,7 +141,7 @@ async def dispatch_with_retry(
             0,
         )
 
-    # B-2026-08-23-33: Check configurable operation permissions.
+    # Check configurable operation permissions.
     perm_key = _TOOL_PERMISSION_MAP.get(tool_intent)
     if perm_key is not None:
         try:
@@ -168,7 +168,7 @@ async def dispatch_with_retry(
         except Exception:
             pass  # settings unavailable — allow through
 
-    # ADR-8 Phase 3: set the current adapter + obs so the delegate tools
+    # Set the current adapter + obs so the delegate tools
     # can access them. The sets are conditional on the args being provided
     # (some tests call dispatch_with_retry without them).
     if adapter is not None or obs is not None:

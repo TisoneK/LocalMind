@@ -1,11 +1,11 @@
-"""Deterministic file-task summary for the final answer (B-2026-08-23-7).
+"""Deterministic file-task summary for the final answer.
 
 The user wants the file-task facts — paths written, bytes, what was created vs
 edited — visible in the summary right where the final output is. Free-tier
 models are unreliable at reporting their own writes, so this is derived from
 the ACTUAL tool timeline (the durable record), never from what the model claims:
 file_write → created, edit_file/propose_write_file → modified. Same evidence
-philosophy as the Session 330 goal-checklist gate.
+philosophy as the goal-checklist gate.
 """
 
 from __future__ import annotations

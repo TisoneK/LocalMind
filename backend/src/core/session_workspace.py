@@ -1,4 +1,4 @@
-"""Per-session workspaces (B-2026-08-23-17).
+"""Per-session workspaces.
 
 Each session owns a folder under the LocalMind home:
 
@@ -28,7 +28,7 @@ from core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# ── Current-session context (B-2026-08-23-17 follow-up) ─────────────────
+# ── Current-session context ─────────────────
 # The engine sets this once per turn (agent_runtime.process); tools read it
 # to default their artifact writes into the session's workspace folder
 # instead of the shared ~/LocalMind scratch. Async-safe: contextvars

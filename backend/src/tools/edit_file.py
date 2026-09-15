@@ -375,7 +375,7 @@ def _apply_edit(
         )
 
 
-# ── Shared no-write edit preparation (B-2026-08-02-7 / B2) ────────────────────
+# ── Shared no-write edit preparation ────────────────────
 #
 # edit_file writes the result of an edit to disk; propose_str_replace stages
 # the SAME result as a proposal (no write). Both must run the identical
@@ -411,9 +411,9 @@ class PreparedEdit:
         self.line_ending = line_ending
 
 
-# ── Free-tier model payload aliases (Session 376) ────────────────────────────
+# ── Free-tier model payload aliases ────────────────────────────
 # Free-tier models (DeepSeek, Claude-style) frequently use alternate field
-# names for the same edit — the Session 375 live trace showed
+# names for the same edit — a live trace showed
 # `old_pattern`/`new_string` instead of `pattern`/`replace`, and content-only
 # calls (no action) meaning "rewrite the whole file". Normalizing here makes
 # the first attempt succeed instead of bouncing a validation error back to

@@ -1,5 +1,5 @@
 """
-apply_proposed_edit tool — B-2026-08-02-7 (B2, propose-stage tools).
+apply_proposed_edit tool — Propose-stage tools.
 
 Writes a staged proposal (from propose_str_replace / propose_write_file)
 to disk. Inherits file_writer's safety gates:

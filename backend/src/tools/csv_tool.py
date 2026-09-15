@@ -1,5 +1,5 @@
 """
-CSV tool — bounded, offline CSV file parsing (B-2026-07-31-10, Data tools slice).
+CSV tool — bounded, offline CSV file parsing (Data tools slice).
 
 Reads a CSV file and returns a compact aligned table — NEVER the raw file.
 

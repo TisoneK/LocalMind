@@ -1,6 +1,6 @@
 """
 JSON tool — bounded, offline JSON parsing & dot-path querying
-(B-2026-07-31-10, Data tools slice).
+(Data tools slice).
 
 Answers "what's in this JSON?" for either a file (path must be allowed)
 or an inline JSON string. Supports a simple dot-path query for drilling

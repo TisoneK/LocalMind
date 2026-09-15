@@ -81,7 +81,7 @@ _BROWSER_TIMEOUT = 30
 # ~14s and warm opens are ~1-2s, so a page still not ready at 25s is almost
 # always JS-heavy or blocking automation (e.g. anti-bot walls). Fail navigation
 # a bit sooner than generic commands so the agent falls through to a static
-# source faster instead of burning the full 30s (B-2026-09-01 flashscore trace).
+# source faster instead of burning the full 30s (flashscore trace, 2026-09-01).
 _BROWSER_OPEN_TIMEOUT = 25
 
 # Max output length to prevent context bloat. Table-aware truncation
@@ -136,7 +136,7 @@ async def _run_browser_cmd(
         # so a bare `await proc.communicate()` here blocks until the OUTER
         # dispatch timeout (180s) fires — that is exactly the 3m browse hang.
         # Kill the whole process group, then bound the drain so this returns at
-        # ~`timeout`, not 180s (B-2026-09-01 browser slowness).
+        # ~`timeout`, not 180s (browser slowness, 2026-09-01).
         _terminate_proc_group(proc)
         try:
             await asyncio.wait_for(proc.communicate(), timeout=2)
@@ -150,7 +150,7 @@ async def _run_browser_cmd(
 async def _extract_page_text(max_chars: int = _MAX_OUTPUT) -> str:
     """Best-effort: return the CURRENT page's rendered text (document.body.innerText).
 
-    B-2026-08-30 (agent-browser content capture): `open` and the read actions
+    Agent-browser content capture: `open` and the read actions
     left page content in the browser window — it never came back as tool
     evidence, so the agent opened a URL, saw nothing useful, and thrashed. The
     browser session is persistent (see the tool registration), so we can pull

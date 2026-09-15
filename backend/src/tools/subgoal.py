@@ -1,5 +1,5 @@
 """
-Subgoal scratchpad tools — B-2026-08-02-8 (B3, per Codebuff's
+Subgoal scratchpad tools — per Codebuff's
 add-subgoal / update-subgoal / create-plan).
 
 Three tools that operate on a per-run SubgoalRegistry (core/subgoal.py):
@@ -145,7 +145,7 @@ async def update_subgoal(message: str) -> ToolResult:
 async def create_plan(message: str) -> ToolResult:
     """Create many subgoals at once from a markdown list or JSON steps array.
 
-    ADR-18 P0: an optional `success_criteria` array (or markdown list) is
+    An optional `success_criteria` array (or markdown list) is
     stored on the run's SubgoalRegistry so the acceptance gate can judge
     the plan once executed — "done" requires receipts.
     """

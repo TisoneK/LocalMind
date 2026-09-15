@@ -1,5 +1,5 @@
 """
-SQL tool — bounded, read-only SQLite querying (B-2026-07-31-10, Data tools slice 2).
+SQL tool — bounded, read-only SQLite querying (Data tools slice 2).
 
 Answers "what's in this database?" against local .db/.sqlite files.
 
@@ -88,7 +88,7 @@ def _sql_query(path: str, query: str, max_rows: int = _MAX_ROWS) -> str:
             uri=True,
             timeout=_CONNECT_TIMEOUT_SECS,
         )
-        # B-2026-07-31-10 (Session 132 review): sqlite3 is blocking C code —
+        # sqlite3 is blocking C code — (review finding)
         # asyncio.wait_for in the dispatch layer cannot interrupt it mid-call,
         # so a model-generated cartesian join / recursive CTE could hang the
         # loop past every timeout. set_progress_handler aborts the query after

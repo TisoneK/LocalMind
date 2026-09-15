@@ -1,11 +1,11 @@
-"""S427 — evidence-grounded resolution for referential memory writes.
+"""Evidence-grounded resolution for referential memory writes.
 
 The contract (user directive): memory should have EVIDENCE first, understand
 what the user wants remembered, and distill it into a self-contained one
 line or paragraph — never store the user's raw words when those words only
 name a referent.
 
-Live proof this module is needed (S427 diagnosis): "Remember the source for
+Live proof this module is needed: "Remember the source for
 EPL table" ran the deterministic zero-LLM write and stored the literal
 phrase "source for EPL table", then confirmed it. The URL the user meant
 (https://www.skysports.com/premier-league-table) was in the turn-1 context

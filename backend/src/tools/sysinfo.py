@@ -63,7 +63,7 @@ def _time_info() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Native fallbacks (B-2026-08-24-12) — so sysinfo reports CPU/RAM/disk/uptime
+# Native fallbacks — so sysinfo reports CPU/RAM/disk/uptime
 # even when psutil is unavailable (a platform with no wheel, a broken install).
 # Uses stdlib (shutil.disk_usage, os.cpu_count) and lightweight platform
 # commands. Model/env-agnostic: sysinfo should never return an empty overview.
@@ -244,7 +244,7 @@ def _default_summary() -> str:
         except Exception:
             pass
     else:
-        # B-2026-08-24-12: no psutil — report CPU/RAM/disk/uptime natively so
+        # No psutil — report CPU/RAM/disk/uptime natively so
         # the overview is never empty (append only the lines that resolve).
         for line in (
             _native_cpu_line(),
@@ -503,7 +503,7 @@ def _environment_info() -> str:
 
 
 def _native_disk_all() -> str:
-    """B-2026-08-24-12: mounted-filesystem usage without psutil — `df -kP` on
+    """Mounted-filesystem usage without psutil — `df -kP` on
     Unix, drive letters (via stdlib shutil) on Windows."""
     import shutil
     import subprocess
