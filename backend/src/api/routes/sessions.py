@@ -189,6 +189,18 @@ async def get_history(session_id: str):
                 "model": metrics.get("model") or None,
                 "provider": metrics.get("provider") or None,
             }
+            # "Thought for Xs" — the active reasoning time the live UI
+            # accumulated; restored so the thinking header reads the same
+            # after a reload. Omitted when the turn never thought.
+            if metrics.get("think_ms"):
+                message["thinkMs"] = metrics["think_ms"]
+        # The structured edit diff (DiffBlock shape — already camelCase) and
+        # the best-of-N candidate list the turn produced, restored so the
+        # rendered diff / comparison survives a reload like the rest.
+        if getattr(m, "diff_data", None):
+            message["diffData"] = m.diff_data
+        if getattr(m, "candidates", None):
+            message["candidates"] = m.candidates
         # Session 267: restore the Agent Workspace run tree + phase strip
         # (frontend AgentRun[] / AgentPhase[] shapes — already camelCase).
         if m.agent_runs:

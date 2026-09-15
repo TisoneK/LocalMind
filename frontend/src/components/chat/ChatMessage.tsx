@@ -249,6 +249,48 @@ function MessageMetrics({ performance }: { performance: NonNullable<ChatMessageT
   );
 }
 
+// ── BestOfNSection — the candidate comparison for a best-of-N edit turn ──
+// The tool records every candidate it considered (strategy + rationale) and
+// which one the selector picked. Persisted with the message so the comparison
+// survives reload. Compact by design — the winner line is always visible,
+// the full list folds open on demand.
+function BestOfNSection({ candidates }: { candidates: NonNullable<ChatMessageType['candidates']> }) {
+  const [open, setOpen] = useState(false);
+  const winner = candidates.find((c) => c.isWinner);
+  if (!winner) return null;
+  return (
+    <div className="mt-2 rounded-md border border-brand-green/20 bg-brand-green/5 px-3 py-2">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-1.5 text-[11px] text-brand-green-soft text-left"
+      >
+        <span className="font-medium">Best of {candidates.length}</span>
+        <span className="text-brand-green-muted truncate">
+          — applied <strong className="text-brand-green">{winner.strategy}</strong>
+        </span>
+        <span className="ml-auto text-[9px] text-brand-green-faint shrink-0">
+          {open ? 'Hide' : 'Show'} all
+        </span>
+      </button>
+      {open && (
+        <ul className="mt-1.5 space-y-1">
+          {candidates.map((c) => (
+            <li key={c.index} className="text-[10px] leading-snug">
+              <span className={c.isWinner ? 'text-brand-green font-medium' : 'text-brand-green-muted'}>
+                {c.isWinner ? '✓ ' : '— '}
+                {c.strategy}
+              </span>
+              {c.rationale && (
+                <span className="text-brand-green-faint"> — {c.rationale}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // ── PermissionGate — confirm/deny buttons for pending file writes ──────────
 
 function PermissionGate({ pending, onResolved }: { pending: PendingWrite; onResolved: (result: 'confirmed' | 'denied') => void }) {
@@ -452,9 +494,12 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
   // demand via the card's View-diff toggle, rendered read-only (no second
   // Accept bar — the change is already acknowledged). Component-local state:
   // the message list is keyed by id, so this survives re-renders for as
-  // long as the message is mounted; diffData itself is live-stream-only
-  // (not persisted), so the card disappears entirely on reload either way.
-  const [diffAccepted, setDiffAccepted] = useState(false);
+  // long as the message is mounted. The diff itself persists with the
+  // message, so a reload restores the card — and a reloaded turn's edit is
+  // already applied on disk, so it comes back in the collapsed "applied"
+  // state rather than re-offering Accept/Reject. `timestampEpoch` is set
+  // only by the history-restore path, so it doubles as the restored marker.
+  const [diffAccepted, setDiffAccepted] = useState(!!message.timestampEpoch);
   const [diffReopen, setDiffReopen] = useState(false);
 
   const diffStats = useMemo(() => {
@@ -633,6 +678,9 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
 
           {/* Per-message performance line — only on assistant replies with metrics */}
           {!isUser && message.performance && <MessageMetrics performance={message.performance} />}
+
+          {/* Best of N section — the candidate comparison for a best-of-N edit turn */}
+          {message.candidates && <BestOfNSection candidates={message.candidates} />}
 
           {/* Permission gate for pending writes */}
           {message.pendingWrite && (

@@ -64,7 +64,11 @@ CREATE TABLE IF NOT EXISTS messages (
     acknowledgement TEXT,
     -- Session 267: Agent Workspace run tree + phase strip (JSON).
     agent_runs     TEXT,
-    agent_phases   TEXT
+    agent_phases   TEXT,
+    -- Structured edit diff + best-of-N candidates (JSON) — live-streamed
+    -- artifacts that now survive a reload.
+    diff_data      TEXT,
+    candidates     TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_session
@@ -311,6 +315,15 @@ class SessionStore:
                     conn.execute(f"ALTER TABLE messages ADD COLUMN {_col} TEXT")
             except sqlite3.OperationalError:
                 pass
+        # Structured edit diff + best-of-N candidates on messages (reload
+        # restore). Fresh DBs get them from _SCHEMA; existing DBs need the
+        # same defensive ALTERs as above.
+        for _col in ("diff_data", "candidates"):
+            try:
+                with self._conn() as conn:
+                    conn.execute(f"ALTER TABLE messages ADD COLUMN {_col} TEXT")
+            except sqlite3.OperationalError:
+                pass
         # Session 267: per-session observation persistence. The Observe panel
         # used to read an in-memory engine dict that died on backend restart;
         # the latest turn's observation is now written here and the endpoint
@@ -382,8 +395,8 @@ class SessionStore:
             try:
                 conn.execute(
                     """
-                    INSERT INTO messages(session_id, role, content, tool_name, timestamp, file_name, file_path, file_size, file_type, thinking, error, tool_calls, metrics, agent_runs, agent_phases, acknowledgement)
-                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO messages(session_id, role, content, tool_name, timestamp, file_name, file_path, file_size, file_type, thinking, error, tool_calls, metrics, agent_runs, agent_phases, acknowledgement, diff_data, candidates)
+                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,  # noqa: E501
                     (
                         session_id,
@@ -402,6 +415,8 @@ class SessionStore:
                         json.dumps(message.agent_runs) if message.agent_runs else None,
                         json.dumps(message.agent_phases) if message.agent_phases else None,
                         message.acknowledgement,  # plain text — stored raw
+                        json.dumps(message.diff_data) if message.diff_data else None,
+                        json.dumps(message.candidates) if message.candidates else None,
                     ),
                 )
             except Exception as e:
@@ -594,7 +609,8 @@ class SessionStore:
             rows = conn.execute(
                 """
                 SELECT role, content, tool_name, timestamp, file_name, file_path, file_size, file_type,
-                       thinking, error, tool_calls, metrics, agent_runs, agent_phases, acknowledgement
+                       thinking, error, tool_calls, metrics, agent_runs, agent_phases, acknowledgement,
+                       diff_data, candidates
                 FROM messages
                 WHERE session_id = ?
                 ORDER BY timestamp ASC
@@ -620,6 +636,8 @@ class SessionStore:
                 agent_runs=self._decode_json(row["agent_runs"]) if "agent_runs" in row.keys() else None,
                 agent_phases=self._decode_json(row["agent_phases"]) if "agent_phases" in row.keys() else None,
                 acknowledgement=row["acknowledgement"] if "acknowledgement" in row.keys() else None,
+                diff_data=self._decode_json(row["diff_data"]) if "diff_data" in row.keys() else None,
+                candidates=self._decode_json(row["candidates"]) if "candidates" in row.keys() else None,
             )
             for row in rows
         ]
@@ -636,7 +654,8 @@ class SessionStore:
             rows = conn.execute(
                 """
                 SELECT role, content, tool_name, timestamp, file_name, file_path, file_size, file_type,
-                       thinking, error, tool_calls, metrics, agent_runs, agent_phases, acknowledgement
+                       thinking, error, tool_calls, metrics, agent_runs, agent_phases, acknowledgement,
+                       diff_data, candidates
                 FROM messages
                 WHERE session_id = ?
                 ORDER BY timestamp DESC
@@ -662,6 +681,8 @@ class SessionStore:
                 agent_runs=self._decode_json(row["agent_runs"]) if "agent_runs" in row.keys() else None,
                 agent_phases=self._decode_json(row["agent_phases"]) if "agent_phases" in row.keys() else None,
                 acknowledgement=row["acknowledgement"] if "acknowledgement" in row.keys() else None,
+                diff_data=self._decode_json(row["diff_data"]) if "diff_data" in row.keys() else None,
+                candidates=self._decode_json(row["candidates"]) if "candidates" in row.keys() else None,
             )
             for row in rows
         ]

@@ -115,6 +115,49 @@ def _collect_tool_calls(collector: ObsCollector) -> list[dict]:
     return list(calls.values())
 
 
+def _collect_diff(collector: ObsCollector) -> Optional[dict]:
+    """Last structured file diff of the turn, in the frontend DiffBlock shape.
+
+    Mirrors chat.py's ``file_diff`` → ``{type:"diff"}`` SSE bridge so a reload
+    restores the same highlighted diff the user saw live. A turn that edited
+    several files keeps the last one — the same one the live stream rendered
+    most recently."""
+    for evt in reversed(collector.history()):
+        if evt.type == "file_diff":
+            d = evt.data
+            return {
+                "hunks": d.get("diff_hunks") or [],
+                "language": d.get("diff_language", ""),
+                "filePath": d.get("path", ""),
+                "additions": d.get("diff_additions", 0),
+                "deletions": d.get("diff_deletions", 0),
+            }
+    return None
+
+
+def _collect_candidates(collector: ObsCollector) -> Optional[list]:
+    """Best-of-N edit candidates (winner included) from the turn's obs trace.
+
+    The tool emits a ``best_of_n_candidates`` obs event when it selects a
+    winner; converted here to the frontend ``BestOfNCandidate[]`` shape so
+    the candidate comparison survives a reload."""
+    for evt in reversed(collector.history()):
+        if evt.type == "best_of_n_candidates":
+            cands = evt.data.get("candidates") or []
+            winner = evt.data.get("winner_index")
+            out = [
+                {
+                    "index": c.get("index", i),
+                    "strategy": c.get("strategy", "?"),
+                    "rationale": c.get("rationale", ""),
+                    "isWinner": c.get("index", i) == winner,
+                }
+                for i, c in enumerate(cands)
+            ]
+            return out or None
+    return None
+
+
 def _summarize_tool_actions(collector: ObsCollector) -> str:
     """One-line summary of the most significant tool actions this turn.
 
@@ -487,6 +530,8 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         metrics: Optional[dict] = None,
         agent_runs: Optional[list] = None,
         agent_phases: Optional[list] = None,
+        diff_data: Optional[dict] = None,
+        candidates: Optional[list] = None,
     ) -> None:
         # Session 266: an error turn persists an (empty-text) assistant message
         # carrying the canonical error object — the history endpoint returns it
@@ -507,6 +552,8 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     metrics=metrics,
                     agent_runs=agent_runs,
                     agent_phases=agent_phases,
+                    diff_data=diff_data,
+                    candidates=candidates,
                 ),
             )
         except Exception:
@@ -1136,6 +1183,11 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # collect it so the persisted assistant message carries what
                 # the UI showed live.
                 _fast_thinking_parts: list[str] = []
+                # "Thought for Xs" on this path too: reasoning streams before
+                # the answer, so active thinking spans from the first thinking
+                # chunk until the first answer token.
+                _fast_think_accum = 0.0
+                _fast_think_seg: Optional[float] = None
 
                 _response_chunks: list[str] = []
                 _fast_usage: dict[str, int] = {}
@@ -1178,7 +1230,14 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                         _fast_usage.update(_chunk.usage)
                     if _chunk.thinking:
                         _fast_thinking_parts.append(_chunk.thinking)
+                        if _fast_think_seg is None:
+                            _fast_think_seg = time.monotonic()
                     if _chunk.text:
+                        if _fast_think_seg is not None:
+                            # The answer started — reasoning time stops here
+                            # (this path has no tool work between phases).
+                            _fast_think_accum += time.monotonic() - _fast_think_seg
+                            _fast_think_seg = None
                         _response_chunks.append(_chunk.text)
                         if _chunk.done:
                             # The helper yields its own done=True chunk with
@@ -1250,6 +1309,10 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     file=file,
                     content_type=content_type,
                 )
+                _fast_think_open = (
+                    time.monotonic() - _fast_think_seg if _fast_think_seg is not None else 0.0
+                )
+                _fast_think_elapsed_ms = round((_fast_think_accum + _fast_think_open) * 1000)
                 self._persist_assistant(
                     session_id,
                     _response_text,
@@ -1273,6 +1336,9 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                             "prompt_tokens": _prompt_tokens,
                             "completion_tokens": _completion_tokens,
                             "latency_ms": _total_ms,
+                            # "Thought for Xs" — active reasoning time on this
+                            # turn too (0 when nothing was thought).
+                            "think_ms": _fast_think_elapsed_ms if _fast_thinking_parts else 0,
                             # Turn identity (v3 export): which model +
                             # provider answered this real (non-canned) turn.
                             "model": active_parent_model() or "(default)",
@@ -1622,6 +1688,27 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # streams thinking as "start"/"end" markers plus token text — mirror
         # the frontend's phase-separator behavior (\n\n between phases).
         thinking_parts: list[str] = []
+        # Mirror of the frontend's "Thought for Xs" accumulator: reasoning
+        # time counts between thinking start/end markers, frozen while tools
+        # run (status chunks) so tool latency never double-counts as thinking.
+        _think_accum = 0.0
+        _think_seg: Optional[float] = None
+
+        def _think_resume() -> None:
+            nonlocal _think_seg
+            if _think_seg is None:
+                _think_seg = time.monotonic()
+
+        def _think_pause() -> None:
+            nonlocal _think_accum, _think_seg
+            if _think_seg is not None:
+                _think_accum += time.monotonic() - _think_seg
+                _think_seg = None
+
+        def _think_elapsed_ms() -> int:
+            extra = time.monotonic() - _think_seg if _think_seg is not None else 0.0
+            return round((_think_accum + extra) * 1000)
+
         # B-2026-08-24-16: capture a Chat→Agent switch offer emitted by the loop
         # (direct mode + action request) so it survives into the terminal done
         # chunk below (the runtime rebuilds that chunk, dropping loop metadata).
@@ -1676,8 +1763,17 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                         # frontend does, but only once content exists.
                         if thinking_parts:
                             thinking_parts.append("\n\n")
+                        _think_resume()
                     elif chunk.thinking != "end":
                         thinking_parts.append(chunk.thinking)
+                        _think_resume()
+                    else:
+                        _think_pause()
+                # Tool narration chunks (a status, no prose) mirror the
+                # frontend's pause-on-tool-call: reasoning time freezes while
+                # a tool runs so its latency never counts as thinking.
+                elif chunk.status and not chunk.text and not chunk.error:
+                    _think_pause()
                 # Error chunks are terminal transport events. Do not let the
                 # parent runtime's completion bookkeeping turn a provider
                 # failure into the generic "no usable answer" fallback.
@@ -1697,6 +1793,8 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                         tool_calls=_collect_tool_calls(collector) or None,
                         agent_runs=agent_runs,
                         agent_phases=agent_phases,
+                        diff_data=_collect_diff(collector),
+                        candidates=_collect_candidates(collector),
                     )
                     yield chunk
                     return
@@ -1729,6 +1827,8 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 tool_calls=_collect_tool_calls(collector) or None,
                 agent_runs=agent_runs,
                 agent_phases=agent_phases,
+                diff_data=_collect_diff(collector),
+                candidates=_collect_candidates(collector),
             )
             yield StreamChunk(text="", done=True, error=exc.raw)
             return
@@ -1856,10 +1956,11 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # Session 267: also persist the Agent Workspace run tree + phase strip
         # so the Agents tab and phase visibility survive a reload.
         agent_runs, agent_phases = build_workspace_artifacts(collector, task=message)
+        _thinking_text = "".join(thinking_parts) or None
         self._persist_assistant(
             session_id,
             final_text,
-            thinking="".join(thinking_parts) or None,
+            thinking=_thinking_text,
             acknowledgement=self._collect_acknowledgement(collector),
             tool_calls=_collect_tool_calls(collector) or None,
             metrics={
@@ -1868,6 +1969,10 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 "latency_ms": total_ms,
                 "cached_tokens": int(usage.get("cached_tokens", 0) or 0),
                 "llm_calls": int(usage.get("llm_calls", 0) or 0),
+                # "Thought for Xs" — active reasoning time for the turn,
+                # persisted with the metrics so a reload restores the label
+                # (0 when the turn never thought: no key, no chip).
+                "think_ms": _think_elapsed_ms() if _thinking_text else 0,
                 # Turn identity (v3 export): which model + provider answered
                 # this turn (same source the kernel ready log records).
                 "model": active_parent_model() or "(default)",
@@ -1875,6 +1980,8 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             },
             agent_runs=agent_runs,
             agent_phases=agent_phases,
+            diff_data=_collect_diff(collector),
+            candidates=_collect_candidates(collector),
         )
         # ADR-52 phase 2: fold this turn into the per-chat ParentSession and
         # persist. The rolling summary compacts older turns; the recent tail

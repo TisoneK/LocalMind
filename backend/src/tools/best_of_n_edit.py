@@ -43,6 +43,7 @@ from tools.delegate import (
     MAX_DELEGATION_DEPTH,
     _current_adapter,
     _current_depth,
+    get_current_obs,
 )
 from tools.delegate_parallel import (
     DELEGATION_WALL_CLOCK_SECS,
@@ -466,6 +467,29 @@ async def best_of_n_edit(message: str) -> ToolResult:
 
     winner = candidates[choice]
     winner_strategy = winner.get("strategy", roster[choice] if choice < len(roster) else "?")
+
+    # Record the selection on the turn's observation stream so the candidate
+    # comparison persists with the assistant message and survives a reload
+    # (the parent runtime collects it from the collector history).
+    try:
+        _obs = get_current_obs()
+        if _obs is not None:
+            _obs.emit(
+                "best_of_n_candidates",
+                file_path=abs_path,
+                winner_index=choice,
+                winner_strategy=winner_strategy,
+                candidates=[
+                    {
+                        "index": i,
+                        "strategy": c.get("strategy", "?"),
+                        "rationale": c.get("rationale", ""),
+                    }
+                    for i, c in enumerate(candidates)
+                ],
+            )
+    except Exception:  # never fail the edit over an observation record
+        logger.debug("[best_of_n_edit] candidate obs emit skipped", exc_info=True)
 
     # ── 4. Re-stage the winner in the PARENT's registry ──────────────────
     # The children's registries are discarded when they end; the parent

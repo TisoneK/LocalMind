@@ -185,6 +185,12 @@ class Message(BaseModel):
     # AgentPhase[] shapes) so the Agents tab survives a reload.
     agent_runs: Optional[list] = None
     agent_phases: Optional[list] = None
+    # The structured edit diff the live stream rendered (frontend DiffBlock
+    # shape: {hunks, language, filePath, additions, deletions}) plus the
+    # best-of-N candidate list ({index, strategy, rationale, isWinner}) —
+    # both shown live but previously lost on reload.
+    diff_data: Optional[dict] = None
+    candidates: Optional[list] = None
 
 
 class FileAttachment(BaseModel):

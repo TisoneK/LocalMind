@@ -274,6 +274,56 @@ def test_message_roundtrips_agent_runs_and_phases(store):
     assert recent[0].agent_phases == phases
 
 
+def test_message_roundtrips_diff_data_and_candidates(store):
+    """The structured edit diff + best-of-N candidate list persist with the
+    assistant message and round-trip through both history readers so the
+    rendered diff / comparison survives a reload."""
+    diff = {
+        "hunks": [
+            {
+                "filePath": "src/foo.py",
+                "lines": [
+                    {"type": "removed", "content": "x = 1", "oldLine": 10},
+                    {"type": "added", "content": "x = 2", "newLine": 10},
+                ],
+            }
+        ],
+        "language": "python",
+        "filePath": "src/foo.py",
+        "additions": 1,
+        "deletions": 1,
+    }
+    candidates = [
+        {"index": 0, "strategy": "conservative", "rationale": "smallest change", "isWinner": False},
+        {"index": 1, "strategy": "refactor", "rationale": "clearer structure", "isWinner": True},
+    ]
+    store.append(
+        "s1",
+        Message(
+            role=Role.ASSISTANT,
+            content="Edited foo.py.",
+            diff_data=diff,
+            candidates=candidates,
+            metrics={"prompt_tokens": 10, "completion_tokens": 5, "latency_ms": 100, "think_ms": 4200},
+        ),
+    )
+    history = store.get_history("s1")
+    m = history[0]
+    assert m.diff_data == diff
+    assert m.candidates == candidates
+    assert m.metrics["think_ms"] == 4200
+    recent = store.get_recent_history("s1", limit=2)
+    assert recent[0].diff_data == diff
+    assert recent[0].candidates == candidates
+
+
+def test_messages_without_diff_or_candidates_roundtrip_none(store):
+    store.append("s1", Message(role=Role.ASSISTANT, content="plain"))
+    m = store.get_history("s1")[0]
+    assert m.diff_data is None
+    assert m.candidates is None
+
+
 def test_observation_save_get_roundtrips(store):
     """Session 267: the merged observation + snapshot summary persist to the
     observations table (one row per session, latest turn wins) and the two

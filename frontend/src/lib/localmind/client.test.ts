@@ -231,6 +231,51 @@ describe('getSessionHistory (Session 266 artifacts)', () => {
     });
   });
 
+  it('restores thinkMs/diffData/candidates persisted with the message', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        history: [
+          {
+            id: 'm2',
+            role: 'assistant',
+            content: 'Edited foo.py.',
+            timestamp: 1783586330.77,
+            thinking: 'weighing two edits',
+            thinkMs: 4200,
+            diffData: {
+              hunks: [{ filePath: 'src/foo.py', lines: [{ type: 'added', content: 'x = 2', newLine: 10 }] }],
+              language: 'python',
+              filePath: 'src/foo.py',
+              additions: 1,
+              deletions: 0,
+            },
+            candidates: [
+              { index: 0, strategy: 'conservative', rationale: 'smallest change', isWinner: false },
+              { index: 1, strategy: 'refactor', rationale: 'clearer structure', isWinner: true },
+            ],
+          },
+        ],
+      }),
+    }));
+
+    const messages = await localmindClient.getSessionHistory('session-1');
+    const assistant = messages[0];
+    expect(assistant.thinkMs).toBe(4200);
+    expect(assistant.diffData).toMatchObject({
+      language: 'python',
+      filePath: 'src/foo.py',
+      additions: 1,
+      deletions: 0,
+    });
+    expect(assistant.diffData?.hunks[0]?.lines[0]).toMatchObject({ type: 'added', content: 'x = 2' });
+    expect(assistant.candidates).toHaveLength(2);
+    expect(assistant.candidates?.find((c) => c.isWinner)).toMatchObject({
+      strategy: 'refactor',
+      rationale: 'clearer structure',
+    });
+  });
+
   it('leaves messages without artifacts untouched', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,

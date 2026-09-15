@@ -358,6 +358,9 @@ interface HistoryMessageWire {
   performance?: ChatMessage['performance'];
   agentRuns?: ChatMessage['agentRuns'];
   agentPhases?: ChatMessage['agentPhases'];
+  thinkMs?: number;
+  diffData?: ChatMessage['diffData'];
+  candidates?: ChatMessage['candidates'];
 }
 
 /** Raw workspace file entry (session files / search results / recent). */
@@ -605,6 +608,12 @@ class LocalMindClient {
       // through verbatim so the Agents tab and phase strip survive reload.
       agentRuns: m.agentRuns,
       agentPhases: m.agentPhases,
+      // The reasoning duration ("Thought for Xs"), the structured edit diff,
+      // and the best-of-N candidate list — persisted with the assistant
+      // message and restored so the reload matches the live stream.
+      thinkMs: m.thinkMs,
+      diffData: m.diffData,
+      candidates: m.candidates,
     }));
   }
 
