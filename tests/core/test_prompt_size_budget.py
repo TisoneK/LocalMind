@@ -1,9 +1,9 @@
 """
-Session 126: regression guard on agent system-prompt size.
+Regression guard on agent system-prompt size.
 
 The system prompt is a fixed per-step cost in the agent loop (paid on EVERY
-step, multiplied by the number of steps in a plan). Session 124 scoped the
-tool definitions; Session 126 trimmed the static prompt itself:
+step, multiplied by the number of steps in a plan). An earlier pass scoped
+the tool definitions; this guard then trimmed the static prompt itself:
   - removed the `shell_guidance` block (verbatim duplicate of CRITICAL RULES)
   - condensed the 9 personas in `_PERSONA_MAP` (dropped fabrication/narration
     duplicates; kept find_path, file_task-vs-shell, binary, read-before-write,
@@ -11,7 +11,7 @@ tool definitions; Session 126 trimmed the static prompt itself:
   - trimmed `skills/shell.md` (dropped "Output handling" = exact duplicate of
     CRITICAL RULES #4 and the platform table duplicated by TOOL ARGUMENT RULES)
 
-Session 144 (ADR-17 track 1): consolidated the post-persona tail — merged
+The prompt-assembly consolidation merged the post-persona tail — merged
 CRITICAL RULES + VERIFICATION + RESULT VERIFICATION + RESPONSE FORMATTING into
 one deduplicated block (anti-fabrication / "never say Done" / exact-report
 appeared 3-4x) and capped the injected skill fragment at 2,000 chars (heads
@@ -31,24 +31,24 @@ from core.models import Intent
 
 # intent -> max chars for the system prompt with EMPTY tool metadata list
 # (the tool list is measured separately by test_intent_tool_scoping).
-# Measured 2026-08-11 post-Session-144 trim.
+# Measured 2026-08-11 after that trim.
 _BUDGETS = {
-    # Session 245 (Lever 1 + 3): env vars moved to a trailing turn-context
+    # Env vars moved to a trailing turn-context
     # message and the formatting example trimmed — ~2,270 chars off each
     # execute intent. Budgets tightened to lock the reduction in.
-    # Session 378: +400 each (rule 10 "TOOL OUTPUT IS RETAINED" — the
+    # +400 each (rule 10 "TOOL OUTPUT IS RETAINED" — the
     # repeated-listings fix; hard-capped at ~330 chars, this is the once-off
     # cost of telling models not to re-list what they already have).
-    Intent.SHELL: 12_200,  # Session 351: +100; Session 379: +200 (shell-writes-last-resort)
-    Intent.SYSINFO: 11_500,  # 2026-08-21: +500; S378: +400; S379: +300; +300 (dir_explorer steering in the planning templates + TOOL ARGUMENT rule — the always-present executor prompt grew with the new core tool; measured 11,355, justified rather than absorbed)
-    Intent.CODE_EXEC: 12_500,  # Session 351: +100; S378: +350; S379: +250
-    Intent.FILE_WRITE: 12_600,  # S378: +400; S379: +200
-    Intent.FILE_EDIT: 12_600,  # S378: +400; S379: +200
-    Intent.FILE_TASK: 13_100,  # 2026-08-21: +500; S378: +400; S379: +200
-    Intent.WEB_SEARCH: 13_100,  # 2026-08-21: +500; S378: +400; S379: +200
-    Intent.WEB_FETCH: 12_300,  # S378: +100; S379: +200
-    Intent.MEMORY_OP: 11_700,  # S378: +500; S379: +200
-    Intent.BROWSE: 11_800,  # S378: +100; S379: +200
+    Intent.SHELL: 12_200,  # +100; +200 (shell-writes-last-resort)
+    Intent.SYSINFO: 11_500,  # 2026-08-21: +500; +400; +300; +300 (dir_explorer steering in the planning templates + TOOL ARGUMENT rule — the always-present executor prompt grew with the new core tool; measured 11,355, justified rather than absorbed)
+    Intent.CODE_EXEC: 12_500,  # Session 351: +100; +350; +250
+    Intent.FILE_WRITE: 12_600,  # +400; +200
+    Intent.FILE_EDIT: 12_600,  # +400; +200
+    Intent.FILE_TASK: 13_100,  # 2026-08-21: +500; +400; +200
+    Intent.WEB_SEARCH: 13_100,  # 2026-08-21: +500; +400; +200
+    Intent.WEB_FETCH: 12_300,  # +100; +200
+    Intent.MEMORY_OP: 11_700,  # +500; +200
+    Intent.BROWSE: 11_800,  # +100; +200
     Intent.CHAT: 6_000,  # measured 4,730 (unchanged — no CRITICAL RULES in CHAT branch)
 }
 

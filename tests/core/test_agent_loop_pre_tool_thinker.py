@@ -1,7 +1,7 @@
 """Pre-tool Thinker consult in the parent-agent loop.
 
 Root cause fixed: the Thinker ran only (a) on the conversational fast-path
-(agent_runtime, S354) and (b) in the loop AFTER a tool produced an
+(agent_runtime) and (b) in the loop AFTER a tool produced an
 observation. A parent-agent turn with zero tools and no fast-path match
 therefore had NO structured understanding pass — the model free-associated
 "I'll start by exploring…" (narration-without-action, CONV-05/06) or
@@ -56,7 +56,7 @@ class _AnalysisThinker:
 
 
 class _StreamingThinker(_AnalysisThinker):
-    """Also streams prose reasoning as thinking chunks (the ADR-57
+    """Also streams prose reasoning as thinking chunks (the
     slice-1 consult contract) and records the Evidence it was handed."""
 
     def __init__(self, timeout_secs=30.0):
@@ -270,12 +270,12 @@ async def test_pre_tool_consult_failure_never_breaks_turn():
     assert not any(e.type == "agent_thinker_done" for e in obs.history())
 
 
-# ── Session 343: pressured re-ask of a refused unanswerable (loop wiring) ──
+# ── Pressured re-ask of a refused unanswerable (loop wiring) ──
 
 
 @pytest.mark.asyncio
 async def test_pressured_reask_returns_direct_refusal_without_model_call():
-    """B-2026-08-22-1/-2 wiring: when the history shows the agent already
+    """Wiring check: when the history shows the agent already
     refused an unanswerable and the follow-up pressures it ('just guess' /
     'check your memory'), the loop must return the deterministic refusal
     with ZERO model calls — no fresh pass to cave in, no credential hunt."""
@@ -331,12 +331,12 @@ async def test_pressured_reask_returns_direct_refusal_without_model_call():
     assert not any(e.type == "tool_call" for e in obs.history())
 
 
-# ── Session 344: Cluster F loop wiring ──
+# ── Cluster F loop wiring ──
 
 
 @pytest.mark.asyncio
 async def test_vague_imperative_short_circuits_before_thinker():
-    """B-2026-08-22-5: 'Fix my project.' now returns the deterministic
+    """'Fix my project.' now returns the deterministic
     clarifying question with ZERO model calls — the tool-first reflex (CAT2-2
     burned 10 tools / 164s before asking) never gets a chance to start."""
     from agents.base_agent import AgentConfig
@@ -385,9 +385,9 @@ async def test_vague_imperative_short_circuits_before_thinker():
     assert "clarify" in user_text.lower() or "could you" in user_text.lower(), user_text
 
 
-# ── ADR-57 slice 2: Thinker gating, then concurrency (B-2026-09-03 / S428) ──
-# B-2026-09-03 value-gated the reflexive consults (once per turn, failure /
-# >=2 sources) to kill the S420-era serial latency. S428 (owner-approved)
+# ── Thinker gating, then concurrency (B-2026-09-03 / S428) ──
+# Value-gated the reflexive consults (once per turn, failure /
+# >=2 sources) to kill the earlier serial latency. An owner-approved
 # replaces that gate with CONCURRENCY: a consult after every successful tool
 # runs in the background (zero added latency), failures stay blocking, volume
 # is bounded by one-in-flight + a per-turn cap.
@@ -484,7 +484,7 @@ async def test_posttool_thinker_consults_once_across_many_tools():
         ):
             pass
 
-    # ADR-57 slice 2: the once-per-turn guard is GONE — a consult
+    # The once-per-turn guard is GONE — a consult
     # fires after every successful tool (bounded by the in-flight rule +
     # per-turn cap) and each one completes and is absorbed. SHELL is not a
     # direct-retrieval intent, so the pre-tool consult (iteration 0) also
@@ -501,7 +501,7 @@ async def test_posttool_thinker_consults_once_across_many_tools():
 
 @pytest.mark.asyncio
 async def test_posttool_consults_capped_per_turn():
-    """ADR-57 slice 2: the per-turn cap (_THINKER_CONSULT_CAP) bounds consult
+    """The per-turn cap (_THINKER_CONSULT_CAP) bounds consult
     volume — a 7-tool turn consults at most 5 times even though every tool
     succeeds."""
     from core.agent.loop import _THINKER_CONSULT_CAP
@@ -561,7 +561,7 @@ async def test_posttool_consults_capped_per_turn():
 
 @pytest.mark.asyncio
 async def test_background_consult_does_not_block_turn():
-    """ADR-57 slice 2 core property: a slow post-tool consult must NOT delay
+    """Core property: a slow post-tool consult must NOT delay
     the turn — the loop proceeds on the raw observation while the consult
     overlaps the model work. The wall-clock of the turn must stay well under
     the consult's own duration."""
@@ -647,7 +647,7 @@ async def test_background_consult_does_not_block_turn():
 
 @pytest.mark.asyncio
 async def test_failed_tool_consult_blocks_next_call():
-    """ADR-57 slice 2 exception: after a FAILED tool the consult stays
+    """Exception: after a FAILED tool the consult stays
     BLOCKING — its recovery advice must be in the VERY NEXT model call's
     context, not one iteration late."""
     loop = AgentLoop(adapter=MagicMock())
@@ -710,7 +710,7 @@ async def test_failed_tool_consult_blocks_next_call():
     )
 
 
-# ── S425: the consult's reasoning streams; the analysis compounds ───────────
+# ── The consult's reasoning streams; the analysis compounds ───────────
 
 
 @pytest.mark.asyncio
