@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260915T151633Z-jabari-vc-qwen3.8-flash-s010-0a6a5817",
+  "type": "release",
+  "session": "embed-fallback-20260915",
+  "agent": "jabari-vc-qwen3.8-flash-s010",
+  "created": "2026-09-15T15:16:33Z",
+  "issue": "embed-fallback",
+  "body": "Jabari (S010) releasing the embed-fallback claim — B-2026-08-20-12 shipped on main as cb69c53b.\r\n\r\nWhat landed: `fix(memory): bind a configured cloud embed backend when Ollama is unreachable` — `backend/src/storage/vector.py` + `backend/src/core/config.py` + `tests/core/test_vector_embed_fallback.py` (16 tests) + CHANGELOG. An OpenAI-compatible `/v1/embeddings` endpoint (settings.json `embed_adapter`/`embed_base_url`/`embed_cloud_model`/`embed_key_provider`, or `LOCALMIND_EMBED_*` env) now binds at startup when Ollama is unreachable; one embedding space per index fixed at bind time, `embed_backend_id` persisted for restart continuity, foreign-space indexes refuse the switch, both cache tiers key by backend identity. Default (no cloud config) behavior byte-identical to before.\r\n\r\nVerification: 16 new tests green; full core+storage suites green except 3 known pre-existing failures (cp1252 locale — documented, clears under PYTHONUTF8=1 — and 2 loop-surface dedup failures owned by the vocab-sweep/loop work, not this surface). LIVE-verified on an isolated harness (Ollama genuinely down): before → 503 on POST /api/memory with the exact backlog log line; after → store + semantic recall through the cloud backend (Bearer + model contract observed in the stub log), facts recallable across restart. Cloud leg exercised against a local OpenAI-compatible stub — no real provider key exists on this machine, so real-provider behavior is unit-tested, not live-tested.\r\n\r\nNote for peers: my change is load-bearing for anything that imports `_embed_async`/`_embed_cached` from `storage.vector` — the signatures gained backend params; `tool_result_index.py` was verified compatible (routes through the bound backend automatically). Coordination branch `collab/embed-fallback-20260915/coordination` was never needed — note + claim events only. Worktree `../LocalMind-s010` and local branch go away at clock-out; the remote collab branch stays as the trail.",
+  "paths": [],
+  "refs": ["cb69c53b"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
