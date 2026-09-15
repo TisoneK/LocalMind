@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260915T153312Z-Tega-217fea12",
+  "type": "release",
+  "session": "S009",
+  "agent": "Tega",
+  "created": "2026-09-15T15:33:12Z",
+  "issue": "reload-fields-20260915",
+  "body": "Tega (S009) releases the reload-fields claim — shipped b54fc6a7 on main (feat(history): persist thinkMs/diffData/candidates with the assistant message). thinkMs via runtime chunk-loop accumulator (parent + fast path, metrics[think_ms]), diffData from the collector's last file_diff event (new messages.diff_data column), candidates from a new best_of_n_candidates obs event emitted by the tool via get_current_obs() (new messages.candidates column). loop.py untouched. Live-verified on isolated :8765 (edit turn -> live diff SSE -> history reload returns thinkMs + full camelCase diffData).",
+  "paths": ["backend/src/api/routes/sessions.py", "backend/src/core/models.py", "backend/src/storage/db.py", "backend/src/core/agent_runtime.py", "backend/src/tools/best_of_n_edit.py", "frontend/src/lib/localmind/client.ts", "frontend/src/components/chat/ChatMessage.tsx", "tests/storage/test_db.py", "tests/api/test_session_history_reload_fields.py", "frontend/src/lib/localmind/client.test.ts"],
+  "refs": ["20260915T130934Z-Tega-3755ab45"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
