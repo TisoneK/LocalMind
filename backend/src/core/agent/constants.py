@@ -3,7 +3,7 @@ Agent constants — all tunable values in one place.
 
 The legacy dispatcher-era switches (THINKING_DISPATCH_*, CHAT_AGENT_*,
 CAPABILITY_ORCHESTRATION_ENABLED, AGENT_SELECTION_ENABLED) were deleted
-with the ThinkingDispatcher (Session 239). Only constants consumed by the
+with the ThinkingDispatcher. Only constants consumed by the
 live parent-agent runtime remain.
 """
 
@@ -12,7 +12,7 @@ import os
 from core.models import Intent
 
 # ── Iteration budget ──────────────────────────────────────────────────────────
-# Session 32 (raised from 3): the previous cap of 3 was too low for multi-step
+# Raised from 3: the previous cap of 3 was too low for multi-step
 # tasks. The user's "Create hello world repo" scenario needed 6 steps
 # (mkdir-check, dir-check, git-version-check, git-init, file-write, git-commit)
 # but the model hit the cap at step 3 (during reconnaissance) and never reached
@@ -30,7 +30,7 @@ from core.models import Intent
 # localmind_agent_max_iterations *field* was removed, which had made the env
 # var a no-op). LOCALMIND_MAX_ITERATIONS wins if both are set. This is the
 # generic-loop default; the selected agent's AgentConfig.max_iterations
-# overrides it per ADR-8 Phase 2.
+# overrides it when set.
 _MAX_ITERATIONS_DEFAULT = 8
 try:
     _env_raw = os.getenv("LOCALMIND_MAX_ITERATIONS") or os.getenv(
@@ -44,10 +44,10 @@ except (ValueError, TypeError):
 PLAN_ITERATION_COST: int = 1
 CLARIFICATION_THRESHOLD: float = 0.45
 
-# ADR-5: hard wall-clock cap. The loop terminates on "done, blocked, OR
+# Hard wall-clock cap. The loop terminates on "done, blocked, OR
 # limit" — this is the time-based limit, preventing a small model from
 # spinning forever on a task it can't solve.
-# Session 32 (raised from 90s to 180s): the previous 90s cap was too
+# Raised from 90s to 180s: the previous 90s cap was too
 # aggressive — with MAX_ITERATIONS=8 and free-tier models taking ~20-30s
 # per call, 90s only allowed ~3-4 iterations before the cap fired. 180s
 # allows 6-8 iterations, which is enough for the recon + work + verify
@@ -62,14 +62,14 @@ try:
 except (ValueError, TypeError):
     MAX_WALL_CLOCK_SECS: float = _WALL_CLOCK_DEFAULT
 
-# Session 31: per-iteration timeout for each model call (chat_with_tools).
+# Per-iteration timeout for each model call (chat_with_tools).
 # This is SEPARATE from the wall-clock cap — it limits a SINGLE model call,
 # not the total loop time. If a single call takes longer than this, we break
 # with an error instead of waiting for the adapter's 120s HTTP timeout.
 # 45s is generous for a free-tier model but prevents the 120s dead-hang.
 PER_CALL_TIMEOUT_SECS: float = 45.0
 
-# ADR-41 (Session 254): thinking-aware per-call timeout for reasoning models
+# Thinking-aware per-call timeout for reasoning models
 # (z.ai/GLM with thinking enabled). A reasoning model streams many thinking
 # tokens BEFORE the answer; on a slow free tier that can legitimately exceed
 # the 45s cap mid-thought — truncating the answer before it lands. When the
@@ -84,7 +84,7 @@ try:
 except (ValueError, TypeError):
     REASONING_PER_CALL_TIMEOUT_SECS: float = _REASONING_TIMEOUT_DEFAULT
 
-# ADR-41 (Session 256): thinking-aware WALL-CLOCK cap. The 180s
+# Thinking-aware WALL-CLOCK cap. The 180s
 # MAX_WALL_CLOCK_SECS fits only ~1-2 thinking calls on a slow free tier
 # (each call can spend 30-170s reasoning before acting), so a multi-step
 # turn (init + tool + answer) hits the cap before finishing. When the
@@ -102,7 +102,7 @@ try:
 except (ValueError, TypeError):
     REASONING_MAX_WALL_CLOCK_SECS: float = _REASONING_WALL_DEFAULT
 
-# ── Workspace state feedback (ADR-5) ─────────────────────────────────────────
+# ── Workspace state feedback ─────────────────────────────────────────────────
 # Whether to inject workspace_state.snapshot() into the agent's context
 # at step 1 (assemble prompt) of each turn. This is the "observations
 # flow back into context every turn" loop from the CODING HARNESS
@@ -161,12 +161,12 @@ AGENT_INTENTS: frozenset[Intent] = frozenset(
         Intent.FILE_WRITE,
         Intent.FILE_EDIT,
         Intent.FILE_TASK,
-        Intent.FIND_PATH,  # Session 125: name-match search routes to the agent loop
-        Intent.OBSERVE,  # B-2026-07-31-9: desktop awareness routes to the agent loop
-        Intent.CALCULATE,  # B-2026-07-31-10: safe arithmetic routes to the agent loop
-        Intent.CSV,  # B-2026-07-31-10: bounded CSV parsing routes to the agent loop
-        Intent.JSON,  # B-2026-07-31-10: bounded JSON parse/query routes to the agent loop
-        Intent.SQL,  # B-2026-07-31-10: read-only SQLite queries route to the agent loop
+        Intent.FIND_PATH,  # name-match search routes to the agent loop
+        Intent.OBSERVE,  # desktop awareness routes to the agent loop
+        Intent.CALCULATE,  # safe arithmetic routes to the agent loop
+        Intent.CSV,  # bounded CSV parsing routes to the agent loop
+        Intent.JSON,  # bounded JSON parse/query routes to the agent loop
+        Intent.SQL,  # read-only SQLite queries route to the agent loop
         Intent.GIT,
         Intent.MEMORY_OP,
         Intent.PROCESS,
@@ -178,14 +178,14 @@ AGENT_INTENTS: frozenset[Intent] = frozenset(
         Intent.SHELL,
         Intent.WEB_SEARCH,
         Intent.WEB_FETCH,
-        Intent.WEB_RESEARCH,  # Session 340: adaptive web acquisition
+        Intent.WEB_RESEARCH,  # adaptive web acquisition
         Intent.BROWSE,
     }
 )
 
-# ADR-57 slice 2 (B-2026-09-03): agent intents whose action is obvious from
+# Agent intents whose action is obvious from
 # the request itself — a direct retrieval, search, or bounded compute the
-# model will execute without a planning pass. The pre-tool Thinker (ADR-42)
+# model will execute without a planning pass. The pre-tool Thinker
 # earns its serial LLM round-trip only on OPEN-ENDED objectives (ANALYZE
 # "understand what to build", DEBUG, REVIEW, file/code work) where
 # narration-without-action is the real risk (CONV-05/06/11). On these direct
@@ -212,43 +212,43 @@ AGENT_ALLOWED_TOOLS: frozenset[str] = frozenset(
     {
         "web_search",
         "web_fetch",
-        "web_research",  # Session 340: adaptive web acquisition
+        "web_research",  # adaptive web acquisition
         "browse",
         "code_exec",
         "file_write",
         "diagnostics",
         "edit_file",
         "file_task",
-        "system_search",  # Session 400: unified local search — front door for find/discover questions
+        "system_search",  # unified local search — front door for find/discover questions
         "dir_explorer",  # bounded read-only folder inspection (list/tree/stat)
         "git",
         "process",
         "shell",
         "memory_op",
         "sysinfo",
-        "observe",  # B-2026-07-31-9: desktop awareness (window, clipboard, apps, state, recent files)
-        "calculator",  # B-2026-07-31-10: safe arithmetic (offline, bounded)
-        "csv",  # B-2026-07-31-10: bounded CSV parsing (offline, bounded)
-        "json",  # B-2026-07-31-10: bounded JSON parse/query (offline, bounded)
-        "sql",  # B-2026-07-31-10: read-only SQLite queries (offline, bounded)
-        "delegate",  # ADR-8 Phase 3: agent-initiated delegation
-        "delegate_parallel",  # B-2026-08-02-6: parallel delegation fan-out
-        "delegate_inline",  # B-2026-08-02-9: inline delegation (child rewrites parent history)
-        "propose_str_replace",  # B-2026-08-02-7: stage an edit proposal (no write)
-        "propose_write_file",  # B-2026-08-02-7: stage a write proposal (no write)
-        "apply_proposed_edit",  # B-2026-08-02-7: write a staged proposal to disk
-        "add_subgoal",  # B-2026-08-02-8: subgoal scratchpad
-        "update_subgoal",  # B-2026-08-02-8: subgoal scratchpad
-        "create_plan",  # B-2026-08-02-8: subgoal scratchpad
-        "skill",  # B-2026-08-02-12: load a skill into context (universal tool)
-        "best_of_n_edit",  # B-2026-08-02-11: N candidate edits → selector → apply winner
-        "describe_tool",  # ADR-40 option C: load a long-tail tool's full schema on demand
-        "todo_write",  # ADR-43: agent-driven live UI todo checklist (universal)
-        "search_tool_results",  # P0 Step 4 slice 2: read back a large stored tool result
+        "observe",  # desktop awareness (window, clipboard, apps, state, recent files)
+        "calculator",  # safe arithmetic (offline, bounded)
+        "csv",  # bounded CSV parsing (offline, bounded)
+        "json",  # bounded JSON parse/query (offline, bounded)
+        "sql",  # read-only SQLite queries (offline, bounded)
+        "delegate",  # agent-initiated delegation
+        "delegate_parallel",  # parallel delegation fan-out
+        "delegate_inline",  # inline delegation (child rewrites parent history)
+        "propose_str_replace",  # stage an edit proposal (no write)
+        "propose_write_file",  # stage a write proposal (no write)
+        "apply_proposed_edit",  # write a staged proposal to disk
+        "add_subgoal",  # subgoal scratchpad
+        "update_subgoal",  # subgoal scratchpad
+        "create_plan",  # subgoal scratchpad
+        "skill",  # load a skill into context (universal tool)
+        "best_of_n_edit",  # N candidate edits → selector → apply winner
+        "describe_tool",  # load a long-tail tool's full schema on demand
+        "todo_write",  # agent-driven live UI todo checklist (universal)
+        "search_tool_results",  # read back a large stored tool result
     }
 )
 
-# ── Per-intent tool scoping (Session 124) ────────────────────────────────────
+# ── Per-intent tool scoping ──────────────────────────────────────────────────
 # The 21.9K-prompt-token bug: the agent loop sent ALL 24 tool definitions
 # (~24.2K chars ≈ 6K tokens) on EVERY step of every intent — a git-status
 # task paid the same fixed cost as a web-research task, 4+ times over a
@@ -259,7 +259,7 @@ AGENT_ALLOWED_TOOLS: frozenset[str] = frozenset(
 # WEB_* intents, the proposal/subgoal scratchpad to editing intents, etc.
 #
 # Each scope is a subset of AGENT_ALLOWED_TOOLS. Unknown intents fall back
-# to the full AGENT_ALLOWED_TOOLS (safe default — same as pre-Session-124
+# to the full AGENT_ALLOWED_TOOLS (safe default — same as the pre-scoping
 # behavior).
 _INTENT_CORE_LOCAL_TOOLS: frozenset[str] = frozenset(
     {
@@ -272,17 +272,17 @@ _INTENT_CORE_LOCAL_TOOLS: frozenset[str] = frozenset(
         "process",
         "diagnostics",
         "sysinfo",
-        "observe",  # B-2026-07-31-9: desktop awareness — cheap, offline, bounded
-        "calculator",  # B-2026-07-31-10: safe arithmetic — cheap, offline, bounded
-        "csv",  # B-2026-07-31-10: bounded CSV parsing — cheap, offline, bounded
-        "json",  # B-2026-07-31-10: bounded JSON parse/query — cheap, offline, bounded
-        "sql",  # B-2026-07-31-10: read-only SQLite queries — cheap, offline, bounded
+        "observe",  # desktop awareness — cheap, offline, bounded
+        "calculator",  # safe arithmetic — cheap, offline, bounded
+        "csv",  # bounded CSV parsing — cheap, offline, bounded
+        "json",  # bounded JSON parse/query — cheap, offline, bounded
+        "sql",  # read-only SQLite queries — cheap, offline, bounded
         "memory_op",
-        "system_search",  # Session 400: unified local search (files/recent/largest/duplicates/apps/open_with)
+        "system_search",  # unified local search (files/recent/largest/duplicates/apps/open_with)
         "dir_explorer",  # bounded read-only folder inspection — look around / structure / pre-write check
-        "delegate",  # ADR-8 Phase 3: keep delegation available everywhere
-        "skill",  # B-2026-08-02-12: universal tool — playbooks are cheap (~130 tok)
-        "todo_write",  # ADR-43: live UI checklist — universal, cheap, multi-step progress
+        "delegate",  # keep delegation available everywhere
+        "skill",  # universal tool — playbooks are cheap (~130 tok)
+        "todo_write",  # live UI checklist — universal, cheap, multi-step progress
     }
 )
 
@@ -291,11 +291,11 @@ INTENT_TOOL_SCOPES: dict[Intent, frozenset[str]] = {
     Intent.GIT: _INTENT_CORE_LOCAL_TOOLS,
     Intent.CODE_EXEC: _INTENT_CORE_LOCAL_TOOLS,
     Intent.FILE_TASK: _INTENT_CORE_LOCAL_TOOLS,
-    Intent.FIND_PATH: _INTENT_CORE_LOCAL_TOOLS,  # Session 125: locate before listing
-    Intent.SYSTEM_SEARCH: _INTENT_CORE_LOCAL_TOOLS,  # Session 400: unified local search
+    Intent.FIND_PATH: _INTENT_CORE_LOCAL_TOOLS,  # locate before listing
+    Intent.SYSTEM_SEARCH: _INTENT_CORE_LOCAL_TOOLS,  # unified local search
     Intent.DIR_EXPLORER: _INTENT_CORE_LOCAL_TOOLS,  # folder inspection needs the local file tools too
-    # Editing intents keep the proposal/best-of-N family (B-2026-08-02-7/11)
-    # — those are coding-agent editing features that must not be lost.
+    # Editing intents keep the proposal/best-of-N family —
+    # those are coding-agent editing features that must not be lost.
     Intent.FILE_WRITE: _INTENT_CORE_LOCAL_TOOLS | frozenset(
         {"propose_write_file", "propose_str_replace", "apply_proposed_edit", "best_of_n_edit"}
     ),
@@ -305,11 +305,11 @@ INTENT_TOOL_SCOPES: dict[Intent, frozenset[str]] = {
     Intent.MEMORY_OP: _INTENT_CORE_LOCAL_TOOLS,
     Intent.PROCESS: _INTENT_CORE_LOCAL_TOOLS,
     Intent.SYSINFO: _INTENT_CORE_LOCAL_TOOLS,
-    Intent.OBSERVE: _INTENT_CORE_LOCAL_TOOLS,  # B-2026-07-31-9: desktop awareness
-    Intent.CALCULATE: _INTENT_CORE_LOCAL_TOOLS,  # B-2026-07-31-10: safe arithmetic
-    Intent.CSV: _INTENT_CORE_LOCAL_TOOLS,  # B-2026-07-31-10: bounded CSV parsing
-    Intent.JSON: _INTENT_CORE_LOCAL_TOOLS,  # B-2026-07-31-10: bounded JSON parse/query
-    Intent.SQL: _INTENT_CORE_LOCAL_TOOLS,  # B-2026-07-31-10: read-only SQLite queries
+    Intent.OBSERVE: _INTENT_CORE_LOCAL_TOOLS,  # desktop awareness
+    Intent.CALCULATE: _INTENT_CORE_LOCAL_TOOLS,  # safe arithmetic
+    Intent.CSV: _INTENT_CORE_LOCAL_TOOLS,  # bounded CSV parsing
+    Intent.JSON: _INTENT_CORE_LOCAL_TOOLS,  # bounded JSON parse/query
+    Intent.SQL: _INTENT_CORE_LOCAL_TOOLS,  # read-only SQLite queries
     Intent.DIAGNOSTICS: _INTENT_CORE_LOCAL_TOOLS,
     Intent.VERIFY: _INTENT_CORE_LOCAL_TOOLS,
     Intent.REVIEW: _INTENT_CORE_LOCAL_TOOLS,
@@ -364,10 +364,10 @@ ORCHESTRATOR_CONFIDENCE_MEDIUM: float = 0.4
 
 PLAN_TIMEOUT_SECS: float = 8.0
 
-# ADR-41 (Session 254): thinking-aware plan/init timeout. The planning and
+# Thinking-aware plan/init timeout. The planning and
 # initialization paths stream a model-owned JSON decision behind the scenes;
 # with thinking enabled the model reasons BEFORE emitting the JSON, so the
-# 8s PLAN_TIMEOUT_SECS can fire mid-thought (observed live in Session 254:
+# 8s PLAN_TIMEOUT_SECS can fire mid-thought (observed live:
 # "initialization timed out after 8s" with GLM-4.5-Flash thinking ON). When
 # the active adapter reports thinking_enabled, these waits use this larger
 # budget. The parent loop's wall-clock cap still bounds total turn time.

@@ -71,7 +71,7 @@ def build_planning_prompt(
     """
     from core.agent.constants import AGENT_ALLOWED_TOOLS
 
-    # ADR-40: when the scoped tool DEFS are provided, the in-prompt tool list
+    # When the scoped tool DEFS are provided, the in-prompt tool list
     # is rendered from the SAME source as the native `tools` param (one source
     # of truth). Fall back to the metadata list for backward-compat callers.
     if tool_defs is not None:
@@ -485,8 +485,7 @@ def build_agent_system_prompt(
                               The parent agent evaluates it before acting; it is
                               not a directive that replaces parent planning.
         agent_context:        Optional agent-specific context from the selected
-                              BaseAgent subclass's build_context() method (ADR-8
-                              Phase 2). When the CodingAgent is selected, this
+                              BaseAgent subclass's build_context() method. When the CodingAgent is selected, this
                               includes the coding playbook (read-before-write,
                               verify-after-write, follow-conventions, small-
                               verifiable-changes) loaded from
@@ -494,7 +493,7 @@ def build_agent_system_prompt(
                               browser / direct agents. When None (Direct Mode
                               or no agent selected), the section is omitted.
     """
-    # Session 245 (agent-loop token efficiency, Lever 1): the environment
+    # Agent-loop token efficiency: the environment
     # context — which bakes in the CURRENT TIME (changes every minute) plus
     # OS/cwd — is NO LONGER embedded here. It was the worst prompt-cache
     # buster: a per-minute string in the middle of the otherwise-static system
@@ -503,13 +502,13 @@ def build_agent_system_prompt(
     # message (see AgentLoop, build the turn context), keeping this system
     # prompt byte-stable so the system+tools prefix caches.
 
-    # P0 Step 2b: intent history is per-turn/dynamic and rides the trailing
+    # Intent history is per-turn/dynamic and rides the trailing
     # turn-context (loop.py), not the byte-stable prefix — no longer embedded in
     # any branch of this builder.
 
     # Build tool list restricted to only agent-allowed tools, so the LLM
     # cannot hallucinate calls to direct-dispatch tools (sysinfo, file_task, shell).
-    # ADR-40: when the scoped tool DEFS are provided, render the in-prompt list
+    # When the scoped tool DEFS are provided, render the in-prompt list
     # from the SAME source as the native `tools` param (one source of truth).
     if tool_defs is not None:
         agent_tool_list = "\n".join(render_tool_list(tool_defs))
@@ -531,12 +530,12 @@ def build_agent_system_prompt(
         # The first native call must stay light. It only needs a capability
         # index so it can name a tool for describe_tool; sending every
         # registry description here recreates the old kitchen-sink prompt.
-        # B-2026-08-30-17 Phase 1: a NAME-only list made the first tool choice
+        # A NAME-only list once made the first tool choice
         # blind to purpose (sysinfo picked for a weather query). Give a compact
         # per-tool purpose summary so selection is informed from turn 1, while
         # staying well below the full-schema kitchen sink.
         compact_tool_list = compact_tool_summary(
-            # S426: scope the capability index to the SAME defs the native
+            # Scope the capability index to the SAME defs the native
             # tools param is built from (single source of truth) so a scoped
             # agent's bootstrap prompt never advertises tools outside its
             # allowlist. describe_tool is always reachable (tool_defs_for_call
@@ -555,14 +554,15 @@ def build_agent_system_prompt(
                 + "\n".join(f"- {fact}" for fact in memory_facts[:10])
                 + "\n"
             )
-        # B-2026-08-30-17 Phase 3: the boot-cached system summary. The agent
+        # The boot-cached system summary. The agent
         # already KNOWS the machine, so it answers CPU/RAM/disk/OS questions
         # directly instead of reflexively calling sysinfo.
         _sys = _system_env_line()
         system_section = f"\n{_sys}\n" if _sys else ""
-        # Session 412: derive the core/long-tail tool-name lists dynamically
+        # Derive the core/long-tail tool-name lists dynamically
         # from the tier-split constants so this prompt NEVER goes stale when
-        # tools move between tiers (S411 moved 6 tools core→long-tail but
+        # tools move between tiers (an earlier tier move shifted 6 tools
+        # core→long-tail but
         # this list was hardcoded and stale until now). Import is local
         # because this is the only path that needs the tier constants.
         from core.agent.tool_schemas import (  # noqa: PLC0415
@@ -570,9 +570,9 @@ def build_agent_system_prompt(
             LONG_TAIL_TOOL_NAMES,
         )
 
-        # S426: intersect the tier lists with the same allowed-name set the
+        # Intersect the tier lists with the same allowed-name set the
         # compact index and native param use, so the parked multi-agent tools
-        # (ADR-53) never appear in the on-demand instructions either.
+        # never appear in the on-demand instructions either.
         _allowed_tier_names = (
             {td.get("function", {}).get("name") for td in tool_defs} | {"describe_tool"}
             if tool_defs is not None
@@ -708,7 +708,7 @@ THINKING DEPTH:
             )
         return chat_prompt
 
-    # Session 32: inject the universal "check before acting" safety workflow.
+    # Inject the universal "check before acting" safety workflow.
     # This is a constraint that applies to EVERY tool that creates, writes,
     # modifies, or deletes — not a per-tool fix. The user's "Create hello
     # world repo" scenario revealed the model was running `mkdir` BEFORE
@@ -763,7 +763,7 @@ CRITICAL RULES:
 7. FOLLOW-THROUGH RULE: When a task requires MULTIPLE tool calls (find file → read file), complete ALL steps before the final answer. Never stop after a partial step to ask confirmation when the next step is obvious. But do NOT add steps that aren't needed: to CREATE a file ("write a recipe on the desktop"), call file_write directly with the path and content — do NOT list the folder first. When a shell command fails, FIX THE COMMAND (wrong OS syntax?) rather than retrying the same thing. Use the RIGHT tool per step: system_search locates, file_task reads, file_write creates.
 8. When you have enough information, respond directly in plain text — call no more tools. If a tool fails, try a different approach or answer from what you know.
 9. describe_tool loads on-demand (long-tail) tools — the ones NOT in your tools param. Core tools are already loaded; NEVER call describe_tool for them. If unsure whether a tool is core, check your tools param first.
-10. TOOL OUTPUT IS RETAINED (Session 378): results stay available all turn; `[...TRUNCATED DUE TO LENGTH...]` means only the MIDDLE was dropped (head + tail survive). Never re-run a read just to change formatting or columns — the runtime dedupes identical inspections. Re-run only after a write/edit/exec or to get different data.
+10. TOOL OUTPUT IS RETAINED: results stay available all turn; `[...TRUNCATED DUE TO LENGTH...]` means only the MIDDLE was dropped (head + tail survive). Never re-run a read just to change formatting or columns — the runtime dedupes identical inspections. Re-run only after a write/edit/exec or to get different data.
 
 VERIFY (after EVERY tool result — skipping this is the same as fabricating):
 - file_write: the runtime auto-verifies it and appends a `[VERIFICATION]: file_write confirmed — N bytes on disk` line. On verification FAILURE/WARNING, rewrite the file — never claim success.
@@ -847,7 +847,7 @@ permission to deviate; just keep moving toward the user's goal.
 
     skill_fragment = _load_fragment(_intent_fragment_name(intent))
     if skill_fragment:
-        # ADR-17 (Session 144): cap the injected skill fragment at ~2,000
+        # Cap the injected skill fragment at ~2,000
         # chars. The head (philosophy + how-to-approach) carries the
         # distinctive per-intent expertise; the tails (language-specific
         # practices, "what NOT to do", debugging heuristics) overlap with
@@ -1022,7 +1022,7 @@ permission to deviate; just keep moving toward the user's goal.
     }
     persona_section = _PERSONA_MAP.get(intent, "")
 
-    # ADR-8 Phase 2: inject the selected BaseAgent's context (playbook +
+    # Inject the selected BaseAgent's context (playbook +
     # persona + agent-specific guidance). This is the load-bearing piece
     # — when the CodingAgent is selected for SHELL/FILE_*/CODE_EXEC
     # intents, its playbook (read-before-write, verify-after-write,
