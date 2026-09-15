@@ -26,7 +26,7 @@ from core.models import Message, Role
 
 logger = logging.getLogger(__name__)
 
-# ADR-18 P2: tokens that carry no signal for failure recall matching.
+# Tokens that carry no signal for failure recall matching.
 _FAILURE_STOPWORDS = {
     "the", "and", "with", "that", "this", "please", "what", "when",
     "where", "which", "there", "your", "from", "have", "will", "was",
@@ -36,7 +36,7 @@ _FAILURE_STOPWORDS = {
     "works", "working", "failed", "failing", "error", "errors",
 }
 
-# ADR-18 P2: failures older than this are pruned on write — the table
+# Failures older than this are pruned on write — the table
 # stays bounded and stale secrets age out of recall.
 _FAILURE_RETENTION_DAYS = 90
 
@@ -55,14 +55,14 @@ CREATE TABLE IF NOT EXISTS messages (
     content     TEXT    NOT NULL,
     tool_name   TEXT,
     timestamp   REAL    NOT NULL DEFAULT (strftime('%J', 'now')),
-    -- Session 266: per-turn artifacts persisted with the assistant message.
+    -- Per-turn artifacts persisted with the assistant message.
     thinking    TEXT,
     error       TEXT,
     tool_calls  TEXT,
     metrics     TEXT,
-    -- Session 290: the ADR-36 opening acknowledgement line.
+    -- The opening acknowledgement line.
     acknowledgement TEXT,
-    -- Session 267: Agent Workspace run tree + phase strip (JSON).
+    -- Agent Workspace run tree + phase strip (JSON).
     agent_runs     TEXT,
     agent_phases   TEXT,
     -- Structured edit diff + best-of-N candidates (JSON) — live-streamed
@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS tool_stats (
     total_latency_ms INTEGER NOT NULL DEFAULT 0
 );
 
--- Tool call history for the Actions panel (Session 118: real store,
+-- Tool call history for the Actions panel (real store,
 -- replacing the placeholder that returned []).
 CREATE TABLE IF NOT EXISTS actions (
     id          TEXT    PRIMARY KEY,
@@ -96,8 +96,8 @@ CREATE TABLE IF NOT EXISTS actions (
     duration    REAL,
     iteration   INTEGER,
     todo_id     TEXT,   -- plan todo this action serves (one todo → many actions)
-    reasoning   TEXT,   -- Session 122: the model's thought that led to this tool call
-    provider    TEXT,   -- Session 271: which backend engine answered (e.g. web_search winner)
+    reasoning   TEXT,   -- The model's thought that led to this tool call
+    provider    TEXT,   -- Which backend engine answered (e.g. web_search winner)
     timestamp   REAL    NOT NULL DEFAULT (unixepoch('now'))
 );
 
@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS migration_history (
     name TEXT PRIMARY KEY
 );
 
--- ADR-18 P2 (Session 175): failure memory — what-failed-and-why at loop
+-- Failure memory — what-failed-and-why at loop
 -- end (the "Remember" stage of Observe→…→Verify→Remember→Continue).
 -- Read back for repeated patterns so the next similar turn can avoid
 -- the same mistake (injected as a context hint alongside memory facts).
@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS failure_memory (
 );
 CREATE INDEX IF NOT EXISTS idx_failure_memory_session ON failure_memory(session_id);
 
--- ADR-19 P2 (Session 178): cross-session decision ledger — durable
+-- Cross-session decision ledger — durable
 -- store of "decisions that must never be compressed away" (design.md
 -- §6). The task-aware summarizer's [Preserved decisions] block is
 -- written here so a decision-changing line ("user rejected MongoDB",
@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS decision_ledger (
 );
 CREATE INDEX IF NOT EXISTS idx_decision_ledger_session ON decision_ledger(session_id, created_at);
 
--- ADR-22 P1 (Session 190): session episode memory - the system-level
+-- Session episode memory - the system-level
 -- "what happened this session" digest (the product-side equivalent of an
 -- agent's session log, invisible to users). One row per session (upsert);
 -- deliberately NO foreign key to sessions: episodes outlive their source
@@ -263,11 +263,11 @@ class SessionStore:
             # Apply migrations
             self._apply_migrations(conn)
             logger.debug(f"SQLite store ready at {self._path}")
-        # Session 119: ensure the actions table has the iteration column.
+        # Ensure the actions table has the iteration column.
         # Fresh installs get it from _SCHEMA; existing DBs need a defensive
         # ALTER (idempotent — a second run raises duplicate-column, ignored).
         # Separate try blocks: the first ALTER raising (column already exists
-        # on a real DB) must not skip the second. Session 119/120: iteration
+        # on a real DB) must not skip the second. Iteration
         # then todo_id.
         try:
             with self._conn() as conn:
@@ -276,23 +276,23 @@ class SessionStore:
             pass
         try:
             with self._conn() as conn:
-                # Session 120: link each action to the plan todo it serves.
+                # Link each action to the plan todo it serves.
                 conn.execute("ALTER TABLE actions ADD COLUMN todo_id TEXT")
         except sqlite3.OperationalError:
             pass
         try:
             with self._conn() as conn:
-                # Session 122: per-step reasoning (the 'why' of each action).
+                # Per-step reasoning (the 'why' of each action).
                 conn.execute("ALTER TABLE actions ADD COLUMN reasoning TEXT")
         except sqlite3.OperationalError:
             pass
         try:
             with self._conn() as conn:
-                # Session 271: which backend engine answered (Actions-card badge).
+                # Which backend engine answered (Actions-card badge).
                 conn.execute("ALTER TABLE actions ADD COLUMN provider TEXT")
         except sqlite3.OperationalError:
             pass
-        # Session 266: per-turn artifacts on messages (thinking/error/tool
+        # Per-turn artifacts on messages (thinking/error/tool
         # calls/metrics). Fresh DBs get them from _SCHEMA; existing DBs need
         # defensive ALTERs (idempotent — a second run raises duplicate-column,
         # ignored). Same pattern as the actions table columns above.
@@ -302,13 +302,13 @@ class SessionStore:
                     conn.execute(f"ALTER TABLE messages ADD COLUMN {_col} TEXT")
             except sqlite3.OperationalError:
                 pass
-        # Session 290: the ADR-36 opening acknowledgement line (survives reload).
+        # The opening acknowledgement line (survives reload).
         try:
             with self._conn() as conn:
                 conn.execute("ALTER TABLE messages ADD COLUMN acknowledgement TEXT")
         except sqlite3.OperationalError:
             pass
-        # Session 267: Agent Workspace run tree + phase strip on messages.
+        # Agent Workspace run tree + phase strip on messages.
         for _col in ("agent_runs", "agent_phases"):
             try:
                 with self._conn() as conn:
@@ -324,7 +324,7 @@ class SessionStore:
                     conn.execute(f"ALTER TABLE messages ADD COLUMN {_col} TEXT")
             except sqlite3.OperationalError:
                 pass
-        # Session 267: per-session observation persistence. The Observe panel
+        # Per-session observation persistence. The Observe panel
         # used to read an in-memory engine dict that died on backend restart;
         # the latest turn's observation is now written here and the endpoint
         # falls back to it on a cache miss. One row per session (the latest
@@ -377,7 +377,7 @@ class SessionStore:
                 "INSERT OR IGNORE INTO sessions(id) VALUES(?)",
                 (session_id,),
             )
-        # B-2026-08-23-17: a session row and its workspace folder are born
+        # A session row and its workspace folder are born
         # together — the first touch on a session creates its artifact folder
         # under <localmind_home>/sessions/<id> (idempotent, non-fatal).
         try:
@@ -462,7 +462,7 @@ class SessionStore:
 
         aid = action_id or str(_uuid.uuid4())
         with self._conn() as conn:
-            # Session 118 review: INSERT OR REPLACE would wipe output/error/
+            # INSERT OR REPLACE would wipe output/error/
             # duration if a done event re-created an existing id. Use
             # DO NOTHING so the running-create never clobbers a completed row.
             conn.execute(
@@ -531,7 +531,7 @@ class SessionStore:
         fields are written, so a todo_completed event (id + completed only)
         never wipes the todo's text.
 
-        B-2026-08-23-11: `text` is the FULL content (the TodoItem API calls
+        `text` is the FULL content (the TodoItem API calls
         it `content`); `title` is the short user-facing label. When a title
         is supplied on create, it's stored; on update (todo_completed) no
         title is passed, so an existing title survives.
@@ -559,7 +559,7 @@ class SessionStore:
                 updates: dict[str, object] = {"updated_at": now}
                 if text is not None:
                     updates["content"] = text
-                # B-2026-08-23-11: only set/overwrite the title when one is
+                # Only set/overwrite the title when one is
                 # supplied (never wipe an existing title on a status-only
                 # update).
                 if title is not None:
@@ -760,7 +760,7 @@ class SessionStore:
             conn.execute("DELETE FROM session_writes")
             conn.execute("DELETE FROM sessions")
 
-    # ── B-2026-08-23-37: Durable lightweight write stats ─────────────────
+    # ── Durable lightweight write stats ─────────────────
 
     _WRITE_STATS_CAP = 500
 
@@ -819,7 +819,7 @@ class SessionStore:
         except Exception:
             pass
 
-    # ── Session 267: per-session observation persistence ──────────────────
+    # ── Per-session observation persistence ──────────────────
     # The Observe panel used to read an in-memory engine dict that died on
     # backend restart. The latest turn's observation (merged metrics dict +
     # structured snapshot summary) is now written here so the endpoint can
@@ -880,7 +880,7 @@ class SessionStore:
             "snapshot": self._decode_json(row["snapshot"]) if row["snapshot"] else None,
         }
 
-    # ── ParentSession: rolling summary + bounded recent tail (ADR-52 phase 2) ─
+    # ── ParentSession: rolling summary + bounded recent tail ─
 
     def save_parent_session(
         self,
@@ -972,7 +972,7 @@ class SessionStore:
                 result[row["tool_name"]] = row["success_count"] / total
         return result
 
-    # ── ADR-18 P2: Failure memory (Session 175) ───────────────────────────
+    # ── Failure memory ───────────────────────────
 
     def record_failure(
         self,
@@ -1064,7 +1064,7 @@ class SessionStore:
         scored.sort(key=lambda r: r["score"], reverse=True)
         return scored[:limit]
 
-    # ── ADR-19 P2: Cross-session decision ledger (Session 178) ─────────
+    # ── Cross-session decision ledger ─────────
 
     # Decisions older than this are pruned on write — the ledger stays
     # bounded and stale constraints age out of recall (mirrors the failure
@@ -1138,7 +1138,7 @@ class SessionStore:
         except Exception:
             return []
 
-    # ── ADR-22 P1: Session episode memory (Session 190) ──────────────────
+    # ── Session episode memory ──────────────────
     #
     # The system-level "what happened this session" digest. Written by
     # core/episode_memory.py (background, lazy, invisible to users); read
