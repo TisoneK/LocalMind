@@ -18,7 +18,7 @@ SSE payload types:
     {"obs_event": {"type": "intent_classified", "data": {...}}}
     {"intent": "web_search", "confidence": 0.92}
     {"type": "token", "content": "Hello"}
-    {"type": "done"}
+    {"type": "done", "provider_usage": {...}}  # usage omitted when the turn made no provider call
     {"obs_event": {"type": "turn_complete", "data": {...}}}
 """
 
@@ -905,6 +905,18 @@ async def _event_stream(
             # 3. Emit done AFTER text (so all content is already sent)
             if chunk.done:
                 done_payload: dict = {"type": "done"}
+                # The loop accumulates the turn's provider-reported usage
+                # (per-call totals + last-call occupancy + llm_calls) and
+                # attaches it to the final chunk. Forward it here so the
+                # per-turn token cost is measurable from the wire — before
+                # this the bridge built a bare {"type": "done"} and dropped
+                # it, so the benchmark's efficiency half recorded null for
+                # every test even though the number was on the chunk. An
+                # empty mapping means the turn made no provider call (a
+                # canned/greeting fallback, a memory op) — omit the field
+                # rather than dressing a no-call turn up with a fake payload.
+                if chunk.usage:
+                    done_payload["provider_usage"] = chunk.usage
                 if file_path_written:
                     done_payload["file_path"] = file_path_written
                     done_payload["file_name"] = file_name_written or Path(file_path_written).name

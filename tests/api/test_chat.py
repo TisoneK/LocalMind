@@ -239,6 +239,65 @@ class TestChat:
         # Done is {"type": "done"} event
         assert any(e.get("type") == "done" for e in events)
 
+    def test_done_event_forwards_provider_usage(self, client):
+        """The loop attaches the turn's accumulated provider usage to the
+        final chunk; the SSE bridge must forward it on the done event so
+        per-turn token cost is measurable from the wire. Before the fix the
+        bridge built a bare {"type": "done"} and dropped chunk.usage."""
+
+        from core.models import StreamChunk
+
+        async def _process_with_usage(self, message, session_id, file=None, filename=None,
+                                      content_type=None, obs=None, original_path=None,
+                                      client_intent=None, client_confidence=0.0, **kwargs):
+            yield StreamChunk(text="Hi there!", done=False)
+            yield StreamChunk(
+                text="",
+                done=True,
+                usage={
+                    "prompt_tokens": 120,
+                    "completion_tokens": 9,
+                    "total_prompt_tokens": 340,
+                    "total_completion_tokens": 26,
+                    "cached_tokens": 100,
+                    "llm_calls": 2,
+                },
+            )
+
+        with patch("core.engine.Engine.process", _process_with_usage):
+            r = client.post("/api/chat", data={"message": "hi", "session_id": "t-usage"})
+        events = _parse_sse(r.text)
+        dones = [e for e in events if e.get("type") == "done"]
+        assert len(dones) == 1
+        usage = dones[0].get("provider_usage")
+        assert usage, "done event must carry provider_usage when the turn reported it"
+        # The benchmark harness reads total_* first (per-turn sums), then
+        # falls back to the last-call fields — pin both semantics.
+        assert usage["total_prompt_tokens"] == 340
+        assert usage["total_completion_tokens"] == 26
+        assert usage["prompt_tokens"] == 120
+        assert usage["llm_calls"] == 2
+
+    def test_done_event_omits_usage_on_no_provider_call(self, client):
+        """Honesty contract: a turn whose final chunk carries NO usage (a
+        canned fallback or memory op made no provider call) must not gain a
+        fabricated payload — the done event stays bare."""
+
+        from core.models import StreamChunk
+
+        async def _process_no_usage(self, message, session_id, file=None, filename=None,
+                                    content_type=None, obs=None, original_path=None,
+                                    client_intent=None, client_confidence=0.0, **kwargs):
+            yield StreamChunk(text="Got it.", done=False)
+            yield StreamChunk(text="", done=True)  # usage defaults to {}
+
+        with patch("core.engine.Engine.process", _process_no_usage):
+            r = client.post("/api/chat", data={"message": "remember x", "session_id": "t-nousg"})
+        events = _parse_sse(r.text)
+        dones = [e for e in events if e.get("type") == "done"]
+        assert len(dones) == 1
+        assert "provider_usage" not in dones[0]
+
     def test_emits_intent_classified_obs_event(self, client):
         with _mock_stream(intent="web_search"):
             r = client.post("/api/chat", data={"message": "search", "session_id": "t5"})
