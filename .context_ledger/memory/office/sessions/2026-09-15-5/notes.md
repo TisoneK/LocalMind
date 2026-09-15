@@ -2,6 +2,16 @@
 
 ## 2026-09-15 — Baraka / qwen3.8-flash (Session 5) — manual ledger-vocab strip (B-2026-09-15-1)
 
+### ISOLATION (mandatory override — live peers in office)
+- After commit b49d16d1 swept a peer's staged closeout into my product commit (see
+  flaws log 2026-09-15 S005 entry + note c6daa516), ALL remaining sweep work moved to
+  an ISOLATED WORKTREE: `../LocalMind-baraka`, branch `collab/S005/baraka` (off
+  origin/main, which already carries cleaned loop.py). Imani S008 / Tega S009 /
+  Jabari S010 all have their own worktrees too. Commit on the branch, push it;
+  merge to main + release at the end. Review `git diff --cached --stat` before EVERY
+  commit (only my paths). Peer-claim files (chat.py, client.ts, ChatMessage.tsx,
+  config.py, vector.py, useLocalMind, models.py) — sweep LAST, after their releases.
+
 ### Supervisor directive (mid-session, decisive)
 - A scripted bulk transform was designed and dry-run-tested (~2,588 lines,
   review log in `scratch/`), then the supervisor rejected it: **strip by hand
@@ -62,14 +72,34 @@
 - Core 1.1.3 verify green; up to date with origin.
 
 ### Progress log (update at every commit; line numbers SHIFT as edits land — re-grep before each window)
-- loop.py (353 trigger-lines / 294 clusters): DONE — grep now reports 0 hits for
-  ADR/B-ID/Session/SNNN/review/per-adr; `F<digit> ` guard also 0; ruff clean.
-  Working decisions: citation LEAD deleted + sentence capitalized; provider/model
-  live-trace detail KEPT (product fact); "Session N" evidence → "Seen live:";
-  "F4 post-execution verifier" → "post-execution verifier"; "(line ~3819)" →
-  dropped (stale code self-ref); spec §N refs → replaced with the plain rule or
-  dropped. One near-miss during the pass: an over-broad old_string briefly
-  clobbered the goal_tree param — caught by re-reading, restored verbatim.
-- constants.py + models/prompts/tool_schemas: NEXT.
-- Everything else untouched. No product commit yet (working tree carries the
-  loop.py edits; they survive context rolls).
+- loop.py (353 trigger-lines): DONE (main commit b49d16d1) — grep 0; ruff clean.
+- Worktree branch commits: 892cca7e constants/tool_schemas/models/prompts;
+  19b6273c agents/ (48 files: base_agent, selection, coding/tools read
+  individually + exact-replacement table for the templated sub-agent leads —
+  every line reviewed in context first; compileall OK, residue grep 0).
+- Method that works (proven 6x): dump each file's citation lines with grep -n,
+  read context, write a scratch exact-replacement table (old->new), assert every
+  pair hits (MISS lines reported), verify residue 0 + py_compile, commit per
+  ~5-10 files. NEVER a blind whole-tree regex (an early generic stripper ate
+  inline code — killed same session).
+- Branch commits so far: 892cca7e (core/agent 4 files), 19b6273c (agents/),
+  39c01e0b (chat, agent_runtime, openai_compat), c90d829b (trivial_input,
+  api config, db), e04f9c69 (tools init, goal_interpreter, shell, pre_init,
+  compactor, summarizer, error_normalizer), e39d98f6 (agent models, file w/r,
+  text_tools, initialization), 43ba97ab (10 files: system_search, find_path,
+  memory_intent, observability, memory_tool, delegate, failure_memory,
+  web_acquisition, context_builder, task_state), 8b8b5417 (10 files:
+  delegate_parallel, memory, file_ops, thinker prompt/contract, web_search,
+  title_generator, context_policy, contracts/schemas, ollama).
+- NOTE: `# noqa: S603`-style ruff codes are NOT codenames — never strip; the
+  grep pattern `\bS[0-9]{3}\b` false-positives on them (file_reader.py 162).
+- ONE accident: an over-broad replace-all in selection.py left "# <num>:"
+  orphans — caught by the verification grep, fixed same session. Lesson:
+  always re-grep after replace-alls (done).
+- NEXT: rest of backend/src (tools/__init__ 17, adapters/openai_compat 20,
+  api/routes/chat 25, api/routes/config 20, core/config DEFERRED-Jabari,
+  agents done, storage/db 10, summarizer 10, initialization 10, agent_runtime
+  14, models done, tool_schemas done…). Then frontend/tests/docs/scripts.
+- Peer-claim files deferred: backend/src/api/routes/sessions.py (Tega),
+  backend/src/core/config.py + storage/vector.py + tests/core/
+  test_vector_embed_fallback.py (Jabari).
