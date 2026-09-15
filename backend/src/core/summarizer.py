@@ -1,12 +1,12 @@
 """
-History Summarizer — A2 + ADR-19 (task-aware, decision-line preservation).
+History Summarizer — task-aware, decision-line-preserving.
 
 When conversation history exceeds 75% of the token budget, summarize the
 oldest 50% of messages into a single compact system message, then replace
 those messages with the summary.  This preserves important early context
 (user preferences, task setup) that would otherwise be silently dropped.
 
-ADR-19 (Session 162) adds a `policy` parameter:
+A `policy` parameter enables task-aware behavior:
 - `policy=None` (or a default/legacy policy) → behavior is EXACTLY the
   original generic summary (byte-identical prompt) — a wiring no-op.
 - A real policy uses its TASK-SPECIFIC summary prompt AND extracts
@@ -33,7 +33,7 @@ from core.value_scoring import lowest_value_indices
 if TYPE_CHECKING:
     from adapters.base import BaseAdapter
 
-# ADR-19 P2 (Session 178): the engine passes a decision_sink so preserved
+# The engine passes a decision_sink so preserved
 # decision lines are persisted to the cross-session decision ledger
 # (durable — survives compression and session deletion).
 DecisionSink = Callable[[list[str]], None]
@@ -46,7 +46,7 @@ _COMPRESS_THRESHOLD = 0.75
 _COMPRESS_FRACTION = 0.50
 # Cap on preserved decision lines (protects the summary from bloat).
 _MAX_PRESERVED_LINES = 8
-# Total-char cap on the preserved block (Session 162 review: 12 x 500-char
+# Total-char cap on the preserved block (review: 12 x 500-char
 # lines could add ~1500 tokens — net-negative on an already-over-budget
 # turn). Kept well under what compression saves.
 _MAX_PRESERVED_CHARS = 1200
@@ -80,7 +80,7 @@ def _preserved_decision_lines(excerpt: str, policy: ContextPolicy) -> list[str]:
     decision/constraint marker are kept word-for-word so the summarizer
     cannot paraphrase them away.
 
-    Bounds (Session 162 review): line count, per-line length, and total
+    Bounds (per review): line count, per-line length, and total
     chars — a preserved block must never cost more than compression saves.
     """
     if not policy.keep_markers:
@@ -118,14 +118,14 @@ async def maybe_compress_history(
         messages: Full prompt message list (may include a system message at [0]).
         adapter:  LLM adapter used to generate the summary.
         token_budget: Model context window in tokens.
-        policy: Optional ADR-19 ContextPolicy. None/default → the original
+        policy: Optional ContextPolicy. None/default → the original
             generic summary (no-op). A real policy switches to its per-task
             summary prompt and prepends preserved decision lines.
-        decision_sink: Optional ADR-19 P2 callback invoked with the preserved
+        decision_sink: Optional callback invoked with the preserved
             decision lines when compression actually ran (so the caller can
             persist them to the cross-session decision ledger). Default None
             → no-op; the summarizer stays pure.
-        value_scores: Optional ADR-19 P3 list of per-message value scores
+        value_scores: Optional list of per-message value scores
             (0-1, aligned with the conversation messages after any leading
             system message). When present and correctly sized, the OLDEST-50%
             slice is replaced by the LOWEST-VALUE slice — compression by
@@ -148,7 +148,7 @@ async def maybe_compress_history(
     if len(conv_msgs) < 4:
         return messages  # too short to compress meaningfully
 
-    # Identify the slice to summarise. Default: the oldest 50%. ADR-19 P3
+    # Identify the slice to summarise. Default: the oldest 50%. Value-scored:
     # (opt-in LLM value scoring): when per-message value scores are present
     # and correctly sized, compress the LOWEST-VALUE messages instead — the
     # context window is rebuilt by value, not by position (design.md §6).
@@ -161,7 +161,7 @@ async def maybe_compress_history(
             to_compress = [m for i, m in enumerate(conv_msgs) if i in low_set]
             to_keep = [m for i, m in enumerate(conv_msgs) if i not in low_set]
             logger.info(
-                "[summarizer] ADR-19 P3: compressing %d LOWEST-VALUE messages "
+                "[summarizer] compressing %d LOWEST-VALUE messages "
                 "(value-based slice)",
                 len(to_compress),
             )
@@ -176,9 +176,9 @@ async def maybe_compress_history(
     # LLM only needs a digest).
     excerpt = "\n".join(f"{m['role'].upper()}: {m.get('content', '')[:500]}" for m in to_compress)
 
-    # ADR-19: task-aware prompt + decision-line preservation. Preserved
+    # Task-aware prompt + decision-line preservation. Preserved
     # lines are extracted from the RAW message contents (NOT the truncated
-    # excerpt — Session 162 review: a decision line past the 500-char cut
+    # excerpt — per review: a decision line past the 500-char cut
     # must still survive, that is the entire point of the feature).
     active_policy = None if policy is None or policy.task_type == "default" else policy
     summary_prompt = active_policy.summary_prompt if active_policy else _SUMMARY_PROMPT
@@ -212,7 +212,7 @@ async def maybe_compress_history(
             "\n\n[Preserved decisions — verbatim, do not lose these]\n"
             + "\n".join(f"- {line}" for line in preserved)
         )
-        # ADR-19 P2: forward the preserved lines to the decision ledger
+        # Forward the preserved lines to the decision ledger
         # (durable, cross-session) — best-effort, never breaks compression.
         if decision_sink is not None:
             try:

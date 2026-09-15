@@ -1,6 +1,6 @@
-"""Canonical provider-error normalization (ADR-20 + ADR-21).
+"""Canonical provider-error normalization.
 
-The user's principle (Session 165): *never expose provider-specific error
+The user's principle: *never expose provider-specific error
 payloads directly in the conversation UI.* Whether the provider is Zen,
 Anthropic, OpenAI, Ollama, or something new, the user should see what
 happened, why it happened, and what they can do next — not an API dump.
@@ -27,7 +27,7 @@ into the canonical shape the frontend renders:
       "raw": "<original provider response>"   # debug surface only
     }
 
-ADR-21 (Session 169) makes the classifier genuinely provider-agnostic —
+The token table + envelope extraction make the classifier genuinely provider-agnostic —
 ANY model's error JSON envelope normalizes, not just Zen's:
 
 1. **Structured error-type catalog first.** Providers name their errors in
@@ -124,11 +124,11 @@ _STATUS_CODES: dict[int, tuple[str, bool]] = {
     502: (SERVER_ERROR, True),
     503: (SERVER_ERROR, True),
     504: (TIMEOUT, True),
-    # Anthropic's overload status (review fix, Session 169).
+    # Anthropic's overload status (a review fix).
     529: (SERVER_ERROR, True),
 }
 
-# Provider error-type/code tokens → canonical code (ADR-21). The provider's
+# Provider error-type/code tokens → canonical code. The provider's
 # OWN named error type (from `error.type` / `error.code` in the JSON
 # envelope) is the strongest classification signal — stronger than the HTTP
 # status or prose keywords, because it is explicit semantics that survives
@@ -238,7 +238,7 @@ def _try_json(text: str) -> Any:
 def _walk_error(parsed: Any) -> Any:
     """Return the innermost error payload of a parsed provider body.
 
-    Handles the common envelopes (ADR-21): the top-level ``error`` dict, the
+    Handles the common envelopes: the top-level ``error`` dict, the
     ``errors`` plural list (first element), double-nested ``error.error``
     (proxies/gateways), and ``error`` as a plain string (Ollama). Non-dict
     input is returned unchanged.
@@ -323,7 +323,7 @@ def _clean_text(text: str, limit: int = 220) -> str:
     return t
 
 
-# Cloudflare / edge-protection HTML pages (Session 401 live finding,
+# Cloudflare / edge-protection HTML pages (a live finding,
 # bankofai): a 403 whose body is an HTML challenge/block page is NOT an API
 # auth rejection — the request never reached the provider's auth layer. It
 # is transient edge protection (request-cadence triggered; a 200 follows
@@ -359,7 +359,7 @@ def _classify(
 ) -> tuple[str, bool]:
     """Classify a raw provider error into (code, retryable).
 
-    Priority (ADR-21, provider-agnostic): the provider's own structured
+    Priority (provider-agnostic): the provider's own structured
     error-type/code token first (explicit semantics), then edge-block body
     shape (HTML challenge pages lie about auth), then the HTTP status,
     then content keywords; generic as the last resort.
@@ -405,7 +405,7 @@ def _extract(raw: Any) -> tuple[str | None, int | None, str, str, Any]:
     if isinstance(raw, Exception):
         # raw must stay JSON-serializable — the canonical object can reach
         # chat.py's json.dumps. str(raw) keeps the debug surface without the
-        # un-serializable exception object (review fix, Session 168).
+        # un-serializable exception object (a review fix).
         return None, None, f"{type(raw).__name__}: {raw}", "", str(raw)
     text = str(raw)
     match = _PROVIDER_ERROR_RE.match(text)
@@ -427,7 +427,7 @@ def _extract(raw: Any) -> tuple[str | None, int | None, str, str, Any]:
     return None, None, text, "", text
 
 
-# ADR-32: these are provider failures that cannot be repaired by another
+# These are provider failures that cannot be repaired by another
 # parent-loop iteration. Keep the classification here with the canonical
 # envelope parser so the loop does not grow a second provider-error parser.
 _PERMANENT_QUOTA_MARKERS = (
@@ -448,7 +448,7 @@ def is_permanent_quota_429(raw: Any) -> bool:
 
     The adapter uses a provider response body, while the parent loop receives
     the adapter's normalized ``"provider returned 429: body"`` string. Both
-    shapes go through the same ADR-21 envelope extraction here.
+    shapes go through the same envelope extraction here.
     """
     provider, status, text, type_token, raw_src = _extract(raw)
     if status != 429:
@@ -482,7 +482,7 @@ def normalize_error(
     `raw` may be the adapter's `{provider} returned {status}: {body}` string,
     a plain string, an already-parsed provider dict, or an exception. It may
     be ANY provider's error payload — OpenAI, Anthropic, Ollama, Zen, Azure,
-    or a future one — the classifier is envelope-agnostic (ADR-21).
+    or a future one — the classifier is envelope-agnostic.
 
     `source_hint` forces the source when the caller knows the error's domain
     (e.g. `source_hint="internal"` for upload failures) — provider keyword
@@ -515,7 +515,7 @@ def normalize_error(
     if code == GENERIC_ERROR:
         # Provider-shaped errors (name parsed or status present) still belong
         # to the provider domain — the UI should say "the model provider",
-        # not an anonymous internal error (ADR-21).
+        # not an anonymous internal error.
         source = (
             SOURCE_PROVIDER if (provider or status is not None) else SOURCE_INTERNAL
         )

@@ -169,18 +169,18 @@ def available_tools() -> list[dict]:
 # -- Auto-register all built-in tools -----------------------------------------
 # Import order matters: file_reader must be before engine uses parse_file
 from tools import (
-    apply_proposed,  # noqa: E402, F401 -- B-2026-08-02-7: write a staged proposal to disk
+    apply_proposed,  # noqa: E402, F401 -- write a staged proposal to disk
     # Last: best_of_n_edit module-level-imports delegate/delegate_parallel/
     # edit_file — importing it here guarantees those are loaded first.
-    best_of_n_edit,  # noqa: E402, F401 -- B-2026-08-02-11: N candidate edits → selector → apply
+    best_of_n_edit,  # noqa: E402, F401 -- N candidate edits → selector → apply
     browser_agent,  # noqa: E402, F401 -- BROWSE (real browser interaction)
-    calculator,  # noqa: E402, F401 -- B-2026-07-31-10: CALCULATE (safe arithmetic)
+    calculator,  # noqa: E402, F401 -- CALCULATE (safe arithmetic)
     code_exec,  # noqa: E402, F401 -- registers CODE_EXEC
-    csv_tool,  # noqa: E402, F401 -- B-2026-07-31-10: CSV (bounded CSV parsing)
-    delegate,  # noqa: E402, F401 -- ADR-8 Phase 3: agent-initiated delegation
-    delegate_inline,  # noqa: E402, F401 -- B-2026-08-02-9: inline delegation (after delegate: imports its contextvars)
-    delegate_parallel,  # noqa: E402, F401 -- B-2026-08-02-6: parallel delegation fan-out
-    describe_tool,  # noqa: E402, F401 -- ADR-40 option C: load a long-tail tool's full schema on demand
+    csv_tool,  # noqa: E402, F401 -- CSV (bounded CSV parsing)
+    delegate,  # noqa: E402, F401 -- agent-initiated delegation
+    delegate_inline,  # noqa: E402, F401 -- inline delegation (after delegate: imports its contextvars)
+    delegate_parallel,  # noqa: E402, F401 -- parallel delegation fan-out
+    describe_tool,  # noqa: E402, F401 -- load a long-tail tool's full schema on demand
     diagnostics,  # noqa: E402, F401 -- DIAGNOSTICS (structured failure analysis)
     dir_explorer,  # noqa: E402, F401 -- DIR_EXPLORER (bounded read-only folder inspection: list/tree/stat)
     edit_file,  # noqa: E402, F401 -- FILE_EDIT (in-place file editing)
@@ -188,22 +188,22 @@ from tools import (
     file_writer,  # noqa: E402, F401 -- FILE_WRITE (secondary intent)
     find_path,  # noqa: E402, F401 -- FIND_PATH (name-match search, path-only, capped)
     git_tool,  # noqa: E402, F401 -- GIT (structured git operations)
-    grep_search,  # noqa: E402, F401 -- B-2026-08-23-31: GREP_SEARCH (grep-like text search)
-    json_tool,  # noqa: E402, F401 -- B-2026-07-31-10: JSON (bounded JSON parse/query)
+    grep_search,  # noqa: E402, F401 -- GREP_SEARCH (grep-like text search)
+    json_tool,  # noqa: E402, F401 -- JSON (bounded JSON parse/query)
     memory_tool,  # noqa: E402, F401 -- registers MEMORY_OP
-    observe,  # noqa: E402, F401 -- B-2026-07-31-9: OBSERVE (desktop awareness: window, clipboard, apps, state, recent files)
+    observe,  # noqa: E402, F401 -- OBSERVE (desktop awareness: window, clipboard, apps, state, recent files)
     process_tool,  # noqa: E402, F401 -- PROCESS (long-running process management)
-    propose_edit,  # noqa: E402, F401 -- B-2026-08-02-7: stage an edit proposal (no write)
-    propose_write,  # noqa: E402, F401 -- B-2026-08-02-7: stage a write proposal (no write)
+    propose_edit,  # noqa: E402, F401 -- stage an edit proposal (no write)
+    propose_write,  # noqa: E402, F401 -- stage a write proposal (no write)
     search_tool_results,  # noqa: E402, F401 -- P0 Step 4 slice 2: read back a large stored tool result
     shell,  # noqa: E402, F401 -- registers SHELL
-    skill,  # noqa: E402, F401 -- B-2026-08-02-12: load a skill into context
-    sql_tool,  # noqa: E402, F401 -- B-2026-07-31-10: SQL (read-only SQLite queries)
-    subgoal,  # noqa: E402, F401 -- B-2026-08-02-8: subgoal scratchpad tools
+    skill,  # noqa: E402, F401 -- load a skill into context
+    sql_tool,  # noqa: E402, F401 -- SQL (read-only SQLite queries)
+    subgoal,  # noqa: E402, F401 -- subgoal scratchpad tools
     sysinfo,  # noqa: E402, F401 -- registers SYSINFO (offline: time, OS, CPU, RAM, disk, network, GPU, processes, env, uptime, users, services, installed programs)
-    system_search,  # noqa: E402, F401 -- Session 400: SYSTEM_SEARCH (unified local search: files/recent/largest/duplicates/apps/open_with)
-    todo_write,  # noqa: E402, F401 -- ADR-43: agent-driven live UI todo checklist
+    system_search,  # noqa: E402, F401 -- SYSTEM_SEARCH (unified local search: files/recent/largest/duplicates/apps/open_with)
+    todo_write,  # noqa: E402, F401 -- agent-driven live UI todo checklist
     web_fetch,  # noqa: E402, F401 -- registers WEB_FETCH (follow-up URL fetching)
-    web_research,  # noqa: E402, F401 -- Session 340: adaptive web acquisition (search + fetch + browser)
+    web_research,  # noqa: E402, F401 -- adaptive web acquisition (search + fetch + browser)
     web_search,  # noqa: E402, F401 -- registers WEB_SEARCH
 )
