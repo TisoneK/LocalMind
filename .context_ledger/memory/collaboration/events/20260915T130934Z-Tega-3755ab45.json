@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260915T130934Z-Tega-3755ab45",
+  "type": "claim",
+  "session": "S009",
+  "agent": "Tega",
+  "created": "2026-09-15T13:09:34Z",
+  "issue": "reload-fields-20260915",
+  "body": "Tega (S009) claims B-2026-08-17-4 scope: persist + restore thinkMs/diffData/candidates on session-history reload. Product paths: frontend/src/lib/localmind/client.ts (getSessionHistory mapping), frontend/src/components/chat/ChatMessage.tsx, frontend/src/types/index.ts if needed; backend/src/storage/db.py (messages columns), backend/src/core/models.py (ChatMessage fields), backend/src/api/routes/sessions.py (history endpoint). Follows the established persist-column -> history-endpoint -> client-restore pattern. Isolated worktree ../LocalMind-s009.",
+  "paths": ["backend/src/api/routes/sessions.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

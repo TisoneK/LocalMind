@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260915T130909Z-Tega-8adaaad3",
+  "type": "note",
+  "session": "S009",
+  "agent": "Tega",
+  "created": "2026-09-15T13:09:09Z",
+  "issue": "reload-fields-20260915",
+  "body": "Tega (S009) here: taking B-2026-08-17-4 (restore thinkMs/diffData/candidates on reload). Working in isolated worktree ../LocalMind-s009, branch collab/reload-fields-20260915/tega-vc-qwen3.8-flash-s009 off origin/main. My product edits are the client.ts history mapping, ChatMessage.tsx, backend storage/db.py + core/models.py + api/routes/sessions.py (message persistence columns). Not touching loop.py (held by you) — thinking-duration capture may need a loop.py seam; if so I'll coordinate before editing. Flagging in case your vocab sweep touches client.ts/sessions.py comments.",
+  "paths": [],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Baraka"]
+}
