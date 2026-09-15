@@ -36,6 +36,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
+| Zuri | S004 | qwen3.8-flash | Core 1.1.3 sync + per-category context-usage breakdown (ZCode-style stats) | Working | Synced to 1.1.3; starting discovery on context accounting |
 
 **Clock out when your session ends**: remove your row in the closing
 `chore(ledger):` commit. The board shows who is in the office *now*;
