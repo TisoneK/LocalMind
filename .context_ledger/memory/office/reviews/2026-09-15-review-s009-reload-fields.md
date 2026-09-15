@@ -57,6 +57,26 @@ correction event (`47d644c9`) records the full shipped scope.
   surface) — pre-existing, none read this session's surface.
 - Integration gate green (vite build + electron-builder after installing
   the electron workspace in the worktree).
+- **Exit gate (first run, cp1252 locale):** 27 failed / 3114 passed — all
+  22 `tests/tools` failures inside `pytest-baseline.txt`, plus **5 outside
+  it**: `test_obs_drain_bug`, `test_iteration_limit_and_safety`,
+  `test_tool_execution_failure` (×2), `test_empty_agent_fix`. All five are
+  the documented `B-2026-09-15-19` class: they `read_text()`
+  `agent_runtime.py` with no `encoding=` under the Windows cp1252 locale,
+  and the file contains the ⏹ (U+23F9) emoji → byte 0x8F →
+  `UnicodeDecodeError`. **Proven environmental, not this commit:** raw-byte
+  scan shows byte 0x8F present in `agent_runtime.py` at the session's base
+  `a0536d97`, at the product commit's parent, and at HEAD alike; the set of
+  cp1252-undefined bytes (just 0x8F) is identical across all three — the
+  non-ASCII this commit added (→, — in comments) encode to bytes that all
+  decode under cp1252, and none of them is the failing byte. The fix is
+  owned by `B-2026-09-15-19` (one-line `PYTHONUTF8=1` in `ci-check.sh`) —
+  deliberately not a drive-by inside this claim's scope.
+- **Exit gate (re-run, `PYTHONUTF8=1`):** **GATE PASSED** — ci-check green
+  (ruff, conflict-markers, pytest baseline-clean, tsc, eslint 53/53
+  warnings pre-existing, 0 errors) and bookkeeping OK. The five
+  source-grepping tests pass under UTF-8 mode exactly as
+  `B-2026-09-15-19` predicts.
 - **Live:** isolated server on :8765 (scratch home, zai/glm-4.5-flash,
   LOCALMIND_ALLOWED_FOLDERS pointed at a scratch target). A real edit
   turn produced a live `diff` SSE event and 1050 thinking tokens; the
