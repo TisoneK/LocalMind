@@ -12,7 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-09-15 — Zuri / qwen3.8-flash
-- **Feature:** context-usage-breakdown
-- **Task:** per-category context-usage breakdown — split the last-call context occupancy into categories (system prompt, tool schemas, turn context, history, tool results, current message) and surface shares in the UI meter (ZCode-style stats)
-- **Status:** in-progress
+- **Session:** —
+- **Task:** none — no session in progress (Session 4 complete: context-usage breakdown shipped — per-category shares of the last model call surfaced in the clickable occupancy meter, live-verified on zai; core synced to 1.1.3; B-2026-09-15-1 filed and taken by a peer)
+- **Status:** idle

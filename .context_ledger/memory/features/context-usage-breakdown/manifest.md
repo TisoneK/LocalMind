@@ -1,6 +1,10 @@
 # Feature: context-usage-breakdown — per-category share of the model's context window
 
-**Started:** 2026-09-15 · **Status:** active · **Sessions:** S004 (implementation)
+**Started:** 2026-09-15 · **Status:** COMPLETE (S004 — backend estimator +
+loop wiring `c7414ee1`, frontend panel `d3d861c4`, changelog `842d0e7d`;
+live-verified on zai/glm-4.5-flash with shares summing exactly to the
+provider's prompt total; bankofai primary provider QUOTA-EXHAUSTED at
+verification time) · **Sessions:** S004 (implementation)
 
 ## What this feature is
 
@@ -20,11 +24,12 @@ with token counts and percentage shares, rendered under the existing meter
   boundary and the ADR-34 event order are untouched.
 - Categories (parent path): `system_prompt` (stable prompt incl. subgoal
   scratchpad), `turn_context` (dynamic context message: env, memory,
-  workspace, todo, goal, task state), `tool_schemas` (native `tools=` payload
-  JSON), `history` (prior user/assistant turns), `tool_results` (role:tool +
-  synthetic assistant tool-call messages), `current_message` (latest user
-  turn), plus per-iteration observation/nudge user messages folded into
-  `current_message`... (final set pinned in code).
+  workspace, todo, goal, task state, attachments), `tool_schemas` (native
+  `tools=` payload JSON), `history` (prior user/assistant turns),
+  `current_message` (the turn's user message), `tool_results` (role:tool +
+  synthetic assistant tool-call messages), `turn_additions` (per-iteration
+  injections: thinker block, observation log, synthesis nudges, answer
+  directive).
 - Token counts are estimates (tiktoken, chars//4 fallback) **scaled
   proportionally to the provider-reported prompt_tokens of that call when
   available**, so shares sum to the real occupancy the meter shows.

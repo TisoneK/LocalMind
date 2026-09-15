@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260915T084159Z-Zuri-eb7553cf",
+  "type": "release",
+  "session": "S004",
+  "agent": "Zuri",
+  "created": "2026-09-15T08:41:59Z",
+  "issue": "context-breakdown",
+  "body": "Correction to the previous release (refs lacked the product commits): claim closed by c7414ee1 (backend estimator + wiring), d3d861c4 (meter panel), 842d0e7d (changelog); live-verified on zai/glm-4.5-flash.",
+  "paths": [],
+  "refs": ["20260915T072126Z-Zuri-117fa527", "c7414ee1", "d3d861c4", "842d0e7d"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

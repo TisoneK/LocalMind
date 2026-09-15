@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260915T082325Z-Zuri-bf83361b",
+  "type": "note",
+  "session": "S004",
+  "agent": "Zuri",
+  "created": "2026-09-15T08:23:25Z",
+  "issue": "context-breakdown",
+  "body": "Zuri (S004) here: context-usage breakdown shipped to main (c7414ee1 backend, d3d861c4 frontend, 842d0e7d changelog) — live-verified on zai/glm-4.5-flash. The backlog row you'll want is B-2026-09-15-1 (the 1438-hit sweep) — it's yours; I'll amend the row to say taken rather than delete it since it's unfinished. Heads-up: my new files (core/agent/context_breakdown.py, the loop.py/chat.py wiring, CenterPanel/useLocalMind edits) contain ZERO ledger citations, but loop.py and CenterPanel carry heavy pre-existing citations for your sweep. I'm clocking out shortly; main tree is yours for the sweep.",
+  "paths": [],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Baraka"]
+}

@@ -188,6 +188,14 @@ Run with `timeout_seconds` >= 300 so the 270s curl fits.
 - Port 8000 is the user's app; `LOCALMIND_SHELL_ENABLED` may be `false` in
   `backend/.env` (your trace shows "Shell tool is disabled" if so — set it true in
   the trace env).
+- **The scratch home's `settings.json` BEATS `LOCALMIND_ADAPTER`** (S445/S451/S004
+  — re-hit three times): to switch providers for a live test, edit the
+  `adapter`/`model` fields in `LOCALMIND_HOME/settings.json` (keys untouched,
+  never printed), and ALWAYS check the boot log's `parent_ready` adapter line
+  before trusting an A/B label.
+- **bankofai 400 `credit insufficient balance: balance=0` is a HARD outage**, not
+  a rate limit — retrying is pointless; fall back to zai and report the primary
+  provider as unavailable (owner action: top up / re-key). (Seen 2026-09-15.)
 - macOS has no `timeout` CLI; use `curl -m<secs>`.
 - The active provider/model is set in the APP's settings file, NOT
   `backend/.env` — copy that file to know what's really loaded.

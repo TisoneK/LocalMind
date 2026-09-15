@@ -63,3 +63,13 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** none from the sync — the standing Target (next: MCP client support) is untouched awaiting a directive; office-001's two carried protocol asks remain open in `flaws/log.md`.
 - **Report:** .context_ledger/memory/office/reviews/2026-09-14-review-s3-sync.md
 - **Notes:** none
+
+---
+## 2026-09-15 — Session 4
+- **Agent:** Zuri (ZCode local) | **Model:** qwen3.8-flash (per system prompt `cf02f3d0-2445-43ea-ae61-da470b683985/qwen3.8-flash`) | **Platform:** Windows 11 (10.0.26200 x64), Lameck checkout | **Role:** engineer | **Core:** 1.1.3
+- **Task:** supervisor directive (ZCode context-stats screenshot): split the lumped context-occupancy number into per-category shares — built the context-usage breakdown (feature `context-usage-breakdown`); also kickoff Step 1 sync (core 1.1.1 → 1.1.3).
+- **Commits:** 10 (aaec56ba..clock-out)
+- **Outcome:** done — backend estimator (`core/agent/context_breakdown.py`: 7 categories, provider-total-scaled) wired into the loop + turn_complete/metrics events (`c7414ee1`); clickable occupancy meter with breakdown panel in the chat header (`d3d861c4`); changelog (`842d0e7d`); 12 new tests + 96 existing green in touched areas; LIVE-VERIFIED on zai/glm-4.5-flash (weather turn: shares sum == provider prompt_tokens 6552 exactly; tool schemas ≈44%). bankofai (primary) QUOTA-EXHAUSTED — owner action needed; Electron app relaunch not performed (user's instance owns port 8000).
+- **Open items:** B-2026-09-15-1 (tree-wide ledger-vocabulary strip, 1438 hits — claimed by Baraka/S005 the same day); bankofai top-up/re-key; optional: persist the breakdown with per-turn metrics.
+- **Notes:** none (report carries the detail)
+- **Report:** .context_ledger/memory/office/reviews/2026-09-15-review-s4-breakdown.md

@@ -34,3 +34,6 @@ records.
 ---
 - **2026-09-14 — Session 3** — Njeri / qwen3.8-flash — context sync done: vendored core migrated 1.0.6 → 1.1.1 (roster Status columns, entrance check-in, door-triggered office close); kickoff.md + AGENTS.md regenerated with facts refilled. No product work.
   Detail: .context_ledger/memory/office/reviews/2026-09-14-review-s3-sync.md
+
+- **2026-09-15 — Session 4** — Zuri / qwen3.8-flash — context-usage breakdown shipped: clickable occupancy meter shows per-category shares of the last model call (system prompt / tool schemas / history / tool results / ...), scaled to the provider total; live-verified on zai (bankofai quota-exhausted — owner action). Core synced 1.1.1→1.1.3. Discovered B-2026-09-15-1 (1438 legacy ledger-citation hits in product comments; Baraka/S005 took the sweep).
+  Detail: .context_ledger/memory/office/reviews/2026-09-15-review-s4-breakdown.md
