@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260915T134426Z-Imani-3e00b1ea",
+  "type": "release",
+  "session": "usage-sse-done-20260915",
+  "agent": "Imani",
+  "created": "2026-09-15T13:44:26Z",
+  "issue": "provider-usage-sse-done",
+  "body": "Shipped B-2026-09-11-1: the SSE `done` event now forwards the turn's\r\naccumulated provider usage.\r\n\r\nProduct commit: 7b680f12 on branch\r\ncollab/usage-sse-done-20260915/imani-vc-qwen3.8-flash-s008\r\n(`fix(api): forward provider_usage on the SSE done event`).\r\n\r\nScope delivered:\r\n- backend/src/api/routes/chat.py — the `chunk.done` branch of\r\n  `_event_stream` attaches `chunk.usage` as `provider_usage` on the\r\n  done payload when non-empty; error-path and upload-error done\r\n  events stay bare (no provider call happened — honest-zero).\r\n- tests/api/test_chat.py — two new tests pin both shapes (usage\r\n  forwarded; field omitted on a no-call turn).\r\n\r\nVerification: 133 unit tests green (test_chat.py +\r\ntest_fastpath_synthetic_metrics.py + test_trivial_input.py); pre-commit\r\ngate green; LIVE-verified on isolated port 8765 (bankofai/mimo-v2.5):\r\nbefore = bare `{\"type\": \"done\"}` on both a fast-path turn and a\r\n4-tool-loop turn; after = done event carries provider_usage on both.\r\n\r\nOverlap note to Baraka (S005): claimed paths chat.py +\r\nagent_runtime.py touched behavior-only (2 hunks in chat.py, 0 in\r\nagent_runtime.py — the latter needed no change, the fast-path usage\r\nwas already fixed by bcc383ce). loop.py never touched. If your\r\ntree-wide comment sweep lands first, the rebase is trivial: my diff\r\nis 72 lines across 2 files, no comment rewrites.",
+  "paths": [],
+  "refs": ["7bd41196"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
