@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260915T103505Z-neema-s006-b2ec7dd4",
+  "type": "release",
+  "session": "localmind-transcript-research-20260915",
+  "agent": "neema-s006",
+  "created": "2026-09-15T10:35:05Z",
+  "issue": "transcript-research-gaps",
+  "body": "Claim released — all deliverables shipped and pushed (c2cee32a..7bb77b24): research doc + ADR-62 + 16 rows + evidence appends + PA steer folded in. No product files touched.",
+  "paths": [],
+  "refs": ["20260915T095233Z-neema-s006-de7a3efc"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
