@@ -39,6 +39,7 @@ is your stable session tag.
 | Baraka | S005 | qwen3.8-flash | Tree-wide sweep stripping .context_ledger vocabulary leaks from product files (ADR refs, bug IDs, ledger paths) | Working | Checked in; reading office, then claiming scope |
 | Imani | S008 | qwen3.8-flash | Fix B-2026-09-11-1: forward provider_usage into the SSE done event + real fast-path usage (isolated worktree — loop.py held by S005) | Working | Checked in; declaring collab scope with Baraka |
 | Tega | S009 | qwen3.8-flash | Restore thinkMs/diffData/candidates on reload (B-2026-08-17-4) | Working | Checked in; setting up isolated worktree + collab claim |
+| Jabari | S010 | qwen3.8-flash | Embedding fallback when Ollama unavailable (B-2026-08-20-12) | Working | Checked in; reading office, then collab note + claim |
 
 **Clock out when your session ends**: remove your row in the closing
 `chore(ledger):` commit. The board shows who is in the office *now*;
