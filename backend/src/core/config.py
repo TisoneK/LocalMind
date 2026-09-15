@@ -127,6 +127,28 @@ class Settings(BaseSettings):
     # budget (or lower it to protect VRAM). See adapters/ollama.py.
     ollama_num_ctx: int = 0
 
+    # Semantic-memory embedding backend selection.  "" (default) = Ollama only,
+    # exactly the historical behavior: if the local embedder is unreachable,
+    # the vector store cannot embed and memory stays offline.  "openai" enables
+    # an OpenAI-compatible cloud embeddings endpoint (POST {base}/embeddings,
+    # body {model, input} -> {data[0].embedding}).  The vector store binds to
+    # it at startup ONLY when Ollama is unreachable and the index is brand new
+    # (no vectors stored yet), or as the sole backend on a fresh install with
+    # no Ollama.  An index that already holds Ollama-space vectors is never
+    # rewritten by a different backend — mixing embedding spaces in one vec0
+    # index silently corrupts recall — the store refuses and says so.
+    localmind_embed_adapter: str = ""  # "" | "openai"
+    # Empty = resolved from the provider registry (embed_key_provider) at use
+    # time, falling back to https://api.openai.com/v1.
+    localmind_embed_base_url: str = ""
+    # Cloud embedding model, e.g. "text-embedding-3-small".  Required when the
+    # adapter is "openai"; ignored otherwise.
+    localmind_embed_model: str = ""
+    # Which stored API key (or *_API_KEY env var) authorises the endpoint —
+    # reuses an already-stored provider key, so enabling a cloud embedder adds
+    # no new secret surface.
+    localmind_embed_key_provider: str = "openai"
+
     # Adapter
     localmind_adapter: str = "ollama"
 
@@ -409,7 +431,27 @@ class Settings(BaseSettings):
             if data.get("embed_model"):
                 self.ollama_embed_model = str(data["embed_model"])
                 logger.info(f"[config] Set ollama_embed_model to {data['embed_model']}")
-            # Context-window (num_ctx) override. 0 = auto-detect; >0 = explicit.
+            # Cloud embedding fallback (settings.json keys, same mechanism as
+            # the other runtime-persisted knobs).  The runtime key for the
+            # Ollama-local model is `embed_model` above; these keys configure
+            # the OpenAI-compatible cloud embedder instead.
+            if "embed_adapter" in data:
+                val = str(data["embed_adapter"]).strip().lower()
+                if val in ("", "openai"):
+                    self.localmind_embed_adapter = val
+                    logger.info(f"[config] Set localmind_embed_adapter to {val!r}")
+                else:
+                    logger.warning(f"[config] Ignoring invalid embed_adapter: {data['embed_adapter']!r}")
+            if data.get("embed_base_url"):
+                self.localmind_embed_base_url = str(data["embed_base_url"]).strip()
+                logger.info(f"[config] Set localmind_embed_base_url to {self.localmind_embed_base_url}")
+            if data.get("embed_cloud_model"):
+                self.localmind_embed_model = str(data["embed_cloud_model"]).strip()
+                logger.info(f"[config] Set localmind_embed_model to {self.localmind_embed_model}")
+            if data.get("embed_key_provider"):
+                self.localmind_embed_key_provider = str(data["embed_key_provider"]).strip().lower()
+                logger.info(f"[config] Set localmind_embed_key_provider to {self.localmind_embed_key_provider}")
+            # Context window (num_ctx) override. 0 = auto-detect; >0 = explicit.
             if "num_ctx" in data:
                 try:
                     self.ollama_num_ctx = max(0, int(data["num_ctx"]))

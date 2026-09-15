@@ -73,6 +73,79 @@ def _get_embed_model() -> str:
     return settings.ollama_embed_model
 
 
+# ── Embed backend selection ──────────────────────────────────────────────────
+# A single vec0 index stores vectors from ONE embedding space.  Mixing vectors
+# produced by different models/providers in the same index silently corrupts
+# recall (same-dim-but-different-model vectors are not comparable, and dims can
+# differ outright).  So the backend is chosen ONCE at bind time and stays fixed
+# for the store's lifetime; it is never decided per call.
+#
+# _USE_CLOUD is a module-level flag because the whole app shares one embedding
+# space: the semantic-memory store and the tool-result index must embed with the
+# same backend, so their vectors live in one comparable space.  When False
+# (the default) everything uses Ollama — the historical behavior.  When a
+# VectorStore binds to the configured cloud embedder (because Ollama was
+# unreachable at startup) it flips this flag for the process.
+_USE_CLOUD: bool = False
+
+
+def _cloud_embed_config() -> tuple[str, str, str]:
+    """Resolve (base_url, model, api_key) for the OpenAI-compatible embedder.
+
+    base_url falls back to the provider registry entry for
+    ``settings.localmind_embed_key_provider`` (then the public OpenAI URL);
+    the API key reuses an already-stored provider key so enabling a cloud
+    embedder adds no new secret surface.
+    """
+    base = (settings.localmind_embed_base_url or "").strip()
+    if not base:
+        base = "https://api.openai.com/v1"
+        try:
+            from adapters.openai_compat import PROVIDER_CONFIGS
+
+            cfg = PROVIDER_CONFIGS.get(settings.localmind_embed_key_provider)
+            if cfg and cfg.base_url:
+                base = cfg.base_url
+        except Exception:
+            pass
+    model = (settings.localmind_embed_model or "").strip()
+    key = settings.get_api_key(settings.localmind_embed_key_provider) or ""
+    return base.rstrip("/"), model, key
+
+
+def _backend_id(mode: str, url: str, model: str) -> str:
+    """Stable identity for an embed backend — used as the cache key namespace.
+
+    Including the backend in every cache key guarantees a cloud vector can
+    never be served for an Ollama query (or vice-versa), which is the
+    cross-backend poisoning the plain text-hash key allowed.
+    """
+    return f"{mode}|{url.rstrip('/')}|{model}"
+
+
+def _current_backend(base_url: str) -> tuple[str, str, str, str]:
+    """(mode, url, model, api_key) for the currently-bound embed backend.
+
+    When cloud is bound, the passed base_url is ignored — every caller embeds
+    through the one active backend so all vectors share a space.  When cloud is
+    not bound, Ollama is used with the caller's base_url (unchanged behavior).
+    """
+    if _USE_CLOUD:
+        cloud_base, cloud_model, cloud_key = _cloud_embed_config()
+        return "cloud", cloud_base, cloud_model, cloud_key
+    return "ollama", base_url.rstrip("/"), _get_embed_model(), ""
+
+
+def _extract_cloud_embedding(payload: dict) -> list[float] | None:
+    """Pull data[0].embedding out of an OpenAI /embeddings response body."""
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if data and isinstance(data, list):
+        emb = data[0].get("embedding") if isinstance(data[0], dict) else None
+        if emb:
+            return list(emb)
+    return None
+
+
 # ── Bounded thread pool ────────────────────────────────────────────────────────
 # Shared across all VectorStore instances.  Sized to CPU count — beyond that,
 # context-switching overhead dominates on CPU-first deployments.
@@ -184,28 +257,47 @@ def _normalise_text(text: str) -> str:
 
 
 @lru_cache(maxsize=4096)
-def _embed_cached(norm_text: str, base_url: str) -> tuple:
+def _embed_cached(norm_text: str, mode: str, url: str, model: str) -> tuple:
     """
-    Synchronous embed with LRU cache, keyed on normalised text.
-    Records Ollama latency into _stats.
-    Do NOT call directly — use _embed_async() which handles text normalisation.
+    Synchronous embed with LRU cache, keyed on (normalised text, backend).
+
+    The backend identity (mode|url|model) is part of the cache key so a cloud
+    vector can never be served for an Ollama query — the plain text key allowed
+    exactly that cross-backend poisoning.  Records embed latency into _stats.
+    Do NOT call directly — use _embed_async() which resolves the backend.
     """
     t0 = time.monotonic()
-    url = f"{base_url.rstrip('/')}/api/embeddings"
-    embed_model = _get_embed_model()
     result = None
     try:
-        resp = httpx.post(
-            url, json={"model": embed_model, "prompt": norm_text}, timeout=_EMBED_TIMEOUT
-        )
-        if resp.status_code != 200:
+        if mode == "cloud":
+            key = _cloud_embed_config()[2]
+            headers = {"Authorization": f"Bearer {key}"} if key else {}
             resp = httpx.post(
-                url,
-                json={"model": settings.ollama_model, "prompt": norm_text},
+                f"{url}/embeddings",
+                json={"model": model, "input": norm_text},
+                headers=headers,
                 timeout=_EMBED_TIMEOUT,
             )
-        data = resp.json().get("embedding")
-        result = tuple(data) if data else None
+            if resp.status_code == 200:
+                emb = _extract_cloud_embedding(resp.json())
+                result = tuple(emb) if emb else None
+            else:
+                logger.warning(
+                    "[embed] cloud returned %s: %s", resp.status_code, resp.text[:100]
+                )
+        else:
+            post_url = f"{url}/api/embeddings"
+            resp = httpx.post(
+                post_url, json={"model": model, "prompt": norm_text}, timeout=_EMBED_TIMEOUT
+            )
+            if resp.status_code != 200:
+                resp = httpx.post(
+                    post_url,
+                    json={"model": settings.ollama_model, "prompt": norm_text},
+                    timeout=_EMBED_TIMEOUT,
+                )
+            data = resp.json().get("embedding")
+            result = tuple(data) if data else None
     except Exception as exc:
         logger.warning("Embedding request failed: %s", exc)
     finally:
@@ -239,15 +331,23 @@ async def _embed_async(text: str, base_url: str) -> list[float] | None:
     - Uses asyncio.Semaphore for bounded concurrency control instead
 
     Falls back to LRU cache first, then persistent cache, then async HTTP.
+
+    The `base_url` argument names the Ollama endpoint and keeps its historical
+    signature (an external caller passes it); when the process has bound a
+    cloud embed backend, that backend wins for every caller so all vectors
+    share one embedding space.
     """
-    # Check LRU cache first (sync, fast)
     norm_text = _normalise_text(text)
-    cached = _embed_cached(norm_text, base_url)
+    mode, url, model, api_key = _current_backend(base_url)
+    backend = _backend_id(mode, url, model)
+
+    # Check LRU cache first (sync, fast)
+    cached = _embed_cached(norm_text, mode, url, model)
     if cached:
         return list(cached)
 
     # Check persistent cache (sync)
-    persistent = _get_persistent_cache(norm_text, base_url)
+    persistent = _get_persistent_cache(norm_text, backend)
     if persistent:
         return persistent
 
@@ -255,25 +355,39 @@ async def _embed_async(text: str, base_url: str) -> list[float] | None:
     _stats.active_workers += 1
     try:
         client = await _get_async_client()
-        embed_model = _get_embed_model()
-
-        response = await client.post(
-            f"{base_url.rstrip('/')}/api/embeddings",
-            json={"model": embed_model, "prompt": norm_text},
-        )
-
-        if response.status_code == 200:
-            embedding = response.json().get("embedding")
-            if embedding:
-                # Store in LRU cache (sync)
-                _embed_cached(norm_text, base_url)  # Populate cache
-                # Store in persistent cache asynchronously
-                _safe_persist_async(norm_text, base_url, tuple(embedding))
-                return embedding
+        embedding = None
+        if mode == "cloud":
+            headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+            response = await client.post(
+                f"{url}/embeddings",
+                json={"model": model, "input": norm_text},
+                headers=headers,
+            )
+            if response.status_code == 200:
+                embedding = _extract_cloud_embedding(response.json())
+            else:
+                logger.warning(
+                    f"[embed] cloud returned {response.status_code}: {response.text[:100]}"
+                )
         else:
-            logger.warning(f"[embed] Ollama returned {response.status_code}: {response.text[:100]}")
+            response = await client.post(
+                f"{url}/api/embeddings",
+                json={"model": model, "prompt": norm_text},
+            )
+            if response.status_code == 200:
+                embedding = response.json().get("embedding")
+            else:
+                logger.warning(
+                    f"[embed] Ollama returned {response.status_code}: {response.text[:100]}"
+                )
+        if embedding:
+            # Store in LRU cache (sync)
+            _embed_cached(norm_text, mode, url, model)  # Populate cache
+            # Store in persistent cache asynchronously
+            _safe_persist_async(norm_text, backend, tuple(embedding))
+            return list(embedding)
     except httpx.TimeoutException:
-        logger.warning(f"[embed] Timeout calling Ollama for: {norm_text[:50]}")
+        logger.warning(f"[embed] Timeout calling embedder for: {norm_text[:50]}")
     except Exception as e:
         logger.warning(f"[embed] Failed: {e}")
     finally:
@@ -285,13 +399,15 @@ async def _embed_async(text: str, base_url: str) -> list[float] | None:
 # ── Persistent cache helpers for async embedding ───────────────────────────────
 
 
-def _get_persistent_cache(norm_text: str, base_url: str) -> list[float] | None:
+def _get_persistent_cache(norm_text: str, backend: str) -> list[float] | None:
     """
     Check the Tier-2 SQLite embed_cache for a pre-computed embedding.
+    The key is namespaced by backend identity so a cloud vector can never be
+    served for an Ollama query (or vice-versa).
     Returns None if not found or on error (non-critical).
     """
     try:
-        key = hashlib.sha256(norm_text.encode()).hexdigest()[:32]
+        key = hashlib.sha256(f"{backend}|{norm_text}".encode()).hexdigest()[:32]
         db_path = settings.localmind_db_path or "./localmind.db"
         conn = sqlite3.connect(db_path, timeout=1.0)
         conn.row_factory = sqlite3.Row
@@ -309,13 +425,13 @@ def _get_persistent_cache(norm_text: str, base_url: str) -> list[float] | None:
     return None
 
 
-async def _safe_persist_async(norm_text: str, base_url: str, vec: tuple[float, ...]) -> None:
+async def _safe_persist_async(norm_text: str, backend: str, vec: tuple[float, ...]) -> None:
     """
     Asynchronously persist an embedding to the SQLite embed_cache table.
     This is fire-and-forget — errors are logged but never raised.
     """
     try:
-        key = hashlib.sha256(norm_text.encode()).hexdigest()[:32]
+        key = hashlib.sha256(f"{backend}|{norm_text}".encode()).hexdigest()[:32]
         db_path = settings.localmind_db_path or "./localmind.db"
         packed = struct.pack(f"{len(vec)}f", *vec)
 
@@ -349,9 +465,10 @@ async def _embed_async_legacy(text: str, base_url: str) -> list[float] | None:
     """
     loop = asyncio.get_running_loop()
     _stats.active_workers += 1
+    mode, url, model, _ = _current_backend(base_url)
     try:
         result = await loop.run_in_executor(
-            _EXECUTOR, _embed_cached, _normalise_text(text), base_url
+            _EXECUTOR, _embed_cached, _normalise_text(text), mode, url, model
         )
     finally:
         _stats.active_workers -= 1
@@ -474,6 +591,148 @@ class VectorStore:
             pass
         return None
 
+    def _probe_cloud_dim(self) -> int | None:
+        """Same one-shot dimension probe against the configured cloud embedder.
+        Returns None when the endpoint is unreachable or misconfigured."""
+        if not self._cloud_usable():
+            return None
+        base, model, key = _cloud_embed_config()
+        try:
+            resp = httpx.post(
+                f"{base}/embeddings",
+                json={"model": model, "input": "dim_probe"},
+                headers={"Authorization": f"Bearer {key}"} if key else {},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                emb = _extract_cloud_embedding(resp.json())
+                if emb:
+                    return len(emb)
+            else:
+                logger.warning(
+                    "[embed] cloud probe returned %s: %s", resp.status_code, resp.text[:100]
+                )
+        except Exception as exc:
+            logger.warning("[embed] cloud probe failed: %s", exc)
+        return None
+
+    @staticmethod
+    def _cloud_usable() -> bool:
+        """True when a cloud embed backend is configured well enough to try:
+        adapter selected, model named, and a key resolvable for the provider.
+        A missing key would make every call 401, so binding would be pointless."""
+        if settings.localmind_embed_adapter != "openai":
+            return False
+        base, model, key = _cloud_embed_config()
+        if not model:
+            logger.warning(
+                "[embed] embed adapter 'openai' but no embed model configured — cloud skipped"
+            )
+            return False
+        if not key:
+            logger.warning(
+                "[embed] no API key for embed provider %r — cloud skipped",
+                settings.localmind_embed_key_provider,
+            )
+            return False
+        return bool(base)
+
+    def _fact_count(self, conn: sqlite3.Connection) -> int:
+        try:
+            return conn.execute("SELECT COUNT(*) FROM vector_facts").fetchone()[0]
+        except Exception:
+            return 0
+
+    def _meta_get(self, conn: sqlite3.Connection, key: str) -> str | None:
+        row = conn.execute("SELECT value FROM vector_meta WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else None
+
+    def _bind_to_cloud(self, conn: sqlite3.Connection, stored_dim: int | None) -> bool:
+        """
+        Bind this store (and the process's shared embedding space) to the
+        configured OpenAI-compatible cloud embedder.
+
+        One vec0 index answers queries by comparing vectors, and vectors from
+        different models are not comparable even at equal dimensions — so
+        binding cloud is only safe when the index is empty, or when the index
+        was already written by this same cloud backend (restart continuity:
+        Ollama stays down across restarts, memory must not die with it).
+        A populated Ollama-space index is never handed to a cloud backend;
+        the store says so plainly and stays offline until the local embedder
+        returns, instead of silently corrupting recall.
+
+        Returns True when the bind succeeded (cloud backend live for this
+        store's lifetime).
+        """
+        cloud_dim = self._probe_cloud_dim()
+        if cloud_dim is None:
+            logger.warning(
+                "[embed] cloud embedder unreachable — memory stays offline as before"
+            )
+            return False
+
+        base, model, _ = _cloud_embed_config()
+        cloud_id = _backend_id("cloud", base, model)
+        bound_id = self._meta_get(conn, "embed_backend_id")
+        fact_count = self._fact_count(conn)
+
+        if fact_count > 0 and bound_id != cloud_id:
+            # The index holds vectors from another embedding space — an
+            # Ollama-era DB (no recorded backend) or a different cloud model.
+            # Comparing across spaces is silently meaningless, so refuse.
+            logger.error(
+                "[vector] index holds %d vectors written by backend %r — refusing "
+                "to write it with %r (different embedding space). Memory stays "
+                "offline until that backend is reachable again.",
+                fact_count,
+                bound_id or "ollama (pre-backend-tracking)",
+                cloud_id,
+            )
+            return False
+        if fact_count == 0 and stored_dim is not None and cloud_dim != stored_dim:
+            # Empty index at a stale dimension — safe to re-key at the new
+            # backend's dimension and rebuild the (empty) vec0 table.
+            conn.execute("DROP TABLE IF EXISTS vector_embeddings")
+            conn.execute(
+                "INSERT OR REPLACE INTO vector_meta(key, value) VALUES ('dim', ?)",
+                (str(cloud_dim),),
+            )
+            stored_dim = cloud_dim
+        if stored_dim is not None and cloud_dim != stored_dim:
+            logger.error(
+                "[vector] DIM MISMATCH — DB has dim=%d but cloud embedder %s returns "
+                "dim=%d. Refusing to bind: the existing index would be corrupted.",
+                stored_dim,
+                model,
+                cloud_dim,
+            )
+            self._dim_mismatch = (stored_dim, cloud_dim)
+            return False
+
+        global _USE_CLOUD
+        _USE_CLOUD = True
+        conn.execute(
+            "INSERT OR REPLACE INTO vector_meta(key, value) VALUES ('embed_backend_id', ?)",
+            (cloud_id,),
+        )
+        effective_dim = stored_dim if stored_dim is not None else self._dim
+        if effective_dim is None:
+            # Fresh index — dim is recorded by _set_dim on first store; mark
+            # ready exactly like the historical fresh-DB path does.
+            self._ready = True
+        else:
+            self._dim = effective_dim
+            self._ensure_vec_table(conn)
+            self._ready = True
+        conn.commit()
+        logger.warning(
+            "[vector] Ollama unavailable at startup — bound cloud embed backend "
+            "(%s / %s) for this session. One embedding space, fixed at bind time.",
+            base,
+            model,
+        )
+        return True
+
     def _connect(self) -> sqlite3.Connection:
         return _get_connection(self._db_path)
 
@@ -506,30 +765,75 @@ class VectorStore:
             """)
             conn.commit()
             row = conn.execute("SELECT value FROM vector_meta WHERE key = 'dim'").fetchone()
-            if row:
-                stored_dim = int(row["value"])
+            stored_dim = int(row["value"]) if row else None
+
+            # Restart continuity: an index already written by the currently
+            # configured cloud backend stays on that backend — Ollama coming
+            # and going must not flip the embedding space under a live index.
+            cloud_bound = False
+            if stored_dim is not None and self._cloud_usable():
+                _base, _model, _key = _cloud_embed_config()
+                if self._meta_get(conn, "embed_backend_id") == _backend_id("cloud", _base, _model):
+                    cloud_bound = self._bind_to_cloud(conn, stored_dim)
+
+            if not cloud_bound:
                 # Probe actual embed dim synchronously (one cheap blocking call at startup)
                 actual_dim = self._probe_embed_dim()
-                if actual_dim is not None and actual_dim != stored_dim:
-                    logger.error(
-                        "[vector] DIM MISMATCH — DB has dim=%d but %s now returns dim=%d. "
-                        "Run: python scripts/reset_vector_db.py --yes",
-                        stored_dim,
-                        settings.ollama_embed_model,
-                        actual_dim,
-                    )
-                    self._dim_mismatch = (stored_dim, actual_dim)
-                    # Leave self._ready = False so callers get empty results,
-                    # not a cryptic sqlite-vec error
+                if stored_dim is not None:
+                    if actual_dim is not None and actual_dim != stored_dim:
+                        logger.error(
+                            "[vector] DIM MISMATCH — DB has dim=%d but %s now returns dim=%d. "
+                            "Run: python scripts/reset_vector_db.py --yes",
+                            stored_dim,
+                            settings.ollama_embed_model,
+                            actual_dim,
+                        )
+                        self._dim_mismatch = (stored_dim, actual_dim)
+                        # Leave self._ready = False so callers get empty results,
+                        # not a cryptic sqlite-vec error.  A configured cloud
+                        # embedder may still keep memory alive — _bind_to_cloud
+                        # applies the space guard itself (an index with facts
+                        # from another backend is refused).
+                        if not self._ready and self._cloud_usable():
+                            cloud_bound = self._bind_to_cloud(conn, stored_dim)
+                    else:
+                        # A dim match is not a SPACE match: an index recorded
+                        # as written by any cloud backend cannot be extended
+                        # by Ollama's vectors even at equal dimensions.  (Only
+                        # indexes created after backend-tracking exist, so
+                        # legacy DBs — recorded None — keep working unchanged.)
+                        recorded = self._meta_get(conn, "embed_backend_id")
+                        ollama_id = _backend_id(
+                            "ollama", self._base_url.rstrip("/"), settings.ollama_embed_model
+                        )
+                        if recorded is not None and recorded != ollama_id:
+                            logger.error(
+                                "[vector] index was written by backend %r — refusing "
+                                "to extend it with a different embedding space. "
+                                "Restore that backend or run scripts/reset_vector_db.py --yes",
+                                recorded,
+                            )
+                            self._dim_mismatch = (stored_dim, stored_dim)
+                        else:
+                            self._dim = stored_dim
+                            self._ensure_vec_table(conn)
+                            self._ready = True
+                            if actual_dim is None and self._cloud_usable():
+                                # Ollama unreachable with an existing index — fail
+                                # over to the configured cloud embedder for this
+                                # session (one space, fixed at bind time).
+                                cloud_bound = self._bind_to_cloud(conn, stored_dim)
                 else:
-                    self._dim = stored_dim
-                    self._ensure_vec_table(conn)
+                    # Fresh DB — no dim row yet.  Mark ready so the first store() call
+                    # can flow through _persist → _set_dim which records the dim and
+                    # creates vector_embeddings at the correct dimension.
                     self._ready = True
-            else:
-                # Fresh DB — no dim row yet.  Mark ready so the first store() call
-                # can flow through _persist → _set_dim which records the dim and
-                # creates vector_embeddings at the correct dimension.
-                self._ready = True
+                    if actual_dim is None and self._cloud_usable():
+                        # Ollama is not running and a cloud embedder is
+                        # configured: bind it now so the very first fact a
+                        # user stores succeeds instead of being silently
+                        # dropped.
+                        cloud_bound = self._bind_to_cloud(conn, None)
             logger.debug("VectorStore ready at %s (dim=%s)", self._db_path, self._dim)
         except Exception as exc:
             logger.error("VectorStore init failed: %s", exc)
@@ -547,6 +851,14 @@ class VectorStore:
             "INSERT OR REPLACE INTO vector_meta(key, value) VALUES ('dim', ?)",
             (str(dim),),
         )
+        # Record which backend wrote the first vector: the index holds exactly
+        # one embedding space, and later restarts must not blend another
+        # backend's vectors into it.
+        mode, url, model, _ = _current_backend(self._base_url)
+        conn.execute(
+            "INSERT OR REPLACE INTO vector_meta(key, value) VALUES ('embed_backend_id', ?)",
+            (_backend_id(mode, url, model),),
+        )
         self._ensure_vec_table(conn)
         self._ready = True
 
@@ -556,7 +868,11 @@ class VectorStore:
     # ── Tier-2 persistent embed cache ─────────────────────────────────────
 
     def _pkey(self, norm_text: str) -> str:
-        return hashlib.sha256(norm_text.encode()).hexdigest()
+        # Namespaced by backend identity so a cloud vector can never be served
+        # for an Ollama query (or vice-versa) out of the persistent tier.
+        mode, url, model, _ = _current_backend(self._base_url)
+        backend = _backend_id(mode, url, model)
+        return hashlib.sha256(f"{backend}|{norm_text}".encode()).hexdigest()
 
     def _read_persistent(self, norm_text: str) -> list[float] | None:
         try:
@@ -769,6 +1085,17 @@ class VectorStore:
         is typically 10–30× faster than the original one-commit-per-store design.
         """
         if not pairs:
+            return 0
+        # Embedding-space guard: while a mismatch is recorded, writes would go
+        # into an index that cannot serve them (or blend two incomparable
+        # vector spaces) — refuse loudly instead of corrupting silently.
+        if self._dim_mismatch is not None:
+            logger.warning(
+                "[vector] embedding-space guard active (stored dim=%d, active dim=%d) "
+                "— write refused. Run: python scripts/reset_vector_db.py --yes",
+                self._dim_mismatch[0],
+                self._dim_mismatch[1],
+            )
             return 0
 
         meta_base = {
