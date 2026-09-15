@@ -999,6 +999,12 @@ async def _event_stream(
                             # telemetry (0 when the provider doesn't report it)
                             "cached_tokens": evt.data.get("cached_tokens", 0),
                             "llm_calls": evt.data.get("llm_calls", 0),
+                            # Per-category share of the last call's context
+                            # (empty when the turn never reached the loop —
+                            # e.g. the conversational fast path).
+                            "context_breakdown": (
+                                evt.data.get("provider_usage") or {}
+                            ).get("context_breakdown", {}),
                         },
                     }
                 )

@@ -85,6 +85,7 @@ from core.agent.constants import (
 # tool-talk / tool-input helpers below moved to core.agent.text_tools and are
 # re-imported here for backward compatibility (tests import them from
 # core.agent.loop).
+from core.agent.context_breakdown import compute_breakdown, scale_breakdown
 from core.agent.delegation import (
     InlineMutationScope,
     set_inline_mutation_scope,
@@ -3177,6 +3178,12 @@ class AgentLoop:
         if turn_context:
             loop_messages.insert(1, {"role": "system", "content": turn_context})
 
+        # Context-usage breakdown: the boundary between what the turn INHERITED
+        # (history + its own user message) and what the loop APPENDS from here
+        # on (thinker block, observation log, nudges, tool calls/results).
+        # Captured now, before any per-turn injection lands in loop_messages.
+        _turn_msg_boundary = len(loop_messages)
+
         # ── ADR-42: pre-tool Thinker consult (Session 342 fix) ──────────
         # Before this, the Thinker ran ONLY (a) on the conversational
         # fast-path (agent_runtime, Session 354) and (b) in the loop AFTER a
@@ -3911,6 +3918,19 @@ class AgentLoop:
                     "(tool schemas withheld)",
                     iteration + 1,
                 )
+            # Context-usage breakdown estimate for THIS call's exact payload,
+            # taken after every per-iteration mutation (observation log,
+            # nudges, tool-result simplification, scratchpad, answer-only
+            # schema withholding) and scaled to the provider's real
+            # prompt_tokens once the call reports usage. Observability only —
+            # a failure here must never affect the call itself.
+            try:
+                _breakdown_est = compute_breakdown(
+                    iteration_messages, _iter_tools, _turn_msg_boundary
+                )
+            except Exception:
+                logger.debug("[agent.loop] context breakdown failed", exc_info=True)
+                _breakdown_est = None
             try:
                 result = await asyncio.wait_for(
                     active_adapter.chat_with_tools(
@@ -3953,6 +3973,11 @@ class AgentLoop:
             result_usage = getattr(result, "usage", None)
             if result_usage:
                 _merge_call_usage(_provider_usage, result_usage)
+                if _breakdown_est is not None:
+                    _provider_usage["context_breakdown"] = scale_breakdown(
+                        _breakdown_est,
+                        int(result_usage.get("prompt_tokens") or 0),
+                    )
                 # Prompt-cache visibility: what fraction of input was a cheap
                 # cache HIT (the byte-stable system prefix). Only logs when the
                 # provider reports it (DeepSeek/OpenAI/Anthropic-family).
