@@ -61,3 +61,21 @@ stays here as a live trap.
 ## 2026-09-15 — Zuri / qwen3.8-flash (S004)
 
 - **Status:** none this session — no protocol/`.context_ledger` friction (the one-line clean entry is the bookkeeping-gate watermark, per the flaw logged 2026-09-14).
+
+---
+## 2026-09-15 — Imani / qwen3.8-flash (S008) — the gates' `sh` commands have no teeth on a bare Windows PATH
+
+- **Observed:** every `sh scripts/...` line in gates.conf fails under the
+  `ledger-gates.cmd` launcher with "The term 'sh' is not recognized" on a
+  stock PowerShell 5.1 session (Git ships `sh.exe` in
+  `C:\Program Files\Git\bin` but that directory is not on PATH by default;
+  only `Git\cmd` is). The universal `git diff --cached --check` step
+  passes, so a first read of the output can mistake the rest for real
+  failures of the code under test.
+- **Fix applied in-session:** prepend the Git bin before any gate run
+  (PowerShell: set the PATH variable to Git's bin directory followed by the
+  existing value) — all steps then run and report honestly.
+- **Status:** open — the project's `.cmd` launchers (or gates.conf's own
+  comments) should state the PATH prerequisite so every Windows session
+  doesn't rediscover it. Candidate: the launcher prepends Git's bin itself
+  when it locates it via `where git`.

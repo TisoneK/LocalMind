@@ -81,7 +81,7 @@ from core.agent.constants import (
     WORKSPACE_STATE_ENABLED,
 )
 
-# Session 129 decomposition: the plan-parsing / MiniMax-DSML interception /
+# Decomposition: the plan-parsing / MiniMax-DSML interception /
 # tool-talk / tool-input helpers below moved to core.agent.text_tools and are
 # re-imported here for backward compatibility (tests import them from
 # core.agent.loop).
@@ -138,7 +138,7 @@ from core.agent.text_tools import (
     _has_minimax_tool_call,
     _inspection_can_be_rerun,
     _inspection_fingerprint,
-    _is_filler_step,  # noqa: F401 — re-exported for backward compat (Session 129)
+    _is_filler_step,  # noqa: F401 — re-exported for backward compat
     _is_readonly_inspection,
     _is_tool_talk,
     _normalize_dsml,
@@ -161,7 +161,7 @@ from storage.tool_result_index import INDEX_THRESHOLD_BYTES, get_tool_result_ind
 logger = logging.getLogger(__name__)
 
 
-# Session 332-D — lazy wrapper to avoid circular import:
+# Lazy wrapper to avoid circular import:
 # core.agent.loop → core.trivial_input → core.engine._helpers →
 # core.engine.__init__ → core.agent_runtime → core.agent.loop.
 # The trivial_input helpers are stable; importing once per process is cheap,
@@ -183,7 +183,7 @@ def _message_implies_tool_action(message: str) -> bool:
     return _message_implies_tool_action_fn(message)
 
 
-# Session 337 (Cluster B): lazy wrapper for should_skip_workspace_state.
+# Lazy wrapper for should_skip_workspace_state.
 # Avoids circular import: pre_init_classifier imports nothing heavy.
 _should_skip_workspace_state_fn = None
 
@@ -207,7 +207,7 @@ class TerminalProviderError(RuntimeError):
         super().__init__(self.raw)
 
 
-# Tool definitions live in core.agent.tool_schemas (ADR-40 lean schemas) — the
+# Tool definitions live in core.agent.tool_schemas (lean schemas) — the
 # single source of truth for the native `tools` param and the in-prompt list.
 
 
@@ -217,7 +217,7 @@ class TerminalProviderError(RuntimeError):
 def _reasoning_setting(name: str, fallback: float) -> float:
     """Return a user-tunable reasoning timeout from Settings when set.
 
-    ADR-41 (Session 254): the reasoning budgets are surfaced in the Settings
+    The reasoning budgets are surfaced in the Settings
     UI (settings.json) and as env vars via the pydantic Settings fields. The
     constants below remain the module-level defaults (and the test surface);
     the Settings value wins when present, since load_runtime_settings applies
@@ -238,13 +238,13 @@ def _plan_timeout_for(active_adapter) -> float:
     """Return the plan/init stream timeout, scaled for thinking models and
     slow local providers.
 
-    ADR-41 (Session 254): with thinking enabled the model reasons before
+    With thinking enabled the model reasons before
     emitting the plan JSON, so the 8s PLAN_TIMEOUT_SECS can fire mid-thought
     (observed live: "initialization timed out after 8s" with GLM-4.5-Flash
     thinking ON). Use the larger REASONING_PLAN_TIMEOUT_SECS budget for
     thinking models.
 
-    Session 289 (slow local providers): the parent initialization is
+    On slow local providers: the parent initialization is
     classify-only for a fast model, but for a slow local model (Ollama) the
     init call must GENERATE the whole `direct` decision — including the
     greeting `response` itself — before the stream ends. At CPU token rates
@@ -275,12 +275,12 @@ def _per_call_timeout_for(active_adapter) -> float:
     """Return the per-iteration LLM-call timeout, scaled for thinking models
     and slow local providers.
 
-    ADR-41 (Session 254): a reasoning model with thinking enabled streams
+    A reasoning model with thinking enabled streams
     many thinking tokens before its answer — a fixed 45s cap would truncate
     mid-thought on a slow free tier. Use the larger reasoning budget (tunable
     via Settings UI / env) when the adapter reports thinking_enabled.
 
-    Session 288 (slow local providers): a local Ollama model has the same
+    A local Ollama model has the same
     truncation problem for a different reason — its token rate is low (often
     <1-2 tok/s on CPU/small GPUs), so a legitimately short reply can exceed
     45s. The generic cap even preempted the operator-tuned ollama_timeout_chat
@@ -338,12 +338,12 @@ def _merge_call_usage(accum: dict[str, int], call: dict) -> None:
 
 
 def _thinker_context_block(analysis) -> str:
-    """Render a Thinker analysis (ADR-42) into a compact block the loop injects
+    """Render a Thinker analysis into a compact block the loop injects
     so the model's NEXT action is shaped by the reasoning-on-evidence — facts
-    to build on, ambiguities to resolve on their default (ADR-36: proceed, do
+    to build on, ambiguities to resolve on their default (proceed, do
     not block), and the suggested next step."""
     # The standalone [THINKER ANALYSIS] line keeps this block out of
-    # `_user_message_text` (Session 342): recovery nudges and fallbacks read
+    # `_user_message_text`: recovery nudges and fallbacks read
     # "the user's ORIGINAL request" from the latest user message — without
     # the marker, a pre-tool Thinker block (appended BEFORE any tool runs)
     # would be misread as the user's request on every later nudge in the
@@ -370,7 +370,7 @@ def _thinker_context_block(analysis) -> str:
 # tool output directly (rate-limit fallback). These are page chrome — nav items,
 # login/subscription prompts, loading placeholders — that made the fallback look
 # like a wall of "Subscribe now / LOGOUT / Loading…" instead of the actual
-# headlines (B-2026-09-02).
+# headlines.
 _EVIDENCE_JUNK_RE = re.compile(
     r"^(?:loading[.…\s]*|logout|log\s?in|sign\s?in|sign\s?up|subscribe.*|"
     r"subscribed.*|menu|home|register|follow(?:\s+this\s+topic)?|share|more|"
@@ -405,8 +405,8 @@ def _clean_evidence_text(text: str) -> str:
 
 
 def _thinker_user_summary(analysis) -> str:
-    """Render a Thinker analysis (ADR-42) as USER-facing text for the
-    degraded-evidence fallback (B-2026-08-16-12).
+    """Render a Thinker analysis as USER-facing text for the
+    degraded-evidence fallback.
 
     Distinct from `_thinker_context_block`, which addresses the MODEL's next
     action; this is the already-computed intermediate synthesis the user can
@@ -424,12 +424,12 @@ def _thinker_user_summary(analysis) -> str:
     return "\n".join(parts)
 
 
-# ── ADR-57 slice 2: concurrent post-tool consults ────────────────────────────
+# ── Concurrent post-tool consults ────────────────────────────────────────────
 # A consult that runs while the NEXT model call is already in flight costs the
 # turn zero wall-clock (it overlaps model work instead of stacking on it) —
 # which is what lets it fire after every tool without re-creating the
-# S420-era "2-minute turn" serial latency. The data-dependency map (ADR-57
-# Open-Q1): the analysis of observation N BLOCKS the next action only when
+# earlier "2-minute turn" serial latency. The data-dependency map:
+# the analysis of observation N BLOCKS the next action only when
 # the tool FAILED (recovery advice must shape the very next call — that
 # consult stays inline/blocking); after a success the model already sees the
 # raw observation, so the consult overlaps the next call and its analysis is
@@ -501,12 +501,12 @@ class _BackgroundConsult:
 
 def _absorb_thinker_analysis(loop_messages, trace, obs, analysis, iteration: int) -> None:
     """Inject a completed Thinker analysis into the model context (shared by
-    the blocking and background consult paths). Mirrors the slice-1 contract:
+    the blocking and background consult paths). Mirrors the inline-consult contract:
     context block for the model, user-facing summary on the trace for the
     degraded fallback, lifecycle event for observability."""
     if analysis and not analysis.is_empty:
         loop_messages.append({"role": "user", "content": _thinker_context_block(analysis)})
-        # B-2026-08-16-12: preserve a user-facing rendering on the trace so the
+        # Preserve a user-facing rendering on the trace so the
         # degraded-evidence fallback can surface the already-computed synthesis
         # when the final model call fails (e.g. a provider 429).
         trace.thinker_analysis = _thinker_user_summary(analysis)
@@ -521,11 +521,11 @@ def _absorb_thinker_analysis(loop_messages, trace, obs, analysis, iteration: int
 
 
 def _shell_tool_enabled() -> bool:
-    """Whether the shell tool is currently enabled (B-2026-08-23-4).
+    """Whether the shell tool is currently enabled.
 
     Reads the live settings each call — the user can toggle it in the
     Settings UI mid-session and the very next turn must respect it. Defaults
-    to enabled (Session 31: shell on by default) on any config error so the
+    to enabled (shell on by default) on any config error so the
     tool surface is never silently shrunk by a misread."""
     try:
         from core.config import settings as _s
@@ -542,7 +542,7 @@ def _filtered_tool_defs(allowed_tools: Optional[frozenset[str]] = None) -> list[
         allowed_tools: optional scoped toolset (from an AgentConfig). When
             provided, only tools whose name is in this set are returned.
             When None (the default), filters to AGENT_ALLOWED_TOOLS (the
-            global allowlist) — preserving the pre-ADR-6 behavior.
+            global allowlist) — preserving the earlier global-allowlist behavior.
     """
     allowed_names = allowed_tools if allowed_tools is not None else AGENT_ALLOWED_TOOLS
     return [td for td in TOOL_DEFINITIONS if td["function"]["name"] in allowed_names]
@@ -556,7 +556,7 @@ async def _carry_observation(
     *,
     fallback: str,
 ) -> str:
-    """P0 Step 4 slice 2: the carried form of a tool observation.
+    """The carried form of a tool observation.
 
     For a LARGE result (> ~5 KB) this stores the FULL output in the hybrid
     Tool-Result Index and returns a bounded head PLUS a one-line pointer
@@ -598,7 +598,7 @@ async def _carry_observation(
 
 
 def _note_described_tool(tool_name: str, tool_result, loaded_tools: set[str]) -> None:
-    """Record a long-tail tool loaded via describe_tool (ADR-40 option C).
+    """Record a long-tail tool loaded via describe_tool.
 
     Called right after ANY dispatch whose tool was describe_tool. The loaded
     name is carried in ``ToolResult.metadata`` (NOT a contextvar) because
@@ -630,7 +630,7 @@ def _emit_todo_write_events(tool_name: str, tool_result, obs) -> None:
     list in ``metadata["todos"]`` and the loop emits here. A full replace
     (clear + one create per item) mirrors the plan-todo emission, so the agent's
     checklist becomes the live Todos panel — create, update status, and mark
-    complete, all under the agent's control (ADR-43).
+    complete, all under the agent's control.
     """
     if tool_name != "todo_write" or obs is None or tool_result is None or not tool_result.success:
         return
@@ -648,11 +648,11 @@ def _emit_todo_write_events(tool_name: str, tool_result, obs) -> None:
         )
 
 
-# B-2026-08-20-23: terse harness-owned step verbs for the synthesized
+# Terse harness-owned step verbs for the synthesized
 # user-facing checklist. The Todos panel is a rendered artifact of what the
 # agent actually DID — it must never depend on the model choosing to plan,
 # narrate, or call todo_write (free-tier models do none of these reliably;
-# ADR-49's own live-fail evidence showed glm ignoring todo_write entirely).
+# live-fail evidence showed glm ignoring todo_write entirely).
 _SYNTH_TODO_PREFIX = {
     "shell": "Run",
     "file_write": "Write",
@@ -675,7 +675,7 @@ _SYNTH_TODO_PREFIX = {
     "sysinfo": "System info",
     "todo_write": "Update todos",
     "delegate": "Delegate",
-    # S326 follow-up: the agent learning a tool's docs is part of "what
+    # Follow-up: the agent learning a tool's docs is part of "what
     # happened" — surfacing it shows the how/why of the tool choice (the
     # model consulted the schema before using the tool). The AGENT's actual
     # tool knowledge still comes from the returned schema (recorded via
@@ -684,7 +684,7 @@ _SYNTH_TODO_PREFIX = {
 }
 
 
-# ── Diff emission for ANY file-writing path (B-2026-08-23-32) ───────────────
+# ── Diff emission for ANY file-writing path ──────────────────────────────────
 # The edit_file path emits `file_diff` from structured hunks in its ToolResult
 # metadata (edit_file.py._diff_hunks). file_write and shell writes carry no
 # hunks, so the loop computes them itself: snapshot the file's pre-write
@@ -823,7 +823,7 @@ def _consume_prewrite_snapshot(path: str) -> str | None:
     return _PREWRITE_SNAPSHOTS.pop(abs_path, None)
 
 
-# ── B-2026-08-23-37: durable write-stats logging ────────────────────────
+# ── Durable write-stats logging ─────────────────────────────────────────────
 
 _WRITE_TOOLS = frozenset({"file_write", "edit_file", "apply_proposed_edit"})
 
@@ -877,7 +877,7 @@ def _synthetic_todo_text(tool_name: str, tool_input: str) -> str:
 def _render_todo_state(todo_state: Optional[list[dict]]) -> str:
     """Render the session's persisted todo list as a context block.
 
-    Session 359: the agent must be aware of its own environment — a follow-up
+    The agent must be aware of its own environment — a follow-up
     like "mark the task as complete" needs to know WHICH todos exist and their
     status. The todos table rows carry id/content/completed/status; render
     them with the same markers the UI uses so the model can act on them.
@@ -916,7 +916,7 @@ def _render_todo_state(todo_state: Optional[list[dict]]) -> str:
 def _render_goal_route(goal_tree: Optional[list[dict]]) -> str:
     """Render the derived goal tree as an ordered route for the model.
 
-    B-2026-08-23-8: each top-level goal item plus its sub-goals phrased
+    Each top-level goal item plus its sub-goals phrased
     check → prep → write → verify, so the agent follows the fastest+safest
     ordered path (each step feeds the next). Rendered once per turn — the
     same immutable denominator the Todos panel shows. Returns "" when
@@ -953,8 +953,8 @@ def _intent_for_tool(tool_name: str) -> Intent:
     """Map a tool name to its Intent.
 
     Most tools share their intent value, but a few differ: the tool module is
-    ``edit_file`` while its Intent value is ``file_edit``. Session 375 live
-    trace: `Intent(tool_name)` with "edit_file" raises ValueError, the outer
+    ``edit_file`` while its Intent value is ``file_edit``. Seen live:
+    `Intent(tool_name)` with "edit_file" raises ValueError, the outer
     dispatch except marks the tool failed, and the failed-branch emit then
     crashed on the unbound `tool_result` — every native edit_file call died.
     """
@@ -994,16 +994,16 @@ def _tool_provider(tool_result) -> Optional[str]:
     return tool_result.metadata.get("provider") or tool_result.metadata.get("successful_provider")
 
 
-# Session 238 (Thinker/Agent rebuild Step 0) — forced-tool reprompt bound.
+# Forced-tool reprompt bound.
 # When a tool-required turn's FIRST model call returns empty or text-without-
-# tool (gemini-2.5-flash via the OpenAI-compat endpoint, Session 237 trace),
+# tool (gemini-2.5-flash via the OpenAI-compat endpoint, seen live),
 # the loop reprompts once with a forced-tool nudge instead of failing the
 # turn. The nudge is gated to iteration 0 (the first tool call), so this
 # counter is a hard ceiling documenting the bound; if the gate is ever
 # relaxed, the counter still caps the retries.
 _MAX_TOOL_FORCE_RECOVERIES = 2
 
-# ADR-41 follow-up (Session 256) — empty-but-reasoned retry bound.
+# Empty-but-reasoned retry bound (follow-up to the thinking re-enable).
 # With thinking re-enabled (z.ai/GLM), a slow free tier sometimes streams a
 # long reasoning burst and then returns NO content and NO tool call — the
 # model "thought but didn't act" (live user bug: iter-1 ran shell
@@ -1014,8 +1014,8 @@ _MAX_TOOL_FORCE_RECOVERIES = 2
 # stays intact (this + the Phase-1 500-chunk reasoning cap bound it).
 _MAX_EMPTY_REASONING_RECOVERIES = 2
 
-# B-2026-08-20-7 / Session 310: parent turns get a higher recovery cap. Live
-# traces on z.ai/glm-4.5-flash (Sessions 306-308) showed the model frequently
+# Parent turns get a higher recovery cap. Live
+# traces on z.ai/glm-4.5-flash showed the model frequently
 # hits empty-response-after-reasoning on multiple iterations of a single
 # tool-bearing turn — the cap of 2 was exhausted before the model could
 # complete the turn, leaving only the post-loop synthesis to produce an answer.
@@ -1028,23 +1028,23 @@ _MAX_EMPTY_REASONING_RECOVERIES = 2
 _MAX_EMPTY_REASONING_RECOVERIES_PARENT = 3
 
 
-# Session 192 — same-tool replan bound. After this many CONSECUTIVE
+# Same-tool replan bound. After this many CONSECUTIVE
 # failures on the SAME tool, the acceptance gate stops replanning and
-# reports honestly instead of looping. Root of the Session 191 death
-# spiral: "find my CV" replanned to the same failing shell tool 15+
+# reports honestly instead of looping. Root cause, seen live: the
+# "find my CV" task replanned to the same failing shell tool 15+
 # times (confidence 0.30) for 480s — a tool failing twice in a row
 # means the APPROACH is wrong; retrying it a third time is not a plan
 # change, it's a loop. A different tool (or a success) resets the
 # streak, so legitimate strategy pivots are never blocked.
 _SAME_TOOL_REPLAN_CAP = 2
 
-# Session fix: total replan cap. The acceptance gate can replan on every
+# Total replan cap. The acceptance gate can replan on every
 # "done" claim, burning iterations on re-planning instead of executing.
 # Weak models hit 8 replan cycles with zero progress. Cap total gate
 # replans per run so the model is forced to produce a real answer.
 _MAX_TOTAL_GATE_REPLANS = 2
 
-# B-2026-08-18-3 — repetition nudge bound. A model can spin on a tool that keeps
+# Repetition nudge bound. A model can spin on a tool that keeps
 # SUCCEEDING but isn't advancing (the "current weather Kitengela" transcript: 3
 # web_searches all returned results, none useful, then an empty synthesis). The
 # failure streak above never catches this because the tool didn't fail. After
@@ -1055,7 +1055,7 @@ _MAX_TOTAL_GATE_REPLANS = 2
 # hard bound.
 _SAME_TOOL_REPETITION_NUDGE_CAP = 3
 
-# B-2026-08-21: divergent-tool budget. If the model calls N different tools
+# Divergent-tool budget. If the model calls N different tools
 # (or same tool with materially different inputs) but never sets criteria and
 # never completes a subgoal, the task is a goose chase (e.g. "fix it" with no
 # context → random filesystem exploration). Force an honest stop.
@@ -1088,7 +1088,7 @@ def same_tool_failure_streak(trace) -> tuple[int, str]:
     return streak, last_tool
 
 
-# B-2026-08-24-2: the iteration cap is a failsafe for a FAILING loop, not a
+# The iteration cap is a failsafe for a FAILING loop, not a
 # penalty on a legitimately long task whose tools keep succeeding. Past the base
 # cap the loop continues as long as it keeps making successful progress — so a
 # genuinely long, succeeding task is bounded by the WALL-CLOCK cap and by
@@ -1098,8 +1098,8 @@ def same_tool_failure_streak(trace) -> tuple[int, str]:
 # fires; set high enough that wall-clock always binds first in practice.
 _ITER_ABSOLUTE_CEILING = 100
 
-# B-2026-08-30-2: max iterations "refunded" for on-demand tool loading.
-# describe_tool (ADR-40 option C) costs a whole iteration purely to pull ONE
+# Max iterations "refunded" for on-demand tool loading.
+# describe_tool costs a whole iteration purely to pull ONE
 # tool's schema into context before the tool can be called — pure overhead, not
 # task progress. We credit one iteration per DISTINCT tool loaded on-demand this
 # run so schema-loading does not eat the failsafe budget (a weather lookup that
@@ -1111,7 +1111,7 @@ _DESCRIBE_TOOL_CREDIT_CAP = 8
 
 def _base_cap_reached(iteration: int, loaded_tool_count: int, effective_max_iter: int) -> bool:
     """True when the failsafe base iteration cap is reached, AFTER refunding the
-    iterations spent purely on describe_tool schema-loading (B-2026-08-30-2).
+    iterations spent purely on describe_tool schema-loading.
 
     ``loaded_tool_count`` is the number of DISTINCT tools loaded on-demand this
     run (``len(loaded_tools)``); each cost an iteration to fetch a schema, which
@@ -1137,7 +1137,7 @@ def _iteration_budget_extendable(trace) -> bool:
 
 
 # ── Tool-error recovery (spec §17 self-correction, §28 error handling) ────────
-# ROOT FIX (B-2026-08-18-9): when a tool FAILS, the loop used to surface only
+# ROOT FIX: when a tool FAILS, the loop used to surface only
 # "[Tool 'X' returned error_type='...']" and leave recovery to the model — which
 # a weak model can't reliably do, so the turn dead-ended (empty_response). Every
 # tool error now carries a concrete, model-AGNOSTIC next step keyed on its error
@@ -1159,12 +1159,12 @@ _ERR_INPUT = frozenset({
     "missing_field", "parse_error", "binary_content", "construction_failed",
     "nl_command_rejected",
 })
-# S422: OneDrive/cloud placeholder that could not be hydrated (file bytes are
+# A OneDrive/cloud placeholder that could not be hydrated (file bytes are
 # in the cloud, provider not serving them). NOT a plain io_error — every OS-
 # level read (zipfile/code_exec/shell included) fails identically, so the
 # directive must stop the model from improvising alternate readers.
 _ERR_CLOUDFILE = frozenset({"cloud_file_unavailable"})
-# S422: format has NO parser (OLE2 .pub/.doc, ambiguous zip container). The
+# A format that has NO parser (OLE2 .pub/.doc, ambiguous zip container). The
 # generic "try a different tool/approach" directive is actively harmful here —
 # the model obeyed it and burned 10 code_exec calls improvising OLE2 parsing
 # on the live trace. The only correct move: stop, ask for a converted file.
@@ -1194,7 +1194,7 @@ def tool_error_recovery_directive(tool_name: str, error_type: str) -> str:
             "that actually fits this step. Do not repeat the identical call."
         )
     if et in _ERR_UNSUPPORTED:
-        # Live evidence (S422): under the generic directive a weak model spent
+        # Live evidence: under the generic directive a weak model spent
         # 10 code_exec calls trying to hand-parse the OLE2 container. There is
         # NO parser for this format — alternate tools cannot succeed.
         return (
@@ -1215,7 +1215,7 @@ def tool_error_recovery_directive(tool_name: str, error_type: str) -> str:
             "state to the user with the remedy named above. Never fabricate the file's contents."
         )
     if et in _ERR_NORESULT:
-        # B-2026-08-20-19: for web_fetch, the model usually has search results
+        # For web_fetch, the model usually has search results
         # with multiple URLs already. Point it at the next URL instead of a
         # generic "try a different source." The model was stopping after one
         # 404 instead of trying the other results.
@@ -1242,10 +1242,10 @@ def tool_error_recovery_directive(tool_name: str, error_type: str) -> str:
             "from the evidence gathered so far."
         )
     # git_error, internal_error, child_exception, parse-anything-else, unknown.
-    # B-2026-08-21: OS-aware shell recovery hint. When shell fails with
+    # OS-aware shell recovery hint. When shell fails with
     # "not recognized" or similar, the model almost always used the
     # wrong OS syntax. Give an explicit OS-specific correction.
-    # Session 333: keep the "honestly" contract — the test
+    # Keep the "honestly" contract — the test
     # test_unknown_errors_still_get_an_actionable_directive requires it for
     # every unknown error type, and the wording protects against false
     # success claims (the model says "done" without verifying).
@@ -1281,7 +1281,7 @@ def tool_error_recovery_directive(tool_name: str, error_type: str) -> str:
 
 def same_tool_repetition_streak(trace) -> tuple[int, str]:
     """Trailing run of consecutive calls to the SAME tool, regardless of
-    pass/fail (B-2026-08-18-3).
+    pass/fail.
 
     Returns (streak, tool_name). Unlike `same_tool_failure_streak`, a SUCCESS
     does not break the streak — this catches a model spinning on a tool that
@@ -1304,8 +1304,8 @@ def same_tool_repetition_streak(trace) -> tuple[int, str]:
     return streak, last_tool
 
 
-# Session 419 — identical-call no-progress bound. The B-2026-08-18-3 nudge
-# counts same-TOOL repetitions; a weak model can satisfy the letter of the
+# Identical-call no-progress bound. The repetition nudge
+# above counts same-TOOL repetitions; a weak model can satisfy the letter of the
 # nudge by tweaking one character and still spin. This counts the trailing
 # run of calls with the SAME tool AND normalized-identical arguments — the
 # true "same command over and over" signature the user called out (the CV
@@ -1344,12 +1344,12 @@ def identical_call_streak(trace) -> tuple[int, str]:
 
 
 def parent_completion_floor_note(trace) -> Optional[str]:
-    """The parent's deterministic completion-verification FLOOR (B-2026-08-18-2,
-    review-66): the missing VERIFY→DONE segment of the spec's wheel.
+    """The parent's deterministic completion-verification FLOOR:
+    the missing VERIFY→DONE segment.
 
     On the user-facing parent path the turn carries no explicit success-criteria
     contract (the parent runs a generic ANALYZE intent, `GoalInterpreter` is not
-    wired, and the F4 post-execution verifier is skipped for non-high-stakes
+    wired, and the post-execution verifier is skipped for non-high-stakes
     intents), so `_acceptance_gate_at_final_answer` used to accept the model's
     "done" on its word alone — even when the parent's last real action FAILED
     (spec §29/§30: "action succeeded" ≠ "objective succeeded").
@@ -1358,14 +1358,14 @@ def parent_completion_floor_note(trace) -> Optional[str]:
     (file_write/file_edit/shell/code_exec — file_write also has its own read-back
     grounding), the action is judged failed if EITHER (a) the dispatcher set
     `tool_failed` (tool-level failure: permission, internal error), OR (b) the
-    reused F4 checker `verify_last_tool_succeeded` finds error markers in its
+    reused post-execution checker `verify_last_tool_succeeded` finds error markers in its
     observation (command-level failure: a nonzero-exit shell command or a
     code_exec exception, which `shell.py` returns as content with success=True —
     so `tool_failed` alone would MISS it). Returns a note on failure so the gate
     rejects "done" and recovers; None otherwise → read/analysis/search turns and
     genuinely successful actions are unchanged.
 
-    Tradeoff (identical to the already-shipped F4 verifier this reuses): the
+    Tradeoff (identical to the already-shipped post-execution verifier this reuses): the
     observation check keys on error markers, so a high-stakes action whose
     legitimate output contains "error"/"failed" could be false-rejected; the
     `_SUCCESS_RE` override in `verify_last_tool_succeeded` covers the common
@@ -1403,10 +1403,10 @@ def parent_completion_floor_note(trace) -> Optional[str]:
 def _flush_after_live_stream(streamed_text: str, clean_text: str) -> str:
     """Return the not-yet-seen remainder of `clean_text` after live streaming.
 
-    B-2026-09-02 (ADR-57 slice 1): when the head of an iteration's answer was
+    When the head of an iteration's answer was
     streamed live, the post-gate flush must emit only what the user has NOT
     already seen — otherwise a cleaned/intercepted buffer re-yields the whole
-    answer (the Session 332 duplicate-answer class, reintroduced by streaming).
+    answer (the duplicate-answer class, reintroduced by streaming).
 
     Prefix-aware: the live path never yields a detected tool-call marker (the
     pending-marker hold flips the turn back to the buffered path first), so
@@ -1427,7 +1427,7 @@ def _flush_after_live_stream(streamed_text: str, clean_text: str) -> str:
     return ""
 
 
-# B-2026-08-20-6 — prose tool-action commitment detector (Session 307).
+# Prose tool-action commitment detector.
 # Phrases that indicate the model is *preamble-ing* a tool call rather than
 # answering. Matched case-insensitively as substrings. Scoped to iterations
 # where no tool_call was emitted, so a legitimate prose answer that happens
@@ -1558,7 +1558,7 @@ def prose_commits_to_tool_action(text: str) -> bool:
     return has_tool
 
 
-# B-2026-08-20-13 (Session 314): hedge detection. After tools ran and produced
+# Hedge detection. After tools ran and produced
 # evidence, weak models sometimes produce a non-answer that asks the user to
 # choose or confirm instead of synthesizing the answer from the evidence they
 # already have. Live transcript: model had 8 search results with "16°,
@@ -1580,7 +1580,7 @@ _HEDGE_PHRASES: tuple[str, ...] = (
     "please let me know if you'd like",
 )
 
-# Session 348: follow-through failure phrases — the model says "let me try"
+# Follow-through failure phrases — the model says "let me try"
 # after a failed tool but doesn't actually call a tool on this iteration.
 # These phrases indicate the model INTENDS to continue but is stopping
 # prematurely — the acceptance gate should reject and force a real tool call.
@@ -1603,7 +1603,7 @@ _FOLLOW_THROUGH_PHRASES: tuple[str, ...] = (
     "i'll pull up",
 )
 
-# B-2026-08-24 (Session 397): post-evidence narration detection.
+# Post-evidence narration detection.
 # After tools have run successfully (iteration >= 1), weak models
 # sometimes narrate their NEXT intended action instead of synthesizing
 # the evidence they already gathered. E.g. "Let me call sysinfo to get
@@ -1643,7 +1643,7 @@ _POST_EVIDENCE_NARRATION_PHRASES: tuple[str, ...] = (
     "now i'll use",
 )
 
-# Session 438 — evidence-sufficient → answer-only call.
+# Evidence-sufficient → answer-only call.
 # Live baseline (bankofai/qwen3.8-flash, weather turn): after the page fetch
 # landed, the loop still spent a full tool-schema-bearing reasoning call
 # (38s) deciding to answer, plus two more acquisition iterations the evidence
@@ -1679,7 +1679,7 @@ _EVIDENCE_ANSWER_DIRECTIVE = (
     "exactly what is missing instead of guessing.\n"
 )
 
-# B-2026-08-25-11 (Session 405): pending-ACTION narration. Distinct from
+# Pending-ACTION narration. Distinct from
 # post-evidence narration (which wants the model to SYNTHESIZE): here the
 # model narrates a concrete STATE-CHANGING action it is ABOUT to take
 # (delete, create, run, move, install…) but emits no tool call, and the loop
@@ -1718,7 +1718,7 @@ _OFFER_MARKERS: tuple[str, ...] = (
     "if you want", "want me to", "should i ", "shall i ", "do you want",
     "would you prefer", "if you'd prefer", "just say", "let me know if",
 )
-# Gerund / present-continuous action verbs. Live-test (Session 405,
+# Gerund / present-continuous action verbs. Live-test (
 # bankofai/deepseek-v4-flash): the model ended its answer with "…which I will
 # leave untouched. Deleting the two .bin files now:" and stopped — no rm. That
 # phrasing has NO "let me/I'll" lead-in (it's a gerund) so trigger 1 missed it.
@@ -1800,7 +1800,7 @@ def answer_fails_follow_through(text: str, had_tool_failure: bool) -> bool:
     """Detect a follow-through failure: the model says 'let me try...' after
     a tool failed, but doesn't actually call a tool on this iteration.
 
-    Session 348: the model fetched AccuWeather, got 403, saw the [RECOVERY]
+    Seen live: the model fetched AccuWeather, got 403, saw the [RECOVERY]
     directive to 'try the NEXT URL', then produced a short text response:
     'AccuWeather blocked the request. Let me try the next sources.'
     The acceptance gate accepted this as a final answer — ending the turn
@@ -1912,13 +1912,13 @@ def _recovery_nudge_tail(loop_messages: list[dict], trace=None) -> str:
     """Task-anchor a recovery nudge: the user's ORIGINAL request, plus an
     advancement hint when tools already ran this turn.
 
-    B-2026-08-20-20 / Session 323 (the user's "create a new project" trace):
+    Seen live in the user's "create a new project" trace:
     the tool-talk / forced-tool / empty-response nudges were task-blind —
     "Call the tool now using the function-calling format", with no reference
     to the actual request. A weak model reads that as "prove you can call a
     tool" and re-runs reconnaissance (ls / Get-ChildItem) instead of taking
     the next real step, burning iterations until the turn ends with zero
-    progress. Session 314 already anchored the empty-reasoning nudge (include
+    progress. An earlier fix already anchored the empty-reasoning nudge (include
     the original question); this gives the remaining nudges the same anchor
     plus a "do not repeat tools you already ran" advancement hint.
     """
@@ -2002,16 +2002,16 @@ class AgentLoop:
         # (same plan-{i} ids the planner would emit) and drive the plan
         # cursor, so the UI still shows a real plan + progress.
         plan_steps: Optional[list[str]] = None,
-        # ADR-18 P0: typed success criteria from an explicit plan
+        # Typed success criteria from an explicit plan
         # (or the model's create_plan). The acceptance gate
         # evaluates these against tool evidence + workspace; "done" requires
         # receipts. None = no contract (legacy model-assertion path).
         success_criteria: Optional[list[str]] = None,
-        # ADR-19: explicit task type from a caller-provided plan.
+        # Explicit task type from a caller-provided plan.
         # Selects the task-aware context policy (which tool results/history
         # stay verbatim vs. get stubbed). Empty = legacy positional behavior.
         task_type: str = "",
-        # ADR-18 P0: the selected BaseAgent's is_done() implementation,
+        # The selected BaseAgent's is_done() implementation,
         # called at each iteration head so the loop stops when criteria are
         # VERIFIED (not merely asserted). None for the direct-loop path
         # (no agent instance) — hard caps still bound it.
@@ -2021,36 +2021,36 @@ class AgentLoop:
         allowed_tool_names: Optional[frozenset[str]] = None,
         steering_queue: Optional[asyncio.Queue] = None,
         abort_signal: Optional[asyncio.Event] = None,
-        # Session 178 — wire the dead AgentOrchestrator.replan() into the
+        # Wire the dead AgentOrchestrator.replan() into the
         # verify-fail path. Before falling back to _replan_for_gate's
         # self-contained LLM call, notify the orchestrator so its confidence
         # drops, it can re-route to a different agent (e.g. coding→debugger),
         # and the orchestrator_replan_* obs events fire for real (consumed by
-        # the frontend in Session 180). None = legacy behavior (no orchestrator
+        # the frontend). None = legacy behavior (no orchestrator
         # notification; _replan_for_gate runs alone).
         orchestrator=None,
         reformulated_message: str = "",
-        # Session 330: when the caller supplies a harness-derived goal
+        # When the caller supplies a harness-derived goal
         # checklist, the criteria must gate at the FINAL-ANSWER point
         # (_acceptance_gate_at_final_answer), never at the iteration head
         # is_done_fn — an early criteria-verified stop would end the turn
         # with a bare "✓ n/n" summary before the model writes its answer.
         skip_head_gate: bool = False,
-        # Session 359: the session's CURRENT persisted todo list (from the
+        # The session's CURRENT persisted todo list (from the
         # todos table, via the SSE bridge). Injected into the turn context so
         # a follow-up like "mark the task as complete" is actionable — the
         # model sees what todos exist and their status instead of hunting in
         # chat history. None = no persisted todos (first turn / no checklist).
         todo_state: Optional[list[dict]] = None,
-        # B-2026-08-23-8: the derived goal tree — each plan step plus its
+        # The derived goal tree — each plan step plus its
         # ordered sub-goals (check → prep → write → verify), as plain dicts
         # [{goal, sub_goals}]. When present alongside plan_steps, the loop
         # seeds the sub-goals as nested Todos rows (plan-{i}-sub-{j}) and
         # injects the ordered route into the model context. None = flat plan
-        # (legacy behavior). Never mutated — same fixed denominator as the
-        # flat plan items (Session 330 contract).
+        # (legacy behavior). Never mutated — the same fixed denominator as the
+        # flat plan items.
         goal_tree: Optional[list[dict]] = None,
-        # B-2026-08-23-17: session id → the env context injects the session's
+        # Session id → the env context injects the session's
         # workspace folder so the agent writes artifacts where they belong.
         session_id: str | None = None,
     ) -> AsyncIterator[StreamChunk]:
@@ -2075,21 +2075,21 @@ class AgentLoop:
                 seed the Todos panel (plan-{i} ids) and drive the plan cursor
                 as the model narrates each step.
             agent_config: Optional AgentConfig from the selected BaseAgent
-                subclass (ADR-6). When provided, its `max_iterations` and
+                subclass. When provided, its `max_iterations` and
                 `max_wall_clock_secs` override the module-level defaults
-                (ADR-8 Phase 2 — was dead code before; now honored).
+                (were dead code before; now honored).
             agent_context: Optional agent-specific context string from the
-                selected BaseAgent's build_context() method (ADR-8 Phase 2).
+                selected BaseAgent's build_context() method.
                 When the CodingAgent is selected for SHELL/FILE_*/CODE_EXEC
                 intents, this contains the coding playbook loaded from
                 agents/coding/playbook.md. Passed through to
                 build_agent_system_prompt() and injected as the
                 `agent_context_section` in the system prompt.
             steering_queue: Optional per-session asyncio.Queue of user
-                messages injected mid-turn (B-2026-08-02-5/A5). Drained at
+                messages injected mid-turn (the user-steering path). Drained at
                 each iteration boundary — the agent sees them as new user
                 prompts and continues its turn without being aborted.
-            abort_signal: Optional per-session asyncio.Event (B-2026-08-02-2/A2).
+            abort_signal: Optional per-session asyncio.Event (the abort path).
                 When set (POST /api/chat/{session_id}/abort), the loop raises
                 AgentAbortedError at the next check point so the engine can
                 yield a clean "stopped" response instead of running to the
@@ -2097,22 +2097,22 @@ class AgentLoop:
         """
         active_adapter = adapter or self._adapter
         trace = AgentTrace()
-        # ADR-18 P0: seed the acceptance contract from the dispatcher's plan.
+        # Seed the acceptance contract from the dispatcher's plan.
         if success_criteria:
             trace.success_criteria = [str(c).strip() for c in success_criteria if str(c).strip()]
 
-        # ADR-19: resolve the context policy from the DISPATCHER-RESOLVED
+        # Resolve the context policy from the DISPATCHER-RESOLVED
         # task_type (parse_task_type_from_plan already applied the
         # primary_domain hint before storing it on the plan). The dispatcher
         # prompt contract says "when unset or ambiguous, omit it — the engine
         # falls back to the legacy positional behavior" — so the loop must
         # not additionally activate a policy via intent/phase fallbacks
-        # (Session 163: a SHELL intent with no task_type must behave exactly
-        # as before; see design.md §7 locked decision 2 note). Empty → the
+        # (a SHELL intent with no task_type must behave exactly
+        # as before). Empty → the
         # legacy no-op default policy.
         from core.context_policy import policy_for, resolve_task_type
 
-        # ADR-19 x ADR-22 re-key (Session 186): the passed-in task_type is a
+        # The passed-in task_type is a
         # dispatcher HINT — the agent re-settles it from its actual routing
         # during planning below. Seed with the hint so any read before the
         # settlement point sees the same value the engine used.
@@ -2122,26 +2122,26 @@ class AgentLoop:
         # result so the Engine can report real prompt/completion counts.
         _provider_usage: dict[str, int] = {}
         _obs = obs  # may be None — all obs.emit() calls guarded below
-        _loop_start_time = time.monotonic()  # ADR-5: wall-clock cap baseline
+        _loop_start_time = time.monotonic()  # wall-clock cap baseline
 
-        # B-2026-08-02-7 (B2): fresh proposal scope per run — staged edits
+        # Fresh proposal scope per run — staged edits
         # from a previous run must never leak into this one (same
-        # fresh-per-turn pattern as the A5 steering queue / A2 abort event).
+        # fresh-per-turn pattern as the steering queue / abort event).
         # Lazy import to avoid a circular import at registration time.
         from tools.proposals import reset_proposals
         reset_proposals()
-        # B-2026-08-02-8 (B3): fresh subgoal scratchpad per run — a previous
+        # Fresh subgoal scratchpad per run — a previous
         # run's subgoals must never leak into this one (same fresh-per-turn
-        # pattern as the proposal registry / A5 steering queue / A2 abort).
+        # pattern as the proposal registry / steering queue / abort).
         from core.subgoal import reset_subgoals
         reset_subgoals()
 
-        # ADR-40 option C: per-run loaded long-tail tools (via describe_tool).
+        # Per-run loaded long-tail tools (via describe_tool).
         # Fresh per run — a previous run's loads never leak into this one
         # (same fresh-per-turn pattern as proposals/subgoals above).
         loaded_tools: set[str] = set()
 
-        # ADR-8 Phase 2 (Session 34): honor agent_config.max_iterations
+        # Honor agent_config.max_iterations
         # and agent_config.max_wall_clock_secs when provided. Previously
         # these were dead code — the loop used module-level MAX_ITERATIONS
         # and MAX_WALL_CLOCK_SECS regardless of which agent was selected.
@@ -2159,7 +2159,7 @@ class AgentLoop:
             _effective_max_iter = agent_config.max_iterations
         else:
             _effective_max_iter = MAX_ITERATIONS
-        # B-2026-08-24-2: absolute iteration ceiling. The base cap
+        # Absolute iteration ceiling. The base cap
         # (_effective_max_iter) is the failsafe for a stuck/failing loop; a run
         # that keeps succeeding continues past it, bounded by the WALL-CLOCK cap
         # and failure detection rather than an iteration count. This ceiling is a
@@ -2173,10 +2173,10 @@ class AgentLoop:
         ):
             _effective_max_wall = agent_config.max_wall_clock_secs
         elif getattr(active_adapter, "thinking_enabled", False) or getattr(active_adapter, "slow_provider", False):
-            # ADR-41 (Session 256): a thinking model on a slow free tier
+            # A thinking model on a slow free tier
             # spends 30-170s per call THINKING before acting — the 180s wall
             # clock fits only ~1-2 calls, so a multi-step turn (init + tool +
-            # answer) hits the cap before finishing. Session 288: a slow
+            # answer) hits the cap before finishing. A slow
             # LOCAL provider (Ollama) has the same wall-clock problem for a
             # different reason — every call is slow (often 60-90s+), so a
             # multi-step turn can't fit in 180s either. Scale the cap for
@@ -2207,16 +2207,16 @@ class AgentLoop:
             return
 
         # ── Build tool definitions filtered by allowlist ───────────────
-        # ADR-6: when an agent_config is provided, use its scoped
+        # When an agent_config is provided, use its scoped
         # allowed_tools instead of the global AGENT_ALLOWED_TOOLS, then
-        # (Session 124) further narrow to the intent's tool scope — a
+        # further narrow to the intent's tool scope — a
         # coding agent's 19 tools become ~11 for a SHELL task. Smaller
         # surface = more reliable selection AND fewer tokens per step.
         scoped_tools = agent_config.allowed_tools if agent_config is not None else None
         effective_allowed = allowed_tool_names
         if effective_allowed is not None:
             scoped_tools = frozenset(scoped_tools or AGENT_ALLOWED_TOOLS).intersection(effective_allowed)
-        # Session 124: per-intent tool scoping — intersect with the intent's
+        # Per-intent tool scoping — intersect with the intent's
         # tool scope so a git-status request doesn't pay for web/browse/
         # proposal/subgoal tool definitions on every step (the 21.9K-prompt-
         # token driver). Unknown intents fall back to the full allowlist.
@@ -2230,7 +2230,7 @@ class AgentLoop:
         if effective_allowed is None:
             intent_scope = INTENT_TOOL_SCOPES.get(intent, AGENT_ALLOWED_TOOLS)
             scoped_tools = frozenset(scoped_tools or AGENT_ALLOWED_TOOLS).intersection(intent_scope)
-        # B-2026-08-23-4: when the shell tool is DISABLED (Settings UI toggle /
+        # When the shell tool is DISABLED (Settings UI toggle /
         # LOCALMIND_SHELL_ENABLED=false), remove it from the model's tool
         # surface entirely. The model must not see a callable shell schema —
         # it should route through code_exec (python), file_task, file_write
@@ -2249,14 +2249,14 @@ class AgentLoop:
             bool(skip_planning) and getattr(agent_config, "name", "") == "parent"
         )
 
-        # ADR-40 option C: the native `tools` param is composed PER CALL —
+        # The native `tools` param is composed PER CALL —
         # scoped CORE tools + describe_tool + any long-tail tools loaded this
         # run via describe_tool (on-demand full-tool-context). Loaded tools
         # stay loaded for the rest of the run; nothing outside the scope is
         # ever added.
         def _current_tool_defs() -> list[dict]:
             _allowed = scoped_tools if scoped_tools is not None else AGENT_ALLOWED_TOOLS
-            # P0 Step 4 slice 2: search_tool_results is a meta-retrieval tool
+            # search_tool_results is a meta-retrieval tool
             # (like describe_tool) — permit its composition regardless of the
             # per-intent scope so a stub/pointer is always actionable. It is
             # kept OUT of the in-prompt "Available tools" list (scoped_available
@@ -2264,7 +2264,7 @@ class AgentLoop:
             # it to loaded_tools — i.e. only on a turn that stored a large result.
             if "search_tool_results" in loaded_tools:
                 _allowed = frozenset(_allowed) | {"search_tool_results"}
-            # B-2026-08-30-16: the call-1 tool param ALWAYS includes core tools.
+            # The call-1 tool param ALWAYS includes core tools.
             # Bootstrap used to send ONLY describe_tool, which forced a handshake
             # round-trip — and for a CORE tool it caused an INFINITE describe_tool
             # loop (live: the model wanted web_search, but with only describe_tool
@@ -2289,9 +2289,9 @@ class AgentLoop:
 
         scoped_available = [t for t in available_tools if _scope_name(t) in scoped_tools]
 
-        # Boot-path efficiency (bootup-telemetry session): the FULL
+        # Boot-path efficiency: the FULL
         # environment block (platform calls + available_tools + a VectorStore
-        # construction) and the ADR-5 workspace snapshot (4-5 git
+        # construction) and the workspace snapshot (4-5 git
         # subprocesses, ~100ms macOS / more on Windows) are ONLY consumed by
         # the EXECUTE prompt (turn_context_parts below). They are NOT needed
         # by the parent initialization call — that uses the COMPACT env block
@@ -2314,7 +2314,7 @@ class AgentLoop:
         # the ParentAgent config, so all user turns use initialization.
         plan_context = ""
         iteration_offset = 0  # how many initialization/planning calls consumed
-        # Session 280 (B-2026-08-16-12): `initialization` is only assigned in
+        # `initialization` is only assigned in
         # the parent-init branch below, but the Thinker consult reads it as
         # the Evidence objective. Initialize here so the consult never hits a
         # NameError on non-parent paths (child agents, isolated loop tests) —
@@ -2327,7 +2327,7 @@ class AgentLoop:
             and not skip_planning
         )
 
-        # B-2026-08-23-34: Chat mode — read from settings singleton.
+        # Chat mode — read from settings singleton.
         # "auto" = current behavior (classifier decides).
         # "agent" = skip classifier, force full execute path.
         # "direct" = skip classifier, answer with no tools.
@@ -2335,7 +2335,7 @@ class AgentLoop:
         _chat_mode = getattr(_cfg, 'localmind_chat_mode', 'auto')
 
         if _chat_mode == 'direct' and getattr(agent_config, "name", "") == "parent":
-            # B-2026-08-24-16: Chat mode answers with no tools — but if the
+            # Chat mode answers with no tools — but if the
             # request clearly needs an ACTION (run a command, edit files, search
             # the machine), don't silently answer without doing it. Offer to
             # switch to Agent mode (the frontend renders an Accept/Decline gate).
@@ -2389,7 +2389,7 @@ class AgentLoop:
             yield StreamChunk(text="", done=True)
             return
 
-        # Session 337 — pre-init deterministic guards (4 root-cause clusters):
+        # Pre-init deterministic guards (4 root-cause clusters):
         #   A. hallucination-class prompts → direct refusal (no tools)
         #   B. analyze-only prompts → skip workspace_state + skip action-narration
         #   C. pressure-induced fabrication → refusal-strengthening reminder
@@ -2401,7 +2401,7 @@ class AgentLoop:
         from core.agent.pre_init_classifier import classify_pre_init
 
         _user_msg_for_pre = reformulated_message or _user_message_text(messages) or ""
-        # Session 343: pass the recent prior turns (EXCLUDING the current
+        # Pass the recent prior turns (EXCLUDING the current
         # message, which is the tail of `messages`) so the pressured-reask
         # guard can see that the agent already refused an unanswerable —
         # "just guess" / "check your memory" follow-ups then get the same
@@ -2448,7 +2448,7 @@ class AgentLoop:
                     status="pre_init_override",
                 )
 
-            # Session 337: emit the direct/clarify response + done chunk
+            # Emit the direct/clarify response + done chunk
             # and return immediately. Do NOT fall through to the execute
             # phase — that would run tools despite the deterministic
             # refusal/clarify decision.
@@ -2475,7 +2475,7 @@ class AgentLoop:
             initialization_started = time.monotonic()
             if _obs:
                 _obs.emit("agent_initialization_start", intent=intent.value)
-            # ADR-34 B-7: consume the streaming initializer so the user sees
+            # Consume the streaming initializer so the user sees
             # the model's acknowledgement within the 5s SLO.
             # Each ("ack", str) event becomes a StreamChunk(status=...) — a
             # model-owned transport acknowledgement, never raw chain-of-thought.
@@ -2486,11 +2486,11 @@ class AgentLoop:
             initialization: Optional[InitializationDecision] = None
             streaming_ack_emitted = False
 
-            # Session 289: the classify/init call gets a COMPACT env (no tool
+            # The classify/init call gets a COMPACT env (no tool
             # prose, no hardware lines) — ~half the tokens of the full block,
             # which matters most on the slow local models this app targets.
             init_env_context = _build_environment_context(compact=True, session_id=session_id)
-            # Session 337 (Cluster C): inject the refusal-strengthening reminder
+            # Inject the refusal-strengthening reminder
             # into the init prompt (prepended to the env_context) when the
             # pre-init classifier detected pressure on a sensitive topic.
             if _pre_init_override.extra_system_reminder:
@@ -2546,7 +2546,7 @@ class AgentLoop:
                     # model omitted it → the UI keeps "Turn N".
                     title=initialization.title,
                     confidence=initialization.confidence,
-                    # ADR-34 B-12: record the init prompt budget so init vs
+                    # Record the init prompt budget so init vs
                     # execution sizes are measured independently.
                     init_prompt_chars=initialization.init_prompt_chars,
                 )
@@ -2555,7 +2555,7 @@ class AgentLoop:
                 if _obs:
                     _obs.emit("agent_loop_done", intent=intent.value, direct=True)
                 if getattr(initialization, "needs_history_answer", False):
-                    # B-2026-08-18-5: the classify JSON flaked with nothing to
+                    # When the classify JSON flakes with nothing to
                     # salvage. Do NOT emit the canned context-free fallback —
                     # answer the user's latest message directly from the
                     # conversation history (fixes a follow-up like "why did you
@@ -2601,7 +2601,7 @@ class AgentLoop:
                         done=False,
                         status=initialization.acknowledgement,
                     )
-                # Session 290: carry the init call's provider usage — on a
+                # Carry the init call's provider usage — on a
                 # direct turn the init IS the turn, so this is the real token
                 # count (else the runtime falls back to an inflated estimate).
                 yield StreamChunk(
@@ -2626,8 +2626,9 @@ class AgentLoop:
 
             plan_context = initialization.objective_line()
             trace.plan_text = plan_context
-            # ADR-49 (revises ADR-38 for the todo checklist): the init returns an
-            # ordered step list for a multi-step task. Emit it UP FRONT as the
+            # The init returns an ordered step list for a multi-step task
+            # (the todo-checklist contract, superseding the earlier plan-only shape).
+            # Emit it UP FRONT as the
             # live Todos panel so the user sees the plan the agent will follow;
             # `_advance_plan_on_narration` (below) checks each step off as the
             # agent works, and the agent may reorder/skip as evidence changes.
@@ -2642,10 +2643,9 @@ class AgentLoop:
                         completed=False,
                         status="pending",
                     )
-                # B-2026-08-23-8/11: seed the sub-goal rows
+                # Seed the sub-goal rows
                 # (plan-{i}-sub-{j}) right after their parent goal. They
-                # are part of the SAME immutable denominator (Session
-                # 330) — informational, never advanced by the plan
+                # are part of the SAME immutable denominator — informational, never advanced by the plan
                 # cursor, finalized with the parent at turn end. The UI
                 # shows the short title; `content` keeps the full route
                 # text (paths/commands) for the agent context.
@@ -2684,7 +2684,7 @@ class AgentLoop:
             if initialization.acknowledgement and not streaming_ack_emitted:
                 yield StreamChunk(text="", done=False, status=initialization.acknowledgement)
         elif PLAN_ENABLED and intent in AGENT_INTENTS and not initial_tool_result and not skip_planning:
-            # B-2026-08-02-2 (A2): check abort before the planning phase — it
+            # Check abort before the planning phase — it
             # can take a full model call.
             if abort_signal is not None and abort_signal.is_set():
                 raise AgentAbortedError("aborted by user before planning")
@@ -2694,8 +2694,8 @@ class AgentLoop:
             # The plan-stream path (non-parent callers) is the ONLY consumer
             # of the full environment block — the parent initialization call
             # uses the compact block instead. Build it here, lazily, so the
-            # parent boot path never pays for it (bootup-telemetry session).
-            # S295: drop the redundant "## Available Tools" prose (the native
+            # parent boot path never pays for it.
+            # Drop the redundant "## Available Tools" prose (the native
             # tools param + in-prompt list already carry it) — saves ~279
             # tokens on every loop iteration; keeps the OS/shell hints.
             env_context = _build_environment_context(
@@ -2740,7 +2740,7 @@ class AgentLoop:
                 for i, step in enumerate(_plan_steps):
                     _obs.emit("todo_created", id=f"plan-{i}", text=step, completed=False)
             elif not _plan_steps:
-                # Session 122: the engine's static fallback is suppressed for
+                # The engine's static fallback is suppressed for
                 # plan-required intents (the LLM plan owns the todo list), so a
                 # planner that produced nothing parseable must be loud — a
                 # silent zero-todo turn would look exactly like the old dead UI.
@@ -2749,11 +2749,11 @@ class AgentLoop:
                     f"(plan_len={len(plan_context)}); no todos emitted"
                 )
         elif plan_steps:
-            # Session 134: planning was skipped because the dispatcher's
+            # Planning was skipped because the dispatcher's
             # execution_plan is being reused (injected via
             # orchestrator_context). Seed the todo list from those steps so
             # the Todos panel shows the plan and the cursor can advance as
-            # the model narrates each step. B-2026-08-23-11: the UI text is
+            # the model narrates each step. The UI text is
             # the goal's short title (when the goal tree supplied one);
             # `content` keeps the full checkable goal string.
             _plan_steps = list(plan_steps)
@@ -2771,7 +2771,7 @@ class AgentLoop:
                         content=str(step),
                         completed=False,
                     )
-                # B-2026-08-23-8/11: seed the sub-goal rows
+                # Seed the sub-goal rows
                 # (plan-{i}-sub-{j}) right after their parent goal — the
                 # warm-kernel parent path (runtime passes skip_planning +
                 # goal_tree) rides this branch. Same fixed denominator as
@@ -2802,7 +2802,7 @@ class AgentLoop:
         else:
             _plan_steps = []
 
-        # ADR-18 P0: first-class task state — created once per turn when
+        # First-class task state — created once per turn when
         # there is a contract (criteria) or a plan. The full block (objective
         # + criteria checklist) is injected into the system prompt ONCE — the
         # criteria are the "done" contract. Progress/budget are refreshed
@@ -2816,7 +2816,7 @@ class AgentLoop:
             or "",
             success_criteria=list(trace.success_criteria),
         )
-        # Session 180 — F3 Structured Planner DAG. Parse the free-text
+        # Structured Planner DAG. Parse the free-text
         # plan into typed PlanNode objects so the loop can advance them
         # through pending → in_progress → completed | failed. Falls back
         # to the GoalInterpreter's turn-level criteria for per-node
@@ -2842,7 +2842,7 @@ class AgentLoop:
                     _plan_parse_exc,
                 )
 
-        # ADR-19 x ADR-22 re-key (Session 186): settle the task type the
+        # Settle the task type the
         # agent committed to during planning. The dispatcher task_type is a
         # HINT (free-tier misclassifies); the loop only plans for
         # AGENT_INTENTS with an intent-driven planner, so the intent is the
@@ -2876,7 +2876,7 @@ class AgentLoop:
         # todos as complete when their corresponding tool finishes.
         _plan_step_cursor = 0
 
-        # Session 121: the plan cursor advances ONLY when the model narrates
+        # The plan cursor advances ONLY when the model narrates
         # a step transition (non-empty text before its tool call). Silent tool
         # continuations keep the current todo — so ONE todo owns MANY actions
         # (e.g. todo "Review backend code" → read/grep/read… all under it).
@@ -2886,7 +2886,7 @@ class AgentLoop:
         def _complete_sub_goals(parent_idx: int) -> None:
             """Complete the sub-goal rows of a finished plan step.
 
-            B-2026-08-23-8: the sub-goals (plan-{i}-sub-{j}) are guidance
+            The sub-goals (plan-{i}-sub-{j}) are guidance
             rows seeded with the parent; when the parent completes, its
             route is done too, so the nested rows flip together. The rows
             stay part of the fixed denominator — no new ids are ever
@@ -2917,7 +2917,7 @@ class AgentLoop:
                 _complete_sub_goals(_plan_step_cursor)
                 _plan_step_cursor += 1
 
-        # Session 142: the 'why' for any tool call under the active plan
+        # The 'why' for any tool call under the active plan
         # step. The frontend renders `why: {action.reasoning}` in the
         # Actions/tool-step cards — previously only the model's pre-tool
         # narration (thought=) was attached, so a silent tool run (no
@@ -2928,7 +2928,7 @@ class AgentLoop:
                 return _plan_steps[_plan_step_cursor]
             return ""
 
-        # Session 142: mark the CURRENT plan step's todo complete when the
+        # Mark the CURRENT plan step's todo complete when the
         # loop is about to end. `_advance_plan_on_narration` only completes
         # on model narration; a silent tool run (the common free-tier case)
         # never advances, so the executed step's todo stayed 'pending' until
@@ -2947,7 +2947,7 @@ class AgentLoop:
                 )
                 _complete_sub_goals(_plan_step_cursor)
 
-        # B-2026-08-20-23: synthesized harness-owned checklist. The warm-kernel
+        # Synthesized harness-owned checklist. The warm-kernel
         # runtime (agent_runtime passes skip_planning=True) gates out ALL plan→
         # todo branches, so the Todos panel was structurally empty and the only
         # remaining path was the model-voluntary todo_write tool. Instead, when
@@ -2956,15 +2956,15 @@ class AgentLoop:
         # todo_completed when the tool lands. Model-agnostic, bounded, and
         # skipped for scaffolding calls (describe_tool) and single-step noise.
         _synthetic_todos: list[str] = []
-        # Session fix: track total gate replans to cap replanning loops
+        # Track total gate replans to cap replanning loops
         _gate_replan_count: int = 0
-        # B-2026-08-21: zero-tool force flag. When the acceptance gate
+        # Zero-tool force flag. When the acceptance gate
         # detects zero tool calls with criteria unmet (model narrating
         # instead of acting), it sets this so the next iteration forces
         # tool_choice="required". Single-element list for mutability
         # across the gate call boundary.
         _gate_force_tool: list[bool] = [False]
-        # Session 438: evidence-sufficient answer-only call. Set after a
+        # Evidence-sufficient answer-only call. Set after a
         # substantive page fetch lands in the transcript; consumed by the
         # NEXT model call, which then runs without tool schemas (answer
         # only) so the model synthesizes instead of re-planning acquisition.
@@ -2980,7 +2980,7 @@ class AgentLoop:
                 return None
             if len(_synthetic_todos) >= _SYNTH_TODO_MAX:
                 return None
-            # Session 359: todo_write IS the checklist manager — synthesizing
+            # todo_write IS the checklist manager — synthesizing
             # a todo for it and then completing it after the tool clears +
             # re-creates the list would upsert an EMPTY leftover row
             # (todo_completed with no text after todo_cleared). Skip it.
@@ -3019,7 +3019,7 @@ class AgentLoop:
             intent=intent,
             available_tools=scoped_available,
             intent_history=None,
-            # P0 Context Engineering Step 2: plan/routing-hint/agent-playbook
+            # Context engineering: plan/routing-hint/agent-playbook
             # are PER-TURN or PER-INTENT content — they now ride the trailing
             # turn-context (via build_agent_intent_tail below) instead of the
             # byte-stable system prefix. agent_context is passed through ONLY
@@ -3029,19 +3029,19 @@ class AgentLoop:
             memory_facts=None,
             orchestrator_context=None,
             agent_context=agent_context if _parent_native_turn else None,
-            # ADR-40: render the in-prompt "Available tools" list from the SAME
+            # Render the in-prompt "Available tools" list from the SAME
             # scoped defs as the native tools param (single source of truth).
             tool_defs=filtered_tools,
             native_bootstrap=_parent_native_turn,
         )
-        # P0 Context Engineering Step 2: the intent-varying sections (skill
+        # Context engineering: the intent-varying sections (skill
         # fragment, expert persona, agent playbook, execution plan, routing
         # hint, current-intent line) used to live INSIDE the system prompt —
         # an intent switch rewrote the cached prefix and every provider cache
         # missed. They now ride the trailing turn-context message, which sits
         # after the stable prefix. Native bootstrap turns keep their compact
         # self-contained prompt (no tail — that surface never had these
-        # sections and its leanness is deliberate, B-2026-08-30-17).
+        # sections and its leanness is deliberate).
         intent_tail = (
             ""
             if _parent_native_turn
@@ -3053,28 +3053,28 @@ class AgentLoop:
             )
         )
 
-        # Session 245 (agent-loop token efficiency, Lever 1): the environment
-        # (OS/cwd and the CURRENT TIME), the ADR-5 workspace state (git status,
-        # diff, last build) and the ADR-18 task-state block are all PER-TURN
+        # Agent-loop token efficiency: the environment
+        # (OS/cwd and the CURRENT TIME), the workspace state (git status,
+        # diff, last build) and the task-state block are all PER-TURN
         # DYNAMIC. They are deliberately kept OUT of the cacheable system prompt
         # and carried in a SEPARATE trailing turn-context message, so the
         # system+tools prefix stays byte-stable across calls and turns and the
         # provider can cache it (see the cache_control marker in the adapter).
         #
-        # ── ADR-5: Workspace state feedback (DEFERRED to the execute path) ──
+        # ── Workspace state feedback (deferred to the execute path) ────────
         # Mark the turn start (records current HEAD for diff tracking), then
         # take a snapshot of git status/diff/build result. The snapshot is
         # injected into the execute prompt below — this is the "observations
         # flow back into context every turn" loop from the CODING HARNESS
         # diagram, the literal difference between a harness and a bare API.
         #
-        # Boot-path efficiency (bootup-telemetry session): this block runs 4-5
+        # Boot-path efficiency: this block runs 4-5
         # git subprocesses (~100ms on macOS, more on Windows). It is ONLY
         # consumed by the execute prompt — the parent initialization call
         # never sees it. Deferred here (after init/plan decided mode=execute)
         # so DIRECT and CLARIFY turns skip the subprocesses entirely.
         #
-        # Session 334 — system-prompt pollution guard: skip the workspace
+        # System-prompt pollution guard: skip the workspace
         # snapshot entirely when the user's message doesn't imply a tool/
         # file/code/git action. Previously the snapshot (Branch: main, dirty
         # working tree, HEAD, untracked files) was injected on EVERY turn,
@@ -3086,7 +3086,7 @@ class AgentLoop:
         # on turns that don't need them.
         workspace_context = ""
         _user_msg = reformulated_message or _user_message_text(loop_messages) or ""
-        # Session 337 (Cluster B): when the pre-init classifier flagged this
+        # When the pre-init classifier flagged this
         # message as "analyze-only" (do not write code yet / first analyze),
         # skip workspace_state injection. The user wants abstract analysis,
         # not inspection of the on-disk repo.
@@ -3121,14 +3121,13 @@ class AgentLoop:
                 0,
             )
 
-        # S295: the trailing turn-context is re-sent on EVERY loop iteration —
+        # The trailing turn-context is re-sent on EVERY loop iteration —
         # drop the redundant tool-list prose (kept in the native param + the
         # in-prompt list) to save ~279 tokens/iteration. session_id is passed
-        # so the Session workspace line lands in the per-iteration context too
-        # (Session 382 follow-up: free-tier models need the destination
-        # repeated near the action, not just in the init call).
+        # so the Session workspace line lands in the per-iteration context too —
+        # free-tier models need the destination
         turn_context_parts = [
-            # P0 Step 2: the intent tail leads the per-iteration context — it
+            # Context engineering: the intent tail leads the per-iteration context — it
             # varies by intent/turn, so it lives entirely after the stable
             # prefix (byte-identical within a turn, so it caches too).
             *([intent_tail] if intent_tail else []),
@@ -3146,14 +3145,14 @@ class AgentLoop:
             turn_context_parts.append("Recent intent history: " + ", ".join(intent_history))
         if workspace_context:
             turn_context_parts.append(workspace_context)
-        # Session 359: inject the session's CURRENT todo list (persisted from
+        # Inject the session's CURRENT todo list (persisted from
         # previous turns). This is the "agent is aware of its own environment"
         # fix — a follow-up like "mark the task as complete" must see what
         # todos exist and their status instead of looking for them in chat.
         _todo_state_prompt = _render_todo_state(todo_state)
         if _todo_state_prompt:
             turn_context_parts.append(_todo_state_prompt)
-        # B-2026-08-23-8: the derived goal route — the ordered sub-goal path
+        # The derived goal route — the ordered sub-goal path
         # (check → prep → write → verify) per top-level goal, so the model
         # follows the fastest+safest sequence rather than guessing.
         _goal_route_prompt = _render_goal_route(goal_tree)
@@ -3184,9 +3183,9 @@ class AgentLoop:
         # Captured now, before any per-turn injection lands in loop_messages.
         _turn_msg_boundary = len(loop_messages)
 
-        # ── ADR-42: pre-tool Thinker consult (Session 342 fix) ──────────
+        # ── Pre-tool Thinker consult ─────────────────────────────────────
         # Before this, the Thinker ran ONLY (a) on the conversational
-        # fast-path (agent_runtime, Session 354) and (b) in the loop AFTER a
+        # fast-path (agent_runtime) and (b) in the loop AFTER a
         # tool produced an observation. A parent-agent turn with zero tools
         # and no fast-path match ("Fix my project.", "Improve the system.")
         # therefore had NO structured understanding pass — the model
@@ -3203,7 +3202,7 @@ class AgentLoop:
             not initial_tool_result
             and not _pre_init_override.mode
             and intent in AGENT_INTENTS
-            # ADR-57 slice 2 (B-2026-09-03): value-gate the pre-tool consult.
+            # Value-gate the pre-tool consult.
             # On direct-retrieval intents (WEB_*, find_path, bounded compute,
             # git, memory) the action is obvious and the model acts on the
             # first call — the consult is a wasted serial round-trip before
@@ -3237,10 +3236,10 @@ class AgentLoop:
                             REASONING_PLAN_TIMEOUT_SECS,
                         )
                     )
-                    # ADR-57 slice 1 ("no call runs silent"): forward the
+                    # "No call runs silent": forward the
                     # consult's prose reasoning to the ThinkingBlock instead of
                     # draining it. The Thinker itself stops surfacing at the
-                    # JSON marker, so the Session 324 structure leak can't
+                    # JSON marker, so the structure leak it previously caused can't
                     # reappear; _filter_system_leaks stays the second layer.
                     async for _tc in _pre_thinker.consult(_ev, active_adapter):
                         if isinstance(getattr(_tc, "thinking", None), str) and _tc.thinking:
@@ -3270,8 +3269,8 @@ class AgentLoop:
         last_tool_failed = False
         consecutive_failures = 0
         fabrication_risk = 0  # Incremented on tool errors and fabrication-prone patterns
-        # ADR-42: the Thinker consults ONCE, on the first real evidence.
-        # ADR-57 slice 2: post-tool consults run CONCURRENTLY with the next
+        # The Thinker consults ONCE, on the first real evidence.
+        # Post-tool consults run CONCURRENTLY with the next
         # model call — at most one in flight, capped per turn; each completed
         # analysis is injected into loop_messages at the next iteration head
         # (before the model call), so the reasoning shapes the next action
@@ -3301,7 +3300,7 @@ class AgentLoop:
                     ],
                 }
             )
-            # P0 Step 4 slice 2: index a large pre-dispatched result and carry a
+            # Index a large pre-dispatched result and carry a
             # bounded head + pointer (retrievable via search_tool_results);
             # small results keep the existing bounded head.
             _carried_initial = await _carry_observation(
@@ -3315,7 +3314,7 @@ class AgentLoop:
                     "content": _carried_initial,
                 }
             )
-            # ADR-18 P1 (Session 174): the SINGLE_TOOL fast path (dir
+            # The SINGLE_TOOL fast path (dir
             # listing, git status, URL fetch, browse) pre-dispatches the
             # tool in the engine and passes the result as
             # initial_tool_result — but the result never became a
@@ -3340,7 +3339,7 @@ class AgentLoop:
         # Per-turn tool call cache: (tool_name, normalised_input) → observation text.
         _call_cache: dict[tuple[str, str], str] = {}
 
-        # Session 378 (repeated-listings flaw): a STRUCTURAL cache for
+        # Repeated-listings flaw guard: a STRUCTURAL cache for
         # read-only inspection calls. Keyed by _inspection_fingerprint —
         # which strips cosmetic variation (quoting, column order, table
         # formats, object wrappers) — so "the same listing asked a different
@@ -3358,7 +3357,7 @@ class AgentLoop:
             ops) keep it; anything that could change state on disk or in the
             environment — writes, edits, code exec, mutating shell commands,
             git write ops — must not reuse stale inspection output, so the
-            cache is cleared for the rest of the turn (Session 378).
+            cache is cleared for the rest of the turn.
             """
             nonlocal _inspection_cache, _inspection_seen
             always_mutates = tool_name in (
@@ -3383,7 +3382,7 @@ class AgentLoop:
         # content leak directly to the user.
         collected_results: list[ToolResult] = []
 
-        # ── Bug B fix: name-level dedup for file_write ────────────────────
+        # ── Name-level dedup for file_write ─────────────────────────────────
         # Track which file paths have been written to in this turn. If the
         # agent calls file_write on the same path twice (even with different
         # content), the second call is almost always redundant or a mistake.
@@ -3392,7 +3391,7 @@ class AgentLoop:
         # retry, defeating the exact-match dedup.
         _file_write_paths: set[str] = set()
 
-        # ── B-2026-08-02-9 (B4): inline-delegation scope ──────────────
+        # ── Inline-delegation scope ──────────────────────────────────────
         # Publish this loop's live message list (BY REFERENCE) plus a
         # validated in-place mutate callback into a contextvar. The
         # delegate_inline tool reads this scope and hands it to an
@@ -3456,21 +3455,21 @@ class AgentLoop:
         # Phase 1 warm-kernel parent turns enter this loop directly. Their
         # first native response may be ordinary prose, so they must not be
         # treated as a skipped tool call or forced into a tool recovery.
-        # ADR-8 Phase 2: use _effective_max_iter / _effective_max_wall
+        # Use _effective_max_iter / _effective_max_wall
         # (agent_config overrides when provided; module-level defaults
         # otherwise) instead of the raw MAX_ITERATIONS / MAX_WALL_CLOCK_SECS.
-        _repetition_nudged = False  # B-2026-08-18-3: fire the progress nudge once per turn
-        _divergent_stop = False  # B-2026-08-21: divergent tool budget broke the loop
+        _repetition_nudged = False  # fire the progress nudge once per turn
+        _divergent_stop = False  # divergent tool budget broke the loop
         for iteration in range(_iter_hard_cap):
             trace.iterations_used = iteration + 1
 
-            # B-2026-08-24-2: past the BASE cap, only continue while the run is
+            # Past the BASE cap, only continue while the run is
             # still making successful progress. The iteration cap is a failsafe
             # for a failing/stuck loop, not a penalty on a legitimately long task
             # whose tools keep succeeding. A non-progressing run stops here at the
             # base cap (unchanged behavior); a succeeding run earns up to
             # _PROGRESS_EXTENSION_ITERS more, still bounded by the wall-clock cap.
-            # B-2026-08-30-2: the failsafe cap measures ACTION iterations —
+            # The failsafe cap measures ACTION iterations —
             # iterations spent purely on describe_tool schema-loading are
             # refunded (see _base_cap_reached), so a task that must load a couple
             # of long-tail tools still gets its full budget instead of hitting
@@ -3478,11 +3477,11 @@ class AgentLoop:
             if _base_cap_reached(
                 iteration, len(loaded_tools), _effective_max_iter
             ) and not _iteration_budget_extendable(trace):
-                # Session 419: record WHICH budget broke the loop. The
+                # Record WHICH budget broke the loop. The
                 # post-loop classification used to report every break as
                 # "iteration_limit" — including wall-clock breaks — which
-                # is exactly the misdiagnosis the Session 32 contract bans
-                # (the remedy for a step-count cap differs from a time cap).
+                # misdiagnosed the failure: the remedy for a step-count cap
+                # differs from a time cap.
                 trace.limit_kind = "iteration_cap"
                 logger.info(
                     "[agent_loop] base iteration cap %d reached and not progressing "
@@ -3493,12 +3492,12 @@ class AgentLoop:
                 )
                 break
 
-            # ADR-5: hard wall-clock cap. The loop terminates on "done,
+            # Hard wall-clock cap. The loop terminates on "done,
             # blocked, OR limit" — this is the time-based limit. Prevents
             # a small model from spinning forever on a task it can't solve.
             _elapsed = time.monotonic() - _loop_start_time
             if _elapsed > _effective_max_wall:
-                # Session 419: distinguish the time cap from the step cap.
+                # Distinguish the time cap from the step cap.
                 trace.limit_kind = "wall_clock"
                 logger.warning(
                     "[agent_loop] wall-clock cap hit after %.1fs (iter %d/%d) — forcing final answer",
@@ -3515,7 +3514,7 @@ class AgentLoop:
                     )
                 break
 
-            # ── ADR-18 P0 acceptance gate (iteration head) ──────────────
+            # ── Acceptance gate (iteration head) ─────────────────────────
             # Sync model-declared success criteria (create_plan tool) into
             # the trace, update the task-state block, then ask the selected
             # agent's is_done(): the loop stops only when the criteria are
@@ -3541,7 +3540,7 @@ class AgentLoop:
             task_state.pending = [s.description for s in _subgoals if s.status in ("pending", "in_progress")]
             task_state.failed = [(s.description, s.notes or "") for s in _subgoals if s.status == "blocked"]
 
-            # B-2026-08-18-3 — progress nudge. If the model has called the SAME
+            # Progress nudge. If the model has called the SAME
             # tool N+ times in a row (succeeding but not advancing — the "current
             # weather Kitengela" spin: 3 web_searches, all ok, none useful, then
             # empty synthesis), nudge ONCE to change approach or answer with what
@@ -3573,7 +3572,7 @@ class AgentLoop:
                             iteration=iteration + 1,
                         )
 
-            # Session 419 — identical-call hard stop. Same tool + the same
+            # Identical-call hard stop. Same tool + the same
             # (normalized) arguments N+ times is the literal "running the
             # same command over and over" loop: the nudge above is soft and
             # fires on the tool name alone, so a model that tweaks one
@@ -3597,7 +3596,7 @@ class AgentLoop:
                     )
                 break
 
-            # B-2026-08-21: divergent-tool budget. If the model has called many
+            # Divergent-tool budget. If the model has called many
             # real tools (excluding todo metadata ops) but never set criteria,
             # the task is a goose chase (e.g. "fix it" with no context).
             # Force an honest stop.
@@ -3639,7 +3638,7 @@ class AgentLoop:
                 _divergent_stop = True
                 break
 
-            # Session 180 — F3 Structured Planner DAG. Advance the plan
+            # Structured Planner DAG. Advance the plan
             # nodes based on the latest tool execution. Heuristic: the
             # node whose subgoal tokens appear in the latest tool's
             # input/observation transitions to completed (or failed).
@@ -3707,7 +3706,7 @@ class AgentLoop:
                     _complete_current_plan_step()
                     _done_text = str(_done_reason or "").strip()
                     if not _done_text:
-                        # ADR-36 B-7: a gate that passes without an explicit
+                        # A gate that passes without an explicit
                         # reason must still produce a non-empty final reply —
                         # never end a turn with zero output. Fall back to the
                         # trace evidence, then to a generic acknowledgement.
@@ -3722,13 +3721,13 @@ class AgentLoop:
                     yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                     return
 
-            # B-2026-08-02-5 (A5): steering without aborting. Drain any
+            # Steering without aborting. Drain any
             # user messages queued via POST /api/chat/{session_id}/steer
             # at the NEXT iteration boundary — never mid-tool. The agent
             # sees the steering message as a new user prompt and continues
             # its turn instead of being aborted and re-run. Messages are
             # tagged "steering": True so compaction passes can identify
-            # them; they are user-role, so the A4 compactor
+            # them; they are user-role, so the compactor
             # (simplify_tool_results — tool-role only) never stubs them.
             if steering_queue is not None:
                 while not steering_queue.empty():
@@ -3736,7 +3735,7 @@ class AgentLoop:
                     _steer_msg.setdefault("steering", True)
                     loop_messages.append(_steer_msg)
 
-            # B-2026-08-02-2 (A2): abort check at each iteration boundary.
+            # Abort check at each iteration boundary.
             # Set via POST /api/chat/{session_id}/abort (or client
             # disconnect) — the loop raises and the engine yields a clean
             # "stopped" response. Granularity is one step boundary, matching
@@ -3745,7 +3744,7 @@ class AgentLoop:
             if abort_signal is not None and abort_signal.is_set():
                 raise AgentAbortedError("aborted by user")
 
-            # ── ADR-57 slice 2: drain a completed background consult ───────
+            # ── Drain a completed background consult ──────────────────────
             # The consult for a previous observation overlapped the last
             # model call; its analysis is injected HERE — before the copy
             # that feeds this iteration's model call — so it shapes the next
@@ -3779,14 +3778,14 @@ class AgentLoop:
                 if len(observation_log) > _OBS_LOG_TOTAL_CAP:
                     trimmed_log = "…[earlier observations truncated]\n" + observation_log[-_OBS_LOG_TOTAL_CAP:]
                 context_content = f"{trimmed_log}{failure_hint}\nIteration {iteration + 1}/{_iter_hard_cap}. "
-                # ADR-18 P0: refresh the task-state progress/budget lines
+                # Refresh the task-state progress/budget lines
                 # into the per-iteration context (criteria stay in the
                 # system prompt; only progress changes per iteration).
                 if task_state_refresh:
                     context_content += task_state_refresh
                 iteration_messages.append({"role": "user", "content": context_content})
 
-            # B-2026-08-24: synthesis nudge. When tools have succeeded in
+            # Synthesis nudge. When tools have succeeded in
             # earlier iterations but the model is past iteration 1, it should
             # SYNTHESIZE from the evidence already gathered, not plan more
             # actions. Without this nudge, weak models keep narrating
@@ -3819,7 +3818,7 @@ class AgentLoop:
                 )
                 iteration_messages.append({"role": "user", "content": _synth_hint})
 
-            # B-2026-08-02-4 (A4): deterministic tool-result simplification.
+            # Deterministic tool-result simplification.
             # When the accumulated conversation has more than the newest few
             # tool results, stub the older oversized ones (head + omission
             # marker + tail) to keep the window in budget WITHOUT an LLM
@@ -3829,15 +3828,15 @@ class AgentLoop:
             # what the model still needs; old results it already acted on
             # are exactly what frees the most context (see
             # context_compactor.simplify_tool_results docstring).
-            # B-2026-08-02-4 (A4): deterministic tool-result simplification.
+            # Deterministic tool-result simplification.
             iteration_messages = simplify_tool_results(
                 iteration_messages,
                 policy=getattr(self, "_context_policy", None),
             )
 
-            # B-2026-08-02-8 (B3): surface the subgoal scratchpad directly in
+            # Surface the subgoal scratchpad directly in
             # the system message each iteration — tool results alone aren't
-            # reliable working memory (the A4 compactor stubs older tool
+            # reliable working memory (the compactor stubs older tool
             # results, so a plan created early could vanish mid-run). The
             # registry is small (3-7 subgoals); empty → skip. iteration_messages
             # is a fresh copy per iteration, so the append never accumulates.
@@ -3851,25 +3850,25 @@ class AgentLoop:
                 )
 
             # ── LLM call with tools ───────────────────────────────────
-            # Session 25/31: wrap with a hard timeout to prevent "thinking
+            # Wrap with a hard timeout to prevent "thinking
             # forever" when the model hangs. Uses PER_CALL_TIMEOUT_SECS
             # (45s) — SHORTER than the adapter's 120s HTTP timeout so the
             # user sees a result before the adapter itself times out.
             # The wall-clock cap is checked between iterations.
-            # ADR-41 (Session 254): a reasoning model with thinking enabled
+            # A reasoning model with thinking enabled
             # (z.ai/GLM) legitimately streams many thinking tokens before
             # its answer — a fixed 45s cap would truncate mid-thought on a
             # slow free tier. When the adapter reports thinking_enabled,
             # use the larger reasoning budget instead (Settings UI / env).
             _per_call_timeout = _per_call_timeout_for(active_adapter)
             t_llm = time.monotonic()
-            # Session 238 (Thinker/Agent rebuild Step 0): on the FIRST
+            # On the FIRST
             # iteration of a tool-required intent (no tool has run yet),
             # force the model to emit a tool call. Some providers
             # (gemini-2.5-flash via the OpenAI-compat endpoint) otherwise
             # return an empty or text-only response on the first tool call,
             # which failed the turn with the "empty response" message
-            # (Session 237 trace). tool_choice="required" is applied ONLY
+            # (seen live). tool_choice="required" is applied ONLY
             # here — later iterations keep the default so the model can
             # synthesize its final answer without further tool calls.
             _force_tool_choice = (
@@ -3884,7 +3883,7 @@ class AgentLoop:
             # force ONE iteration, then let the model respond normally.
             if _gate_force_tool[0]:
                 _gate_force_tool[0] = False
-            # Session 438: evidence-sufficient → answer-only call. When the
+            # Evidence-sufficient → answer-only call. When the
             # previous iteration's tool already put the requested page
             # content in the transcript, this call runs WITHOUT tool schemas
             # (the adapter omits the tools key, so a native tool call is
@@ -3994,7 +3993,7 @@ class AgentLoop:
             # This is safe because independent tool calls (e.g., file_task + sysinfo)
             # have no side-effect dependencies between them.
             if isinstance(result, MultiToolCallResult):
-                # Session 438: batches can mix a fetch with follow-on work —
+                # Batches can mix a fetch with follow-on work —
                 # the answer-only optimization applies only to the clean
                 # single-tool fetch shape, so reset the flag here.
                 _evidence_answer_ready = False
@@ -4064,7 +4063,7 @@ class AgentLoop:
                     tc_result = None
                     try:
                         tc_intent = Intent(tc_name)
-                        # B-2026-08-23-32: snapshot pre-write content so a diff
+                        # Snapshot pre-write content so a diff
                         # can be emitted after a file_write in a batch.
                         if tc_name == "file_write":
                             _record_prewrite_snapshot(tc_args.get("path", ""))
@@ -4074,7 +4073,7 @@ class AgentLoop:
                             obs=_obs,  # ADR 18 P3: delegation streams into the UI
                             allowed_tool_names=effective_allowed,
                         )
-                        # ADR-40 option C: a describe_tool call in a batch loads
+                        # A describe_tool call in a batch loads
                         # the named tool for the rest of this run (metadata
                         # survives the wait_for task boundary).
                         _note_described_tool(tc_name, tc_result, loaded_tools)
@@ -4099,7 +4098,7 @@ class AgentLoop:
                                     diff_additions=tc_result.metadata.get("diff_additions", 0),
                                     diff_deletions=tc_result.metadata.get("diff_deletions", 0),
                                 )
-                        # B-2026-08-23-37: log write stat for edit_file in batch
+                        # Log write stat for edit_file in batch
                         if tc_result and tc_result.success and tc_result.metadata and tc_result.source == "edit_file":
                             _log_session_write(
                                 session_id,
@@ -4109,7 +4108,7 @@ class AgentLoop:
                                 lines=tc_result.metadata.get("modified_lines", 0),
                                 kind="overwritten",
                             )
-                        # B-2026-08-23-32: compute + emit a diff for file_write
+                        # Compute + emit a diff for file_write
                         # in a batch (same shape as the single-tool path).
                         if tc_name == "file_write" and tc_result and tc_result.success:
                             _pre = _consume_prewrite_snapshot(tc_args.get("path", ""))
@@ -4124,7 +4123,7 @@ class AgentLoop:
                                     _emit_file_diff(
                                         _obs, path=str(_dest), content_before=_pre, content_after=_after
                                     )
-                            # B-2026-08-23-37: log write stat
+                            # Log write stat
                             _log_session_write(
                                 session_id,
                                 path=(tc_result.metadata or {}).get("path", ""),
@@ -4133,7 +4132,7 @@ class AgentLoop:
                                 lines=(tc_result.metadata or {}).get("lines", 0),
                                 kind=_write_kind_from_snapshot(_pre),
                             )
-                        # B-2026-08-23-37: log write stat for apply_proposed_edit in batch
+                        # Log write stat for apply_proposed_edit in batch
                         if tc_name == "apply_proposed_edit" and tc_result and tc_result.success and tc_result.metadata:
                             _applied = tc_result.metadata.get("applied", False)
                             if _applied:
@@ -4153,7 +4152,7 @@ class AgentLoop:
                     return tc_name, tc_obs, tc_failed, tc_lat, tc_provider
 
                 # Build labels for each tool call
-                # Session 142: capture the batch's 'why' ONCE — the started
+                # Capture the batch's 'why' ONCE — the started
                 # emits below run BEFORE _advance_plan_on_narration and the
                 # done emits AFTER it, so calling _step_reasoning() at each
                 # emit would stamp the same tool call with two different step
@@ -4223,7 +4222,7 @@ class AgentLoop:
                             thought=result.raw_content or "", reasoning=_batch_reasoning,
                         )
 
-                # Session 121: a narrated iteration is a step transition —
+                # A narrated iteration is a step transition —
                 # advance the plan before dispatching this batch so all its
                 # (parallel) actions land under the new todo.
                 _advance_plan_on_narration()
@@ -4450,7 +4449,7 @@ class AgentLoop:
                 # error message so it can self-correct instead of dispatching
                 # a doomed tool call that wastes an iteration.
                 if tool_name == "file_write":
-                    # Session 376: normalize free-tier aliases (file_path → path,
+                    # Normalize free-tier aliases (file_path → path,
                     # text/body/code → content) BEFORE every arg check below —
                     # the required-args gate, the content-length guard, and the
                     # contract payload all see canonical fields.
@@ -4565,7 +4564,7 @@ class AgentLoop:
                     )
                     continue
 
-                # ── Session 378: structural dedup for read-only inspections ──
+                # ── Structural dedup for read-only inspections ──────────────
                 # The exact-match fingerprint below misses near-identical
                 # repeat listings — "the same Get-ChildItem asked with
                 # different columns/formatting" re-ran and burned an
@@ -4785,7 +4784,7 @@ class AgentLoop:
                         "describe_tool": f"Loading tool docs: {tool_args.get('tool_name', '')}" if tool_args.get('tool_name') else "Loading tool docs",  # noqa: E501
                     }
                     action_label = action_labels.get(tool_name, f"Running {tool_name}")
-                # Session 121: narrated iteration → step transition; the new
+                # Narrated iteration → step transition; the new
                 # tool call belongs to the next plan todo.
                 _advance_plan_on_narration()
                 logger.info(
@@ -4816,7 +4815,7 @@ class AgentLoop:
                 tool_failed = False
                 retry_count = 0
                 observation = ""
-                # Session 375: bind up front — a pre-assignment exception in
+                # Bind up front — a pre-assignment exception in
                 # the dispatch try (e.g. `Intent(tool_name)` raising) must not
                 # leave `tool_result` unbound for the failed-branch emit below.
                 tool_result: Optional[ToolResult] = None
@@ -4832,7 +4831,7 @@ class AgentLoop:
                     # caused "not_found" errors when the file didn't exist yet
                     # (the user wanted to CREATE it, not READ it).
                     if tool_name == "file_write":
-                        # Session 376: normalize aliases (file_path → path,
+                        # Normalize aliases (file_path → path,
                         # text/body/code → content) BEFORE the content-length
                         # guard so a `{file_path, text}` payload is not wrongly
                         # rejected — the contract re-normalizes (idempotent).
@@ -4895,7 +4894,7 @@ class AgentLoop:
                             )
                             continue
 
-                    # Session 378: a possibly-mutating call must drop the
+                    # A possibly-mutating call must drop the
                     # structural inspection cache BEFORE running, so a
                     # listing that follows a write/edit/exec is never served
                     # stale output. Read-only inspections (incl. the shell
@@ -4903,7 +4902,7 @@ class AgentLoop:
                     _maybe_invalidate_inspection_cache(tool_name, tool_input)
 
                     if tool_name == "file_write":
-                        # B-2026-08-23-32: snapshot the pre-write content so a
+                        # Snapshot the pre-write content so a
                         # diff can be emitted for overwrite/new-write even
                         # though the tool replaces the file in place.
                         _record_prewrite_snapshot(tool_args.get("path", ""))
@@ -4927,7 +4926,7 @@ class AgentLoop:
                                 allowed_tool_names=effective_allowed,
                             )
                         except Exception as exc:
-                            # Session 375: a contract execution error (bad args,
+                            # A contract execution error (bad args,
                             # IO, transient provider error) must not crash the
                             # loop with an unbound `tool_result` — surface it as
                             # a failed tool result so the normal recovery path
@@ -4962,7 +4961,7 @@ class AgentLoop:
                                 allowed_tool_names=effective_allowed,
                             )
                         except Exception as exc:
-                            # Session 375: same unbound-`tool_result` guard as
+                            # Same unbound-`tool_result` guard as
                             # file_write — a contract exception must become a
                             # failed tool result, never a loop crash (which
                             # also swallowed the diff SSE event).
@@ -4995,7 +4994,7 @@ class AgentLoop:
                                 )
 
                     else:
-                        # B-2026-08-23-32: snapshot before a shell write so a
+                        # Snapshot before a shell write so a
                         # diff can be emitted when the command rewrote a file.
                         # dispatch_with_retry is also the path for other tools
                         # — a harmless no-op for reads.
@@ -5007,7 +5006,7 @@ class AgentLoop:
                             allowed_tool_names=effective_allowed,
                         )
 
-                    # B-2026-08-23-32: emit a diff for ANY file-writing tool,
+                    # Emit a diff for ANY file-writing tool,
                     # not just edit_file. file_write replaces the file in
                     # place, so the loop computes hunks from the pre-write
                     # snapshot + the now-landed on-disk content — the same
@@ -5025,7 +5024,7 @@ class AgentLoop:
                                 _emit_file_diff(
                                     _obs, path=str(_dest), content_before=_pre, content_after=_after
                                 )
-                        # B-2026-08-23-37: log write stat
+                        # Log write stat
                         _log_session_write(
                             session_id,
                             path=(tool_result.metadata or {}).get("path", ""),
@@ -5035,7 +5034,7 @@ class AgentLoop:
                             kind=_write_kind_from_snapshot(_pre),
                         )
 
-                    # B-2026-08-23-37: log write stat for edit_file (single-tool path)
+                    # Log write stat for edit_file (single-tool path)
                     if tool_name == "edit_file" and tool_result and tool_result.success and tool_result.metadata:
                         _log_session_write(
                             session_id,
@@ -5046,7 +5045,7 @@ class AgentLoop:
                             kind="overwritten",
                         )
 
-                    # B-2026-08-23-37: log write stat for apply_proposed_edit (single-tool path)
+                    # Log write stat for apply_proposed_edit (single-tool path)
                     if (
                         tool_name == "apply_proposed_edit"
                         and tool_result
@@ -5063,7 +5062,7 @@ class AgentLoop:
                                 kind="overwritten",
                             )
 
-                    # ADR-40 option C: a describe_tool call loads the named
+                    # A describe_tool call loads the named
                     # long-tail tool into this run's native tools param.
                     _note_described_tool(tool_name, tool_result, loaded_tools)
                     _emit_todo_write_events(tool_name, tool_result, _obs)
@@ -5077,7 +5076,7 @@ class AgentLoop:
                             safe_obs = _filter_tool_injection(tool_result.content)
 
                         # Structured error context + a concrete recovery step
-                        # (B-2026-08-18-9) so a tool error is never a dead end.
+                        # so a tool error is never a dead end.
                         if not tool_result.success and tool_result.error_type:
                             safe_obs = (
                                 f"[Tool '{tool_name}' returned error_type={tool_result.error_type!r}]\n"
@@ -5096,14 +5095,14 @@ class AgentLoop:
                         observation = safe_obs
                         _call_cache[call_fingerprint] = safe_obs
 
-                        # Session 378: also seed the structural inspection
+                        # Also seed the structural inspection
                         # cache so a later cosmetic variant of the same
                         # read-only listing hits the dedup above. Only
                         # successful, non-mutating inspections are cached.
                         if _structural_key and tool_result.success and tool_name != "file_write":
                             _inspection_cache[_structural_key] = safe_obs
 
-                        # Bug B fix: track file_write paths for name-level dedup
+                        # Track file_write paths for name-level dedup
                         if tool_name == "file_write":
                             _written_path = tool_args.get("path", "").strip().lower()
                             if _written_path:
@@ -5130,13 +5129,13 @@ class AgentLoop:
                         # verification observable to the frontend and creates an
                         # explicit audit trail for the grounding check.
                         if tool_name == "file_write" and not tool_failed:
-                            # S293: verify WHERE THE WRITE ACTUALLY LANDED
+                            # Verify WHERE THE WRITE ACTUALLY LANDED
                             # (tool_result.metadata["path"]), not the model's
                             # requested arg. They diverge whenever file_write
                             # re-anchors a path or timestamp-renames a document —
                             # verifying the raw arg then read-back-failed a
                             # perfectly good write and injected a false
-                            # [GROUNDING CHECK FAILED] (B-2026-08-17-6).
+                            # [GROUNDING CHECK FAILED].
                             _grounding_path = (tool_result.metadata or {}).get("path") or tool_args.get("path", "")
                             if _grounding_path and _obs:
                                 try:
@@ -5274,7 +5273,7 @@ class AgentLoop:
                                         )
 
                 _synth_end(_syn_todo_id, tool_failed)
-                # Session 438: evidence-sufficient detection — the flag says
+                # Evidence-sufficient detection — the flag says
                 # "the last successful real tool put substantive page content
                 # in the transcript" (web intent only). The mid-task exclusion
                 # (save/write/… in the request) keeps multi-step work free to
@@ -5375,15 +5374,15 @@ class AgentLoop:
                     }
                 )
 
-                # ── ADR-42 + ADR-57 slice 2: post-tool Thinker consult ──────
+                # ── Post-tool Thinker consult ─────────────────────────────
                 # A read-only reasoning pass on what was just GATHERED (not
-                # the raw request). ADR-57 slice 1: its prose streams to the
-                # ThinkingBlock. Slice 2: after a SUCCESSFUL tool the consult
+                # the raw request). Its prose streams to the
+                # ThinkingBlock. After a SUCCESSFUL tool the consult
                 # no longer blocks the next model call — it runs in the
                 # background (overlapping the model work) and its analysis is
                 # injected at the next iteration head by the drain there;
                 # this is what lets the consult fire after EVERY tool without
-                # re-creating the S420-era serial latency. After a FAILURE
+                # re-creating the earlier serial latency. After a FAILURE
                 # the consult stays BLOCKING: recovery advice must shape the
                 # very next call or the model may repeat the failure.
                 # Throttling: at most one consult in flight and
@@ -5425,7 +5424,7 @@ class AgentLoop:
                             ),
                             last_action=tool_name,
                             iteration=iteration + 1,
-                            # S425 continuity: an earlier consult this turn (the
+                            # Continuity: an earlier consult this turn (the
                             # pre-tool pass or a previous post-tool one) hands
                             # its summary forward so the reasoning compounds
                             # instead of restarting.
@@ -5456,7 +5455,7 @@ class AgentLoop:
                     except Exception as _thx:  # never let the Thinker break a turn
                         logger.warning("[agent.loop] Thinker consult skipped: %s", _thx)
 
-                # ADR-34 B-8: tool output must NOT become the final assistant
+                # Tool output must NOT become the final assistant
                 # answer. The parent model receives the evidence as a tool
                 # message and synthesizes its own response on the next
                 # iteration. The previous "authoritative sysinfo" shortcut
@@ -5509,17 +5508,17 @@ class AgentLoop:
                 _minimax_chunks: list[StreamChunk] = []
                 _minimax_stream_ended = False
                 _minimax_error = False
-                _streamed_reasoning = False  # Session 256: did this call stream thinking?
-                _reasoning_buffer = ""  # B-2026-08-18-11: capture the reasoning TEXT
+                _streamed_reasoning = False  # did this call stream thinking?
+                _reasoning_buffer = ""  # capture the reasoning TEXT
                 # (not just the flag). On GLM/thinking the model sometimes puts its
                 # real answer/analysis in the reasoning channel and leaves content
                 # empty; the endgame salvages this instead of failing the turn.
-                _minimax_error_msg = ""  # Session 187: keep the adapter's error
+                _minimax_error_msg = ""  # keep the adapter's error
                 # message (e.g. "zen returned 429: …") — previously dropped, so
                 # the frontend got error="" and rendered nothing.
                 _minimax_partial_seen = False  # track if we've seen start of XML
 
-                # B-2026-09-02: live-stream the final answer instead of buffering
+                # Live-stream the final answer instead of buffering
                 # it for a single burst (timeline: ~51s of dead air then a dump).
                 # SAFE-GATED — live streaming only when NO discard path can fire
                 # after text is already on screen (no frontend supersede yet):
@@ -5528,9 +5527,9 @@ class AgentLoop:
                 #   (b) the LAST tool run is NOT high-stakes (file_write/
                 #       file_edit/shell/code_exec) — those turns keep the
                 #       parent-completion-floor's ability to discard + replan
-                #       silently (B-2026-08-18-2) without a duplicate answer;
+                #       silently without a duplicate answer;
                 #   (c) NO success criteria — a research/chat turn; the
-                #       acceptance gate passes trivially, so Session 332-B's
+                #       acceptance gate passes trivially, so the
                 #       "don't show discarded text" guarantee is not at stake
                 #       (goal turns keep buffering).
                 # The buffer path stays authoritative: we only ADD live yields
@@ -5554,7 +5553,7 @@ class AgentLoop:
                     and bool(_last_tool_name)
                     and not is_high_stakes_intent(_last_tool_name)
                     and not getattr(trace, "success_criteria", None)
-                    # Session 438: an answer-only reply must stay buffered —
+                    # An answer-only reply must stay buffered —
                     # if it turns out to narrate a further action, the gate
                     # withholds it entirely (FORCE_TOOL replan); live-streamed
                     # text could never be taken back.
@@ -5565,7 +5564,7 @@ class AgentLoop:
                 _pending_text = ""
 
                 async for chunk in result:
-                    # B-2026-08-02-2 (A2): abort check during stream buffering.
+                    # Abort check during stream buffering.
                     if abort_signal is not None and abort_signal.is_set():
                         raise AgentAbortedError("aborted during streaming")
                     filtered_text = _filter_system_leaks(chunk.text)
@@ -5609,7 +5608,7 @@ class AgentLoop:
                                 _streamed_live_text.append(_pending_text)
                                 yield StreamChunk(text=_pending_text, done=False, usage=dict(_provider_usage))
                                 _pending_text = ""
-                    # ADR-41 (Session 254): forward the model's reasoning live
+                    # Forward the model's reasoning live
                     # as it streams (GLM thinking → ThinkingBlock). Reasoning is
                     # user-visible progress and never affects MiniMax/DSML
                     # tool-call detection (that only looks at TEXT), so it can
@@ -5781,7 +5780,7 @@ class AgentLoop:
                                 tool_intent,
                                 tool_input,
                                 adapter=active_adapter,
-                                obs=_obs,  # ADR-18 P3: delegation streams into the UI
+                                obs=_obs,  # delegation streams into the UI
                                 allowed_tool_names=effective_allowed,
                             )
                             _note_described_tool(tc_name, tool_result, loaded_tools)
@@ -5795,7 +5794,7 @@ class AgentLoop:
                                     safe_obs = _filter_tool_injection(tool_result.content)
 
                                 # Structured error context + a concrete recovery
-                                # step (B-2026-08-18-9) — never a dead end.
+                                # step — never a dead end.
                                 if not tool_result.success and tool_result.error_type:
                                     safe_obs = (
                                         f"[Tool '{tc_name}' returned error_type={tool_result.error_type!r}]\n"
@@ -5950,12 +5949,12 @@ class AgentLoop:
                         f"tool calls for intent={intent.value} on iter={iteration + 1} "
                         f"(fabrication_risk={fabrication_risk})"
                     )
-                    # Session 238 (Thinker/Agent rebuild Step 0): on the
+                    # On the
                     # FIRST tool iteration, text without a tool call is
                     # usually model fragility, not a real answer — the
                     # model skipped the tool API (gemini-2.5-flash via
                     # OpenAI-compat returned text/empty on the first tool
-                    # call — Session 237 trace). Reprompt with a
+                    # call — seen live). Reprompt with a
                     # forced-tool nudge (bounded) instead of streaming the
                     # text as the final answer. The model's text stays in
                     # history, so if it insists on text again on the next
@@ -6043,7 +6042,7 @@ class AgentLoop:
                                 provider_error_code=_normalized_stream_error.get("code", "error"),
                                 evidence_preserved=True,
                             )
-                        # B-2026-08-20-15 (Session 317): FIRST try deterministic
+                        # FIRST try deterministic
                         # extraction from the evidence already in hand — zero
                         # LLM calls. The provider rate-limited the synthesis,
                         # but the tool observations (search results, shell
@@ -6077,7 +6076,7 @@ class AgentLoop:
                             return
                         # Extraction failed — yield a CLEAN user-facing message
                         # with the actual evidence, NOT "check the Actions panel."
-                        # Session 349: the user should never be told to look at
+                        # The user should never be told to look at
                         # the Actions panel — that's a developer debug UX, not
                         # a user-facing response. Instead, build a simple summary
                         # from the tool observations we already have.
@@ -6149,7 +6148,7 @@ class AgentLoop:
 
                 # Detect tool-talk in the initial buffer
                 #
-                # Session 374: this recovery must be intent-gated like the
+                # This recovery must be intent-gated like the
                 # fabrication/forced-tool checks above. Live bug on a plain
                 # "Hi" (CHAT intent, deepseek-v4-flash): the greeting mentioned
                 # tools ("I'm ready to help — file work, research, coding…")
@@ -6165,7 +6164,7 @@ class AgentLoop:
                     intent in AGENT_INTENTS
                     and _is_tool_talk(initial_buffer)
                     and trace.tool_talk_recoveries < _MAX_TOOL_TALK_RECOVERIES
-                    # Session 438: on an answer-only call (tool schemas
+                    # On an answer-only call (tool schemas
                     # withheld) the narration IS the signal that the model
                     # needs a tool — nudging it to "call the tool now" is
                     # impossible (no schemas) and burns the recovery budget
@@ -6237,11 +6236,11 @@ class AgentLoop:
                     _fabricated_data_detected
                     and intent in (Intent.WEB_SEARCH, Intent.WEB_FETCH)
                     and trace.tool_talk_recoveries < _MAX_TOOL_TALK_RECOVERIES + 1
-                    # B-2026-09-02: once the answer streamed live, the recovery's
+                    # Once the answer streamed live, the recovery's
                     # `continue` would show the forced re-search under the text
                     # already on screen (duplicate). The head was veto-checked
                     # before streaming started; a late pattern match is logged
-                    # and the answer stands (slice-1 tradeoff, ADR-57 Open-Q4).
+                    # and the answer stands (the deliberate streaming tradeoff).
                     and not _streamed_live
                 ):
                     # The model fabricated time-sensitive data from training — this is
@@ -6286,7 +6285,7 @@ class AgentLoop:
                     fabrication_risk += 2  # Heavy penalty for fabricated data
                     continue  # retry with forced tool call
 
-                # ── Empty-response guard (Session 115) ────────────────────
+                # ── Empty-response guard ──────────────────────────────────
                 # The model produced NO usable text AND no tool call (e.g.
                 # the free-tier model returns an empty stream, or every chunk
                 # was filtered out as a system-leak). Previously this fell
@@ -6297,12 +6296,12 @@ class AgentLoop:
                 # never burn another PER_CALL_TIMEOUT_SECS call on the same
                 # empty output.
                 if not (initial_buffer or "").strip():
-                    # Session 238 (Thinker/Agent rebuild Step 0): an EMPTY
+                    # An EMPTY
                     # response on the FIRST tool iteration is model
                     # fragility (gemini-2.5-flash returned empty/no-tool in
-                    # 788ms — Session 237 trace), not evidence that the
+                    # 788ms — seen live), not evidence that the
                     # model is overloaded. Reprompt once with a forced-tool
-                    # nudge before the Session 115 honest fast-fail, so the
+                    # nudge before the honest fast-fail below, so the
                     # turn can still succeed. Later iterations (or a second
                     # empty response) take the honest fail unchanged — the
                     # nudge is bounded and never spins.
@@ -6341,7 +6340,7 @@ class AgentLoop:
                         )
                         continue  # retry this iteration with the forced-tool nudge
 
-                    # ADR-41 follow-up (Session 256): the model streamed
+                    # Follow-up to the thinking re-enable: the model streamed
                     # reasoning but returned no text and no tool call — on a
                     # slow free tier with thinking ON, GLM sometimes "thinks
                     # but doesn't act" (live user bug: iter-1 ran shell
@@ -6351,7 +6350,7 @@ class AgentLoop:
                     # the honest fail. Two consecutive empties still fail
                     # fast — the think-only protection stays intact.
                     #
-                    # B-2026-08-20-7 / Session 310: parent turns get a higher
+                    # Parent turns get a higher
                     # cap (3 vs 2) — weak models on the parent path frequently
                     # need the extra recovery attempt to complete a tool-bearing
                     # turn. The post-loop synthesis remains the final safety net.
@@ -6379,7 +6378,7 @@ class AgentLoop:
                         if not stream_ended_early:
                             async for _drain_chunk in result:
                                 pass
-                        # Session 260: ground truth showed the model streams
+                        # Ground truth showed the model streams
                         # reasoning then 0 content ("thinks but doesn't act").
                         # Force thinking OFF on the retry so it emits the
                         # answer/tool-call directly — it has already reasoned
@@ -6391,7 +6390,7 @@ class AgentLoop:
                         # Keep message-role alternation for strict providers:
                         # an empty assistant frame, then the corrective nudge.
                         loop_messages.append({"role": "assistant", "content": ""})
-                        # B-2026-08-20-13 (Session 314): include the user's
+                        # Include the user's
                         # ORIGINAL question in the nudge so the model can
                         # re-anchor. The generic "You reasoned about this task"
                         # caused the model to lose context on weak models
@@ -6413,7 +6412,7 @@ class AgentLoop:
                                 ),
                             }
                         )
-                        # B-2026-08-21: on the LAST empty-reasoning retry for a tool-bearing intent,
+                        # On the LAST empty-reasoning retry for a tool-bearing intent,
                         # force tool_choice so the model MUST call a tool instead of producing
                         # another empty response or prose. This cuts zai's wasted iterations
                         # in half (empty-think -> nudge -> force-tool-call).
@@ -6429,7 +6428,7 @@ class AgentLoop:
                             )
                         continue  # retry with thinking OFF so the model acts
 
-                    trace.empty_response = True  # ADR-18 P2: remember this failure
+                    trace.empty_response = True  # remember this failure
                     if _obs:
                         _obs.emit(
                             "agent_loop_empty_response",
@@ -6440,7 +6439,7 @@ class AgentLoop:
                         async for _drain in result:
                             pass
 
-                    # B-2026-08-20-15 (Session 316): FIRST try deterministic
+                    # FIRST try deterministic
                     # extraction from the reasoning buffer — ZERO LLM calls.
                     # The user's insight: "the thinking text already has all
                     # the answers." The model's reasoning often contains a
@@ -6469,7 +6468,7 @@ class AgentLoop:
                         yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                         return
 
-                    # B-2026-08-18-11: SYNTHESIZE a real answer before giving up.
+                    # SYNTHESIZE a real answer before giving up.
                     # The model streamed reasoning but no content — on GLM/thinking
                     # the substance often lands in the REASONING channel (it "thinks
                     # but doesn't act"). Hand the model its OWN reasoning + the tool
@@ -6524,8 +6523,8 @@ class AgentLoop:
                         return
 
                     _empty_summary = self._summarize_trace_for_user(trace, observation_log)
-                    # B-2026-08-20-7: LAST safety net. The B-2026-08-18-11
-                    # synthesis-from-reasoning rescue above (line ~3819) failed
+                    # LAST safety net. The synthesis-from-reasoning
+                    # rescue above failed
                     # or didn't fire (no reasoning buffer). But if tools ran
                     # this turn, there IS evidence to synthesize from — the
                     # model just couldn't produce the final answer itself.
@@ -6545,7 +6544,7 @@ class AgentLoop:
                             yield _post_synth_chunk
                             yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                             return
-                    # B-2026-08-20-14: post-loop synthesis also failed. Produce
+                    # Post-loop synthesis also failed. Produce
                     # a CLEAN user-facing message — not the raw trace dump.
                     # The old path yielded _empty_summary (raw harness internals
                     # "Here is what actually ran: web_search(...) → output: ...")
@@ -6564,12 +6563,12 @@ class AgentLoop:
                             "I couldn't generate a response for that request. "
                             "Please try again, or rephrase your question."
                         )
-                    # Session 142: do NOT complete the plan todo here — the
+                    # Do NOT complete the plan todo here — the
                     # model produced nothing and NO tool ran, so marking the
                     # step done would be a lie. The SSE bridge's end-of-turn
                     # _finalize_plan_todos still closes it (the plan covers
                     # the whole turn), but we don't pretend the work happened.
-                    self._emit_failure_memory(trace, intent, _obs)  # ADR-18 P2
+                    self._emit_failure_memory(trace, intent, _obs)  # record a failure memory
                     yield StreamChunk(text=_empty_msg, done=False)
                     yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                     return
@@ -6642,7 +6641,7 @@ class AgentLoop:
                                 _late_result, _late_failed, _ = await dispatch_with_retry(
                                     Intent(_tc_name),
                                     _tc_input,
-                                    obs=_obs,  # ADR-18 P3: delegation streams into the UI
+                                    obs=_obs,  # delegation streams into the UI
                                     allowed_tool_names=effective_allowed,
                                 )
                                 _note_described_tool(_tc_name, _late_result, loaded_tools)
@@ -6724,7 +6723,7 @@ class AgentLoop:
                                 )
                         continue  # continue the loop so the model can produce a final answer
 
-                # Session 332-B: do NOT yield the initial buffer here. Buffer
+                # Do NOT yield the initial buffer here. Buffer
                 # the iteration's text and only emit it AFTER the acceptance
                 # gate confirms is_final=True. If the gate fails, the buffered
                 # text is discarded so the user doesn't see a duplicate answer
@@ -6750,7 +6749,7 @@ class AgentLoop:
                             observation=None,
                         )
                     )
-                    # ADR-18 P0: the model saying "done" is not enough — gate
+                    # The model saying "done" is not enough — gate
                     # the claim against the success criteria (replan or honest
                     # report). Only finish when the gate is satisfied or capped.
                     _gate_suffix, _gate_final = await self._acceptance_gate_at_final_answer(
@@ -6775,7 +6774,7 @@ class AgentLoop:
                     if not _gate_final:
                         _gate_replan_count += 1
                         logger.info("[agent.loop] gate replan #%d", _gate_replan_count)
-                        # Session 332-B: discard this iteration's text — don't
+                        # Discard this iteration's text — don't
                         # emit it. The next iteration will produce the answer.
                         if _obs:
                             _obs.emit(
@@ -6785,8 +6784,8 @@ class AgentLoop:
                                 discarded_chars=len(_stripped_buffer),
                             )
                         continue
-                    # Session 332-B: gate passed — flush the buffered text now.
-                    # B-2026-09-02: if the head streamed live, flush only the
+                    # Gate passed — flush the buffered text now.
+                    # If the head streamed live, flush only the
                     # unseen tail (prefix-aware) — never re-yield shown text.
                     if _streamed_live:
                         _flush_tail = _flush_after_live_stream(
@@ -6796,7 +6795,7 @@ class AgentLoop:
                             yield StreamChunk(text=_flush_tail, done=False, usage=dict(_provider_usage))
                     elif _stripped_buffer.strip():
                         yield StreamChunk(text=_stripped_buffer, done=False, usage=dict(_provider_usage))
-                    # Session 237: the gate passed but the model may have run
+                    # The gate passed but the model may have run
                     # the tool without writing an answer — synthesize the real
                     # content from evidence so the reply isn't just "✓ n/n".
                     if not full_text.strip():
@@ -6814,7 +6813,7 @@ class AgentLoop:
                         trace.final_response = full_text
                         yield StreamChunk(text=_gate_suffix, done=False)
                     logger.info(f"[agent.loop] finished iter={iteration + 1} — {trace.summary()}")
-                    # Session 142: turn-end — close out the current plan step's
+                    # Turn-end — close out the current plan step's
                     # todo (covers the stream-ended-early silent path).
                     _complete_current_plan_step()
                     self._emit_failure_memory(trace, intent, _obs)
@@ -6822,7 +6821,7 @@ class AgentLoop:
                         _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
                     _worker_report = trace.work_report()
                     if _worker_report.needs_report(full_text):
-                        # Session 147: try one focused synthesis call before
+                        # Try one focused synthesis call before
                         # the deterministic report — the free-tier model often
                         # ends a tool-bearing turn with a bare heading.
                         async for _rescue_chunk in self._rescue_final_answer(
@@ -6837,15 +6836,15 @@ class AgentLoop:
                     return
 
                 # Stream remaining chunks — with mid-stream MiniMax detection
-                # Session 332-B: buffer chunks instead of yielding live. Emit
+                # Buffer chunks instead of yielding live. Emit
                 # only after the gate confirms is_final=True. If the gate fails,
                 # the buffer is discarded so the user doesn't see a duplicate
                 # answer from a doomed iteration.
                 _mid_stream_minimax_buffer = ""
                 _mid_stream_text = ""
-                _iteration_clean_text = ""  # Session 332-B
+                _iteration_clean_text = ""  # buffered until the gate verdict
                 async for chunk in result:
-                    # B-2026-08-02-2 (A2): respond to abort DURING streaming —
+                    # Respond to abort DURING streaming —
                     # the longest phase (up to PER_CALL_TIMEOUT_SECS). is_set()
                     # is a flag read; checked per chunk.
                     if abort_signal is not None and abort_signal.is_set():
@@ -6872,7 +6871,7 @@ class AgentLoop:
                         # For now, just suppress the XML and let the model see it
                         filtered_text = ""
                         _mid_stream_minimax_buffer = ""
-                    # ADR-41 (Session 254): forward the model's reasoning live
+                    # Forward the model's reasoning live
                     # as it streams (GLM thinking → ThinkingBlock). Reasoning
                     # is independent of the text path — it never affects
                     # MiniMax/DSML detection and is filtered for system leaks
@@ -6894,7 +6893,7 @@ class AgentLoop:
                     # whitespace; the final answer is assembled from full_text.
                     _chunk_clean = _strip_minimax_tool_calls_stream(filtered_text)
                     if _chunk_clean:
-                        # Session 332-B: buffer instead of yield. The flush
+                        # Buffer instead of yield. The flush
                         # happens after the acceptance gate confirms is_final.
                         _iteration_clean_text += _chunk_clean
 
@@ -6919,7 +6918,7 @@ class AgentLoop:
                         observation=None,
                     )
                 )
-                # ADR-18 P0: gate the model's "done" claim (replan or honest
+                # Gate the model's "done" claim (replan or honest
                 # report) BEFORE the turn-end events — the loop is only done
                 # when the gate is satisfied or the caps force an honest close.
                 _gate_suffix, _gate_final = await self._acceptance_gate_at_final_answer(
@@ -6944,7 +6943,7 @@ class AgentLoop:
                 if not _gate_final:
                     _gate_replan_count += 1
                     logger.info("[agent.loop] gate replan #%d (alt)", _gate_replan_count)
-                    # Session 332-B: discard the buffered text — don't emit it.
+                    # Discard the buffered text — don't emit it.
                     if _obs:
                         _obs.emit(
                             "agent_loop_iteration_discarded",
@@ -6953,8 +6952,8 @@ class AgentLoop:
                             discarded_chars=len(_iteration_clean_text),
                         )
                     continue
-                # Session 332-B: gate passed — flush the buffered text now.
-                # B-2026-09-02: if the head streamed live, flush only the unseen
+                # Gate passed — flush the buffered text now.
+                # If the head streamed live, flush only the unseen
                 # tail. The full clean answer = _stripped_buffer (first buffering
                 # loop — includes any held pending chunk) + _iteration_clean_text
                 # (this remainder loop's per-chunk cleaned text); the shown prefix
@@ -6968,7 +6967,7 @@ class AgentLoop:
                     if _flush_tail:
                         yield StreamChunk(text=_flush_tail, done=False, usage=dict(_provider_usage))
                 else:
-                    # B-2026-09-02 (pre-existing S332-B head-drop): the buffered
+                    # Head-drop fix (buffered-flush path): the buffered
                     # flush yielded ONLY _iteration_clean_text — on answers long
                     # enough to fill the 2000-char detection buffer, the head
                     # (_stripped_buffer) never reached the user. Flush the head
@@ -6978,7 +6977,7 @@ class AgentLoop:
                         yield StreamChunk(text=_stripped_buffer, done=False, usage=dict(_provider_usage))
                     if _iteration_clean_text.strip():
                         yield StreamChunk(text=_iteration_clean_text, done=False, usage=dict(_provider_usage))
-                # Session 237: gate passed but no model answer — synthesize the
+                # Gate passed but no model answer — synthesize the
                 # real content from tool evidence (not just "✓ n/n criteria met").
                 if not full_text.strip():
                     _synth = await self._synthesize_final_from_trace(
@@ -7005,7 +7004,7 @@ class AgentLoop:
                 # append the deterministic report derived from the trace.
                 _worker_report = trace.work_report()
                 if _worker_report.needs_report(full_text):
-                    # Session 147: try one focused synthesis call before
+                    # Try one focused synthesis call before
                     # the deterministic report — the free-tier model often
                     # ends a tool-bearing turn with a bare heading.
                     async for _rescue_chunk in self._rescue_final_answer(
@@ -7017,7 +7016,7 @@ class AgentLoop:
                     ):
                         yield _rescue_chunk
                 elif not full_text.strip():
-                    # B-2026-08-20-14: model stream produced no text after
+                    # Model stream produced no text after
                     # filtering. Produce a CLEAN user-facing message, not the
                     # raw trace dump. The Actions panel has the tool evidence.
                     _tc = sum(1 for s in (trace.steps if trace else []) if getattr(s, "tool_name", ""))
@@ -7036,7 +7035,7 @@ class AgentLoop:
                             ),
                             done=False,
                         )
-                # Session 142: close out the current plan step's todo — a
+                # Close out the current plan step's todo — a
                 # silent tool run never advanced the cursor, so without this
                 # the executed step stays 'pending' in the Todos panel.
                 _complete_current_plan_step()
@@ -7050,7 +7049,7 @@ class AgentLoop:
         logger.warning(
             "[agent.loop] loop ended — %s limit_kind=%s", trace.summary(), trace.limit_kind
         )
-        # Session 142: close out the current plan step's todo on the
+        # Close out the current plan step's todo on the
         # hit-limit path too — the work for the current step may have
         # completed even though the loop was capped.
         _complete_current_plan_step()
@@ -7063,11 +7062,11 @@ class AgentLoop:
                 limit_kind=trace.limit_kind,
             )
 
-        # Session 31: ALWAYS try to synthesize a final answer from what
+        # ALWAYS try to synthesize a final answer from what
         # we gathered. Wrap with a timeout so this doesn't hang too.
         # If it times out, yield the observation log directly — the user
         # sees what happened instead of nothing. On the real-text path the
-        # synthesis sets trace.final_response itself (Session 419); the
+        # synthesis sets trace.final_response itself; the
         # deterministic fallbacks (timeout / exception / empty stream)
         # deliberately do not, so classification still reports the failure.
         try:
@@ -7075,7 +7074,7 @@ class AgentLoop:
                 loop_messages=loop_messages,
                 observation_log=observation_log,
                 active_adapter=active_adapter,
-                trace=trace,  # Session 31: pass trace so empty-stream fallback can surface tool outputs
+                trace=trace,  # pass trace so empty-stream fallback can surface tool outputs
                 provider_usage=_provider_usage,
             ):
                 yield chunk
@@ -7092,7 +7091,7 @@ class AgentLoop:
                 done=True,
             )
 
-        # Session 419 — classify AFTER the rescue, not before. A capped turn
+        # Classify AFTER the rescue, not before. A capped turn
         # whose forced synthesis delivered a real answer is a rescued turn,
         # not a failure: the old order emitted `agent_loop_failure` before
         # the synthesis ran, so the user saw "✗ Agent loop failed" ABOVE a
@@ -7100,11 +7099,11 @@ class AgentLoop:
         self._emit_failure_memory(trace, intent, _obs)
 
     # ------------------------------------------------------------------
-    # ADR-18 P0 — acceptance gate at the final-answer point
+    # Acceptance gate at the final-answer point
     # ------------------------------------------------------------------
 
     # ──────────────────────────────────────────────────────────────────────
-    # ADR-18 P2 — failure memory emit (Session 175)
+    # Failure memory emit
     # ──────────────────────────────────────────────────────────────────────
     def _emit_failure_memory(self, trace, intent, obs):
         """Emit an `agent_loop_failure` obs event when this run FAILED
@@ -7132,7 +7131,7 @@ class AgentLoop:
         """Build a real content answer from tool evidence when the model
         finished the loop without emitting one.
 
-        Session 237: execute turns like "list my dev folder" ran the tool and
+        Seen live: execute turns like "list my dev folder" ran the tool and
         the acceptance gate passed, but the model produced NO final text — so
         the reply was only the criteria suffix ("✓ 1/1 criteria met"), never
         the actual listing. Synthesize an answer from the trace's tool
@@ -7171,7 +7170,7 @@ class AgentLoop:
             return ""
 
     def _emit_honest_stop(self, criteria, results, obs, plan_steps) -> None:
-        """Session 330 — the synthesize/evaluate stage's honest-stop report.
+        """The synthesize/evaluate stage's honest-stop report.
 
         When the acceptance gate ends the turn with UNMET criteria (iteration
         cap / same-tool streak), emit the per-goal todo state so the Todos
@@ -7206,21 +7205,21 @@ class AgentLoop:
         active_adapter,
         intent: Intent,
         obs,
-        # Session 178 — pass-through from run() so the orchestrator's
+        # Pass-through from run() so the orchestrator's
         # dead replan() method can finally be called. None = legacy.
         orchestrator=None,
         reformulated_message: str = "",
         memory_facts: Optional[list[str]] = None,
         intent_history: Optional[list[str]] = None,
         is_parent: bool = False,
-        # Session 330 — the harness-derived goal checklist (plan_steps).
+        # The harness-derived goal checklist (plan_steps).
         # Used to emit the per-goal todo state on an honest stop.
         plan_steps: Optional[list[str]] = None,
-        # Session fix: total gate replan count
+        # Total gate replan count
         gate_replan_count: int = 0,
-        # B-2026-08-21: mutable flag for gate→loop zero-tool force signal
+        # Mutable flag for gate→loop zero-tool force signal
         gate_force_tool: list[bool] | None = None,
-        # Session 438: True when the reply being gated came from an
+        # True when the reply being gated came from an
         # answer-only call (tool schemas withheld). Changes the recovery
         # for post-evidence narration from SYNTHESIZE to FORCE_TOOL.
         tools_withheld: bool = False,
@@ -7231,22 +7230,23 @@ class AgentLoop:
         "An agent saying done should not mean the task is done":
           - All criteria met → suffix = the verified summary (✓ n/n).
           - Some unmet + iterations remain → EXPLICIT replan LLM call
-            (locked decision 3, Session 154); the revised plan is injected
+            (a locked design decision); the revised plan is injected
             as a user block and the loop continues (returns is_final=False).
-            Session 178: when `orchestrator` is provided, it is notified
+            When `orchestrator` is provided, it is notified
             FIRST — its replan() produces a structured OrchestrationResult
             (re-route, confidence drop, clarification question) which is
             prepended to the revised plan block. The orchestrator's obs
             events (orchestrator_replan_start/_done/_timeout/_failed) now
-            fire for real (consumed by the frontend in Session 180).
+            fire for real (consumed by the frontend).
           - Some unmet + cap → suffix = the honest unmet report.
         No criteria → ("", True) — the legacy path is unchanged.
         """
         criteria = getattr(trace, "success_criteria", None) or []
         if not criteria:
-            # B-2026-08-18-2 / review-66 — the parent's missing VERIFY→DONE
+            # The parent's missing VERIFY→DONE
             # floor. With no explicit criteria contract, don't accept the
-            # parent's "done" when its last real action FAILED (spec §29/§30).
+            # parent's "done" when its last real action FAILED —
+            # an action failure means the objective is not met.
             # Deterministic, keyed on the dispatcher's tool_failed verdict, and
             # scoped to the parent — read/analysis/successful turns are
             # unchanged (return the legacy model-assertion path below).
@@ -7281,14 +7281,14 @@ class AgentLoop:
                         )
                     ):
                         return "", True
-                # B-2026-08-20-6 (Session 307) — the prose-tool-commitment
+                # The prose-tool-commitment
                 # detector. Distinct from the completion floor (which fires
                 # when a tool RAN and failed): this fires when NO tool ran
                 # this run AND the model's prose *commits* to a tool action
                 # ("I'll use the shell tool", "let me describe..."). The
                 # model intended to act but didn't emit the tool_call — a
-                # known weak-model pattern (glm-4.5-flash live trace,
-                # Session 306). Inject ONE bounded re-prompt; if the model
+                # known weak-model pattern (glm-4.5-flash live trace).
+                # Inject ONE bounded re-prompt; if the model
                 # still doesn't emit a tool_call on the next iteration, the
                 # one-shot guard below prevents an infinite nudge loop and
                 # the turn falls through to the honest-stop path.
@@ -7333,7 +7333,7 @@ class AgentLoop:
                                 }
                             )
                             return "", False
-                # B-2026-08-21: broader action-narration detector. The
+                # Broader action-narration detector. The
                 # prose_commits_to_tool_action detector requires BOTH a
                 # commitment phrase AND a tool-name mention. But weak models
                 # say "I'll start by exploring the Dev/ folder" — an action
@@ -7342,7 +7342,7 @@ class AgentLoop:
                 # calls on iteration 1, and the intent is execute/analyze,
                 # nudge once to force a tool call.
                 #
-                # Session 332-D — replanning threshold: only fire when the
+                # Replanning threshold: only fire when the
                 # user's message ACTUALLY implies a tool action. Conversational
                 # requests ("give me ideas", "what do you think", "recommend
                 # a book") don't need tools — the model's prose answer IS the
@@ -7354,11 +7354,11 @@ class AgentLoop:
                     is_parent
                     and iteration == 0
                     and intent != Intent.CHAT
-                    # Session 332-D — lazy import to avoid circular dependency
+                    # Lazy import to avoid circular dependency
                     # (core.trivial_input → core.engine._helpers → core.engine
                     # → core.agent_runtime → core.agent.loop).
                     and _message_implies_tool_action(reformulated_message or "")
-                    # Session 337 (Cluster B): don't fire the action-narration
+                    # Don't fire the action-narration
                     # detector when the user explicitly said "do not write code
                     # yet" / "first analyze". The model's prose answer IS the
                     # correct response — the user asked for analysis, not tools.
@@ -7430,7 +7430,7 @@ class AgentLoop:
                         is_internal_scaffold_text=answer_is_internal_scaffold(_ft),
                         is_post_evidence_narration=(_tools_ran and narrates_after_evidence(_ft)),
                         is_hedge_after_evidence=(_tools_ran and answer_hedges_after_evidence(_ft)),
-                        # Session 438: when this reply came from an
+                        # When this reply came from an
                         # answer-only call (tool schemas deliberately
                         # withheld), narrating a further action means the
                         # model NEEDS a tool (e.g. a second fetch) — give
@@ -7516,7 +7516,7 @@ class AgentLoop:
         # Run-scoped evidence guard (same as is_coding_done): never gate on
         # pre-existing workspace state before this run executed a tool.
         #
-        # Session 330 (goal-checklist turns): with a harness-derived goal
+        # Goal-checklist turns: with a harness-derived goal
         # checklist (plan_steps), a turn whose model ran NO tool must NOT be
         # accepted — the user asked for deliverables, there are no tool
         # outcomes to compare, so the criteria are unmet. Falling through to
@@ -7529,7 +7529,7 @@ class AgentLoop:
         if not any(step.tool_name for step in getattr(trace, "steps", [])):
             if not plan_steps:
                 return "", True
-            # B-2026-08-21: zero-tool force. When criteria/plan_steps
+            # Zero-tool force. When criteria/plan_steps
             # exist but NO tools have run, the model is narrating instead
             # of acting ("I'll start by checking...", "Let me use the
             # shell tool"). The LLM replan call below just produces MORE
@@ -7568,11 +7568,11 @@ class AgentLoop:
         results = evaluate_criteria(criteria, trace)
         trace.criteria_results = results
         trace.gate_passed = gate_passed(results)
-        # Session 192 — same-tool replan bound. Consecutive failures on the
+        # Same-tool replan bound. Consecutive failures on the
         # same tool means the APPROACH is wrong: stop replanning and report
         # honestly instead of looping the same failure (the 480s spiral).
         #
-        # Tradeoff (Session 192 review): CAP=2 gives the model exactly ONE
+        # Tradeoff: CAP=2 gives the model exactly ONE
         # replan cycle after the first same-tool failure — the gate only fires
         # at the model's "done" claim, so a model that heeds the revised plan
         # (e.g. pivots to find_path) breaks the streak on the next step and is
@@ -7585,7 +7585,7 @@ class AgentLoop:
         _block_replan = _block_replan or gate_replan_count >= _MAX_TOTAL_GATE_REPLANS
         if trace.gate_passed:
             trace.gate_summary = format_gate_results(results)
-            # Session 179 — F4 Mandatory post-execution verifier for
+            # Mandatory post-execution verifier for
             # high-stakes intents. Even when criteria pass, run ONE
             # additional deterministic check that the LAST tool's output
             # has no error markers. If the last tool failed (e.g. the
@@ -7599,10 +7599,10 @@ class AgentLoop:
             _pe_passed, _pe_note = post_execution_verify(trace, intent)
             if not _pe_passed:
                 # Treat as criteria-fail: replan if iterations remain AND the
-                # same-tool failure streak hasn't hit its bound (Session 192).
+                # same-tool failure streak hasn't hit its bound.
                 unmet = [("(post-execution verifier)", _pe_note)]
                 if iteration + 1 < effective_max_iter and not _block_replan:
-                    # Session 178 — notify the orchestrator (same path as
+                    # Notify the orchestrator (same path as
                     # criteria-fail above).
                     _orchestrator_hint = ""
                     if orchestrator is not None:
@@ -7711,14 +7711,14 @@ class AgentLoop:
 
         unmet = [(c, n) for c, passed, n in results if not passed]
         if iteration + 1 < effective_max_iter and not _block_replan:
-            # Session 178 — Notify the orchestrator FIRST so its dead
+            # Notify the orchestrator FIRST so its dead
             # replan() method finally runs, its confidence drops, and
             # the orchestrator_replan_* obs events fire for real (to be
-            # consumed by the frontend in Session 180). The orchestrator
+            # consumed by the frontend). The orchestrator
             # may also return a clarification_question or a re-route hint.
             _orchestrator_hint = ""
             if orchestrator is not None:
-                # Session 178 — emit the obs events HERE (in the loop) so
+                # Emit the obs events HERE (in the loop) so
                 # they fire even when the orchestrator is mocked in tests
                 # (the real AgentOrchestrator.replan also emits them, but
                 # the loop is the authoritative source — it owns the call).
@@ -7950,7 +7950,7 @@ class AgentLoop:
         asyncio.create_task(_write_file())
 
         # ── Synthesis pipeline (STREAMED) ───────────────────────────────
-        # B-2026-09-02: stream the synthesis token-by-token instead of
+        # Stream the synthesis token-by-token instead of
         # buffering the whole answer and emitting one burst at the end. The
         # per-turn timeline showed ~51s of dead air then the answer arriving
         # as ONE chunk — an agent-side defect on any model (opencode streams
@@ -8070,7 +8070,7 @@ class AgentLoop:
     ):
         """Stream the parent initializer with progressive public events.
 
-        ADR-34 B-7: the user must see a model-owned acknowledgement and a
+        The user must see a model-owned acknowledgement and a
         bounded understanding line as soon as the provider emits them —
         not a single parsed blob 7+ seconds in.  This generator yields
         ``(event_type, payload)`` tuples that the parent runtime forwards
@@ -8111,7 +8111,7 @@ class AgentLoop:
         # from yielding and propagates exceptions cleanly.
         event_queue: asyncio.Queue = asyncio.Queue()
         last_preview = InitializationPreview()
-        # Session 290: accumulate the init call's provider usage. On a DIRECT
+        # Accumulate the init call's provider usage. On a DIRECT
         # turn the init call is the whole turn, so this is the real token usage
         # (previously dropped, forcing an inflated estimate).
         usage_acc: dict = {}
@@ -8145,9 +8145,9 @@ class AgentLoop:
                         return
                     # Whitespace-safe per-chunk filtering: the stream variant
                     # removes tool-call markup WITHOUT trimming edges, so the
-                    # spaces between streamed JSON deltas survive the join
-                    # (Session 231: the trimming variant collapsed the init
-                    # objective + response into spaceless text).
+                    # spaces between streamed JSON deltas survive the join —
+                    # the trimming variant once collapsed the init
+                    # objective + response into spaceless text.
                     text = _strip_minimax_tool_calls_stream(_filter_system_leaks(chunk.text))
                     if not text:
                         continue
@@ -8162,12 +8162,12 @@ class AgentLoop:
                     # for genuinely new content.
                     for field, new_value in diff.items():
                         setattr(last_preview, field, new_value)
-                    # Session 237: for DIRECT (trivial / needs-thought-no-tools)
+                    # For DIRECT (trivial / needs-thought-no-tools)
                     # turns, suppress the acknowledgement AND the understanding.
                     # The reply itself streams immediately, so an ack like
                     # "Hello there!" before "Hi! How can I help you today?" is
                     # a redundant second greeting, and a "respond to a greeting"
-                    # thought is pure theater (ADR-37: trivial → just reply, no
+                    # thought is pure theater (trivial → just reply, no
                     # narration). `mode` is the first JSON field, so it is known
                     # by the time ack/objective appear. Ack + understanding stay
                     # for execute/clarify turns, where there is real work to
@@ -8183,7 +8183,7 @@ class AgentLoop:
                     # it here would make the "thought process" identical to the
                     # final answer (rendered in the ThinkingBlock AND the
                     # workspace card) and would expose the answer as
-                    # chain-of-thought, which ADR-34 forbids.
+                    # chain-of-thought, never shown to the user here.
                     if not understanding_sent and not _direct and (
                         last_preview.objective
                         or last_preview.clarifying_question
@@ -8195,10 +8195,10 @@ class AgentLoop:
                 # Stream ended — parse the full JSON and emit the final decision.
                 _raw_joined = "".join(chunks)
                 decision = parse_initialization(_raw_joined)
-                # ADR-34 B-12: record the init prompt size for budget measurement.
+                # Record the init prompt size for budget measurement.
                 decision.init_prompt_chars = len(prompt)
                 decision.usage = dict(usage_acc)
-                # Observability (Session 290): log the mode AND a snippet of the
+                # Observability: log the mode AND a snippet of the
                 # model's raw output so an operator can confirm WHY a turn went
                 # direct vs execute — e.g. "execute" on a plain 'Hi' means the
                 # model explicitly chose it, while a direct-from-unparseable
@@ -8339,11 +8339,11 @@ class AgentLoop:
                             logger.warning("[agent.loop] plan stream adapter error: %s", chunk.error[:120])
                             break
                         text = _filter_system_leaks(chunk.text)
-                        # Session 148: strip DSML/MiniMax tool-call markup from
+                        # Strip DSML/MiniMax tool-call markup from
                         # planning text too — a model that emits a stray tool
                         # call block here would otherwise leak it into the plan
                         # context and the thinking stream.
-                        # Session 231: use the whitespace-SAFE stream variant —
+                        # Use the whitespace-SAFE stream variant —
                         # the trimming one removed the spaces between streamed
                         # deltas, so the plan/thinking text rendered spaceless.
                         text = _strip_minimax_tool_calls_stream(text)
@@ -8366,7 +8366,7 @@ class AgentLoop:
                     yield item
                 # Ensure the task completes — but don't hang if it already
                 # finished or errored. Use a short timeout.
-                # NOTE: same BaseException trap as the dispatcher (Session 127):
+                # NOTE: same BaseException trap as the dispatcher:
                 # awaiting a task cancelled by the timeout path above raises
                 # CancelledError, which `except (TimeoutError, Exception)` does
                 # NOT catch in py3.8+ — it would escape and kill the whole
@@ -8431,10 +8431,10 @@ class AgentLoop:
         try:
             # ── file_write verification ──────────────────────────────────
             if tool_name == "file_write" and VERIFY_FILE_WRITE:
-                # S293: read back WHERE THE WRITE LANDED (result_path from the
+                # Read back WHERE THE WRITE LANDED (result_path from the
                 # tool's metadata) not the model's raw arg — they diverge on a
                 # re-anchored path or a timestamp-renamed document, which used
-                # to fail verification for a perfectly good write (B-2026-08-17-6).
+                # to fail verification for a perfectly good write.
                 path = result_path or tool_args.get("path", "")
                 expected_len = len(tool_args.get("content", ""))
                 if not path:
@@ -8457,7 +8457,7 @@ class AgentLoop:
                     )
 
                 actual_content = verify_result.content or ""
-                # B-2026-08-20-22: count the FILE, not the read-back report.
+                # Count the FILE, not the read-back report.
                 # len(content) counts the file_task REPORT ("File: <path> / Size:
                 # N bytes" header + preview), so a 19-byte file reported as ~79
                 # "chars" and the ~60-char header skewed the truncation heuristic
@@ -8496,7 +8496,7 @@ class AgentLoop:
                 # NOT tell the agent whether to read the file back itself — that
                 # phantom "do NOT read it back" / "read it back" instruction is a
                 # bug (it fought legitimate user requests and second-guessed the
-                # agent); the agent decides based on the actual task (B-2026-08-18-7).
+                # agent); the agent decides based on the actual task.
                 return f"file_write confirmed — {actual_len} bytes verified on disk at {path}."
 
             # ── code_exec verification ───────────────────────────────────
@@ -8525,7 +8525,7 @@ class AgentLoop:
         return None
 
     # ------------------------------------------------------------------
-    # Trace summarization — for silent-failure fallbacks (Session 31)
+    # Trace summarization — for silent-failure fallbacks
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -8537,7 +8537,7 @@ class AgentLoop:
         silent-failure fallback path. Returns an empty string if no tools
         ran (so the caller knows there's nothing to summarize).
 
-        Session 31 (revised per user feedback): the previous version guessed
+        Revised per user feedback: the previous version guessed
         "free-tier model overload" — a plausible-sounding but unverified
         self-diagnosis. The user correctly pushed back: for a 4-step task
         (mkdir, git init, write a small file, commit), context overflow is
@@ -8566,7 +8566,7 @@ class AgentLoop:
             # model-overload suggestion in _force_final_answer.
             return ""
 
-        # B-2026-08-16-12: the Thinker's analysis (if any) was preserved on
+        # The Thinker's analysis (if any) was preserved on
         # the trace by the loop — surface it instead of discarding the
         # already-computed synthesis when the final model call fails.
         thinker_block = ""
@@ -8607,9 +8607,9 @@ class AgentLoop:
         if thinker_block:
             lines.append(thinker_block)
             lines.append("")
-        # Session 32: if a limit was hit, say WHICH one explicitly. The
-        # previous fallback guessed "overload" — that was a wrong
-        # diagnosis. Session 419: the wording now follows the actual
+        # If a limit was hit, say WHICH one explicitly. The
+        # previous fallback guessed "overload" — a wrong
+        # diagnosis. The wording now follows the actual
         # break reason (limit_kind) — a wall-clock break is NOT an
         # iteration-cap break, and the remedies differ. When hit_limit is
         # True, the user needs to know: the model didn't fail, the run
@@ -8672,10 +8672,10 @@ class AgentLoop:
             lines.append(observation_log[:1500])
 
         lines.append("")
-        # Session 32: tailor the "what to try" advice to the actual cause.
+        # Tailor the "what to try" advice to the actual cause.
         # If hit_limit is True, the advice is "tell me to continue" or
         # "raise the limit" — NOT "switch to a larger model" (the model
-        # didn't fail, the run was stopped by a budget). Session 419: the
+        # didn't fail, the run was stopped by a budget). The
         # advice now names the budget that actually bound (steps vs time
         # vs the repetition guard).
         if getattr(trace, "hit_limit", False):
@@ -8719,7 +8719,7 @@ class AgentLoop:
         return "\n".join(lines)
 
     # ------------------------------------------------------------------
-    # Deterministic evidence extraction (ZERO LLM calls — B-2026-08-20-15)
+    # Deterministic evidence extraction (ZERO LLM calls)
     # ------------------------------------------------------------------
 
     def _extract_answer_from_evidence(
@@ -8732,7 +8732,7 @@ class AgentLoop:
     ) -> str:
         """Extract the answer directly from evidence already in hand — no LLM call.
 
-        B-2026-08-20-15 (Session 316): the user's insight — "the thinking text
+        The user's insight: "the thinking text
         and other evidence already has all the answers." When the model's
         synthesis call fails (empty/timeout), the answer often already exists in:
         1. The reasoning buffer (the model's own analysis — "the temperature is
@@ -8920,7 +8920,7 @@ class AgentLoop:
     ) -> str:
         """Build a CLEAN user-facing message when final synthesis times out or crashes.
 
-        B-2026-08-20-14 (Session 315): the old fallback dumped raw harness
+        The old fallback dumped raw harness
         internals (``_summarize_trace_for_user`` with "I ran the requested
         tools but couldn't synthesize... What to try next: Check the outputs
         above") which reads as developer debug output, not a user answer. The
@@ -8931,7 +8931,7 @@ class AgentLoop:
         """
         _tool_count = sum(1 for s in (trace.steps if trace else []) if getattr(s, "tool_name", ""))
         if _tool_count > 0:
-            # Session 349: build a simple evidence summary instead of
+            # Build a simple evidence summary instead of
             # telling the user to "check the Actions panel"
             _evidence_lines = []
             for s in (trace.steps if trace else []):
@@ -8976,7 +8976,7 @@ class AgentLoop:
         intent,
         obs,
     ) -> AsyncIterator[StreamChunk]:
-        """B-2026-08-20-7: deterministic post-loop synthesis when tools ran
+        """Deterministic post-loop synthesis when tools ran
         but the model produced no usable final text.
 
         This is the LAST safety net before the empty-response fallback. It
@@ -8984,7 +8984,7 @@ class AgentLoop:
         - at least one tool ran this turn (``trace.steps`` has a tool_name), AND
         - the final text is empty or trivially short.
 
-        Unlike the B-2026-08-18-11 synthesis-from-reasoning rescue (which
+        Unlike the synthesis-from-reasoning rescue (which
         fires on empty-WITH-reasoning and counts against the recovery budget),
         this fires AFTER the loop has terminated and does NOT count against
         any recovery budget — it's a single final attempt to synthesize a
@@ -9046,7 +9046,7 @@ class AgentLoop:
         trace: Optional[AgentTrace],
         provider_usage: dict[str, int],
     ) -> AsyncIterator[StreamChunk]:
-        """Session 147: rescue a heading-only final answer on NORMAL completion.
+        """Rescue a heading-only final answer on NORMAL completion.
 
         The free-tier model frequently ends a tool-bearing turn with a bare
         heading ("**Git status**") instead of a synthesized answer. Before
@@ -9103,12 +9103,12 @@ class AgentLoop:
         answer from everything gathered so far.  Uses plain chat() without
         tools — the model should just summarize what it knows.
 
-        Session 31: now accepts an optional `trace` parameter so the
+        Per user feedback, this now accepts an optional `trace` parameter so the
         empty-stream fallback can surface ACTUAL tool inputs/outputs
-        instead of guessing "overload" (per user feedback — the overload
+        instead of guessing "overload" (the overload
         diagnosis was unverified and likely wrong for small tasks).
 
-        Session 147: `framing` selects the directive text — "limit" for the
+        The `framing` parameter selects the directive text — "limit" for the
         iteration-limit path (default, preserves prior behavior) or "final"
         for rescuing a heading-only answer on normal completion. When
         `suppress_report` is True, the internal needs_report append is
@@ -9178,7 +9178,7 @@ class AgentLoop:
                 "content": f"{observation_log}\n{_directive}",
             }
         ]
-        # Session 31: track whether the model produced ANY non-empty text.
+        # Track whether the model produced ANY non-empty text.
         # Free-tier models sometimes return an empty stream (zero chunks, or
         # chunks whose text is entirely filtered out as system-leak XML).
         # Without this check, _force_final_answer returns silently, the
@@ -9206,13 +9206,13 @@ class AgentLoop:
                     )
                     return
                 filtered_text = _filter_system_leaks(chunk.text)
-                # Session 148: strip DSML/MiniMax tool-call markup from the
+                # Strip DSML/MiniMax tool-call markup from the
                 # final synthesis too — the browser-validated run leaked a raw
                 # <｜DSML｜tool_calls> block into the answer because the rescue
                 # path (framing='final') only ran the system-leak filter. The
                 # model sometimes emits a tool call as plain text here even
                 # though plain chat has no tools.
-                # Session 246: use the STREAM variant — the trimming variant
+                # Use the STREAM variant — the trimming variant
                 # ends with .strip(), which on a per-chunk basis eats the
                 # boundary space between every delta and welds the synthesis
                 # into spaceless text ("HereHere arethe", "storiesIfound").
@@ -9220,7 +9220,7 @@ class AgentLoop:
                 if filtered_text:
                     _any_text_yielded = True
                     _final_text_parts.append(filtered_text)
-                # ADR-41 (Session 254): forward the model's reasoning in the
+                # Forward the model's reasoning in the
                 # final synthesis too — a thinking model (GLM) streams
                 # reasoning before this answer as well. Held with the text
                 # so the ThinkingBlock renders it before the answer.
@@ -9282,7 +9282,7 @@ class AgentLoop:
                 else:
                     _rebuilt_chunks.append(_chunk)
             _final_chunks = _rebuilt_chunks
-        # Session 419: record that the rescue produced a REAL model answer
+        # Record that the rescue produced a REAL model answer
         # (not a deterministic fallback) so post-loop failure classification
         # can tell a rescued turn from a failed one — a capped run whose
         # synthesis delivered is not a failure (the "find my CV" false
@@ -9309,7 +9309,7 @@ class AgentLoop:
                 yield _final_chunk
             yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
 
-        # Session 31 (revised per user feedback): if the model returned an
+        # Revised per user feedback: if the model returned an
         # empty stream (or all chunks were filtered out as system-leak XML),
         # yield a fallback that surfaces ACTUAL EVIDENCE — not a guess.
         #
@@ -9321,7 +9321,7 @@ class AgentLoop:
         # tool inputs and outputs from the trace and let the user decide.
         if not _any_text_yielded:
             if suppress_empty_fallback:
-                # Session 147: the rescue caller owns the empty case — it
+                # The rescue caller owns the empty case — it
                 # renders the deterministic worker report itself.
                 logger.info(
                     "[agent.loop] final synthesis empty — caller handles fallback"
@@ -9331,7 +9331,7 @@ class AgentLoop:
                 "[agent.loop] final synthesis produced no text — "
                 "yielding evidence-based fallback (model returned empty stream)"
             )
-            # B-2026-08-20-15 (Session 316): FIRST try deterministic evidence
+            # FIRST try deterministic evidence
             # extraction — ZERO LLM calls, ZERO latency. The user's insight:
             # "the thinking text and other evidence already has all the answers."
             # The model's reasoning buffer + tool observations often contain
@@ -9348,7 +9348,7 @@ class AgentLoop:
             if _extracted:
                 yield StreamChunk(text=_extracted, done=True, usage=dict(_provider_usage))
                 return
-            # B-2026-08-20-14 (Session 315): before dumping raw tool calls to
+            # Before dumping raw tool calls to
             # the user, try the post-loop evidence synthesis ONE more time.
             # The _force_final_answer call above may have returned empty
             # because the model was in a bad state; a fresh synthesis call
@@ -9385,7 +9385,7 @@ class AgentLoop:
                 return
 
             # Synthesis retry also failed — produce a CLEAN user-facing message.
-            # B-2026-08-20-14: the old fallback dumped raw harness internals
+            # The old fallback dumped raw harness internals
             # ("I ran the requested tools but couldn't synthesize... What to
             # try next: Check the outputs above") which reads as developer
             # debug output, not a user answer. The new fallback is honest +
@@ -9393,7 +9393,7 @@ class AgentLoop:
             # Actions panel (where the tool evidence already lives).
             _tool_count = sum(1 for s in (trace.steps if trace else []) if s.tool_name)
             if _tool_count > 0:
-                # Session 349: build evidence summary instead of "check Actions panel"
+                # Build evidence summary instead of "check Actions panel"
                 _evidence_lines = []
                 for s in (trace.steps if trace else []):
                     _obs = getattr(s, "observation", "") or ""

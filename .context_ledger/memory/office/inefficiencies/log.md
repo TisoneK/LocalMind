@@ -61,3 +61,22 @@ never makes an entry eligible.
 - **Workaround / fix:** for memory-surface-only commits in a worktree — run the memory-meaningful steps directly (`check-conflict-markers.sh`, `check-backlog-duplicates.sh`, `git diff --cached --check`), which all run dependency-free, and verify the product steps (ruff/tsc) from the main checkout when its product tree equals origin/main; full `ci-check.sh` (incl. pytest + eslint) run at exit from the provisioned main checkout.
 - **Prevent next time:** never pipe a gate through `tail`/`head` and chain commits — run it bare and read the verdict; a worktree where `git add` touched only `.context_ledger/**.md` cannot break tsc/ruff, and the two memory scripts are the gate's actually-relevant teeth.
 - **Upstream:** candidate — the protocol's collab-worktree flow should state which gate steps degrade when the worktree is unprovisioned (every collaboration project hits this).
+
+---
+## 2026-09-15 — Imani / qwen3.8-flash (S008) — Windows console traps: cp1252 stdout and commit-message quoting
+
+- **Problem:** two one-shot losses to the shell rather than the code. (1)
+  `scripts/lm_benchmark.py` prints a `→` per test line; under PowerShell's
+  cp1252 console the run crashed mid-report with UnicodeEncodeError (server
+  already booted, test already passed — pure output-encoding loss). (2)
+  `git commit -m` with a message containing `{"type": "done"}` and escaped
+  quotes broke parsing ("fatal: Invalid path '/done'").
+- **Cost:** two reruns, ~3 minutes.
+- **Cause:** (1) Python defaults stdout to the console codepage on Windows;
+  the harness's own summary lines are non-ASCII. (2) PS 5.1 + git's argument
+  quoting around embedded double quotes.
+- **Workaround / fix:** set the Python IO encoding to UTF-8 in the
+  environment before any harness/benchmark run; write commit messages with
+  embedded quotes or braces to a scratch file and use `git commit -F`.
+- **Prevent next time:** both are the standing Windows pattern now — UTF-8 env
+  for scripts, `-F` for fiddly messages.

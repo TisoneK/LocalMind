@@ -440,7 +440,7 @@ patch that doesn't run cannot pass.
 
 - **Per-adapter model pin** (`_ADAPTER_MODEL` + `prepare_home` + `--adapter`/`--model`), mirroring the dir_explorer harness — free-tier providers rotate models; bankofai's free tier answers on `qwen3.8-flash`.
 - **Multi-turn support**: a test's `multi_turn` setup prompts replay on the same session before the scored prompt.
-- **Usage capture**: `_usage_tokens` normalizes `total_prompt_tokens`/`total_completion_tokens`/`llm_calls`/cached from the `done` event when present; results carry `usage_tokens`, plus a suite-level quality-per-token summary. NOTE (B-2026-09-11-1): the wire `done` event currently carries NO usage, so these record null until that lands.
+- **Usage capture**: `_usage_tokens` normalizes `total_prompt_tokens`/`total_completion_tokens`/`llm_calls`/cached from the `done` event when present; results carry `usage_tokens`, plus a suite-level quality-per-token summary. The wire `done` event now carries `provider_usage` (forwarded from the loop's final chunk since 2026-09-15, live-verified on bankofai/mimo-v2.5: fast-path turn → `{prompt_tokens, completion_tokens, total_tokens}`; tool-loop turn → the `total_*` accumulation set); it stays omitted on no-provider-call turns (canned fallback, memory op, error path), which record null honestly.
 - **Raw SSE evidence** saved per test as `scratch/sse-<ID>-<session>.sse`; unknown `--tests` IDs now warn instead of shrinking the run.
 
 ---
