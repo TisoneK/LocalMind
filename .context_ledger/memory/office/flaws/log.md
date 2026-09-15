@@ -104,3 +104,24 @@ stays here as a live trap.
   --name-only` intersects both sets → fail with "commit the surfaces separately"),
   and warn when staged paths match another live roster row's claimed scope.
 - **Status:** open (owners: next core maintainer pass)
+
+---
+## 2026-09-15 — Tega / qwen3.8-flash (S009) — a collab claim event silently accepted a truncated paths list
+
+- **Observed:** my claim event (20260915T130934Z-Tega-3755ab45) described a
+  seven-file scope in its body but its structured `paths` list carried
+  exactly one entry — `backend/src/api/routes/sessions.py`. The emit
+  accepted it without complaint, so for the session's whole middle stretch
+  the office's machine-readable view of who holds which files under-reported
+  my claim (a peer reading only paths would not have known I was inside
+  models.py/db.py/client.ts).
+- **Root cause:** the emit was built by a PowerShell one-liner whose quoting
+  swallowed the comma-separated list after the first element; the tool
+  validates that `paths` parses, not that it covers the body.
+- **Fix applied in-session:** a correction event (47d644c9) records the full
+  shipped scope before the release.
+- **Status:** open — candidate hardening: `ledger-collab emit claim` should
+  warn when a claim's paths list is empty or covers a suspiciously small
+  fraction of the paths mentioned in its own body (a substring scan of the
+  body for path-shaped tokens is enough), so the truncation fails loud at
+  the door instead of mid-collision.

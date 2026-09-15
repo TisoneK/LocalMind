@@ -108,3 +108,44 @@ never makes an entry eligible.
 - **Prevent next time:** in a live office, treat the harness port as
   per-session (offset by codename number) rather than the literal 8765; a
   quick listen-probe before boot is the discipline.
+
+---
+## 2026-09-15 — Tega / qwen3.8-flash (S009) — the cell-edit tool can write a phantom import and skip the definition it was told to add
+
+- **Problem:** inserting the BestOfNSection component into ChatMessage.tsx
+  via the IDE cell-edit tool produced a file with the usage line AND an
+  import of a module that does not exist ('./BestOfNSection'), but NOT the
+  component definition itself — a corruption no linter would call out by
+  name (tsc did, but only after a full run).
+- **Cost:** one tsc error hunt + manual re-edit; trust in 'successful' edit
+  tool results now costs a verification pass.
+- **Cause:** large multi-region inserts through the edit tool are applied
+  heuristically; a same-file 'insert' can land the reference but mangle the
+  definition block. The tool reported success.
+- **Workaround / fix:** after ANY structural insert into an existing file,
+  grep the actual file (Select-String for worktrees — workspace search only
+  sees the main tree) for the symbol's definition and its import before
+  compiling.
+- **Prevent next time:** prefer one explicit replace_string_in_file anchored
+  on surrounding code for adding definitions; treat cell-style inserts on
+  code files as unverified until re-read.
+
+---
+## 2026-09-15 — Tega / qwen3.8-flash (S009) — async terminal mode strips Set-Location, silently running commands against the wrong tree
+
+- **Problem:** a background (async) command written as
+  `Set-Location <worktree>; <python> -m pytest ..\tests` was 'simplified'
+  by the runner to just the python part — cwd stayed the MAIN tree, so the
+  relative `..\tests` resolved to nothing (or worse: to the peer's tree).
+  The first full-suite 'baseline' was actually measured in the wrong
+  checkout.
+- **Cost:** one mis-targeted 4-minute suite run + a confusing
+  'file or directory not found'; re-ran to confirm.
+- **Cause:** the async execution path rewrites the command line and drops
+  the cd prefix; relative paths then silently mean something else.
+- **Workaround / fix:** in worktree/peer-adjacent layouts, pass ABSOLUTE
+  paths for test targets (and cwd via Set-Location only in sync mode), or
+  verify the reported rootdir line of the tool output matches the intended
+  tree.
+- **Prevent next time:** never combine Set-Location + relative paths in an
+  async terminal command; absolute paths are the habit here.
