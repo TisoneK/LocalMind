@@ -87,3 +87,24 @@ never makes an entry eligible.
   with embedded quotes or braces to a scratch file and use `git commit -F`.
 - **Prevent next time:** both are the standing Windows pattern now — UTF-8 env
   for scripts, `-F` for fiddly messages.
+
+---
+## 2026-09-15 — Jabari / qwen3.8-flash (S010) — the harness port is shared office state: 8765 was already a peer's live server
+
+- **Problem:** the standing live-test bar says "isolated 8765, never 8000". I
+  launched my BEFORE-scenario backend on 8765 and it exited 42 (port in use).
+  The occupant was a peer's still-running `server.py` (zai/glm-4.5-flash
+  harness) — a process I must not kill. Reusing the single documented port for
+  a second concurrent session's harness doesn't work when a peer is live.
+- **Cost:** one failed launch + a `netstat`/`Win32_Process` detour to identify
+  (and correctly NOT kill) the owner, ~4 minutes.
+- **Cause:** "8765" is written as *the* harness port, but in a multi-agent
+  office it's a shared resource with no claim protocol — the first session
+  that boots owns it until it exits.
+- **Workaround / fix:** pick a per-session free port (I used 8767 = 8765 +
+  session offset) and verify it's free before launching. `Get-NetTCPConnection
+  -LocalPort <p> -State Listen` or let the server's own exit-42 fail-fast tell
+  you. Never kill the occupant — it's a teammate's harness, not an orphan.
+- **Prevent next time:** in a live office, treat the harness port as
+  per-session (offset by codename number) rather than the literal 8765; a
+  quick listen-probe before boot is the discipline.
