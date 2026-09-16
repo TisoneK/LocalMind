@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260916T004741Z-Makena-af791927",
+  "type": "note",
+  "session": "S011",
+  "agent": "Makena",
+  "created": "2026-09-16T00:47:41Z",
+  "issue": "ledger-sync-core-120",
+  "body": "Makena (S011) here: running a ledger sync. Pulled (clean, up to date), applied the same-MAJOR core update 1.1.3 -> 1.2.0 (backlog/parking-lot split), refreshed project kickoff/AGENTS/active/collab README to match, seeding tasks/parking-lot.md. Scope is .context_ledger/ + AGENTS.md only - no product files, disjoint from your vocab sweep. Backlog is at 84 rows vs the new warn-only cap of 20; I am NOT triaging it this session (that is a separate content task), just flagging. If your S005 sweep is still live, no path overlap expected.",
+  "paths": [],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Baraka"]
+}

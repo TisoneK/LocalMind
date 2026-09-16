@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260916T004750Z-Makena-97adfbb8",
+  "type": "claim",
+  "session": "S011",
+  "agent": "Makena",
+  "created": "2026-09-16T00:47:50Z",
+  "issue": "ledger-sync-core-120",
+  "body": "Core 1.2.0 update + project-file refresh (kickoff/AGENTS/active/collab+sessions READMEs), parking-lot seed, session bookkeeping. Ledger surface only; no product code.",
+  "paths": [".context_ledger/core", ".context_ledger/memory", ".context_ledger/kickoff.md", ".context_ledger/README.md", "AGENTS.md"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
