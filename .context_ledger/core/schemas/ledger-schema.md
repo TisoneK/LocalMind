@@ -134,15 +134,19 @@ File inventory, write modes, and scopes. **Write modes:**
   up into one `Recurring` entry with the instances moved verbatim into
   the archive. Every moved line survives unchanged in the archive and in
   git history — compaction relocates, it never rewrites.
-- **live queue** — open work only. New items are added as rows in their
-  priority table (High/Medium/Low — see "The backlog" below); a row is
-  deleted when its item is finished or no longer relevant. Never delete
-  a row whose item is still open (git history keeps every removed row,
-  so nothing is lost). The only live-queue file is
-  `office/tasks/backlog.md`; completion records live in
-  `office/agents/sessions.md` and the commits, not in the backlog.
-  `ledger-mem closeout` still sweeps checked-off `- [x]` tombstones
-  from legacy checkbox-format backlogs.
+- **live queue** — open, **actionable** work only, capped (default ~20
+  rows). New items are added as rows in their priority table (High /
+  Medium / Low — see "The backlog" below); a row is deleted when its
+  item is finished or no longer relevant. Never delete a row whose item
+  is still open (git history keeps every removed row, so nothing is
+  lost). The only live-queue file is `office/tasks/backlog.md`;
+  completion records live in `office/agents/sessions.md` and the
+  commits, not in the backlog. Items that are *not* actionable —
+  findings, open questions, deferred or someday ideas — are not queue
+  rows; they live in `office/tasks/parking-lot.md` (a knowledge base,
+  not a queue). `ledger-mem check` warns when the backlog passes its cap;
+  `ledger-mem closeout` still sweeps checked-off `- [x]` tombstones from
+  legacy checkbox-format backlogs.
 - **overwrite** — current-state only; replace the content, history
   lives in the append-only logs.
 - **update-in-place** — structured records with one entry per key,
@@ -165,7 +169,8 @@ File inventory, write modes, and scopes. **Write modes:**
 | `agents/sessions.md` | append-only (current office) | project | One entry per session: agent, model, platform, task, commits, outcome. Bounded by the office itself: the door-triggered close (see Office lifecycle) keeps it at `office_size` entries or fewer |
 | `agents/roster.md` | update-in-place (current office) | project | Team roster — the "who's in the office *now*" board. Every session (solo included) adds its row at check-in — at the entrance, before the deep read, not after analysis — and pushes it; the push claims the codename (the earlier commit keeps a colliding number; the later worker fixes their own row to the next free codename). Columns: Name; codename `S<NNN>`; model; Doing (what you're on); **Status** — one short word, `Working` at check-in, edited in place to `Done` or `Blocked` as the work moves; **Status detail** — the one line the next worker needs (for `Working`: the stage or step reached; for `Done`: the outcome and extent, "Shipped: …"; for `Blocked`: what you're waiting on and from whom). Clock out (remove the row) when actually leaving — a finished session that stays live shows `Done` + its shipped outcome. Who was on duty *when* lives in `agents/sessions.md` + this file's git history. Name and codename each unique in the office; `ledger-mem check` enforces that and warns on an empty Status cell. Identity is *claimed* at check-in (fresh name + codename you pick), never *inferred* from a model/harness-string match — model strings are shared across sessions, so duplicate model values are normal. Never reset or trimmed: the whole office is frozen verbatim at close |
 | `tasks/current.md` | overwrite | project | The one task in progress — a lock only in single-agent mode |
-| `tasks/backlog.md` | live queue (priority-grouped tables; add/delete rows) | project | Open items for future sessions only — one row per item in its priority table (High/Medium/Low, ID + Summary); a finished item's row is deleted, its completion record is the session entry + commit. Office-scoped: still-open items are re-seeded into the next office at close |
+| `tasks/backlog.md` | live queue (priority-grouped tables; add/delete rows; capped ~20) | project | Actionable work only — one row per item in its priority table (High/Medium/Low, ID + Summary); a finished item's row is deleted, its completion record is the session entry + commit; past the cap, prune the lowest-value row first. Non-actionable items go to `parking-lot.md`, not here. Office-scoped: at close, only items with an active owner or a clear next step are re-seeded into the next office |
+| `tasks/parking-lot.md` | live queue (grouped by kind; add/delete rows; uncapped) | project | The knowledge base, not a queue — research findings, open/advisory questions, deferred work, someday ideas, grouped by kind with stable `P-` IDs. No cap, no priority, no urgency. An item becomes a `backlog.md` row only when it turns actionable (promote: cut here, add there); at close it is not re-seeded wholesale — promote what's now work, record the rest in the permanent record |
 | `plans/decisions.md` | append-only (compactable) | project | ADR-style decisions — respected, not relitigated. Decisions still in force are re-seeded into the next office and recorded in the office's permanent record. Superseded ADRs move verbatim to `plans/archive.md` |
 | `flaws/log.md` | append-only (compactable) | project→package | Friction with the protocol/`.context_ledger/` system itself; flows upstream. A clean session appends nothing; closed entries move verbatim to `flaws/archive.md`; 3+ entries on the same recurring trap roll up into one `Recurring` entry |
 | `flaws/README.md` | generated | project | The flaws-vs-inefficiencies split rule (pointer to this schema) |
@@ -200,12 +205,19 @@ template before writing; never invent formats.** If a file's in-repo
 template comment and this schema's mode column disagree, this schema
 wins.
 
-### The backlog: arrangement + workstream view
+### The backlog: a capped work queue
 
-`office/tasks/backlog.md` is **arranged, not a checkbox list**: open
-items live as rows in priority-grouped tables, so the shape of the work
-is visible the moment the file opens. The file is arranged exactly like
-this:
+`office/tasks/backlog.md` is a **queue of actionable work, not a
+knowledge base**. The test for a row is: *can an agent start on this and
+finish it?* If not — it's a finding, an open question, an advisory
+"should we…?", a deferred or someday idea — it belongs in
+`office/tasks/parking-lot.md` (next section), not here. The failure mode
+this rule prevents is the well-documented backlog that is an unworkable
+queue: rows accumulate research narrative and status qualifiers, nothing
+is ever deleted because deleting feels like losing the record, and the
+file becomes a knowledge base pretending to be a to-do list.
+
+The file is arranged exactly like this:
 
     ## Open Items
 
@@ -227,25 +239,44 @@ this:
     |----|---------|
     | B-2026-07-31-10 | Non-coding capability roadmap |
 
-- **One row per open item, in its priority table.** Priority is the
-  table an item sits in (High / Medium / Low); when unsure, Medium.
+- **Actionable rows only.** One row per item, in its priority table.
+  The Summary says what to *do*, in a line — not everything known about
+  it. Deep context lives in the linked issue, PR, ADR, or parking-lot
+  finding the row points at; packing it into the cell is the document
+  mindset creeping back in. Keep status qualifiers short ("partial",
+  "blocked on X"); a row that needs a paragraph of justification to
+  belong is usually a parking-lot item.
 - **ID every row:** `B-<added YYYY-MM-DD>-<n>`, n = that date's next
   sequence in the file. Stable IDs are what make cross-references and
   workstream clustering possible. Legacy checkbox-format items keep
   their line until next touched; re-row them with an ID then.
-- **The Summary cell carries the context** — enough for a fresh agent
-  to act without chat history — with status qualifiers in the text
-  ("partial — features present, lib not replaced", "done, pending
-  sign-off", "deferred by owner", "advisory").
-- **Finished = delete the row.** The backlog holds open work only; the
-  completion record is the session entry + commit. There are no
-  checkboxes in the file, so there is nothing to "check off" — a row
-  that remains is open work. (`ledger-mem closeout` still sweeps
-  checked-off `- [x]` tombstones from pre-1.0.5 checkbox-format
-  backlogs.)
+- **Finished = delete the row. Stale = delete the row.** The backlog
+  holds open work only; the completion record is the session entry +
+  commit. There are no checkboxes in the file, so there is nothing to
+  "check off" — a row that remains is open work. When an item stops
+  mattering, delete it; if it still carries information, move it to the
+  parking lot first. Git history keeps every removed row, so deleting
+  loses nothing. (`ledger-mem closeout` still sweeps checked-off
+  `- [x]` tombstones from pre-1.0.5 checkbox-format backlogs.)
+- **The queue is capped (default ~20 rows).** The cap is a working-set
+  limit, not a quota to fill: `backlog_cap` in
+  `memory/workflows/history.conf` (default 20), and `ledger-mem check`
+  warns past it. When you'd add a row that pushes the file past the
+  cap, prune one first: the lowest-value open row goes to the parking
+  lot (deferred, still valuable) or is deleted (no longer relevant).
+  Never prune a row you can't justify dropping, and never let the cap
+  become an excuse to hoard — a queue you can hold in your head beats a
+  comprehensive one you can't.
+- **Priority is the table an item sits in (High / Medium / Low), and it
+  is dynamic.** Only the top of the queue really matters — the handful
+  of High rows (roughly the top 3–5) are the work a session starts on;
+  the rest is context. A row that has sat in Low across many sessions is
+  a parking-lot candidate, not a permanent resident. When unsure between
+  two tables, pick the lower one; promoting later is cheap, and a
+  backlog where everything is High says nothing.
 - **Workstream view — derived, never stored.** When the backlog is
-  large (roughly 20+ rows) or the user asks for a planning pass, render
-  the workstreams: numbered clusters of items attacking the same
+  large (near or past the cap) or the user asks for a planning pass,
+  render the workstreams: numbered clusters of items attacking the same
   problem ("Code Block / Code Display (3 items → 1 effort)"), each
   listing its item IDs, a one-line rationale, dedupe/partial notes
   ("treat as the same effort; dedupe when picked up"), and an ordering
@@ -262,6 +293,36 @@ this:
   ("70 items → ~12 workstreams"). Workstreams are an analysis of the
   rows, never a second copy of them — an item has one home (its
   priority-table row), so finishing it stays a single delete.
+
+### The parking lot: the knowledge base, not a queue
+
+`office/tasks/parking-lot.md` is where everything the backlog must stay
+clean of actually goes: research findings, open and advisory questions,
+consciously deferred work, and loose someday ideas. It exists so the
+backlog can be a queue. The distinction is one question — *is this
+actionable now?* — and the two files are the two answers.
+
+- **Grouped by kind, not by priority.** Four sections — Findings, Open
+  questions, Deferred work, Someday — because these items are not
+  competing for the top of a queue, so ranking them is meaningless.
+- **Uncapped, no urgency.** Nothing here blocks a gate or a session. The
+  whole point is that it is out of the working set, so it can grow
+  without hurting anything; the backlog's cap is what keeps *this* file
+  honest by giving overflow a home instead of a permanent queue row.
+- **ID every row:** `P-<added YYYY-MM-DD>-<n>`, n = that date's next
+  sequence in the file — the same shape as backlog IDs, a separate
+  namespace.
+- **Promote, don't duplicate.** When a parked item becomes actionable —
+  it now has a clear next step and someone to take it — it becomes a
+  backlog row: cut it here, add a one-line actionable row there (a fresh
+  `B-` ID, pointing back at the `P-` ID for context if useful). An item
+  that turns out wrong or moot is simply deleted; history remembers it.
+- **Not re-seeded wholesale at close.** The parking lot is office-scoped
+  like the backlog, but the closing session does not copy it forward.
+  It promotes what is now actionable into the new backlog and records
+  the rest in the permanent record (`history/office-<NNN>.md`, "Open
+  threads"). A cold idea earns its way into the next office by becoming
+  work, not by being carried.
 
 ### Append-only logs: compaction, not hoarding
 
@@ -392,6 +453,16 @@ permanent record — the same promotion rule as session notes, applied at
 the office boundary. This is what lets a closed office be archived and
 eventually deleted without losing institutional knowledge: the permanent
 record plus the durable files remember what matters.
+
+**Re-seed work, not knowledge.** The backlog re-seeds **only items with
+an active owner or a clear next step** — the queue's whole purpose is
+that a fresh session can act on what's in it, and a row that can't be
+acted on is a knowledge-base entry wearing a queue's clothes. Findings,
+open questions, and deferred or someday items are not re-seeded at all:
+they are recorded in the permanent record (and promoted to the new
+backlog later, when they become actionable). Decisions and open log
+threads follow the same test — carry what the next office must *do* or
+*respect*, not what it might *want to remember*.
 
 **Re-seed content, not record numbers.** A re-seeded backlog row,
 decision, or log entry must stand alone: it never cites the closed

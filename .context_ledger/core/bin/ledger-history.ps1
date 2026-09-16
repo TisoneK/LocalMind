@@ -22,7 +22,8 @@
 #
 # Config: memory/workflows/history.conf - office_size=20 (legacy key
 # group_size still read), history_keep=3, archive_keep=12 (defaults when
-# absent). Uses tar (Windows 10+ ships tar.exe) so archives are .tar.gz,
+# absent); backlog_cap=20 sizes the work queue (read by ledger-mem check).
+# Uses tar (Windows 10+ ships tar.exe) so archives are .tar.gz,
 # matching the POSIX port.
 
 [CmdletBinding()]
@@ -54,7 +55,7 @@ function Usage {
     '  status                 live office, session count, zone sizes, due?',
     '  close [--milestone L] [--confirm]   freeze the live office into history/',
     '  gc [--confirm]         delete oldest archive/ tarballs over the cap',
-    'Config: memory/workflows/history.conf (office_size, history_keep, archive_keep).'
+    'Config: memory/workflows/history.conf (office_size, history_keep, archive_keep, backlog_cap).'
   ) | ForEach-Object { Say $_ }
   exit 2
 }
@@ -116,6 +117,10 @@ function Show-PrecloseChecklist {
   Say '    Accomplished / Decisions still in force / Open threads'
   Say "  - re-seed open threads that still matter into the NEW office's files"
   Say '    (backlog / flaws / decisions) - the only carryover there is'
+  Say '  - re-seed WORK, not knowledge: backlog.md rows only for actionable'
+  Say '    items with an active owner or a clear next step; the old office''s'
+  Say '    parking-lot findings/questions/someday items go in the permanent'
+  Say '    record (Open threads), not into the fresh queue'
   Say '  - re-seeded entries describe the work in plain words: they never cite'
   Say "    this office's session numbers or codenames (S014, Session 12) -"
   Say '    those live in the frozen copy the new office never reads; the new'
@@ -210,7 +215,10 @@ function Cmd-Close {
     '- <ADRs / working agreements the next office must respect - or "none">',
     '',
     '## Open threads',
-    '- <items re-seeded into the new office''s backlog / flaws / decisions - or "none">',
+    '- <actionable items re-seeded into the new office''s backlog (owner / next step),',
+    '  plus the parking-lot findings, questions, and someday items worth keeping -',
+    '  this record is where knowledge survives a close; the fresh queue does not',
+    '  inherit it - or "none">',
     '-->'
   )
   # WriteAllText with UTF-8 without BOM: Set-Content on Windows PowerShell
@@ -226,7 +234,9 @@ function Cmd-Close {
   Roll-OldestOfficeToArchive
   Say ''
   Say "Then, before committing: fill in $record and re-seed open threads into the"
-  Say "new office's backlog / flaws / decisions - only what still matters."
+  Say "new office's backlog / flaws / decisions - only what still matters, and"
+  Say "into the backlog only actionable work with an owner or next step (the"
+  Say "parking lot's findings/questions go in the record, not the new queue)."
   Say ''
   Say "Commit as: chore(ledger): close office-$n, open a fresh office"
 }

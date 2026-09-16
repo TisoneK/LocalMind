@@ -31,6 +31,13 @@ LEDGER_DIR=$(dirname -- "$CORE_DIR")
 PROJECT_DIR=$(dirname -- "$LEDGER_DIR")
 MEMORY_DIR=$LEDGER_DIR/memory
 OFFICE_DIR=$MEMORY_DIR/office
+CONFIG=$MEMORY_DIR/workflows/history.conf
+
+conf() { # $1 key, $2 default — same reader as ledger-history (numeric values only)
+  _v=""
+  [ -f "$CONFIG" ] && _v=$(sed -n "s/^$1=//p" "$CONFIG" | tr -d '\r' | head -n1)
+  case "$_v" in ''|*[!0-9]*) printf '%s' "$2" ;; *) printf '%s' "$_v" ;; esac
+}
 
 usage() {
   say "ledger-mem — .context_ledger hygiene checks"
@@ -41,7 +48,9 @@ usage() {
   say "          roster row with no Status cell (the at-a-glance column), a"
   say "          roster row whose Session N is already in agents/sessions.md"
   say "          means the session never clocked out, and a duplicated"
-  say "          Session N means a resumed session re-logged"
+  say "          Session N means a resumed session re-logged; plus a"
+  say "          warn-only backlog-cap check (rows past backlog_cap in"
+  say "          workflows/history.conf — prune to parking-lot.md)"
   say "  lint    .context_ledger vocabulary (ADR-N, bug IDs, .context_ledger/ paths) leaking"
   say "          into product artifacts — the staged diff by default; --tree"
   say "          sweeps every tracked product file (strip leaks old sessions left)"
@@ -54,7 +63,7 @@ usage() {
   say "          instances archived verbatim); --list names them. Never"
   say "          moves or deletes — reports only."
   say "  closeout delete finished backlog items (- [x] tombstones) from the"
-  say "          tasks/backlog.md live queue — open work stays. Dry run by"
+  say "          tasks/backlog.md work queue — open work stays. Dry run by"
   say "          default (lists the tombstones); --confirm deletes. Every"
   say "          deleted line stays recoverable in git history; the completion"
   say "          record is the finishing session's entry + commit."
@@ -168,6 +177,7 @@ check() {
   check_roster_stale
   check_dup_sessions
   check_backlog_tombstones
+  check_backlog_cap
   if [ "$_rc" -eq 0 ]; then
     say "memory check passed: no duplicate keys in the update-in-place registries"
   else
@@ -312,6 +322,25 @@ check_backlog_tombstones() {
   _n=$(grep -cE '^[[:space:]]*[-*+][[:space:]]+\[[xX]\]' "$_f" 2>/dev/null)
   _n=${_n:-0}
   [ "$_n" -gt 0 ] && say "WARN backlog.md: $_n finished item(s) still sit checked off (- [x]) — the backlog holds open work only; run ledger-mem closeout to sweep them (git history keeps the lines)"
+  return 0
+}
+
+# the backlog is a capped WORK QUEUE (core 1.2.0) — actionable items only,
+# default ~20 rows (backlog_cap in workflows/history.conf). Past the cap the
+# add-a-row rule becomes prune-a-row: the lowest-value open row goes to
+# parking-lot.md (still valuable) or is deleted (not). Warns only — the
+# queue is a working set, not a hard limit; a 21st row is a prompt to prune,
+# not an error. Counted as table rows carrying a B-<date> ID (headers,
+# separators, and template comments are not rows).
+check_backlog_cap() {
+  _f=$OFFICE_DIR/tasks/backlog.md
+  [ -f "$_f" ] || return 0
+  _cap=$(conf backlog_cap 20)
+  _n=$(grep -cE '^[[:space:]]*\|[[:space:]]*B-[0-9]' "$_f" 2>/dev/null)
+  _n=${_n:-0}
+  if [ "$_n" -gt "$_cap" ]; then
+    say "WARN backlog.md: $_n actionable rows past the cap of $_cap — the queue is a working set, not an archive; prune the lowest-value open row to tasks/parking-lot.md (or delete it) before adding another (raise backlog_cap in workflows/history.conf only by intent)"
+  fi
   return 0
 }
 

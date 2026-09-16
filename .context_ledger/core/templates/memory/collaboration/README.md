@@ -308,8 +308,9 @@ checks.
   conflicts even when the files differ; negotiate them explicitly.
 - At integration time, merge/rebase each product branch into the shared
   branch in dependency order. Never force-push over a peer's work.
-- Normal durable files (`tasks/backlog.md` — a live queue, delete a line
-  when its item is done — `plans/decisions.md`, and
+- Normal durable files (`tasks/backlog.md` — a capped work queue, delete
+  a row when its item is done, overflow to `tasks/parking-lot.md` —
+  `plans/decisions.md`, and
   session logs) are updated after the collaboration event trail is
   published. If two agents need the same durable file, one agent owns
   that update or peers merge it after rebasing; do not use those files as

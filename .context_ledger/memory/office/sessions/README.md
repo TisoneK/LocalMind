@@ -38,8 +38,9 @@ live office. See `ledger-history status`.
 > **Permanent context must never depend exclusively on an individual
 > session.** If Session 47 discovers an architectural decision worth
 > keeping, that decision gets promoted out of the notes into its proper
-> file (the office's `plans/decisions.md`, `tasks/backlog.md`,
-> `inefficiencies/log.md`, `flaws/log.md` — or, for facts that must
+> file (the office's `plans/decisions.md`, `tasks/backlog.md` for
+> actionable work or `tasks/parking-lot.md` for a finding/question that
+> isn't work yet, `inefficiencies/log.md`, `flaws/log.md` — or, for facts that must
 > outlive this office entirely, the durable memory at the `memory/`
 > root: `user/preferences.md`, `system/`, `overrides/rules.md`).
 > Deleting Session 47's notes afterwards cannot damage the project's

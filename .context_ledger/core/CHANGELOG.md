@@ -10,6 +10,50 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 1.2.0 — 2026-09-15
+
+**The backlog becomes a capped work queue, and what was never work moves
+to a new parking lot.** A backlog row is a promise to act; for a while
+the template invited every kind of note into the queue — research
+findings, design questions, deferred ideas, "someday" items — and the
+result was a 57-row document posing as a queue: the header said "delete
+rows when done", the culture said never lose information, so nothing
+left and nothing got worked. The two roles split:
+
+- `tasks/backlog.md` (template rewritten) holds actionable work only —
+  the test for a row is "can an agent start on this and finish it?" —
+  capped at `backlog_cap` (default 20, `workflows/history.conf`).
+  Adding a row past the cap means pruning the lowest-value open row
+  first, to the parking lot or the bin. Done rows and stale rows are
+  deleted, not annotated. `ledger-mem check` reports a warn-only nudge
+  past the cap (both ports; the cap is read from `history.conf`, so a
+  project can raise it by intent).
+- `tasks/parking-lot.md` (new template) is the knowledge base:
+  Findings / Open questions / Deferred work / Someday, `P-<date>-<n>`
+  IDs, no cap, no urgency. A parking-lot row is not a task; when one
+  grows an owner and a next step, it is promoted to the queue.
+- Office close re-seeds WORK, not knowledge: the fresh backlog inherits
+  only rows with an active owner or a clear next step; parking-lot
+  content survives the close in the permanent record (`Open threads`),
+  not in the queue. Both `ledger-history` ports' pre-close checklists,
+  record templates, and post-close messages carry the rule.
+- Schema (md + json), both protocol editions (startup reads, door-close
+  re-seed, deep-scan, promotion routing, pitfalls, report template),
+  and the AGENTS / kickoff / ledger-README / sessions / collaboration
+  templates updated to match. Tests 36 → 41: at-cap silent, over-cap
+  warn-only, `backlog_cap` conf override, ps1 parity, and the
+  work-not-knowledge checklist line.
+
+No existing file moves or renames; projects that never write a
+parking-lot file keep working — `check` only reads `backlog.md`.
+
+- **Migration:** none required. `ledger-sync update` to 1.2.0 seeds
+  `tasks/parking-lot.md` in new offices; existing offices can add the
+  file by copying the template and splitting non-actionable rows out of
+  the live backlog at the next convenient session.
+
+---
+
 ## 1.1.3 — 2026-09-14
 
 **Harvest reaches office-era projects, and the core's own path pointers

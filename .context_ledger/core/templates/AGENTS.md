@@ -60,6 +60,8 @@ If you read nothing else, obey these rules:
    past S020), the office is full: close it before working
    (`ledger-history close`, dry run then `--confirm`), fill the
    permanent record, re-seed open threads into the fresh office —
+   backlog rows only with an active owner or a clear next step (the
+   rest is knowledge, not work: record it in the permanent record) —
    re-seeded entries describe the work in plain words and never cite
    old session numbers or codenames — then sign the new board;
    codenames restart at `S001`. Then choose the mode
@@ -98,11 +100,17 @@ If you read nothing else, obey these rules:
    explicitly marked `RESOLVED`/`superseded`/fixed move verbatim into the
    log's `archive.md`; 3+ entries hitting the same recurring thing roll up
    into one `Recurring` entry (instances archived verbatim);
-   `ledger-mem prune` reports all three. `office/tasks/backlog.md` is a live queue
-   arranged as priority-grouped tables: add each open item as a row in
-   its priority table (High/Medium/Low, `ID | Summary`), delete the row
-   when its item is finished (the completion record is the session
-   entry + commit, not a tombstone); `ledger-mem closeout` sweeps
+   `ledger-mem prune` reports all three. `office/tasks/backlog.md` is a
+   capped work queue of ACTIONABLE items (default ~20 rows): add a row
+   to its priority table only when an agent can start on it and finish
+   it (`ID | Summary`, one line, context lives where it's pointed);
+   delete the row when its item is finished or stale (the completion
+   record is the session entry + commit, not a tombstone); past the
+   cap, prune the lowest-value row to the parking lot first. Findings,
+   open questions, deferred and someday items are not queue rows — they
+   go to `office/tasks/parking-lot.md` (grouped by kind, uncapped),
+   which promotes into the backlog when an item turns actionable.
+   `ledger-mem check` warns past the cap; `ledger-mem closeout` sweeps
    checked-off tombstones from legacy checkbox-format backlogs.
    *Update-in-place* registries
    (`system/ai-models.md`, `system/environments.md`) have one entry per key:

@@ -54,7 +54,7 @@ Generation rules for the bootstrapping agent:
 - **Live application:** N/A (local-first Electron desktop app)
 - **Git identity:** Tisone Kironget `tisonkironget@gmail.com`
 - **Protocol:** vendored at `.context_ledger/core/` (version: see `.context_ledger/core/VERSION`)
-- **Package upstream (core updates + flaw back-ports):** <https://github.com/TisoneK/context-ledger.git
+- **Package upstream (core updates + flaw back-ports):** https://github.com/TisoneK/context-ledger.git
 - **Edition routing:** local agents → `.context_ledger/core/rules/ai-engineering-protocol-local.md`; cloud/sandbox agents → `.context_ledger/core/rules/ai-engineering-protocol.md`
 
 ## Session Parameters
@@ -144,10 +144,13 @@ part of check-in: `sh .context_ledger/core/bin/ledger-history close`
 (dry run prints the checklist; re-run with `--confirm`; Windows: the
 `.cmd` launcher). Fill in the permanent record `history/office-<NNN>.md`
 and re-seed the open threads that still matter into the fresh office's
-`backlog.md` / `decisions.md` / logs — re-seeded entries describe the
-work in plain words and **never cite the closed office's session numbers
-or codenames** ("as fixed in S014"), which point into the frozen copy the
-new office never reads. Then sign the NEW roster: same name, codename
+`backlog.md` / `decisions.md` / logs — backlog rows only when they have
+an active owner or a clear next step (the rest is knowledge, not work:
+record it in the permanent record, don't re-seed it) — re-seeded entries
+describe the work in plain words and **never cite the closed office's
+session numbers or codenames** ("as fixed in S014"), which point into
+the frozen copy the new office never reads. Then sign the NEW roster:
+same name, codename
 `S001` — numbering restarts in a new office, and old-office numbers never
 carry over. (Schema: "The door trigger — a full office closes at
 check-in".)

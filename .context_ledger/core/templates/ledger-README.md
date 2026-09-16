@@ -24,7 +24,8 @@ is committed to git and travels with the repo. It has **two zones**:
 │   │   ├── agents/sessions.md      # append-only session registry
 │   │   ├── agents/roster.md        # the "who's in the office now" board — sign here FIRST, before the deep read
 │   │   ├── tasks/current.md        # task in progress (single-agent lock only)
-│   │   ├── tasks/backlog.md        # live queue of open items, priority-grouped tables (delete the row when done)
+│   │   ├── tasks/backlog.md        # capped work QUEUE — actionable items only (delete the row when done; overflow → parking lot)
+│   │   ├── tasks/parking-lot.md    # knowledge BASE — findings, questions, deferred/someday (uncapped, not a queue; promote to backlog when actionable)
 │   │   ├── plans/decisions.md      # append-only ADRs
 │   │   ├── flaws/log.md            # protocol friction — flows upstream to the package
 │   │   ├── inefficiencies/log.md   # project friction

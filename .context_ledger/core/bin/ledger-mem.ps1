@@ -26,6 +26,18 @@ $ledgerDir = Split-Path -Parent $coreDir
 $projectDir = Split-Path -Parent $ledgerDir
 $memoryDir = Join-Path $ledgerDir 'memory'
 $officeDir = Join-Path $memoryDir 'office'
+$configFile = Join-Path $memoryDir 'workflows/history.conf'
+
+function Get-Conf { param([string]$Key, [int]$Default)
+  # same reader as ledger-history (numeric values only)
+  if (Test-Path -LiteralPath $configFile) {
+    foreach ($raw in Get-Content -Encoding UTF8 -LiteralPath $configFile) {
+      $line = $raw.TrimEnd("`r")
+      if ($line -match "^$Key=(\d+)\s*$") { return [int]$matches[1] }
+    }
+  }
+  return $Default
+}
 
 function Usage {
   @(
@@ -37,7 +49,9 @@ function Usage {
     '          roster row with no Status cell (the at-a-glance column), a',
     '          roster row whose Session N is already in agents/sessions.md',
     '          means the session never clocked out, and a duplicated',
-    '          Session N means a resumed session re-logged',
+    '          Session N means a resumed session re-logged; plus a',
+    '          warn-only backlog-cap check (rows past backlog_cap in',
+    '          workflows/history.conf - prune to parking-lot.md)',
     '  lint    .context_ledger vocabulary (ADR-N, bug IDs, .context_ledger/ paths) leaking',
     '          into product artifacts - the staged diff by default; --tree',
     '          sweeps every tracked product file (strip leaks old sessions left)',
@@ -50,7 +64,7 @@ function Usage {
     "          instances archived verbatim); --list names them. Never",
     '          moves or deletes - reports only.',
     '  closeout delete finished backlog items (- [x] tombstones) from the',
-    '          tasks/backlog.md live queue - open work stays. Dry run by',
+    '          tasks/backlog.md work queue - open work stays. Dry run by',
     '          default (lists the tombstones); --confirm deletes. Every',
     '          deleted line stays recoverable in git history; the completion',
     "          record is the finishing session's entry + commit.",
@@ -205,6 +219,22 @@ function Check-BacklogTombstones {
   $n = @(Get-Content -Encoding UTF8 -LiteralPath $f | Where-Object { $_ -match '^\s*[-*+]\s+\[[xX]\]' }).Count
   if ($n -gt 0) {
     Say ('WARN backlog.md: {0} finished item(s) still sit checked off (- [x]) - the backlog holds open work only; run ledger-mem closeout to sweep them (git history keeps the lines)' -f $n)
+  }
+}
+
+function Check-BacklogCap {
+  # The backlog is a capped WORK QUEUE (core 1.2.0) - actionable items only,
+  # default ~20 rows (backlog_cap in workflows/history.conf). Past the cap the
+  # add-a-row rule becomes prune-a-row: the lowest-value open row goes to
+  # parking-lot.md (still valuable) or is deleted (not). Warns only - the
+  # queue is a working set, not a hard limit. Counted as table rows carrying
+  # a B-<date> ID (headers, separators, and template comments are not rows).
+  $f = Join-Path $officeDir 'tasks/backlog.md'
+  if (-not (Test-Path -LiteralPath $f)) { return }
+  $cap = Get-Conf 'backlog_cap' 20
+  $n = @(Get-Content -Encoding UTF8 -LiteralPath $f | Where-Object { $_ -match '^\s*\|\s*B-[0-9]' }).Count
+  if ($n -gt $cap) {
+    Say ('WARN backlog.md: {0} actionable rows past the cap of {1} - the queue is a working set, not an archive; prune the lowest-value open row to tasks/parking-lot.md (or delete it) before adding another (raise backlog_cap in workflows/history.conf only by intent)' -f $n, $cap)
   }
 }
 
@@ -363,6 +393,7 @@ switch ($Command) {
     Check-RosterStale
     Check-DupSessions
     Check-BacklogTombstones
+    Check-BacklogCap
     if ($ok1 -and $ok2 -and $ok3) { Say 'memory check passed: no duplicate keys in the update-in-place registries'; exit 0 }
     ErrLine 'memory check failed: a registry has more than one entry for a key - correct in place (edit the entry), do not append a duplicate'
     exit 1

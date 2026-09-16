@@ -32,6 +32,8 @@
 #                     (legacy key group_size is still read)
 #   history_keep=3    frozen offices kept readable in history/ before zipping
 #   archive_keep=12   tarballs kept in archive/ before gc deletes oldest-first
+#   backlog_cap=20    rows the new office's work queue holds before pruning
+#                     (read by ledger-mem check, not by this tool)
 
 set -u
 
@@ -50,7 +52,7 @@ SESSIONS_MD=$OFFICE_DIR/agents/sessions.md
 CONFIG=$MEMORY_DIR/workflows/history.conf
 OFFICE_TPL=$CORE_DIR/templates/memory/office
 
-usage() { sed -n '16,34p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '16,36p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 
 conf() { # $1 key, $2 default
   _v=""
@@ -113,6 +115,10 @@ preclose_checklist() {
   say "    Accomplished / Decisions still in force / Open threads"
   say "  - re-seed open threads that still matter into the NEW office's files"
   say "    (backlog / flaws / decisions) — the only carryover there is"
+  say "  - re-seed WORK, not knowledge: backlog.md rows only for actionable"
+  say "    items with an active owner or a clear next step; the old office's"
+  say "    parking-lot findings/questions/someday items go in the permanent"
+  say "    record (Open threads), not into the fresh queue"
   say "  - re-seeded entries describe the work in plain words: they never cite"
   say "    this office's session numbers or codenames (S014, Session 12) —"
   say "    those live in the frozen copy the new office never reads; the new"
@@ -209,7 +215,7 @@ cmd_close() {
     printf -- '- Opened: %s\n- Closed: %s\n- Sessions: %s\n' "$_opened" "$(today)" "$_c"
     [ -n "$_milestone" ] && printf -- '- Milestone: %s\n' "$_milestone"
     printf '\nThe frozen office lives at history/office-%s/ until it is zipped into\narchive/office-%s.tar.gz. This record stays in history/ forever — even after\nthe tarball is garbage-collected, the office is never forgotten. Not read at\nsession start; deliberate lookback only.\n\n' "$_n" "$_n"
-    printf "<!-- FILL IN before committing the close — this is the office's permanent memory:\n## Accomplished\n- <what this office achieved — releases, milestones, work worth remembering>\n\n## Decisions still in force\n- <ADRs / working agreements the next office must respect — or \"none\">\n\n## Open threads\n- <items re-seeded into the new office's backlog / flaws / decisions — or \"none\">\n-->\n"
+    printf "<!-- FILL IN before committing the close — this is the office's permanent memory:\n## Accomplished\n- <what this office achieved — releases, milestones, work worth remembering>\n\n## Decisions still in force\n- <ADRs / working agreements the next office must respect — or \"none\">\n\n## Open threads\n- <actionable items re-seeded into the new office's backlog (owner / next step),\n  plus the parking-lot findings, questions, and someday items worth keeping —\n  this record is where knowledge survives a close; the fresh queue does not\n  inherit it — or \"none\">\n-->\n"
   } > "$_record" || die "could not write $_record"
   say "wrote $_record (fill it in before committing)"
 
@@ -219,7 +225,9 @@ cmd_close() {
   roll_oldest_office_to_archive
   say ""
   say "Then, before committing: fill in $_record and re-seed open threads into the"
-  say "new office's backlog / flaws / decisions — only what still matters."
+  say "new office's backlog / flaws / decisions — only what still matters, and"
+  say "into the backlog only actionable work with an owner or next step (the"
+  say "parking lot's findings/questions go in the record, not the new queue)."
   say ""
   say "Commit as: chore(ledger): close office-$_n, open a fresh office"
 }
