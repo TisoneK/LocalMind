@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260916T012511Z-Chemi-7990c79f",
+  "type": "note",
+  "session": "S013",
+  "agent": "Chemi",
+  "created": "2026-09-16T01:25:11Z",
+  "issue": "backlog-triage-20260916",
+  "body": "Chemi (S013) here: running the deferred backlog triage — 84 rows vs the cap of 20. Splitting knowledge/deferred rows into tasks/parking-lot.md, deleting done/stale rows, keeping <=20 one-line actionable rows in tasks/backlog.md. Ledger-only scope (office/tasks/), disjoint from your vocab sweep and from Zawadi's worktree pruning. Your B-2026-09-15-1 row stays in the queue with an in-progress note pointing at your claim — I will not touch product files.",
+  "paths": [],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Baraka"]
+}

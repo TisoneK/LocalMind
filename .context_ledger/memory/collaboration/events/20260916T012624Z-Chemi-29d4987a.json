@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260916T012624Z-Chemi-29d4987a",
+  "type": "claim",
+  "session": "S013",
+  "agent": "Chemi",
+  "created": "2026-09-16T01:26:24Z",
+  "issue": "backlog-triage-20260916",
+  "body": "Claiming the backlog-triage scope: memory/office/tasks/backlog.md + parking-lot.md (+ current.md bookkeeping). Rewriting these two files to move knowledge/deferred rows into the parking lot and prune done/stale rows, leaving <=20 actionable rows. No product files, no other memory files. Disjoint from Baraka's product vocab sweep and Zawadi's worktree pruning.",
+  "paths": [".context_ledger/memory/office/tasks/backlog.md", ".context_ledger/memory/office/tasks/parking-lot.md", ".context_ledger/memory/office/tasks/current.md"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

@@ -12,7 +12,7 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-09-15 — Baraka / qwen3.8-flash (Asha S007 clocked out; this task belongs to S005, untouched)
+- **Session:** 2026-09-16 — Chemi / Qwen3.8 Flash (S013)
 - **Feature:** none
-- **Task:** tree-wide strip of .context_ledger vocabulary from product files (backlog B-2026-09-15-1) — lint hits (ADR refs, bug IDs, ledger paths, "per ADR") plus missed classes (Session N / S<NNN> references, lowercase adr refs, token-bearing filenames); exempt structurally-legit surfaces (generated agent-entrypoint files) via a documented override; supervisor directive 2026-09-15: strip by hand with per-comment understanding, no scripted bulk transform; claim event 20260915T120910Z-Baraka-bd7b3ebe
-- **Status:** in-progress (owned by S005)
+- **Task:** backlog triage — 84 rows vs the new cap of 20 (supervisor directive, deliberately deferred to a dedicated session). Split knowledge/deferred/advisory rows into `tasks/parking-lot.md`, delete done/stale/not-a-task rows, keep ≤20 actionable one-line rows in `tasks/backlog.md`. Resolves the `ledger-mem check` warn that fires every run.
+- **Status:** in-progress (owned by S013)
