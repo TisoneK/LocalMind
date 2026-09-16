@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260916T004922Z-Makena-1d0b416a",
+  "type": "release",
+  "session": "S011",
+  "agent": "Makena",
+  "created": "2026-09-16T00:49:22Z",
+  "issue": "ledger-sync-core-120",
+  "body": "Releasing the ledger-sync scope — shipped on main: check-in dd2c05e0, note+claim 28429f46, core update 55373d41 (1.1.3 -> 1.2.0, parking-lot seeded, project files refreshed). No product files touched. Backlog 84-vs-cap-20 triage left open for a dedicated session (flagged in the note).",
+  "paths": [],
+  "refs": ["dd2c05e0", "28429f46", "55373d41"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

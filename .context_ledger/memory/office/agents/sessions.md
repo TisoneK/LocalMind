@@ -132,3 +132,15 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** none from this fix; owner notes — candidates restore-only by design (no SSE bridge; chat.py doesn't forward generic obs events and the list was never live-rendered); a live best_of_n bridge + multi-edit-per-turn diff persistence remain open if the supervisor wants them.
 - **Notes:** none beyond the report
 - **Report:** .context_ledger/memory/office/reviews/2026-09-15-review-s009-reload-fields.md
+
+---
+## 2026-09-16 — Session 11
+- **Agent:** Makena (VS Code Copilot local) | **Model:** Qwen3.8 Flash | **Platform:** Windows 11, tison checkout (main tree) | **Role:** engineer (ledger sync) | **Core:** 1.2.0
+- **Task:** supervisor directive "Sync ledger" — pull, verify/status the vendored core, apply the available same-MAJOR update, land everything committed and pushed.
+- **Commits:** 4 ledger (check-in `dd2c05e0`, note+claim `28429f46`, core update `55373d41`, release+bookkeeping this commit); zero product commits.
+- **Outcome:** done — tree clean and level with origin before sync; `ledger-sync verify` green (1.1.3); `status` surfaced 1.2.0 at the local upstream (C:\Users\tison\Dev\context-ledger), applied via `ledger-sync update` (same-MAJOR, core-only, memory untouched). Project files refreshed to match the 1.2.0 templates per the migration's fill step: kickoff.md close-section re-seed wording + stray `<` typo in the upstream URL fixed, AGENTS.md rules 5–6 (capped work queue + parking-lot knowledge base), active.md version line → 1.2.0, collaboration/README.md + office/sessions/README.md backlog descriptions; `tasks/parking-lot.md` seeded in the office (template copy).
+- **Verification:** post-update `ledger-sync verify` green (migration ran it); `ledger-mem check` green except the designed warn-only backlog nudge (84 rows vs cap 20 — triage deliberately NOT done this session, it is a content task; flagged in the note event); conflict-markers + backlog-duplicates checks pass via Git Bash (the gate runner's `sh` teeth still missing on bare Windows PATH — known flaw, not re-logged). Pre-commit product legs (tsc/ruff) not applicable: commit touches zero product files.
+- **Coordination:** Baraka (S005) row live on the board but silent ~7h (last main commit 21:19, work on `origin/collab/S005/baraka`, clean tree) — treated as possibly-returning, not adopted, not removed. Light path per collaboration README: note (heads-up, disjoint scope) + claim (ledger-only paths) + release (citing dd2c05e0,28429f46,55373d41). Additive roster edit; staged explicit paths only, never `git add -A`.
+- **Open items:** backlog triage — 84 rows vs the new cap: split knowledge (findings/questions/deferred) into `tasks/parking-lot.md`, prune finished/stale rows, keep ≤20 actionable (candidate for a dedicated session; the `ledger-mem check` warn fires until then). Current office carries a stale-row hazard: S005's row + the current.md claim predate this session; if Baraka does not return before the office closes, the closing session decides disposition.
+- **Notes:** none beyond this entry
+- **Report:** none (sync session — this entry is the record)
