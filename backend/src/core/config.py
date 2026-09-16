@@ -172,12 +172,12 @@ class Settings(BaseSettings):
     gemini_model: str = ""
     chutes_model: str = ""
     zai_model: str = ""
-    # ADR-9: ZenMux — IMPLEMENTED BUT UNTESTED (smoke test blocked).
+    # ZenMux — IMPLEMENTED BUT UNTESTED (smoke test blocked).
     zenmux_model: str = ""
-    # ADR-55: BankOfAI (B.AI) — api.bankofai.io, live-tested (Session 321).
+    # BankOfAI (B.AI) — api.bankofai.io, live-tested.
     bankofai_model: str = ""
     # OmniRoute — self-hosted OpenAI-compatible gateway (localhost:20128/v1);
-    # base_url env-overridable via OMNIROUTE_BASE_URL. Session 405.
+    # base_url env-overridable via OMNIROUTE_BASE_URL.
     omniroute_model: str = ""
 
     # Server
@@ -208,7 +208,7 @@ class Settings(BaseSettings):
     localmind_code_exec_timeout: int = 30
     localmind_code_exec_enabled: bool = True
 
-    # Shell tool — Session 31: enabled by default. LocalMind is a local-first
+    # Shell tool — enabled by default. LocalMind is a local-first
     # app where the user explicitly wants to run commands. Disabling shell by
     # default made every shell request silently fail with a misleading error.
     localmind_shell_enabled: bool = True
@@ -225,7 +225,7 @@ class Settings(BaseSettings):
     localmind_response_reserve_tokens: int = 2048
     localmind_history_max_tokens: int = 4096
 
-    # ADR-19 P3 (Session 179): LLM-guided value scoring of history messages
+    # LLM-guided value scoring of history messages
     # — when enabled, one LLM call scores each message 0-1 and the
     # summarizer compresses the LOWEST-value messages instead of the oldest
     # 50%. OFF by default (design.md §6: "too slow for free-tier; the
@@ -240,7 +240,7 @@ class Settings(BaseSettings):
     # Intent-specific timeouts (seconds) — override per model/environment in .env
     # chat is 180 (was 90): local models generate at <1-2 tok/s on CPU/small
     # GPUs, so a legitimately short reply can exceed 90s — the loop's per-call
-    # cap reads this same knob for slow providers (Session 288).
+    # cap reads this same knob for slow providers.
     ollama_timeout_chat: int = 180
     ollama_timeout_web_search: int = 180
     ollama_timeout_file_task: int = 180
@@ -252,7 +252,7 @@ class Settings(BaseSettings):
     # browse is a single interactive command (open+extract, each internally
     # bounded to 30s); web_research chains search+fetch+optional JS render.
     # Both previously fell through to the 180s default, so a hung browser op
-    # ran the full 180s (B-2026-09-01 browser slowness). Right-size them.
+    # ran the full 180s (browser slowness, live finding). Right-size them.
     ollama_timeout_browse: int = 60
     ollama_timeout_web_research: int = 120
     ollama_timeout_default: int = 180
@@ -268,10 +268,10 @@ class Settings(BaseSettings):
     # (Note: localmind_agent_max_iterations was REMOVED — it was dead code
     # never read by anything. The loop's iteration cap comes from
     # LOCALMIND_MAX_ITERATIONS (constants.py) or the selected agent's
-    # AgentConfig.max_iterations per ADR-8 Phase 2.)
+    # AgentConfig.max_iterations.)
     localmind_agent_enabled: bool = True
 
-    # ADR-41 (Session 254): reasoning-model thinking policy (z.ai/GLM).
+    # Reasoning-model thinking policy (z.ai/GLM).
     # "enabled" (default) lets GLM reason before answering — disabling it
     # made glm-4.5-flash emit ~28-token terse answers. "disabled" opts out
     # for latency-sensitive use. GLM-5.3+ ignores this (z.ai rejects
@@ -298,14 +298,14 @@ class Settings(BaseSettings):
     # LOCALMIND_REASONING_EFFORT / Settings UI.
     localmind_reasoning_effort: str = ""
 
-    # B-2026-08-23-27: startup session behavior — "resume" auto-opens the
+    # Startup session behavior — "resume" auto-opens the
     # most recent session on launch; "new" starts with a blank chat.
     localmind_startup_session: str = "new"
 
     # Permission gates — require user confirmation before write/delete
     localmind_require_write_permission: bool = False
 
-    # B-2026-08-23-33: Configurable operation permissions (global, not per-session).
+    # Configurable operation permissions (global, not per-session).
     # Maps tool-family keys to allow/deny booleans. Loaded from settings.json
     # via load_runtime_settings().
     localmind_permissions: dict = {
@@ -319,7 +319,7 @@ class Settings(BaseSettings):
         "memory_op": True,
     }
 
-    # B-2026-08-23-34: Chat mode — “auto” (classifier decides), “agent”
+    # Chat mode — “auto” (classifier decides), “agent”
     # (always full agent loop), “direct” (no tools, lightweight chat).
     localmind_chat_mode: str = "auto"
 
@@ -397,7 +397,7 @@ class Settings(BaseSettings):
             if not content.strip():
                 return
             data = json.loads(content)
-            # S428 security fix: `data` contains api_keys with PLAINTEXT key
+            # Security: `data` contains api_keys with PLAINTEXT key
             # values — logging the whole dict wrote every provider key to the
             # server log in plaintext. Log the key NAMES only.
             _api_keys = data.get("api_keys")
@@ -420,7 +420,7 @@ class Settings(BaseSettings):
                         setattr(self, model_key, data["model"])
                         logger.info(f"[config] Set {model_key} to {data['model']}")
             # Ollama chat model — dedicated key so it survives restarts and never
-            # cross-contaminates with a cloud provider's model (Session 292).
+            # cross-contaminates with a cloud provider's model.
             if data.get("ollama_model"):
                 self.ollama_model = str(data["ollama_model"])
                 logger.info(f"[config] Set ollama_model to {data['ollama_model']}")
@@ -458,11 +458,11 @@ class Settings(BaseSettings):
                     logger.info(f"[config] Set ollama_num_ctx to {self.ollama_num_ctx}")
                 except (TypeError, ValueError):
                     logger.warning(f"[config] Ignoring invalid num_ctx: {data['num_ctx']!r}")
-            # Shell-tool enable flag (Session 292: UI toggle, persisted).
+            # Shell-tool enable flag (UI toggle, persisted).
             if "shell_enabled" in data:
                 self.localmind_shell_enabled = bool(data["shell_enabled"])
                 logger.info(f"[config] Set localmind_shell_enabled to {self.localmind_shell_enabled}")
-            # ADR-41 (Session 254): reasoning-model thinking policy
+            # Reasoning-model thinking policy
             # (settings.json keys written by POST /api/settings/thinking).
             if "thinking" in data:
                 self.localmind_thinking = str(data["thinking"])
@@ -475,7 +475,7 @@ class Settings(BaseSettings):
                 self.localmind_reasoning_max_wall_clock_secs = float(data["reasoning_max_wall_clock"])
             if "reasoning_effort" in data:
                 self.localmind_reasoning_effort = str(data["reasoning_effort"])
-            # B-2026-08-23-27: startup session behavior ("resume" | "new").
+            # Startup session behavior ("resume" | "new").
             if "startup_session" in data:
                 val = str(data["startup_session"]).strip().lower()
                 if val in ("resume", "new"):
@@ -483,7 +483,7 @@ class Settings(BaseSettings):
                     logger.info(f"[config] Set startup_session to {val}")
                 else:
                     logger.warning(f"[config] Ignoring invalid startup_session: {data['startup_session']!r}")
-            # B-2026-08-23-34: chat mode ("auto" | "agent" | "direct").
+            # Chat mode ("auto" | "agent" | "direct").
             if "chat_mode" in data:
                 val = str(data["chat_mode"]).strip().lower()
                 if val in ("auto", "agent", "direct"):
@@ -491,7 +491,7 @@ class Settings(BaseSettings):
                     logger.info(f"[config] Set chat_mode to {val}")
                 else:
                     logger.warning(f"[config] Ignoring invalid chat_mode: {data['chat_mode']!r}")
-            # B-2026-08-23-33: operation permissions
+            # Operation permissions
             if "permissions" in data:
                 perms = data["permissions"]
                 if isinstance(perms, dict):
@@ -635,10 +635,10 @@ class Settings(BaseSettings):
             "gemini": "GEMINI_API_KEY",
             "chutes": "CHUTES_API_KEY",
             "zai": "ZAI_API_KEY",
-            # ADR-9: ZenMux — IMPLEMENTED BUT UNTESTED (smoke test blocked,
-            # free plan has no API access). See ADR-9 for details.
+            # ZenMux — IMPLEMENTED BUT UNTESTED (smoke test blocked,
+            # free plan has no API access). Untested until a paid key exists.
             "zenmux": "ZENMUX_API_KEY",
-            # ADR-55: BankOfAI (B.AI) — api.bankofai.io, live-tested.
+            # BankOfAI (B.AI) — api.bankofai.io, live-tested.
             "bankofai": "BANKOFAI_API_KEY",
             # OmniRoute — self-hosted gateway; dashboard key as Bearer.
             "omniroute": "OMNIROUTE_API_KEY",

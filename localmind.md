@@ -71,7 +71,7 @@ alone, without calling a tool.
 
 ## Agent Registry (v0.6)
 
-LocalMind uses 8 specialized agents (ADR-6), each with a scoped toolset:
+LocalMind uses 8 specialized agents, each with a scoped toolset:
 
 | Agent | Tools | Role |
 |---|---|---|

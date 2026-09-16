@@ -30,7 +30,7 @@ class SessionListItem(BaseModel):
 def _agent_written_paths(tool_calls) -> list[str]:
     """Recover file paths the agent wrote from the persisted tool timeline.
 
-    B-2026-08-23-3: the live `done` SSE carries the last written path but the
+    The live `done` SSE carries the last written path but the
     stored message only kept user-attached files. The tool-call timeline is
     the durable record — file_write tool_args are "path:\n\ncontent" and
     edit_file/propose_write_file tool_args are JSON with a "path" key. Dedupes
@@ -102,7 +102,7 @@ async def list_sessions():
             except (ValueError, OSError):
                 formatted_date = ""
 
-        # B-2026-08-23-17: expose the session's artifact folder so the UI
+        # Expose the session's artifact folder so the UI
         # (Files tab, previews) can point at where this session's files live.
         try:
             from core.session_workspace import workspace_path
@@ -157,16 +157,16 @@ async def get_history(session_id: str):
             "timestamp": m.timestamp,
         }
 
-        # Session 266: restore the per-turn artifacts the frontend showed live
+        # Restore the per-turn artifacts the frontend showed live
         # (thinking block, error card, tool-step pills, per-turn metrics). They
         # are persisted with the assistant message and must survive a reload.
         if m.thinking:
             message["thinking"] = m.thinking
-        # Session 290: the ADR-36 opening acknowledgement line.
+        # The opening acknowledgement line.
         if getattr(m, "acknowledgement", None):
             message["acknowledgement"] = m.acknowledgement
         if m.error:
-            # ADR-20: normalize ONCE at the presentation boundary — the stored
+            # Normalize ONCE at the presentation boundary — the stored
             # raw string becomes the canonical object the frontend renders.
             message["error"] = normalize_error(m.error)
         if m.tool_calls:
@@ -201,7 +201,7 @@ async def get_history(session_id: str):
             message["diffData"] = m.diff_data
         if getattr(m, "candidates", None):
             message["candidates"] = m.candidates
-        # Session 267: restore the Agent Workspace run tree + phase strip
+        # Restore the Agent Workspace run tree + phase strip
         # (frontend AgentRun[] / AgentPhase[] shapes — already camelCase).
         if m.agent_runs:
             message["agentRuns"] = m.agent_runs
@@ -219,7 +219,7 @@ async def get_history(session_id: str):
             ]
 
         # Add file results if present — both the user's attached files AND
-        # (B-2026-08-23-3) the files the agent wrote during the turn. The
+        # the files the agent wrote during the turn. The
         # agent-written paths are recovered from the persisted tool-call
         # timeline: file_write tool_args are "path:\n\ncontent" and edit_file
         # tool_args are JSON with a "path" key. This keeps the export (and a
@@ -255,7 +255,7 @@ async def get_history(session_id: str):
 
 @router.get("/sessions/{session_id}/files")
 async def list_session_files(session_id: str):
-    """List the session's workspace artifacts recursively (B-2026-08-23).
+    """List the session's workspace artifacts recursively.
 
     Returns a flat list of files + folders inside the session's workspace
     folder (<localmind_home>/sessions/<id>), so the sidebar can render each
@@ -344,7 +344,7 @@ async def list_session_files(session_id: str):
 async def delete_session(session_id: str):
     """Delete a session and all its messages.
 
-    Session 26: also clean up engine state (intent history, pending
+    Also clean up engine state (intent history, pending
     writes, pending clarifications, cached code, observations) to
     prevent unbounded memory growth and state leaks across sessions.
     """
@@ -352,7 +352,7 @@ async def delete_session(session_id: str):
     if not deleted:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # B-2026-08-23-17: deleting a chat deletes its artifacts — the session's
+    # Deleting a chat deletes its artifacts — the session's
     # workspace folder under <localmind_home>/sessions/<id> (uploads + agent
     # files) goes with the DB row. Non-fatal: the DB deletion already happened.
     try:
@@ -366,7 +366,7 @@ async def delete_session(session_id: str):
             "[sessions] workspace cleanup failed for %s: %s", session_id[:8], e
         )
 
-    # Session 26: clean up engine per-session state dicts
+    # Clean up engine per-session state dicts
     try:
         from api.routes.chat import _engine
 
@@ -385,5 +385,5 @@ async def delete_session(session_id: str):
 
 @router.get("/sessions/{session_id}/writes")
 async def get_session_writes(session_id: str):
-    """Return write-stats rows for a session (B-2026-08-23-37)."""
+    """Return write-stats rows for a session."""
     return _store.get_session_writes(session_id)

@@ -448,7 +448,7 @@ function createTray() {
 // ---------------------------------------------------------------------------
 
 function createMainWindow() {
-  // ADR-34 B-11 + Session 234: deliberate LocalMind chrome.
+  // Deliberate LocalMind chrome.
   // - macOS: 'hiddenInset' keeps the native traffic lights but removes the
   //   title text; the TitleBar component renders in the inset space. The
   //   system provides the window controls, so the custom buttons are hidden.
