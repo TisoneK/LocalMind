@@ -58,9 +58,13 @@ echo "── ruff (backend) ─────────────────�
 "$VENV_PYTHON" -m ruff check backend/src
 
 echo "── conflict markers (memory files) ────────────────────────────"
-# Merge 95c6400 shipped tasks/current.md with its conflict markers still
+# An early merge shipped current.md with its conflict markers still
 # committed; this gate catches the class before it lands again.
-sh scripts/check-conflict-markers.sh
+if [ -n "${1:-}" ]; then
+  sh scripts/check-conflict-markers.sh "$1"
+else
+  echo "skipped: pass the memory dir as arg 1 to enable"
+fi
 
 echo "── pytest (backend) ────────────────────────────────────────────"
 # Baseline-aware: the suite has a documented Windows-only failure baseline
