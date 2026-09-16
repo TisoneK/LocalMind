@@ -1,4 +1,4 @@
--- Migration 009: Rolling ParentSession summary + readiness state (ADR-52 phase 2 / B-2026-08-20-1).
+-- Migration 009: Rolling ParentSession summary + readiness state.
 -- One row per chat session. The rolling summary compacts older turns so the
 -- parent prompt stays bounded on long conversations; the recent_tail holds
 -- the exact last N user/assistant pairs (verified evidence + user wording
