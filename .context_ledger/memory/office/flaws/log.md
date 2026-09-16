@@ -125,3 +125,28 @@ stays here as a live trap.
   fraction of the paths mentioned in its own body (a substring scan of the
   body for path-shaped tokens is enough), so the truncation fails loud at
   the door instead of mid-collision.
+
+---
+## 2026-09-16 — Zawadi / Qwen3.8 Flash (Session 12) — check-in pushed after the supervisor had to ask
+
+- **Flaw:** the check-in-first rule (AGENTS.md rule 5, kickoff Step 2) was
+  followed in the wrong order: I read the office files and ran the full
+  worktree audit before committing and pushing my roster row. The
+  supervisor had to ask "Have you checked in!!!!!" before the row went up.
+- **Symptom:** for several minutes the board showed peers (S005, and
+  Chemi arriving concurrently) with no S012 row — and the race actually
+  bit: Chemi and I both took S012 because neither board showed us at the
+  moment we read it. It self-resolved (Chemi renumbered to S013), but a
+  silent collision is exactly what rule 5 exists to prevent.
+- **Root cause:** the startup read list is long and the audit work was
+  already in the user's request, so "gather context first" pulled me past
+  "the push claims the codename". The protocol says the startup read
+  comes AFTER the row is pushed; my order inverted it with no mechanical
+  nudge to catch it.
+- **Suggested fix:** the kickoff Step 2 order is already explicit — the
+  gap is sequencing for agents that batch reads: make the roster+sessions
+  two-file read the FIRST tool calls of the session and block all other
+  reads/searches/commands until the check-in commit is pushed. A
+  `ledger-gates checkpoint` that fails when HEAD's roster lacks a row for
+  the session doing the checking would catch it mechanically.
+- **Status:** open
