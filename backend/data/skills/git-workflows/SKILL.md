@@ -12,7 +12,7 @@ description: Git best practices for working in this repo — clean commits, prot
   (`feat(tools):`, `fix(agent):`), `.context/` uses `chore(context):`.
 - Commit messages follow Conventional Commits: `type(scope): summary` +
   optional body. Reference the backlog id in the summary
-  (e.g. `feat(tools): delegate_parallel — ... (B-2026-08-02-6)`).
+  (e.g. `feat(tools): delegate_parallel — parallel delegation fan-out`).
 - Before committing: `git status --short` to confirm exactly what's staged;
   never `git add -A` blindly into a commit you can't describe.
 

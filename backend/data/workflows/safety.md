@@ -113,7 +113,7 @@ the specific action. The constraint is: don't act blind.
 - **Don't assume the world is in the state you expect.** Verify, then
   act on what's actually true.
 
-## Why this exists (Session 32)
+## Why this exists
 
 The user asked "Create hello world repo in C:\Users\tison\...\ProjectPhill".
 The model:

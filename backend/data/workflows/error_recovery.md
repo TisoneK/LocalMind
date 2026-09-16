@@ -2,7 +2,7 @@
 
 > For when a tool call, model call, or generation step fails. This is
 > the workflow that prevents silent hangs and swallowed exceptions —
-> the root cause of nearly every bug found in Sessions 21–27.
+> the root cause of nearly every bug found in early development.
 
 ## What "done" looks like
 
