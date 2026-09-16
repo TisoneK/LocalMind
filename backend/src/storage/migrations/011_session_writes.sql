@@ -1,5 +1,5 @@
 -- Migration 011: session_writes — durable lightweight write stats.
--- B-2026-08-23-37: one row per successful file write (session_id, path, tool,
+-- One row per successful file write (session_id, path, tool,
 -- bytes, lines, kind, timestamp). Capped at ~500 rows per session via
 -- pruning on insert. Deleted with the session (explicit delete — SQLite FK
 -- cascade requires PRAGMA foreign_keys = ON which is already set in the

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   LocalMind ships three palettes (graphite | iris | warm) in light and dark
-  (theming-multi-palette, Sessions 217-218; the Session-103 dark-only
+  (multi-palette; the earlier dark-only
   decision was reversed). The inline script below applies the user's stored
   choice to <html> before first paint so there is no theme flash; useTheme.ts
   is the runtime source of truth. Default = graphite dark.
@@ -24,7 +24,7 @@
           }
           el.setAttribute('data-theme', theme);
           el.setAttribute('data-mode', mode);
-          // B-2026-08-23-19: custom palette + tone — apply before first paint
+          // Custom palette + tone — apply before first paint
           // so a saved custom theme doesn't flash the default.
           if (theme === 'custom' && s.custom && s.custom.accent && s.custom.background && s.custom.surface && s.custom.text) {
             el.style.setProperty('--acc', s.custom.accent);

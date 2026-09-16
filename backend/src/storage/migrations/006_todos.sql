@@ -1,6 +1,6 @@
 -- Migration 006: Todos table — persistent task tracking for the UI TodoList panel.
--- Session 27: the todo API was a stub (returned []), the orchestrator wrote todos
--- to a per-turn scratch dir that the UI never saw. This table is the bridge:
+-- The todo API was once a stub (returned []) and the orchestrator wrote todos
+-- to a per-turn scratch dir the UI never saw. This table is the bridge:
 -- the engine writes todos here, the API reads them, the UI displays them.
 
 CREATE TABLE IF NOT EXISTS todos (

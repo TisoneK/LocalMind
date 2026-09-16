@@ -25,7 +25,7 @@ The requested change is:
    success without verification.
 
 3. **Use the workspace state.** The engine injects `git status` and
-   `git diff` into your context every turn (ADR-5). USE IT — check
+   `git diff` into your context every turn. USE IT — check
    what changed, catch errors, verify your edits landed correctly.
 
 4. **Follow existing conventions.** Match the codebase's style —
