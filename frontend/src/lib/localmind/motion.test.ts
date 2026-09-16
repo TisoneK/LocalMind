@@ -1,5 +1,5 @@
 /**
- * Tests for the shared motion primitive (Session 216 — realtime-alive-ui).
+ * Tests for the shared motion primitive.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';

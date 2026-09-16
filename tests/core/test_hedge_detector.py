@@ -188,7 +188,7 @@ async def test_gate_hedge_respects_iteration_cap():
 
 
 def test_recovery_nudge_includes_original_question():
-    """B-2026-08-20-13: the empty-reasoning recovery nudge must include
+    """The empty-reasoning recovery nudge must include
     the user's original question so the model can re-anchor. The old
     generic nudge caused the model to lose context ('I don't have any
     information about what the original task was')."""

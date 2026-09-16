@@ -1,5 +1,5 @@
 """
-Shared cache primitives (Session 135 addendum).
+Shared cache primitives.
 
 Consolidates the ad-hoc TTL caches that previously lived inline in several
 modules (api/routes/health.py reachability,
@@ -206,7 +206,7 @@ def memoize(
         copier=copier,
     )
 
-    # ── Per-key single-flight locks (Session 140) ────────────────────────
+    # ── Per-key single-flight locks ────────────────────────
     # Concurrent misses for the SAME key must compute ONCE, not N times: the
     # first caller to acquire the key's lock computes + stores, waiters re-
     # check the cache after acquiring and return the stored result. Mirrors

@@ -1,4 +1,4 @@
-"""ADR-34 B-8: Parent evidence and final-synthesis boundary.
+"""Parent evidence and final-synthesis boundary.
 
 Validates that:
 1. Tool output NEVER becomes the final assistant answer via a code shortcut.

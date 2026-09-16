@@ -2,7 +2,7 @@
 binary (real Chromium isn't available in CI / on every dev box).
 
 Verifies the browser_agent 'open' action end-to-end through the slowness fix
-(B-2026-09-01): navigate (open) + rendered-text extraction (eval) + ToolResult
+: navigate (open) + rendered-text extraction (eval) + ToolResult
 assembly still work with start_new_session=True, and page text comes back as
 evidence (not left in the browser window). Pairs with
 test_browser_cmd_timeout.py, which covers the hang-bounded timeout path.

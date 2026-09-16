@@ -8,7 +8,7 @@ model-owned initialization decision chooses between clarification and
 execution. This boundary is generic — it does not special-case individual
 capability questions.
 
-Problem (Session 21): A one-word greeting like "Hi" was burning 11.5s
+Problem: A one-word greeting like "Hi" was burning 11.5s
 and ~4.8k tokens because it entered capability inference before being
 classified as CHAT. That's massive overkill for inputs that are obviously
 conversational.
@@ -18,7 +18,7 @@ acknowledgments) and short-circuit them to a direct chat response — no
 capability inference, tool planning, or tool loop. The model just streams a
 direct reply.
 
-Session 68 / ADR-11 (B-2026-08-09-1): also short-circuit obviously
+Also short-circuit obviously
 conversational QUESTIONS ("What can you do?", "Who are you?", "Tell me
 about yourself"). Before this, such a question paid TWO sequential LLM
 calls (dispatcher capability-inference + chat generation) — verified as
@@ -61,7 +61,7 @@ from core.models import StreamChunk
 
 logger = logging.getLogger(__name__)
 
-# B-2026-08-25: capability assertion for the LIGHTWEIGHT reply paths (direct/
+# Capability assertion for the LIGHTWEIGHT reply paths (direct/
 # conversational) that don't carry the full agent system prompt. Without it the
 # model reverts to generic-LLM behavior and fabricates "I don't have access to
 # your filesystem" / "I can't do that" (user live-report — the false claim
@@ -173,7 +173,7 @@ _TRIVIAL_RE = re.compile(
 # We strip these before matching so "Hi!" matches the "hi" pattern.
 _TRIVIAL_PUNCT = "!.?.,;:"
 
-# Session 187: deterministic replies for PURE SOCIAL intents (greeting /
+# Deterministic replies for PURE SOCIAL intents (greeting /
 # farewell / thanks / acknowledgment). These carry no information request —
 # the user said "hi" and expects a greeting, NOT a rate-limit error card when
 # the free-tier provider is throttled. Yielding a canned reply here means the
@@ -188,7 +188,7 @@ _SOCIAL_REPLIES: dict[str, str] = {
 }
 
 
-# ── Conversational-question patterns (Session 68 / ADR-11) ───────────────────
+# ── Conversational-question patterns ─────────────────────────────────────────
 # Unlike the trivial patterns above, these do NOT match the whole message.
 # A conversational question must:
 #   1. START with an interrogative opener ("what", "who", "can you", "tell me", ...)
@@ -241,7 +241,7 @@ _CONVERSATIONAL_OPENERS = [
     r"what can you",
     r"what do you",
     r"how do you",
-    # Session 332-C: brainstorming/idea imperatives. These signal a
+    # Brainstorming/idea imperatives. These signal a
     # conversational request for suggestions/ideas — no tools, files, code,
     # or live data needed. The blocked-keyword guard below still catches
     # tool-bearing phrasings ("give me the weather", "suggest a script that
@@ -251,7 +251,7 @@ _CONVERSATIONAL_OPENERS = [
     r"propose",
     r"recommend",
     r"brainstorm",
-    # Session 335: knowledge-imperative openers. These signal a request
+    # Knowledge-imperative openers. These signal a request
     # for general-knowledge exposition — no tools, files, code, or live
     # data needed. Even when the message contains a blocked keyword like
     # "RAM" or "disk", the IMPERATIVE makes it clear the user wants an
@@ -271,7 +271,7 @@ _CONVERSATIONAL_OPENER_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Session 335: knowledge-imperative openers. When a message STARTS with one
+# Knowledge-imperative openers. When a message STARTS with one
 # of these, the user is asking for general-knowledge exposition ("Summarize
 # the difference between RAM and storage", "Compare TCP vs UDP"). The
 # blocked-keyword guard is bypassed because the imperative makes the intent
@@ -295,7 +295,7 @@ _KNOWLEDGE_IMPERATIVES = (
     "name",
 )
 
-# Session 335: debugging-context keywords that remain hard-blocked even
+# Debugging-context keywords that remain hard-blocked even
 # under knowledge imperatives. "explain this error message" is a debugging
 # request — the user has a real error and needs tool evidence (file reads,
 # shell output, code inspection) to debug it, not exposition about errors.
@@ -433,12 +433,12 @@ _CONVERSATIONAL_BLOCKED_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Session 400 (system-search-tool): first-person LOCAL-DISCOVERY questions
+# First-person LOCAL-DISCOVERY questions
 # ("where is my LocalMind project?", "where did I save that CV?", "do I
 # have multiple copies…", "what's on my computer?") are search questions —
 # they need system_search, not exposition. First-person phrasing (my/I/we)
 # is the discriminator: "where is the Eiffel Tower?" stays conversational.
-# Signal-based local-discovery detection (B-2026-08-25-1). Real users phrase
+# Signal-based local-discovery detection. Real users phrase
 # these VAGUELY — "large files", "old photos", "clean up my downloads",
 # "what's here", "biggest stuff" — so we detect by CATEGORY signals, not exact
 # phrasings. An ambiguous adjective is grounded by a file/disk noun OR local
@@ -561,7 +561,7 @@ _CONVERSATIONAL_FILE_EXT_RE = re.compile(
 _CONVERSATIONAL_URL_RE = re.compile(r"https?://", re.IGNORECASE)
 
 # Size caps for the conversational fast-path.
-# Session 334: bumped from 140/20 to 200/25 to catch short logic questions
+# Bumped from 140/20 to 200/25 to catch short logic questions
 # like "We have three branches. One closed. We opened two. How many now?"
 # (22 words, 131 chars). The blocked-keyword guard still catches tool/
 # realtime/system queries so routing-sensitive prompts fall through.
@@ -569,7 +569,7 @@ _CONVERSATIONAL_URL_RE = re.compile(r"https?://", re.IGNORECASE)
 # over-wordy test fixture (30w) still falls through.
 _CONVERSATIONAL_MAX_CHARS = 200
 _CONVERSATIONAL_MAX_WORDS = 25
-# Session 334: minimum word count for a no-opener "?"-ending message to
+# Minimum word count for a no-opener "?"-ending message to
 # qualify as a conversational question. Fragments like "Like what?" (2
 # words) need prior assistant context; complete thoughts like "We have
 # three branches..." (22 words) stand alone.
@@ -582,7 +582,7 @@ def is_conversational_question(message: str, history: Optional[list[object]] = N
     short follow-up that can be answered with a single direct chat call — no tools.
 
     Conservative by design: the message must either start with an interrogative
-    opener OR be a complete thought ending in "?" (Session 334: ≥5 words),
+    opener OR be a complete thought ending in "?" (≥5 words),
     AND contain none of the tool/realtime/system keywords, so routing-sensitive
     queries ("what is today's EPL games?", "what time is it", "how much RAM do
     I have", "who wrote app.py") always fall through to the parent agent loop.
@@ -601,7 +601,7 @@ def is_conversational_question(message: str, history: Optional[list[object]] = N
     if not message or not message.strip():
         return False
 
-    # Session 334: check the trailing "?" BEFORE stripping punctuation —
+    # Check the trailing "?" BEFORE stripping punctuation —
     # _TRIVIAL_PUNCT includes "?" so the stripped form loses the question
     # marker, breaking the "ends with ?" fast-path below.
     _raw_stripped = message.strip()
@@ -615,7 +615,7 @@ def is_conversational_question(message: str, history: Optional[list[object]] = N
     if len(words) > _CONVERSATIONAL_MAX_WORDS:
         return False
 
-    # Session 334: accept EITHER an opener OR a trailing question mark
+    # Accept EITHER an opener OR a trailing question mark
     # (with a minimum word count so fragments like "Like what?" don't
     # qualify without history). Previously required an opener, which
     # excluded short logic questions like "We have three branches. One
@@ -651,13 +651,13 @@ def is_conversational_question(message: str, history: Optional[list[object]] = N
 
     # Must not reference anything that needs tools, live data, or system
     # info — those must reach the dispatcher for correct routing.
-    # Session 335: knowledge-imperative openers bypass the blocked-keyword
+    # Knowledge-imperative openers bypass the blocked-keyword
     # guard. "Summarize the difference between RAM and storage" contains
     # "RAM" (a sysinfo keyword) but the IMPERATIVE makes the intent
     # unambiguous — the user wants exposition, not their system's RAM.
     # File-extension and URL patterns are still checked (those are
     # structural signals of tool action regardless of intent).
-    # Session 335 addendum: error/bug/exception/crash remain hard-blocked
+    # Addendum: error/bug/exception/crash remain hard-blocked
     # even under knowledge imperatives — "explain this error message" is a
     # debugging request that needs tool evidence (file reads, shell, code),
     # not exposition.
@@ -675,7 +675,7 @@ def is_conversational_question(message: str, history: Optional[list[object]] = N
         return False
     if _CONVERSATIONAL_URL_RE.search(cleaned):
         return False
-    # Session 400: local-discovery questions are search questions — hard
+    # Local-discovery questions are search questions — hard
     # block even under knowledge imperatives ("describe where my CV is"
     # still needs a filesystem search, not exposition).
     if _is_local_discovery(cleaned):
@@ -699,7 +699,7 @@ def conversational_intent(message: str) -> str:
 
 def message_implies_tool_action(message: str) -> bool:
     """
-    Session 332-D — does this user message imply a tool/file/code action?
+    Does this user message imply a tool/file/code action?
 
     Returns True when the message references tool/file/code/realtime/system
     keywords that would need a tool to satisfy (e.g. "find files in /tmp",
@@ -712,7 +712,7 @@ def message_implies_tool_action(message: str) -> bool:
     action, not when the model produced a conversational answer to a
     conversational question.
 
-    Session 335: knowledge-imperative openers ("summarize", "compare",
+    Knowledge-imperative openers ("summarize", "compare",
     "explain", etc.) return False even when the message contains a blocked
     keyword like "RAM" — the imperative makes the intent unambiguous
     (exposition, not sysinfo). This prevents the parent-agent loop from
@@ -735,7 +735,7 @@ def message_implies_tool_action(message: str) -> bool:
         return True
     if _CONVERSATIONAL_URL_RE.search(message):
         return True
-    # Session 400: local-discovery phrasing implies a search tool action.
+    # Local-discovery phrasing implies a search tool action.
     if _is_local_discovery(message):
         return True
     return False
@@ -748,7 +748,7 @@ def message_implies_tool_action(message: str) -> bool:
 def _render_conversational_todos(todo_state: Optional[list[dict]]) -> str:
     """Render the session's persisted todos for the conversational fast-path.
 
-    Session 359: "what todos are left?" routes to the conversational fast-path
+    "what todos are left?" routes to the conversational fast-path
     (no tool keywords, question opener). Without the real checklist the model
     would invent one — inject the persisted state so the answer is grounded.
     Returns "" when there are no todos.
@@ -846,7 +846,7 @@ async def _direct_chat_response(
         _done_usage: dict[str, int] = dict(_usage_agg)
         if not _usage_agg and _prompt_est:
             _done_usage["prompt_tokens"] = _prompt_est
-        # Session 153 / silent-failure contract: when the adapter streamed
+        # Silent-failure contract: when the adapter streamed
         # ZERO text (free-tier models can return empty or reasoning-only
         # streams — the provider reports usage but never emits content), the
         # UI would show a status update with an EMPTY bubble, which reads as
@@ -855,14 +855,14 @@ async def _direct_chat_response(
         # turn always ends with visible text. Normal streams are untouched.
         if not _streamed_any_text:
             if _stream_error:
-                # ADR-20/21 (Session 171): never embed the raw provider
+                # Never embed the raw provider
                 # payload in the fallback TEXT — the user previously saw
                 # "zen returned 429: {…json…}" dumped into the bubble. Use
                 # the canonical friendly message instead, and forward the
                 # raw error on chunk.error so the SSE boundary emits the
                 # canonical error object → the ErrorMessage card renders
                 # (Try again / Switch model). The clean text keeps the
-                # Session 153 visible-text + persistence guarantees.
+                # Visible-text + persistence guarantees.
                 _norm = normalize_error(_stream_error)
                 yield StreamChunk(
                     text=(
@@ -1033,8 +1033,8 @@ async def trivial_response(
 def _render_conversational_memories(memory_facts: Optional[list[str]]) -> str:
     """Render recent stored memories for the conversational fast-path.
 
-    S427: "What's it?" after "Remember the source…" died twice — the fast
-    path injected todos (S359) but never memories, so referential follow-ups
+    "What's it?" after "Remember the source…" died twice — the fast
+    path injected todos but never memories, so referential follow-ups
     about remembered things had nothing to resolve against. Recency beats
     semantic similarity for immediate follow-ups, so the caller supplies the
     newest facts. Returns "" when there are none.
@@ -1063,17 +1063,16 @@ async def conversational_response(
 
     Same single-call fast path as `trivial_response`, with a prompt that
     asks for a natural answer to the user's question. Bypasses the parent
-    agent loop — verified fix for the ~40s "What can you do?" latency
-    (ADR-11 / B-2026-08-09-1).
+    agent loop — verified fix for the ~40s "What can you do?" latency.
 
     Args:
         message: the user's message text.
         adapter: the model adapter (already configured with the right model).
         history: optional prior messages for context.
-        todo_state: Session 359 — the session's current persisted todo list,
+        todo_state: the session's current persisted todo list,
             rendered into the prompt so questions like "what todos are left?"
             are answered from the real checklist, not made up.
-        memory_facts: S427 — the session's most recent stored memories, so
+        memory_facts: the session's most recent stored memories, so
             referential follow-ups ("What's it?") resolve against what was
             actually remembered.
 

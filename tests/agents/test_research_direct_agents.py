@@ -48,7 +48,7 @@ def test_research_agent_description_concrete():
 
 
 def test_research_agent_build_context():
-    """ADR-8 Phase 2 (Session 34): build_context() loads the research
+    """ADR-8 Phase 2: build_context() loads the research
     playbook from agents/research/playbook.md. The "## Research Playbook"
     section header appears, plus the constraints (raw search results are
     NOT the answer, chunk before generating, verify synthesis, etc.).
@@ -174,16 +174,16 @@ def test_registry_direct_registered():
     assert get_agent("direct") is DirectAgent
 
 
-# ── All 4 toolsets are pairwise disjoint (ADR-6) ─────────────────────────────
+# ── All 4 toolsets are pairwise disjoint  ─────────────────────────────
 
 
 def test_all_four_toolsets_disjoint():
-    """ADR-6: each agent has a scoped, non-overlapping PRIMARY toolset.
+    """Each agent has a scoped, non-overlapping PRIMARY toolset.
 
-    ADR-8 Phase 3 (Session 34): the `delegate` tool is intentionally
+    ADR-8 Phase 3: the `delegate` tool is intentionally
     shared across multiple agents (it's the universal delegation
     primitive — any agent with `delegate` in its toolset can delegate
-    to any other agent). B-2026-08-02-12 (Session 84): `skill` is the
+    to any other agent). B-2026-08-02-12: `skill` is the
     other intentionally-shared universal tool (any agent may pull a
     skill into context). The PRIMARY tools (excluding both shared
     tools) remain pairwise disjoint: browser has browse, coding has

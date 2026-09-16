@@ -1,5 +1,5 @@
 """
-Context Compactor — B-2026-08-02-4 (A4: tool-result simplification) + ADR-19.
+Context Compactor — tool-result simplification + task-aware compaction.
 
 When the agent loop accumulates many tool results, the conversation
 window fills with raw output the model has already acted on. LocalMind
@@ -20,7 +20,7 @@ This module is the deterministic complement (Codebuff's
   matching `tool` response).
 - No LLM call, no await — synchronous, idempotent, cheap.
 
-ADR-19 (Session 161) adds a `policy` parameter for TASK-AWARE selection:
+A `policy` parameter enables TASK-AWARE selection:
 - With `policy=None` (or a default/legacy policy), behavior is EXACTLY the
   positional legacy path above — wiring the parameter in is a no-op.
 - With a real policy, tool results whose content matches the policy's
@@ -44,17 +44,17 @@ from typing import Optional
 from core.context_policy import ContextPolicy
 
 # Keep this many of the NEWEST tool-role results verbatim.
-# Session 410 (P0 Context Engineering): tightened 4 → 1 after the prompt-assembly
+# Tightened 4 → 1 after the prompt-assembly
 # audit showed tool-result history growing 91 → 4228 tokens across one research
 # turn (5 iters), with the legacy keep_last=4 stubbing at most one result. Only
 # the immediately-previous tool result needs to stay verbatim — the model just
 # acted on it and may still need to reference its details. Older results the
-# model has already synthesized from collapse to a head+tail stub; the ADR-19
+# model has already synthesized from collapse to a head+tail stub; the task-aware
 # policy keep_markers still protect task-critical content (errors, URLs, etc.)
 # verbatim regardless of age. Live-verified on bankofai/qwen3.8-flash.
 KEEP_LAST_TOOL_RESULTS: int = 1
 # Head/tail length retained from a stubbed result.
-# Session 410: tightened 600 → 400 — the legacy 600-char stub was generous for
+# Tightened 600 → 400 — the legacy 600-char stub was generous for
 # results the model has already acted on; 400 chars (200 head + 200 tail) still
 # preserves the result's opening (where the useful title/summary lives for
 # web_fetch, the file path for file_task, the command for shell) plus a tail
@@ -62,11 +62,11 @@ KEEP_LAST_TOOL_RESULTS: int = 1
 STUB_MAX_CHARS: int = 400
 # Marker that identifies an already-stubbed result (idempotency).
 # Worded to signal the tool SUCCEEDED so a model doing verify-after-write
-# (Session 32 safety workflow) doesn't misread the omission as a failure.
+# (the check-before-acting safety workflow) doesn't misread the omission as a failure.
 _STUB_MARKER = "…[tool succeeded — output truncated for length; see earlier tool output]…"
-# One-line notice replacing a DISCARDED result (ADR-19, P0 off by default).
-# Deliberately outcome-NEUTRAL (Session 161 review): it must not imply the
-# tool succeeded or failed, so a verify-after-write model (Session 32 safety
+# One-line notice replacing a DISCARDED result (task-aware, P0 off by default).
+# Deliberately outcome-NEUTRAL (a review finding): it must not imply the
+# tool succeeded or failed, so a verify-after-write model (the safety
 # workflow) can't misread an omitted failed result as resolved.
 _DISCARD_NOTICE = "[tool result omitted — older tool output not needed for this task]"
 
@@ -78,7 +78,7 @@ def _stub_result(content: str, max_chars: int) -> str:
 
 
 def _matches_markers(content: str, markers: tuple[str, ...]) -> bool:
-    """Case-insensitive substring match (Session 160 review semantics)."""
+    """Case-insensitive substring match (reviewed semantics)."""
     if not markers:
         return False
     lowered = content.lower()
@@ -91,7 +91,7 @@ def _legacy_simplify(
     keep_last: int,
     max_chars: int,
 ) -> list[dict]:
-    """The positional legacy path — byte-identical to pre-ADR-19 behavior."""
+    """The positional legacy path — byte-identical to the original behavior."""
     to_stub = max(0, len(tool_indexes) - keep_last)
     if to_stub == 0:
         return messages  # nothing to stub — no copy needed
@@ -117,7 +117,7 @@ def simplify_tool_results(
         messages: The message list about to be sent to the model.
         keep_last: How many of the newest tool results to keep verbatim.
         max_chars: Head/tail chars retained from stubbed results.
-        policy: Optional ADR-19 ContextPolicy. When None or a default/
+        policy: Optional ContextPolicy. When None or a default/
             legacy policy, behavior is the positional legacy path exactly.
             With keep_markers, matching old results are preserved verbatim
             (bounded by policy.max_keep) in addition to the newest window.
@@ -150,7 +150,7 @@ def simplify_tool_results(
     if policy is None or policy.task_type == "default":
         return _legacy_simplify(messages, tool_indexes, keep_last, max_chars)
 
-    # ── ADR-19 task-aware path ──────────────────────────────────────────
+    # ── Task-aware path ──────────────────────────────────────────
     protected: set[int] = set()
     # 1. The newest `keep_last` results stay verbatim (positional baseline).
     protected.update(tool_indexes[-keep_last:])
@@ -159,7 +159,7 @@ def simplify_tool_results(
     #    can't fill the window with protected results. Only STUBBABLE matches
     #    (over max_chars) consume the budget — small marker lines would never
     #    be stubbed anyway, so protecting them wastes the cap on nothing
-    #    (Session 161 review: under-protection edge).
+    #    (review: under-protection edge).
     if policy.keep_markers:
         matched = [
             i
@@ -179,7 +179,7 @@ def simplify_tool_results(
         # allow_drop=True; only explicit test policies do). Skipping
         # already-stubbed results keeps the path strictly idempotent even if
         # a stub's surviving head/tail happens to match a drop marker
-        # (Session 161 review: stub→discard mutation across passes).
+        # (review: stub→discard mutation across passes).
         if (
             policy.allow_drop
             and policy.drop_markers

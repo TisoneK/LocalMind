@@ -7,7 +7,7 @@ instruction, prefer the strategy that best serves the goal, prefer smaller
 diffs when the instruction doesn't demand more, and return the exact JSON
 contract {choice, reason, suggested_improvements}.
 
-Per ADR-8 Phase 2: the playbook file is load-bearing — it reaches the
+The playbook file is load-bearing — it reaches the
 model's system prompt via BaseAgent.run() → build_context() →
 build_agent_system_prompt().
 """

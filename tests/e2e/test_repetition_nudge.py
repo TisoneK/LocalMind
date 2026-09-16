@@ -1,5 +1,5 @@
 """
-E2E + unit coverage for the progress nudge (B-2026-08-18-3).
+E2E + unit coverage for the progress nudge.
 
 The transcript that motivated it: "current weather Kitengela" made the model run
 3 `web_search` calls that all SUCCEEDED (returned results) but were useless, then

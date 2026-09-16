@@ -1,4 +1,4 @@
-"""B-2026-08-23-6: the file-content preview endpoint.
+"""The file-content preview endpoint.
 
 GET /api/files/content returns readable text for any file the agent created —
 text/code verbatim, office docs (docx/pdf/xlsx) parsed through the same

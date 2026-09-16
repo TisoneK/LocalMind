@@ -22,7 +22,7 @@ from core.agent.goal_interpreter import (
 
 
 def test_goal_tree_matches_flat_checklist_and_adds_ordered_subgoals():
-    """B-2026-08-23-8: every flat goal becomes a DerivedGoal whose sub-goals
+    """Every flat goal becomes a DerivedGoal whose sub-goals
     spell the fastest+safest ordered route (check → prep → write → verify)."""
     tree = derive_goal_tree(
         'In Dev/, create a folder called path-test. Inside it, create two '
@@ -189,7 +189,7 @@ def test_base_dir_none_keeps_legacy_bare_tokens():
 
 
 def test_title_for_goal_is_short_and_verb_led():
-    # B-2026-08-23-11: user sees a short label, not the full path.
+    # User sees a short label, not the full path.
     assert _title_for_goal("file exists at /ws/sess-1/path-test/a.txt with content") == "Create a.txt"
     assert _title_for_goal("file exists at a.txt with content") == "Create a.txt"
     assert _title_for_goal("folder created at /ws/sess-1/path-test") == "Create the folder path-test"

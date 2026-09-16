@@ -101,7 +101,7 @@ async def test_runtime_blocks_when_engine_requests_approval(tmp_db):
 
 @pytest.mark.asyncio
 async def test_runtime_continues_rounds_on_iteration_limit(tmp_db):
-    """ADR-16: when the engine's loop hits its iteration cap (hit_limit),
+    """When the engine's loop hits its iteration cap (hit_limit),
     the objective must run ANOTHER round on the same session — the model
     keeps going with accumulated history instead of giving up."""
     engine = FakeEngine(

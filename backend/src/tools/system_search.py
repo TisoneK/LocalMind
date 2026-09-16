@@ -1,7 +1,7 @@
 """
 System Search tool — the unified Local Search Intelligence front door.
 
-Feature: system-search-tool (Session 400, user pitch 2026-08-25).
+Feature: system-search-tool (user pitch, 2026-08-25).
 
 WHY this exists: LocalMind could answer "what is the capital of France" but
 not "where is my LocalMind project?", "where did I save that CV I edited last
@@ -9,7 +9,7 @@ week?", "do I have multiple copies of this document?", "find the largest
 files on my computer", or "where is the program I use to edit PDFs?" — the
 model had to improvise with find_path (name search only), sysinfo (apps via
 keyword routing), observe (recent files, 60-minute window, 8-file cap) or
-raw shell (`du`, `ls -R` — the exact context-flood pattern Sessions 124/125
+raw shell (`du`, `ls -R` — the exact context-flood pattern the early sessions
 fixed for name search).
 
 This tool is the "Local Search Interface" of the Local Search Intelligence
@@ -47,7 +47,7 @@ Contracts (inherited from find_path/observe hard lessons):
     metadata["results"] so the Parent presents without parsing prose.
   - NEVER RAISES: every failure degrades to a ToolResult(success=False).
 
-Parent-only scope (ADR-53): this is a TOOL of the Parent agent. No
+Parent-only scope: this is a TOOL of the Parent agent. No
 specialist agent, no delegation, no child agents.
 
 Registered as Intent.SYSTEM_SEARCH.
@@ -86,7 +86,7 @@ _HARD_DAYS = 365
 _MAX_DUP_GROUPS = 25              # duplicates: groups returned, hard cap
 _MAX_APPS_SHOWN = 25
 
-# Session 419: tokens that must never win the files-operation relaxed
+# Tokens that must never win the files-operation relaxed
 # fallback. They match huge junk sets in ANY catalog (the "find my CV"
 # transcript's fallback matched "files" and returned 46 unrelated entries
 # while never suggesting the Documents\Tisone folder). A model searching
@@ -99,7 +99,7 @@ _RELAXED_GENERIC_TOKENS = frozenset({
 
 _OPERATIONS = ("files", "recent", "largest", "duplicates", "apps", "open_with")
 
-# B-2026-08-25-1: when the tool is called with a PLAIN string (not JSON) — which
+# When the tool is called with a PLAIN string (not JSON) — which
 # is what weak models do, especially after the shell→system_search redirect
 # hands them "operation='largest'" — recognise a leading operation keyword so
 # "largest /Users/x", "recent", "duplicates *.jpg", "apps python" run the right
@@ -350,13 +350,13 @@ def _op_files(args: dict) -> ToolResult:
         matches, scanned, complete, total_matches = _walk_catalog(
             root, query, max_depth, budget_ms, _MAX_SCANNED
         )
-        # Weak-model tolerance (Session 400 live trace): models pass noun
+        # Weak-model tolerance (live trace): models pass noun
         # phrases ("LocalMind project") as the query. Multi-token AND
         # matching finds 0 (no file is named that). Fall back to the
         # longest single token and SAY SO — never silently return nothing
         # when a relaxed match exists.
         #
-        # Session 419 quality gate. The "find my CV" transcript passed
+        # Quality gate. The "find my CV" transcript passed
         # corrupted queries ("30 files C:\\...\\Tisone *") and the old
         # fallback matched the generic token "files" — 46 junk entries —
         # while the real Documents\\Tisone folder was never suggested and
@@ -479,7 +479,7 @@ def _op_recent(args: dict) -> ToolResult:
     root, err = _resolve_root(raw_root)
     if err:
         return err
-    # B-2026-08-25-1 live finding: models pass `minutes` (e.g. 120) — parse it
+    # Live finding: models pass `minutes` (e.g. 120) — parse it
     # instead of silently falling back to the 7-day default with a wrong label.
     # Explicit minutes win over the days DEFAULT (both explicit = the more
     # specific unit, minutes, decides the window).
@@ -1068,7 +1068,7 @@ async def system_search(message: str) -> ToolResult:
         kind:      "file" | "dir" (files op)
         days:      recency window in days (recent op, default 7, max 365)
         minutes:   recency window in MINUTES (recent op) — wins over days
-                   when given (B-2026-08-25-1: models pass minutes)
+                   when given (models pass minutes)
         limit:     result cap (default 10, max 25)
         offset:    page offset (files op)
         path:      concrete file path (open_with op)
@@ -1079,7 +1079,7 @@ async def system_search(message: str) -> ToolResult:
             args = json.loads(message)
         elif message.strip():
             # Plain string → parse a leading operation keyword if present,
-            # else a name query (B-2026-08-25-1).
+            # else a name query.
             args = _parse_plain_query(message.strip())
         else:
             # Bare call → the most useful overview: recent work.

@@ -1,5 +1,5 @@
 """
-Tests for ADR-8 Phase 3 (Session 34): agent-initiated delegation.
+Tests for ADR-8 Phase 3: agent-initiated delegation.
 
 Tests the `delegate` tool — the primitive that lets any agent with
 `delegate` in its toolset delegate a sub-task to another agent.

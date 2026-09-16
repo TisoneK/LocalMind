@@ -1,5 +1,5 @@
 /**
- * Tests for the buildAgentPhase helper (Session 181 — F4 Frontend Phase Visibility).
+ * Tests for the buildAgentPhase helper.
  *
  * The helper converts backend obs event payloads into AgentPhase entries
  * for the phase strip in ChatMessage. Each event type carries different
@@ -306,7 +306,7 @@ describe('buildAgentPhase', () => {
   });
 });
 
-describe('collapseAdjacentPhases (B-2026-08-30-6)', () => {
+describe('collapseAdjacentPhases', () => {
   it('collapses consecutive identical phases into one with a count', () => {
     const phases = [
       mkPhase('thinking', 'Working out the approach', 1),

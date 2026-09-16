@@ -1,4 +1,4 @@
-"""Session 260: the one-shot thinking override (empty-after-reasoning fix).
+"""The one-shot thinking override (empty-after-reasoning fix).
 
 Ground truth: glm-4.5-flash streams reasoning then 0 content ("thinks but
 doesn't act"). The loop's empty-after-reasoning recovery sets

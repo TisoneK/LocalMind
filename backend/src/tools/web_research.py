@@ -1,5 +1,5 @@
 """
-Session 340 — web_research tool.
+web_research tool.
 
 High-level web research operation that the parent agent calls instead of
 web_search + web_fetch directly. Implements the user's invariant:
@@ -35,7 +35,7 @@ TOOL_DESCRIPTION = (
     "that needs current information from the web — news, weather, sports scores, "
     "standings, prices, documentation, etc."
 )
-TOOL_INTENT = "web_research"  # Session 340: new intent for adaptive web acquisition
+TOOL_INTENT = "web_research"  # new intent for adaptive web acquisition
 TOOL_RISK = RiskLevel.LOW
 
 

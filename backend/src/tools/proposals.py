@@ -1,5 +1,5 @@
 """
-Per-run proposal registry — B-2026-08-02-7 (B2, propose-stage tools).
+Per-run proposal registry — Propose-stage tools.
 
 Stores staged file edits/writes (path → proposed content) so the
 propose/select/apply pattern can work across multiple tool calls WITHIN

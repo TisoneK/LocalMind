@@ -1,20 +1,20 @@
 """
 Analyst agent stop condition.
 
-Per ADR-6: each agent supplies its own is_done(). The analyst's stop
+Each agent supplies its own is_done(). The analyst's stop
 conditions are analysis-oriented:
     - All specs/requirements documents read → done
     - Clear specification produced → done
     - Ambiguities resolved → done
     - No more analysis steps → done
 
-ADR-18 P0 (Session 183, F6 cleanup): promote from the always-False
+Promote from the always-False
 stub to a real `criteria_gate` check — same one-line pattern as
-`is_coding_done` (Session 173) and `is_verifier_done` (Session 174).
+`is_coding_done` and `is_verifier_done`.
 
 The base loop still enforces hard caps (max_iterations,
 max_wall_clock_secs) regardless of this function's answer — that's
-the "OR limit" from ADR-5.
+the loop's "OR limit".
 """
 
 from __future__ import annotations

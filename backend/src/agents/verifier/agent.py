@@ -1,11 +1,11 @@
 """
 VerifierAgent — the verification specialist BaseAgent subclass.
 
-Per ADR-6 (refines ADR-5): a thin subclass of BaseAgent that supplies
+A thin subclass of BaseAgent that supplies
 verifier-specific context_builder, scoped tools, and is_done(). The
 actual loop execution delegates to the existing AgentLoop (Phase 1).
 
-Per ADR-8 Principle 5: this class lives inside its agent directory
+This class lives inside its agent directory
 (`agents/verifier/agent.py`) alongside its playbook, context_builder,
 tools, is_done, and (Phase 2) persona.
 
@@ -51,7 +51,7 @@ class VerifierAgent(BaseAgent):
     Stop condition (Phase 2): tests pass / criteria met / bug reproduced.
     Phase 1 delegates to the existing AgentLoop's termination logic.
 
-    Benefits from the workspace_state feedback loop (Session 16): git
+    Benefits from the workspace_state feedback loop: git
     diff shows what changed, process status shows running services, and
     previous build/test results provide baseline for comparison.
     """

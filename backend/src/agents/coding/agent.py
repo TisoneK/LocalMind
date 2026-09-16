@@ -1,31 +1,30 @@
 """
 CodingAgent — the coding specialist BaseAgent subclass.
 
-Per ADR-6 (refines ADR-5): a thin subclass of BaseAgent that supplies
+A thin subclass of BaseAgent that supplies
 coding-specific context_builder, scoped tools, and is_done(). The
-actual loop execution delegates to the existing AgentLoop (Phase 1) —
+actual loop execution delegates to the existing AgentLoop —
 this keeps the new abstraction non-breaking while establishing the
 structural skeleton.
 
-Per ADR-8 Principle 5: this class lives inside its agent directory
+This class lives inside its agent directory
 (`agents/coding/agent.py`) alongside its playbook, context_builder,
 tools, is_done, and (Phase 2) persona. The directory IS the agent —
 co-located, extensible, testable.
 
-The coding agent is the centerpiece of the CODING HARNESS diagram
-(ADR-5). It's the agent that:
+The coding agent is the centerpiece of the CODING HARNESS diagram.
+It's the agent that:
     - Edits files (file_write, file_edit)
     - Runs shell commands (shell)
     - Executes code (code_exec)
     - Reads files (file_task)
-    - Benefits most from the workspace_state feedback loop (Session 16)
+    - Benefits most from the workspace_state feedback loop
       — git diff shows what it changed, build/test results show whether
       the change worked
 
 Scoped toolset: 5 tools (shell, file_task, file_write, file_edit,
 code_exec). Excludes web_search, web_fetch, browse, memory_op, sysinfo.
-Smaller surface = more reliable selection on gemma3:1b-class hardware
-(ADR-6 point 6).
+Smaller surface = more reliable selection on gemma3:1b-class hardware.
 """
 
 from __future__ import annotations
@@ -49,14 +48,13 @@ class CodingAgent(BaseAgent):
     Scoped toolset: shell, file_task, file_write, file_edit, code_exec
     (5 tools). Cannot search the web, drive a browser, or manage memory.
 
-    Stop condition (Phase 2): tests pass / build succeeds / no more
-    tool calls / user says stop. Phase 1 delegates to the existing
-    AgentLoop's termination logic (max iterations + wall-clock cap from
-    Session 16).
+    Stop condition: tests pass / build succeeds / no more
+    tool calls / user says stop. Delegates to the existing
+    AgentLoop's termination logic (max iterations + wall-clock cap).
 
-    Benefits from the workspace_state feedback loop (Session 16): git
+    Benefits from the workspace_state feedback loop: git
     diff shows what it changed, build/test results show whether the
-    change worked. This is the ADR-5 differentiator — "observations
+    change worked. This is the harness differentiator — "observations
     flow back into context every turn."
     """
 

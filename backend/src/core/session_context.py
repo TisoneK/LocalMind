@@ -179,7 +179,7 @@ class SessionContextManager:
         return self.get_context(session_id).update_cwd(new_cwd)
 
     def clear_session(self, session_id: str) -> bool:
-        """Session 26: remove a session's context when it's deleted.
+        """Remove a session's context when it's deleted.
 
         Prevents unbounded growth and state leaks across sessions that
         reuse the same ID.

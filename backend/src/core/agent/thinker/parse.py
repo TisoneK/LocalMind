@@ -1,4 +1,4 @@
-"""Parse a Thinker model response into a ThinkerAnalysis (ADR-42).
+"""Parse a Thinker model response into a ThinkerAnalysis.
 
 Fail-safe by construction: a malformed or JSON-less response still yields a
 usable analysis (the prose becomes the reasoning, structure stays empty) so

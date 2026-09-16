@@ -1,6 +1,6 @@
-"""Session 359 — todo-state injection: the agent must know its own environment.
+"""Todo-state injection: the agent must know its own environment.
 
-The user's complaint (B-2026-08-23-2): the agent "didn't mark task/todo as
+The user's complaint: the agent "didn't mark task/todo as
 complete, when I asked it to mark it complete didn't have no idea what I was
 talking about because it looked for todos in chat." Todos were persisted in
 the DB and shown in the UI, but NEVER injected into the model context — the

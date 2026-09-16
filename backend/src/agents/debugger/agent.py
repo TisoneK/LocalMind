@@ -1,7 +1,7 @@
 """
 DebuggerAgent — the failure-diagnosis specialist BaseAgent subclass.
 
-Per ADR-6 (refines ADR-5): a thin subclass of BaseAgent that supplies
+A thin subclass of BaseAgent that supplies
 debugger-specific context_builder, scoped tools, and is_done().
 
 The debugger is the agent that finds ROOT CAUSES — it isolates failures,

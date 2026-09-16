@@ -1,17 +1,17 @@
 """
-GoalInterpreter — deterministic success-criteria fallback (ADR-18 P0+).
+GoalInterpreter — deterministic success-criteria fallback.
 
 PURPOSE
 =======
 The parent agent's plan may carry explicit `success_criteria` (from the
 `create_plan` tool, the loop's `success_criteria=` parameter, or a plan
 block). But on free-tier small models the LLM frequently omits them —
-leaving `TaskState.success_criteria == []`, which causes the ADR-18 P0/P1
+leaving `TaskState.success_criteria == []`, which causes the acceptance
 acceptance gate (`core.agent.verify.criteria_gate`,
 `agents/{coding,verifier}/is_done.py`) to short-circuit at
 `verify.py:354-355` and the model-asserted "done" path runs unchanged.
 
-ADR-18 P0 only wired the gate; it did not guarantee a contract the
+Wiring the gate alone did not guarantee a contract the
 gate can check. This module is the contract-side fix: when no explicit
 criteria exist, the GoalInterpreter derives them DETERMINISTICALLY from
 the routing intent + capability set + first tool args. The LLM is NOT
@@ -339,8 +339,8 @@ def _resolve_against(
 ) -> str:
     """Resolve a bare path token onto `base_dir` when it is not already
     absolute (drive / root / ~). Leave explicit absolute paths verbatim —
-    the user's explicit destination always wins (B-2026-08-23-17 door).
-    Session 382 follow-up (workspace steering): with a session workspace
+    the user's explicit destination always wins (the session-workspace door).
+    The workspace-steering follow-up: with a session workspace
     as base_dir, a message's bare "a.txt" / "path-test" goals become
     "file exists at <workspace>/path-test/a.txt" — the model sees the
     EXACT destination in its goal contract, the acceptance gate checks
@@ -411,7 +411,7 @@ def derive_goal_items(
             token = _clean_token(m.group(1) or m.group(0))
             if not token:
                 continue
-            # Session 382 follow-up: bare names resolve onto the session
+            # Workspace-steering follow-up: bare names resolve onto the session
             # workspace so goals/route/gate reference the REAL destination.
             token = _resolve_against(token, base_dir)
             _add(f"file exists at {token} with content")
@@ -436,7 +436,7 @@ def derive_goal_items(
         # longer name.
         if any(other and name != other and name in other for other in folder_names):
             continue
-        # Session 382 follow-up: resolve onto the session workspace so the
+        # Workspace-steering follow-up: resolve onto the session workspace so the
         # folder goal names its actual destination.
         name = _resolve_against(name, base_dir)
         _add(f"folder created at {name}")
@@ -446,11 +446,11 @@ def derive_goal_items(
     return items[:_MAX_GOAL_ITEMS]
 
 
-# ── Hierarchical goal tree (B-2026-08-23-8) ─────────────────────────────────
+# ── Hierarchical goal tree ─────────────────────────────────
 # Each derived goal gets an ordered sub-goal route phrasing the
 # fastest+safest path to the deliverable (check → prep → write → verify),
 # each feeding the next. The tree is derived ONCE with the flat checklist
-# — it is part of the SAME immutable denominator (Session 330 contract):
+# — it is part of the SAME immutable denominator (the fixed contract):
 # never mutated, never re-derived mid-turn. The acceptance gate still
 # checks the flat goal items; the sub-goals are ordered guidance for the
 # model and are rendered as nested rows under their parent in the Todos
@@ -467,9 +467,9 @@ class DerivedGoal:
     `goal` is exactly one item from `derive_goal_items()` (checkable by
     the acceptance gate). `sub_goals` spell the fastest+safest ordered
     route to it — each feeds the next, and both together are derived
-    once and never mutated (the Session 330 fixed-denominator contract).
+    once and never mutated (the fixed-denominator contract).
 
-    B-2026-08-23-11: `title` is the user-facing short label (no commands,
+    `title` is the user-facing short label (no commands,
     no absolute paths — just "Create path-test folder"), defaulting to a
     human-friendly derivation when not supplied.
     """
@@ -479,7 +479,7 @@ class DerivedGoal:
     title: str = ""
 
 
-# ── User-facing title derivation (B-2026-08-23-11) ──────────────────────────
+# ── User-facing title derivation ──────────────────────────
 # The Todos panel shows short titles; the agent + acceptance gate use the
 # full goal/route strings. Defensive against weird tokens — never raises.
 
@@ -539,7 +539,7 @@ def _title_for_sub_goal(sub: str) -> str:
 def _sub_goals_with_title(sub_goals: list[str]) -> list[dict]:
     """Zip sub-goal labels into {content, title} dicts for the Todos panel.
 
-    B-2026-08-23-11: the UI shows titles; the agent's context/persistence
+    The UI shows titles; the agent's context/persistence
     keeps the full content."""
     return [
         {"content": str(s).strip(), "title": _title_for_sub_goal(s)}
@@ -565,11 +565,11 @@ def _sub_goals_for_goal(goal: str, base_dir: Optional[str] = None) -> list[str]:
     """Deterministic ordered sub-goals for one derived goal item.
 
     Phrased fastest+safest: check the current state before acting
-    (Session 32 check-before-acting), then the minimal write route, then
+    (the check-before-acting rule), then the minimal write route, then
     verify against the goal itself. Conservative and bounded — never
     inventing deliverables, only the route to the one the user named.
 
-    ``base_dir`` (Session 382 follow-up): when the file's parent IS the
+    ``base_dir`` (workspace steering): when the file's parent IS the
     workspace root itself, the prep step is skipped — the workspace folder
     already exists (created by the harness), so "create the folder" would
     be noise on every bare-file goal.
@@ -620,9 +620,9 @@ def derive_goal_tree(
     safest ordered route (check → prep → write → verify), each feeding
     the next. Derived once per message — the acceptance gate still
     checks the flat items (unchanged denominator), while the Todos panel
-    renders the sub-goals nested under their parent (B-2026-08-23-8).
+    renders the sub-goals nested under their parent.
 
-    ``base_dir`` (Session 382 follow-up): when provided (the session
+    ``base_dir`` (workspace steering): when provided (the session
     workspace), bare path tokens in the message resolve onto it so the
     goals/route/gate reference the exact destination instead of a
     home-relative guess.
@@ -654,7 +654,7 @@ class Interpretation:
 
 
 class GoalInterpreter:
-    """Deterministic success-criteria fallback (ADR-18 P0+).
+    """Deterministic success-criteria fallback.
 
     See module docstring for full design.
     """

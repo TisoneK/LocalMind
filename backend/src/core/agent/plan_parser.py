@@ -1,6 +1,6 @@
 """
 PlanParser — converts the free-text _plan_stream output into a typed
-list of PlanNode (Session 180 — F3 Structured Planner DAG).
+list of PlanNode (Structured Planner DAG).
 
 PURPOSE
 =======
@@ -10,7 +10,7 @@ prose that the loop injects into the system prompt verbatim (capped at
 the numbered "STEPS:" block for the Todos panel UI — it does NOT feed
 back into execution.
 
-Session 180's fix: a new parser that converts the same free-text plan
+The fix: a new parser that converts the same free-text plan
 into a structured `list[PlanNode]`. Each node carries its own
 `success_criteria` derived deterministically from the goal
 (GoalInterpreter's per-intent templates) when no explicit criteria are

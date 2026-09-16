@@ -1,5 +1,5 @@
 """
-propose_write_file tool — B-2026-08-02-7 (B2, propose-stage tools).
+propose_write_file tool — Propose-stage tools.
 
 Stages a full-file write as a PROPOSAL without touching disk. Takes the
 same input as file_write (path + content) and applies the same

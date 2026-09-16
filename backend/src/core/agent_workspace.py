@@ -34,7 +34,7 @@ _INTERNAL_DELEGATION_TOOLS = frozenset({"delegate", "delegate_parallel", "delega
 # to the parent run's `phases` in build_run_tree so the Agents tab shows the
 # whole turn inside the running agent node ("getting started → understood →
 # working → turn complete"). These belong on the workspace run node, NOT the
-# chat phase strip: the strip (build_agent_phases) keeps the Session 181
+# chat phase strip: the strip (build_agent_phases) keeps the
 # plan/gate/orchestrator/failure decision history only.
 RUN_LIFECYCLE_TYPES = frozenset(
     {
@@ -438,7 +438,7 @@ def build_workspace_artifacts(
 def build_agent_phases(collector: ObsCollector) -> list[dict]:
     """Rebuild the phase-strip entries from the request's obs events.
 
-    Mirrors the frontend's buildAgentPhase (Session 181): each of the 8 phase
+    Mirrors the frontend's buildAgentPhase: each of the 8 phase
     event types becomes one AgentPhase entry; events missing required fields
     are skipped. Ids are deterministic (``phase-<type>-<n>``) so the persisted
     strip survives reload without re-randomization.
@@ -461,7 +461,7 @@ def build_agent_phases(collector: ObsCollector) -> list[dict]:
         )
         # Lifecycle narration (initialization/planning/thinker/loop) lives on
         # the RUN tree (build_run_tree phases), not the chat strip — the strip
-        # keeps the Session 181 plan/gate/orchestrator/failure decision
+        # keeps the plan/gate/orchestrator/failure decision
         # history only.
         if evt.type == "plan_nodes_created":
             try:

@@ -1,5 +1,5 @@
 """
-Tests for ADR-8 Phase 1 (Session 34): agents as directories.
+Tests for ADR-8 Phase 1: agents as directories.
 
 Locks in the structural refactor introduced in Session 34 Phase 1:
     - Each agent class lives INSIDE its directory at agents/<name>/agent.py

@@ -8,7 +8,7 @@ from core.workspace_state import WorkspaceSnapshot
 
 
 def test_emit_keeps_json_containers_native_not_stringified():
-    """Session 376: ObsCollector.emit must NOT str() lists/dicts.
+    """ObsCollector.emit must NOT str() lists/dicts.
 
     The old `str(v)` turned the edit_file diff_hunks list into a Python-repr
     STRING, so the diff SSE event's `hunks` field was a string and the

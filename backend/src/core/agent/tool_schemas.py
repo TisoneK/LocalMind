@@ -1,8 +1,8 @@
 # ruff: noqa: E501 — long tool-description strings (schema data, like prompts.py)
 
-"""Lean tool schemas for the native ``tools`` parameter (ADR-40).
+"""Lean tool schemas for the native ``tools`` parameter.
 
-ADR-40 / review-40 (Session 250): the model received ALL 30 kitchen-sink
+The problem this module solves: the model used to receive ALL 30 kitchen-sink
 schemas on EVERY call — ~24,230 chars (~6,057 tokens) — re-sent every
 iteration, for every provider. The schemas were self-manuals ("the tool
 feeding itself"): `browse` enumerated 10 modes with per-param tutorials,
@@ -13,14 +13,14 @@ catalog. Two surfaces derive from it:
 
 1. **The native ``tools`` parameter** — composed per iteration by
    ``tool_defs_for_call()``: scoped CORE_TOOL_NAMES + ``describe_tool`` +
-   loaded long-tail schemas (ADR-40 option C on-demand loading).
+   loaded long-tail schemas (on-demand loading).
 2. **The in-prompt "Available tools" list** — ``render_tool_list()``
    renders `- <name>: <description>` lines from the SAME definitions
    (see ``prompts.build_agent_system_prompt``/``build_planning_prompt``
    ``tool_defs`` parameter), so the prompt list and the native parameter
    can never drift apart again.
 
-What the cut KEPT vs REMOVED (per ADR-40 guardrails):
+What the cut KEPT vs REMOVED (the lean-schema guardrails):
 - KEPT: every structural element — parameter names, JSON types, enums,
   ``required`` lists, array item schemas, ``additionalProperties``.
   The provider + ``_extract_tool_input`` depend on these to validate and
@@ -39,28 +39,29 @@ What the cut KEPT vs REMOVED (per ADR-40 guardrails):
   loop already builds structured action labels from path/command/query
   when the model omits it (loop.py `action_label` fallback).
 
-Measured (Session 251): the native `tools` param went from ~24,230 chars
+Measured: the native `tools` param went from ~24,230 chars
 (~6,057 tok) to ~15,981 chars (~3,995 tok) — a ~34% cut (~2,062 tok/call,
-~36% of ADR-40's ~5.7k theoretical reclaimable). The remaining weight is
+~36% of the ~5.7k theoretical reclaimable). The remaining weight is
 structural (names, types, enums, required) plus the guardrail/disambiguation
-prose the ADR says to KEEP. The in-prompt tool list also shrank:
+prose the guardrails above say to KEEP. The in-prompt tool list also shrank:
 9,832 chars (~2,458 tok) -> ~5,929 chars (~1,482 tok) via the single-source
 collapse.
 
-ADR-40 option C (Session 252): the long tail now loads ON DEMAND via the
+The long tail loads ON DEMAND via the
 `describe_tool` meta-tool (the `skill`-loader pattern). The 14 CORE_TOOL_NAMES
 (shell/file_task/file_write/edit_file/find_path/web_search/web_fetch/code_exec
 + git/process/memory_op/sysinfo/observe/calculator) are always present lean;
 the 16 LONG_TAIL_TOOL_NAMES are NOT in the native `tools` param until the
 model calls describe_tool(name) — tool_defs_for_call() composes the
 per-iteration param (scoped core + describe_tool + loaded full schemas).
-Measured (Session 252): the full-catalog per-iteration param dropped from
+Measured: the full-catalog per-iteration param dropped from
 ~16,937 chars (~4,234 tok) to ~7,851 chars (~1,962 tok) — a ~54% cut
-(~2,272 tok/call); cumulative vs pre-ADR-40 that is ~68% (~5,095 tok/call).
+(~2,272 tok/call); cumulative vs the pre-lean catalog that is ~68%
+(~5,095 tok/call).
 The default SHELL intent scope went ~9,866 -> ~7,178 chars (~27%). The
 remaining ~9.1k chars of long-tail schemas are paid only when a tool is
 actually loaded (e.g. browse: 7,851 -> 9,624 chars for the full catalog).
-LIVE-VERIFIED tool selection (Session 251 option B; Session 252 option C) on
+LIVE-VERIFIED tool selection for both cuts on
 the active weak model (zai/glm-4.5-flash) AND on cerebras. Do not ship a
 further cut without a fresh live trace — trimming schemas can regress weak
 models' tool choice.
@@ -68,34 +69,34 @@ models' tool choice.
 
 from core.skills import available_skills_summary
 
-# ── Tier split (ADR-40 option C): always-present vs on-demand ──────────────
+# ── Tier split: always-present vs on-demand ──────────────
 # Core tools stay in the native `tools` param on EVERY call, lean. Long-tail
 # tools are NOT loaded by default — the model calls `describe_tool(name)` to
 # pull a specific tool's FULL schema into the `tools` param for the rest of
-# the run (the `skill`-loader pattern, per ADR-40 option C).
+# the run (the `skill`-loader pattern).
 CORE_TOOL_NAMES: frozenset[str] = frozenset(
     {
         "shell",
         "file_task",
         "file_write",
         "edit_file",
-        # Session 400: find_path retired from the always-present surface —
+        # find_path retired from the always-present surface —
         # system_search (operation=files) is the single search front door
-        # (weak models split traffic between two name-search tools; zai trace
-        # picked find_path by name-affinity 4/4). find_path's schema stays in
+        # (weak models split traffic between two name-search tools; a live zai
+        # trace picked find_path by name-affinity 4/4). find_path's schema stays in
         # TOOL_DEFINITIONS (registry + internal file-ops dispatch intact).
         "system_search",
         "dir_explorer",  # bounded read-only folder inspection (list/tree/stat) — sits right after system_search: both are "know your computer" local tools; selection live-verified on a weak model
         "web_search",
         "web_fetch",
-        # Session 411 (P0 Context Engineering): web_research moved to LONG_TAIL.
+        # Context-engineering audit: web_research moved to LONG_TAIL.
         # It overlaps with web_search + web_fetch (both stay in core); the
         # audit measured its schema at ~154 tok/call carried on EVERY agent
         # call regardless of intent. When a research task genuinely needs the
         # adaptive acquisition (search→fetch→browser escalation), the model
         # loads it via describe_tool("web_research") — 1 extra iteration.
         "code_exec",
-        # Session 411 (P0 Context Engineering): git moved to LONG_TAIL.
+        # Context-engineering audit: git moved to LONG_TAIL.
         # CORE_TOOL_NAMES is GLOBAL (always-present across ALL intents); for
         # non-coding intents (~70% of turns) git was pure dead weight at
         # ~275 tok/call. Coding tasks load it via describe_tool("git") — the
@@ -103,17 +104,18 @@ CORE_TOOL_NAMES: frozenset[str] = frozenset(
         # commit) survive in the full schema. Live-verified on
         # bankofai/qwen3.8-flash: coding tasks correctly load git before use.
         "memory_op",
-        # Session 411 (P0 Context Engineering): sysinfo, observe, calculator,
+        # Context-engineering audit: sysinfo, observe, calculator,
         # process moved to LONG_TAIL — all rare in the agent loop
         # (system info, desktop state, arithmetic, long-running process mgmt).
         # Combined ~470 tok/call saved; shell handles <20s commands and
         # code_exec handles arithmetic if the model hasn't loaded calculator.
-        "todo_write",  # ADR-43: agent-driven live UI todo checklist — always available
-        # B-2026-08-30-13 (ADR-40 amendment): browse promoted from the long tail
-        # to CORE. The describe_tool round-trip loaded ~3k chars of browse schema
+        "todo_write",  # agent-driven live UI todo checklist — always available
+        # Browse promoted from the long tail to CORE.
+        # The describe_tool round-trip loaded ~3k chars of browse schema
         # EVERY turn a browse task ran — it blew the context window and timed the
         # turn out, and cost an extra iteration. The browser is now a first-class
-        # capability (see B-2026-08-30-3 revert / -10 / -11) meant to become the
+        # capability (an earlier attempt to gate it away was tried and reverted
+        # on the owner's direction) meant to become the
         # primary web tool, so its lean schema is always present, no docs load.
         "browse",
     }
@@ -121,7 +123,7 @@ CORE_TOOL_NAMES: frozenset[str] = frozenset(
 
 LONG_TAIL_TOOL_NAMES: frozenset[str] = frozenset(
     {
-        "find_path",  # Session 400: retired from the always-present surface (system_search is the front door) — kept on-demand for compatibility
+        "find_path",  # retired from the always-present surface (system_search is the front door) — kept on-demand for compatibility
         "delegate",
         "delegate_parallel",
         "delegate_inline",
@@ -137,10 +139,10 @@ LONG_TAIL_TOOL_NAMES: frozenset[str] = frozenset(
         "create_plan",
         "skill",
         "diagnostics",
-        # Session 411 (P0 Context Engineering): 6 tools moved from CORE to
+        # Context-engineering audit: 6 tools moved from CORE to
         # LONG_TAIL to cut the always-present tools-param token cost (~900
         # tok/call saved). See CORE_TOOL_NAMES comments for per-tool rationale.
-        # ADR-40 guardrail satisfied: live-verified tool SELECTION on
+        # The lean-schema guardrail is satisfied: live-verified tool SELECTION on
         # bankofai/qwen3.8-flash (weak model) after the cut.
         "git",
         "process",
@@ -148,7 +150,7 @@ LONG_TAIL_TOOL_NAMES: frozenset[str] = frozenset(
         "observe",
         "sysinfo",
         "calculator",
-        # P0 Step 4 slice 2: retrieval half of the Tool-Result Index. On-demand
+        # Retrieval half of the Tool-Result Index. On-demand
         # by construction — the loop loads it into the native surface only on a
         # turn that actually carries a stub/pointer (a large result was stored),
         # so the common turn never pays its schema cost.
@@ -160,7 +162,7 @@ LONG_TAIL_TOOL_NAMES: frozenset[str] = frozenset(
 # ── Tool Definitions (OpenAI function-calling format) ────────────────────────
 
 TOOL_DEFINITIONS: list[dict] = [
-    # Session 400: system_search FIRST — weak models have position
+    # system_search FIRST — weak models have position
     # bias toward the first tools in the native param + prompt list; the
     # search front door leads the catalog.
 
@@ -239,7 +241,7 @@ TOOL_DEFINITIONS: list[dict] = [
     {
         "type": "function",
         "function": {
-            "name": "web_research",  # Session 340: adaptive web acquisition
+            "name": "web_research",  # adaptive web acquisition
             "description": "Research a topic on the web and return the most relevant, current content. Automatically searches for sources, fetches the best one (with JavaScript rendering if needed), validates the result, and falls back to alternative sources. Use this for ANY request needing current web information (weather, news, scores, standings, prices, etc.) — it handles search + fetch + browser escalation internally.",  # noqa: E501
             "parameters": {
                 "type": "object",
@@ -863,7 +865,7 @@ TOOL_DEFINITIONS: list[dict] = [
 ]
 
 
-# ── describe_tool meta-tool (ADR-40 option C) ────────────────────────────────
+# ── describe_tool meta-tool ─────────────────────────────────────────────────
 # The on-demand loader, mirroring the `skill` tool: a tiny always-present
 # index (the description below) plus load-a-specific-tool's-full-schema when
 # selected. Kept OUT of TOOL_DEFINITIONS so the 30-tool catalog stays the
@@ -881,16 +883,16 @@ def compact_tool_summary(
     """One short ``- name: purpose`` line per tool for the ENTIRE catalog (core
     AND long-tail), for the first-call / bootstrap prompt.
 
-    B-2026-08-30-17 (Phase 1): the parent's FIRST tool choice used to be made
+    The parent's FIRST tool choice used to be made
     from bare tool NAMES only — it grabbed `sysinfo` for a *weather* query
     because nothing told it `web_fetch`/`web_search` are the web tools. This
     gives every tool's PURPOSE up front so selection is informed from turn 1,
     while staying far below the full-schema "kitchen sink" (first clause of each
     description, ~one line each; ~2.6k chars for the whole catalog).
 
-    S426: ``allowed_names`` optionally scopes the summary to an agent's
+    ``allowed_names`` optionally scopes the summary to an agent's
     allowlist (e.g. PARENT_TOOLS) so a scoped agent's bootstrap prompt never
-    advertises tools it cannot reach (ADR-53: the parked delegation surface
+    advertises tools it cannot reach (the parked delegation surface
     must not appear in the parent's catalog).
     """
     import re as _re
@@ -953,7 +955,7 @@ def tool_defs_for_call(
     *,
     bootstrap_only: bool = False,
 ) -> list[dict]:
-    """Compose the per-iteration native ``tools`` parameter (ADR-40 option C).
+    """Compose the per-iteration native ``tools`` parameter.
 
     ``filtered_defs`` is the scoped catalog (``_filtered_tool_defs``) which
     still contains ALL scoped tools incl. the long tail. This returns the
@@ -1005,7 +1007,7 @@ def render_tool_list(tool_defs: list[dict] | None = None) -> list[str]:
 
     Renders `- <name>: <description>` from the tool definitions themselves so
     the in-prompt list and the native ``tools`` parameter share ONE source of
-    truth (ADR-40 collapse of the 3 copies). The descriptions are already the
+    truth (one source replacing the former three copies). The descriptions are already the
     lean Tier-1 form (one-liner + guardrails + disambiguation), so the full
     description is shown — trimming to the first sentence would drop the
     guardrail sentences ("reset --hard is BLOCKED") that this surface exists

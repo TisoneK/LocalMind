@@ -507,7 +507,7 @@ def _l2_to_score(distance: float) -> float:
     sqrt(2) = orthogonal for unit vectors), NOT a dot product. For unit
     vectors: l2^2 = 2 - 2*cos, so score = (1 - cos)/2 = l2^2 / 4.
 
-    This was the root cause of the memory-collapse bug (S370 follow-up): the
+    This was the root cause of a memory-collapse bug: the
     dedup and recall paths fed the raw L2 distance into _cosine_to_score,
     which clamps to [-1,1] — so almost ANY pair of facts scored ~0, dedup
     merged distinct facts into one row, and recall returned garbage scores.
@@ -1243,7 +1243,7 @@ class VectorStore:
             return False
 
     async def update_content(self, fact_id: str, new_content: str) -> str | None:
-        """Correct an existing fact's content (B-2026-08-23-14 follow-up).
+        """Correct an existing fact's content.
 
         The fact id is derived from the content hash, so an edit re-embeds the
         corrected text and migrates the row to a NEW id while preserving the

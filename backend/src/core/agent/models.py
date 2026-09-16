@@ -92,7 +92,7 @@ def strip_worker_reports_from_history(messages: list) -> list:
     ]
 
 
-# Session 122: a final answer at least this long is treated as substantive
+# A final answer at least this long is treated as substantive
 # and NEVER gets the deterministic evidence report appended — the execution
 # trace is already visible via the inline action cards + Actions tab.
 _SUBSTANTIVE_ANSWER_MIN_CHARS = 40
@@ -129,7 +129,7 @@ class WorkReport:
     def needs_report(self, response: str) -> bool:
         """Return whether a response needs the deterministic evidence report.
 
-        Session 122: the chat message owns the FINAL ANSWER only. The
+        The chat message owns the FINAL ANSWER only. The
         execution trace is already visible to the user via the inline action
         cards (chat) and the Actions tab — so a substantive answer is never
         appended with a recap, even if it doesn't quote raw evidence tokens
@@ -137,7 +137,7 @@ class WorkReport:
         "… Worker report — tool execution evidence: 1. git(status) …").
 
         The report is reserved for actual silent failures: an empty or
-        trivially short response (the Session 31 fallback contract), or the
+        trivially short response (the fallback contract), or the
         iteration-limit path where the model may have been cut off mid-work
         and could have fabricated a conclusion.
         """
@@ -190,7 +190,7 @@ class WorkReport:
             return False
         # Short answers: only acceptable if they actually quote the evidence
         # that ran. A terse filler like "Got it — working on your request…"
-        # (the Session 115 silent-stall shape) gets the report.
+        # (the silent-stall shape) gets the report.
         if not evidence_tokens:
             return False
         matched_tokens = sum(
@@ -228,36 +228,36 @@ class AgentTrace:
     limit_kind: str = ""
     """Which budget actually ended the loop: 'iteration_cap' (base failsafe),
     'wall_clock' (time cap), or 'hard_ceiling' (runaway guard). Empty when
-    hit_limit is False. Session 419: the wall-clock break used to be reported
-    as 'iteration_limit' — the same misdiagnosis class the Session 32
+    hit_limit is False. The wall-clock break used to be reported
+    as 'iteration_limit' — the same misdiagnosis class
     fallback-wording contract warns about (a time cap is NOT a step-count
     cap; the remedies differ)."""
     clarification_issued: bool = False
     tool_talk_recoveries: int = 0  # how many times tool-talk was detected and suppressed
-    tool_forced_recoveries: int = 0  # Session 238: forced-tool reprompts (empty/text-without-tool on iter-0)
-    empty_reasoning_recoveries: int = 0  # Session 256: bounded retries after an
+    tool_forced_recoveries: int = 0  # forced-tool reprompts (empty/text-without-tool on iter-0)
+    empty_reasoning_recoveries: int = 0  # bounded retries after an
     # empty-but-reasoned response (thinking streamed, no content/tool call)
     plan_text: str = ""
     """Text of the planning phase output (empty if planning was skipped)."""
     task_type: str = ""
-    """Task type the agent settled on during planning (ADR-19 x ADR-22 re-key,
-    Session 186). '' = legacy no-op policy / no explicit type. The dispatcher's
+    """Task type the agent settled on during planning (the settled-routing
+    re-key). '' = legacy no-op policy / no explicit type. The dispatcher's
     task_type is only a hint; the settled value keys memory levels + policy."""
     verification_results: list[str] = field(default_factory=list)
     """Results from post-execution verification checks."""
     success_criteria: list[str] = field(default_factory=list)
-    """Typed success criteria from the dispatcher / create_plan (ADR-18 P0)."""
+    """Typed success criteria from the dispatcher / create_plan."""
     criteria_results: list[tuple[str, bool, str]] = field(default_factory=list)
-    """Acceptance-gate evaluation: [(criterion, passed, note)] (ADR-18 P0)."""
+    """Acceptance-gate evaluation: [(criterion, passed, note)]."""
     gate_passed: Optional[bool] = None
     """Whether the acceptance gate passed at turn end (None = no criteria)."""
     gate_summary: str = ""
     """One-line gate outcome for the user-facing final answer."""
     thinker_analysis: str = ""
-    """User-facing rendering of the Thinker's analysis (ADR-42), preserved
+    """User-facing rendering of the Thinker's analysis, preserved
     on the trace so the degraded-evidence fallback can surface the
     already-computed synthesis instead of discarding it when the final model
-    call fails (B-2026-08-16-12). Empty = no Thinker analysis was produced."""
+    call fails. Empty = no Thinker analysis was produced."""
 
     def summary(self) -> str:
         """Human-readable one-liner for logs."""

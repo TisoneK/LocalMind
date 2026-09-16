@@ -1,4 +1,4 @@
-"""Regression tests for the 429 permanent-vs-transient classifier (ADR-32).
+"""Regression tests for the 429 permanent-vs-transient classifier.
 
 A permanent quota / billing 429 (daily or free-tier limit, out of credits)
 must NOT be retried — retrying only burns the backoff window and, across an
@@ -54,7 +54,7 @@ class TestPermanent429Classifier:
         assert A._is_permanent_429(body, None) is False
 
     def test_gemini_billing_boilerplate_is_transient(self):
-        # Session 240: the EXACT real body — gemini says "check your plan and
+        # The EXACT real body — gemini says "check your plan and
         # billing details" on a 2.8s per-minute throttle. The generic "billing"
         # phrase must NOT hard-fail a recoverable window.
         body = (

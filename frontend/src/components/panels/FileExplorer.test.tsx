@@ -1,5 +1,5 @@
 /**
- * B-2026-08-23-18: the Files-tab browser (FileExplorer v2).
+ * The Files-tab browser (FileExplorer v2).
  *
  * Tree rendering with lazy-loaded folder children, debounced search,
  * per-file actions (preview/download/delete) and the refresh callback

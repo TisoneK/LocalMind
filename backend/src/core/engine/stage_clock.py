@@ -1,5 +1,5 @@
 """
-Per-request pipeline stage timing (Session 129 decomposition).
+Per-request pipeline stage timing (extracted from the agent loop).
 
 Shared lifecycle service — ``_StageClock`` records REAL wall-clock latency
 per runtime stage and emits ``stage_timing`` obs events so the Observe panel
@@ -14,7 +14,7 @@ from core.obs import ObsCollector
 
 
 class _StageClock:
-    """Per-request pipeline stage timing for the Observe panel (ADR-12).
+    """Per-request pipeline stage timing for the Observe panel.
 
     The frontend's "Agent Pipeline" section previously derived stage status
     from a heuristic (intent present / tool call seen / latency > 0), which

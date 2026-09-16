@@ -41,7 +41,7 @@ def test_contextvar_default_is_none():
 class TestResolveDefaultScratch:
     def test_with_session_lands_in_workspace(self, home, bound_session):
         p = resolve_write_path("", "notes.txt")
-        # B-2026-08-23-25: default scratch now lands in .tmp/
+        # Default scratch now lands in .tmp/
         assert p == workspace_tmp_dir("sess-write-1") / "notes.txt"
         assert p.is_absolute()
 
@@ -65,7 +65,7 @@ class TestExplicitBareFilenames:
     )
     def test_bare_filename_redirects_to_workspace(self, home, bound_session, path):
         p = resolve_write_path(path, fallback_filename="notes.txt")
-        # B-2026-08-23-25: default scratch now lands in .tmp/
+        # Default scratch now lands in .tmp/
         assert p == workspace_tmp_dir("sess-write-1") / "notes.txt", path
 
     @pytest.mark.parametrize(
@@ -132,7 +132,7 @@ class TestFileWriteContractScratch:
             {"path": "notes.txt", "content": "contract artifact"}
         )
         dest = Path(result.metadata["path"])
-        # B-2026-08-23-25: default scratch now lands in .tmp/
+        # Default scratch now lands in .tmp/
         assert dest == workspace_tmp_dir("sess-write-1") / "notes.txt"
         assert dest.exists()
         assert dest.read_text() == "contract artifact"

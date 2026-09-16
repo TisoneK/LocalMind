@@ -1,4 +1,4 @@
-"""ADR-18 P3 delegation-streaming tests (Session 176).
+"""ADR-18 P3 delegation-streaming tests.
 
 The delegate tools now stream the sub-agent's user-visible work into the
 parent's ObsCollector (so the Actions panel shows it) and emit

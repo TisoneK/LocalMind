@@ -42,7 +42,7 @@ class ObsCollector:
         # Skip None values entirely, and convert everything else to a string
         # only if it isn't already JSON-native.
         #
-        # Session 376: lists/dicts must stay native too — `str(v)` on the
+        # Lists/dicts must stay native too — `str(v)` on the
         # edit_file diff_hunks list produced a Python-repr STRING, so the diff
         # SSE event carried a string "hunks" field and the frontend's
         # Array.isArray check silently dropped every diff (Diff mode never
@@ -87,7 +87,7 @@ class ObsCollector:
         return list(self._history)
 
 
-# ADR-18 P3 (Session 176): delegation streaming/UX — the sub-agent's
+# Delegation streaming/UX — the sub-agent's
 # progress is visible to the user, but its raw tool results stay internal
 # to the child/parent agent contract. A delegated child gets a
 # ChildObsProxy instead of a bare collector: the child behaves exactly

@@ -1,5 +1,5 @@
 """
-Per-run subgoal scratchpad — B-2026-08-02-8 (B3, subgoal tools).
+Per-run subgoal scratchpad — the subgoal tools.
 
 Lets an agent decompose a multi-step task ("build a hello world repo")
 into trackable subgoals ("create dir → write hello.py → git init →
@@ -7,7 +7,7 @@ git add → git commit") and update their status across iterations.
 The planning-phase plan is injected as text but can't be changed
 mid-run — this registry is the mutable, per-run working memory.
 
-Isolation model (same as tools/proposals.py from B-2026-08-02-7):
+Isolation model (same as tools/proposals.py):
 - A contextvars.ContextVar holds the registry, so every asyncio task
   gets its own copy — a delegated child agent's scratchpad never bleeds
   into the parent and vice versa.
@@ -57,7 +57,7 @@ class SubgoalRegistry:
         self._subgoals: dict[str, Subgoal] = {}
         self._order: list[str] = []
         self._counter = 0
-        # ADR-18 P0: success criteria declared by the model via create_plan's
+        # Success criteria declared by the model via create_plan's
         # optional `success_criteria` arg. The agent loop syncs these onto
         # the run's AgentTrace so the acceptance gate can judge them.
         self.success_criteria: list[str] = []

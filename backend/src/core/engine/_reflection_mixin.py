@@ -228,7 +228,7 @@ class _ReflectionMixin:
                 if _corr_match:
                     _correction = _corr_match.group(1).strip()
 
-                # Session 31: DON'T store the correction as a visible chat
+                # DON'T store the correction as a visible chat
                 # message — that created a confusing "⚠️ Self-correction"
                 # second message in the chat that users didn't ask for.
                 # Keep it as an obs event for observability only.

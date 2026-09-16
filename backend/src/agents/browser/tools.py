@@ -1,7 +1,7 @@
 """
 Browser agent scoped toolset.
 
-Per ADR-6: each agent has its own scoped toolset. A browser agent
+Each agent has its own scoped toolset. A browser agent
 shouldn't have shell tools; a coding agent shouldn't have browser
 tools. Smaller surface = more reliable selection on gemma3:1b-class
 models.
@@ -18,11 +18,11 @@ from __future__ import annotations
 from core.agent.constants import AGENT_ALLOWED_TOOLS
 from core.models import Intent
 
-# The browser agent's scoped tool allowlist. Per ADR-6, this is a
+# The browser agent's scoped tool allowlist. This is a
 # subset of AGENT_ALLOWED_TOOLS — only the tools this agent should
 # be able to call.
 #
-# ADR-8 Phase 3: 'delegate' lets the browser agent hand off a sub-task
+# 'delegate' lets the browser agent hand off a sub-task
 # to the research agent (e.g., "search for the login URL for site X"
 # before navigating) or the coding agent (e.g., "extract data from
 # the downloaded HTML file"). The browser agent's primary job is
@@ -30,8 +30,8 @@ from core.models import Intent
 BROWSER_TOOLS: frozenset[str] = frozenset(
     {
         Intent.BROWSE.value,  # the browser_agent tool
-        "delegate",  # ADR-8 Phase 3: agent-initiated delegation
-        "skill",  # B-2026-08-02-12: universal skill tool
+        "delegate",  # agent-initiated delegation
+        "skill",  # universal skill tool
     }
 )
 

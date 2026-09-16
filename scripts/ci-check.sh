@@ -126,7 +126,7 @@ echo "── eslint (frontend) ────────────────�
 # baseline with ZERO headroom so it cannot grow further; the pre-existing 71
 # (mostly no-explicit-any in SSE parsing) are backlogged to ratchet DOWN. Any
 # NEW warning fails the gate — lower this number as debt is paid, never raise it.
-# S440: errors 9 → 0 (conditional useEnterMotion fixed, dead imports/blocks
+# Errors 9 → 0 (conditional useEnterMotion fixed, dead imports/blocks
 # removed) and warnings 84 → 53 (backend wire types in client.ts replace the
 # SSE/session/history/objective `any`s; intent-typed casts dropped); cap
 # follows the true baseline down.

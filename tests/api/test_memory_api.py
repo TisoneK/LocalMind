@@ -1,4 +1,4 @@
-"""B-2026-08-23-14: the memory API surface the Memory tab relies on.
+"""The memory API surface the Memory tab relies on.
 
 GET    /api/memory           — list facts in the frontend MemoryFact shape
 POST   /api/memory           — store a manual fact (the new UI affordance)

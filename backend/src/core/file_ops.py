@@ -1,5 +1,5 @@
 """
-Deterministic file-ops execution layer (ADR-8 Phase 4, track 2 — Session 193).
+Deterministic file-ops execution layer.
 
 The root fix for the "find my CV and read it" failure class: file operations
 become RUNTIME behavior, not model choices. The runtime runs the chain
@@ -10,7 +10,7 @@ a raw provider payload).
 
 Three contracts, all checkable in code (no LLM needed for any of them):
 
-1. ROUTE deterministically — the file-search signal (Session 191) marks
+1. ROUTE deterministically — the file-search signal marks
    file-ops phrasing with primary_domain="file_ops"; the engine intercepts
    BEFORE the agent loop, so the free-tier model never routes a file request
    to SHELL (the transcript failure: Get-ChildItem -Recurse 20s timeouts).
@@ -76,7 +76,7 @@ class FileOpsSpec:
     max_results: int = 25
     read_requested: bool = False
     identity: str = ""  # user name for match picking ("tisone")
-    # Session 194 catalog continuation — filters applied in memory against
+    # Catalog continuation — filters applied in memory against
     # the cached walk (instant follow-ups, no re-scan).
     offset: int = 0  # page offset ("show more")
     ext: str = ""  # extension filter ("pdf", "pdf,docx")
@@ -117,7 +117,7 @@ class FileOpsResult:
     content: Optional[str] = None
     error: Optional[str] = None  # deterministic error text (not provider JSON)
     read_blocked: bool = False  # found but outside allowed folders
-    # Session 194 catalog: scale + shape of the full result set, so the
+    # Catalog: scale + shape of the full result set, so the
     # presentation can show the catalog (never a silently-truncated list).
     total: int = 0
     groups: dict = field(default_factory=dict)
@@ -145,7 +145,7 @@ def _score_match(match: str, pattern: str, identity: str = "") -> float:
     """Deterministic match-scoring (pure string/path heuristics, no LLM).
 
     Single source of truth for BOTH the picker and the ranked shortlist
-    (code review, Session 194): the top candidate shown in the ambiguous
+    (code review): the top candidate shown in the ambiguous
     ask must be exactly the file the picker would have chosen. Rules:
       1. Identity hit (filename contains the user's name) — decisive.
       2. Exact-name hit (filename contains the search pattern) — strong.
@@ -194,7 +194,7 @@ def _parse_match_paths(result) -> list[str]:
     """Extract match paths from a find_path ToolResult.
 
     find_path returns path lines in its content ("  📄  C:\\...\\file.docx").
-    Primary source: metadata["paths"] (added Session 193); fallback parses
+    Primary source: metadata["paths"]; fallback parses
     the content lines for tool runs that predate the metadata key.
     """
     meta = getattr(result, "metadata", None) or {}
@@ -265,7 +265,7 @@ async def execute_file_ops(spec: FileOpsSpec) -> FileOpsResult:
         return result
 
     result.matches = _parse_match_paths(tool_result)
-    # Session 194: carry the catalog (scale + shape) onto the result so the
+    # Carry the catalog (scale + shape) onto the result so the
     # presentation can show totals/groups instead of a truncated page.
     _meta = getattr(tool_result, "metadata", None) or {}
     result.total = int(_meta.get("total", len(result.matches)))

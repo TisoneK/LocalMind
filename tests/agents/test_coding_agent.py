@@ -1,12 +1,12 @@
 """
 Tests for the CodingAgent — the second concrete BaseAgent subclass.
 
-Locks in the ADR-6 structural skeleton for the coding agent:
+Locks in the structural skeleton for the coding agent:
     - CodingAgent is registered under "coding"
     - CodingAgent config has the right name, scoped tools, and caps
     - CodingAgent's scoped_tools() filters out non-coding tools
     - CODING_TOOLS is a subset of AGENT_ALLOWED_TOOLS
-    - description is concrete enough for a small model (ADR-6 point 6)
+    - description is concrete enough for a small model
     - build_context returns a string with the agent-type header
     - is_done returns (False, "") in Phase 1
 """
@@ -48,7 +48,7 @@ def test_coding_agent_config():
 
 def test_coding_agent_description_is_concrete():
     """The description must be concrete enough for a small model to pick
-    the right agent (ADR-6 point 6)."""
+    the right agent."""
     agent = CodingAgent(adapter=None)
     desc = agent.description()
     assert len(desc) > 50, "description too short — small model won't disambiguate"
@@ -61,7 +61,7 @@ def test_coding_agent_description_is_concrete():
 def test_coding_agent_build_context_returns_string():
     """build_context returns a non-empty string with the coding playbook.
 
-    ADR-8 Phase 2 (Session 34): build_context() now loads the coding
+    Build_context() now loads the coding
     playbook from agents/coding/playbook.md (was a static header in
     Phase 1). The playbook's "## Coding Playbook" section appears in
     the context string along with the constraints (read-before-write,
@@ -80,7 +80,7 @@ def test_coding_agent_build_context_returns_string():
     assert "Read before writing" in ctx
     assert "Verify after writing" in ctx
     assert "Python 3.12" in ctx  # memory facts are included
-    # Must mention the workspace state feedback loop (ADR-5 differentiator)
+    # Must mention the workspace state feedback loop (the harness differentiator)
     assert "workspace" in ctx.lower() or "git" in ctx.lower()
 
 
@@ -109,28 +109,28 @@ def test_coding_agent_scoped_tools_filters_non_coding():
         {"intent": "code_exec", "description": "code exec"},
         {"intent": "git", "description": "git"},
         {"intent": "process", "description": "process"},
-        {"intent": "system_search", "description": "unified local search"},  # Session 400
+        {"intent": "system_search", "description": "unified local search"},
         {"intent": "diagnostics", "description": "diagnostics"},
         {"intent": "web_search", "description": "web search"},
         {"intent": "web_fetch", "description": "web fetch"},
         {"intent": "browse", "description": "browser"},
         {"intent": "memory_op", "description": "memory"},
         {"intent": "sysinfo", "description": "sysinfo"},
-        {"intent": "observe", "description": "observe desktop"},  # B-2026-07-31-9
-        {"intent": "calculator", "description": "safe arithmetic"},  # B-2026-07-31-10
-        {"intent": "csv", "description": "bounded csv parse"},  # B-2026-07-31-10
-        {"intent": "json", "description": "bounded json query"},  # B-2026-07-31-10
-        {"intent": "sql", "description": "read-only sqlite"},  # B-2026-07-31-10
-        {"intent": "delegate", "description": "delegate"},  # ADR-8 Phase 3
-            {"intent": "delegate_parallel", "description": "delegate parallel"},  # B-2026-08-02-6
-            {"intent": "propose_str_replace", "description": "propose edit"},  # B-2026-08-02-7
-            {"intent": "propose_write_file", "description": "propose write"},  # B-2026-08-02-7
-            {"intent": "apply_proposed_edit", "description": "apply proposal"},  # B-2026-08-02-7
-            {"intent": "add_subgoal", "description": "add subgoal"},  # B-2026-08-02-8
-            {"intent": "update_subgoal", "description": "update subgoal"},  # B-2026-08-02-8
-            {"intent": "create_plan", "description": "create plan"},  # B-2026-08-02-8
-            {"intent": "skill", "description": "load skill"},  # B-2026-08-02-12
-            {"intent": "best_of_n_edit", "description": "best-of-N edit"},  # B-2026-08-02-11
+        {"intent": "observe", "description": "observe desktop"},
+        {"intent": "calculator", "description": "safe arithmetic"},
+        {"intent": "csv", "description": "bounded csv parse"},
+        {"intent": "json", "description": "bounded json query"},
+        {"intent": "sql", "description": "read-only sqlite"},
+        {"intent": "delegate", "description": "delegate"},
+            {"intent": "delegate_parallel", "description": "delegate parallel"},
+            {"intent": "propose_str_replace", "description": "propose edit"},
+            {"intent": "propose_write_file", "description": "propose write"},
+            {"intent": "apply_proposed_edit", "description": "apply proposal"},
+            {"intent": "add_subgoal", "description": "add subgoal"},
+            {"intent": "update_subgoal", "description": "update subgoal"},
+            {"intent": "create_plan", "description": "create plan"},
+            {"intent": "skill", "description": "load skill"},
+            {"intent": "best_of_n_edit", "description": "best-of-N edit"},
         ]
     scoped = agent.scoped_tools(all_tools)
     scoped_intents = {t["intent"] for t in scoped}
@@ -183,11 +183,11 @@ def test_coding_tools_has_ten_tools():
     """The coding agent's scoped toolset is exactly 23 tools.
 
     Sessions 41-49 added git, process, and diagnostics; Session 81 added
-    delegate_parallel (B-2026-08-02-6); Session 82 added the three
-    propose-stage tools (B-2026-08-02-7); Session 83 added the three
-    subgoal scratchpad tools (B-2026-08-02-8); Session 84 added skill
+    delegate_parallel; Session 82 added the three
+    propose-stage tools; Session 83 added the three
+    subgoal scratchpad tools; Session 84 added skill
     (B-2026-08-02-12, universal); Session 86 added best_of_n_edit
-    (B-2026-08-02-11); Session 125 added find_path (name-match search);
+    ; Session 125 added find_path (name-match search);
     Session 130 added observe (B-2026-07-31-9, desktop awareness);
     Sessions 131-132 added calculator/csv/json/sql (B-2026-07-31-10, data tools).
     """
@@ -250,7 +250,7 @@ def test_is_coding_done_phase1_always_false():
 def test_coding_and_browser_have_different_toolsets():
     """CodingAgent and BrowserAgent have disjoint PRIMARY toolsets.
 
-    ADR-8 Phase 3 (Session 34): both agents have the shared `delegate`
+    ADR-8 Phase 3: both agents have the shared `delegate`
     tool, but their PRIMARY tools (the non-delegate tools) are disjoint.
     """
     from agents.browser import BROWSER_TOOLS

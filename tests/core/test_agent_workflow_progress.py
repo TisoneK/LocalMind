@@ -54,7 +54,7 @@ async def test_parent_exposes_lifecycle_status_not_raw_planner_text():
     thinking = [chunk.thinking for chunk in chunks if chunk.thinking]
     text = "".join(chunk.text for chunk in chunks)
 
-    # ADR-37: the hardcoded stage-name narration is gone. The parent no longer
+    # The hardcoded stage-name narration is gone. The parent no longer
     # emits theater status lines ("preparing an execution plan…", "creating a
     # short plan…", "Plan ready…", "deciding the next action…", "verifying the
     # result…") — real model output (ack + thinking) is the only status signal.

@@ -1,6 +1,6 @@
 """Context pruner agent subpackage — the inline history-rewriter.
 
-Per ADR-8 Principle 5 (Session 34, Phase 1): the agent class lives INSIDE
+The agent class lives INSIDE
 this directory at `agent.py`. The registry auto-discovers directories with
 an `agent.py` whose class name matches <Name>Agent (or any BaseAgent
 subclass for multi-word names like ContextPrunerAgent).

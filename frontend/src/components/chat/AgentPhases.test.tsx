@@ -1,5 +1,5 @@
 /**
- * Tests for AgentPhases component (Session 181 — F4 Frontend Phase Visibility).
+ * Tests for AgentPhases component (Frontend Phase Visibility).
  */
 
 import { describe, it, expect } from 'vitest';

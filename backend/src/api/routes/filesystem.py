@@ -168,7 +168,7 @@ async def list_files(path: str = ""):
 
 @router.get("/files/recent")
 async def recent_files(path: str = "", limit: int = 10):
-    """Most-recently-modified files under the given root (B-2026-08-23-16).
+    """Most-recently-modified files under the given root.
 
     Bounded recursive walk (skips hidden dirs and caps the scan), returning
     the `limit` newest files with size/modified metadata — powers the Files

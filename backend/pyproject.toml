@@ -134,7 +134,7 @@ ignore_missing_imports = true
 asyncio_mode = "auto"
 testpaths = ["../tests"]
 # Session 333: add ".." (repo root) to pythonpath so cross-test imports like
-# `from tests.adapters.test_thinking_policy_adr41 import _collect_with_dispatch`
+# `from tests.adapters.test_thinking_policy import _collect_with_dispatch`
 # (in test_parent_recovery_cap.py) resolve. Previously only "src" was on the
 # path, causing `ModuleNotFoundError: No module named 'tests'`.
 # The `tools` package conflict (tests/tools/ vs src/tools/) is handled by

@@ -126,7 +126,7 @@ KNOWN_SITES: dict[str, str] = {
 }
 
 BLOCKED_COMMANDS = [
-    # NOTE (B-2026-08-16-15): the bare "format" substring is GONE — it
+    # NOTE: the bare "format" substring check is GONE — it
     # blocked safe read-only uses (PowerShell Format-List / Format-Table,
     # filenames/paths containing "format", curl --format, git log --format).
     # Actual disk-format commands are blocked separately via
@@ -146,7 +146,7 @@ BLOCKED_COMMANDS = [
 
 # Destructive disk-format commands ONLY — replacing the old bare "format"
 # substring, which false-positived on Format-List / Format-Table / any path
-# or variable containing "format" (B-2026-08-16-15, found via a live hy3-free
+# or variable containing "format" (found via a live hy3-free
 # trace: the model's read-only `... | Sort-Object Length | Format-Table` was
 # rejected and it had to route around the block).
 _BLOCKED_FORMAT_RE = re.compile(
@@ -173,7 +173,7 @@ FILE_TYPE_EXTENSIONS: dict[str, list[str]] = {
     "receipt": ["pdf", "jpg", "jpeg", "png"],
 }
 
-# ── PowerShell routing on Windows (Session 189) ──────────────────────────────
+# ── PowerShell routing on Windows ──────────────────────────────
 # The model is TOLD it's on PowerShell (context_builder sets shell_name =
 # "PowerShell" on Windows) and therefore generates cmdlets like
 # `Get-ChildItem ... | Where-Object { $_.Name -match ... }`. But subprocess
@@ -186,7 +186,7 @@ FILE_TYPE_EXTENSIONS: dict[str, list[str]] = {
 # Known PowerShell approved verbs (Verbs.PowerShell). Narrowing to these
 # avoids false-positives: a bare `^[A-Za-z]+-[A-Za-z]+` would also match
 # docker-compose / my-script.py / npm-run-all, which are NOT cmdlets and
-# must keep the plain cmd path (Session 189 review catch).
+# must keep the plain cmd path (a review catch).
 _POWERSHELL_VERBS = (
     r"Get|Set|Remove|New|Copy|Move|Select|Where|ForEach|Test|Invoke|Format|"
     r"Sort|Out|Write|Read|Start|Stop|Add|Clear|Import|Export|ConvertTo|"
@@ -271,7 +271,7 @@ def _capture_process_output(proc: subprocess.Popen, timeout: int) -> tuple[str, 
 
 def _blocked_reason(cmd: str | list) -> str | None:
     """Return a user-facing reason if the command is blocked for safety, else
-    None. B-2026-08-16-15: the old bare-"format" substring check also blocked
+    None. The old bare-"format" substring check also blocked
     safe read-only commands (Format-List, filenames with "format" in them) —
     destructive patterns only."""
     target = cmd if isinstance(cmd, str) else " ".join(cmd)
@@ -297,7 +297,7 @@ def _run(cmd: str | list, timeout: int = 20, cwd: str | None = None) -> dict:
         )
         effective_cwd = None
     try:
-        # Session 189: on Windows, PowerShell-flavored commands (cmdlets, $_,
+        # On Windows, PowerShell-flavored commands (cmdlets, $_,
         # pipelines) must run under PowerShell, not the default cmd.exe that
         # shell=True spawns. Passing the full command string as a single
         # argument avoids cmd.exe token-splitting/quoting issues.
@@ -419,7 +419,7 @@ def _find_files(path: Path, file_type: str) -> tuple[str, RiskLevel]:
         return f"No permission to search {path}.", RiskLevel.LOW
 
 
-# ── Natural-language command guard (Session 113) ─────────────────────────────
+# ── Natural-language command guard ─────────────────────────────
 # The agent loop feeds whatever the model emits as run_command straight into
 # the shell. Free-tier models sometimes pass the user's raw sentence as the
 # command (e.g. "Check git status in the localmind repo") instead of
@@ -501,7 +501,7 @@ def _looks_like_natural_language(command: str) -> bool:
     if re.search(r"\[\s*(shell|tool|bash|cmd|powershell)\s*\]", cmd, re.IGNORECASE):
         return True
     # PowerShell cmdlets (Get-ChildItem, Where-Object, $_) are real commands —
-    # Session 189: they used to be mislabeled as natural language on Windows
+    # They used to be mislabeled as natural language on Windows
     # (first token "Get-ChildItem" is not on PATH), which blocked every
     # PowerShell-generated command before it even reached the shell.
     if _looks_like_powershell(cmd):
@@ -553,7 +553,7 @@ def _guard_nl_command(command: str) -> None:
         )
 
 
-# ── B-2026-08-25-1: prefer the search tools over shell for broad filesystem
+# ── Prefer the search tools over shell for broad filesystem
 # searches. Weak/free models ignore the prompt steering ("use system_search —
 # never find hunts") and reach for `find /` / `du ~` / recursive Get-ChildItem,
 # which scan the whole disk/home tree and time out (live-verified on
@@ -596,7 +596,7 @@ _SUDO_WORDS = frozenset({"sudo", "doas"})
 def _guard_broad_search(command: str) -> None:
     """Redirect a broad filesystem search to system_search before it runs.
 
-    B-2026-08-25-1 live follow-up (bankofai/deepseek-v4-flash traces): the
+    The live follow-up (bankofai/deepseek-v4-flash traces): the
     guard previously inspected only the FIRST pipeline segment and did not
     strip privilege prefixes, so two real-world shapes escaped the redirect:
     - compound commands: `ls -d X; echo ---; find /home/z -maxdepth 4 …` —
@@ -683,7 +683,7 @@ def _shell_timeout() -> int:
 
 def _run_command(command: str, cwd: str | None = None) -> tuple[str, RiskLevel]:
     """Execute a raw shell command. command must be a literal command string."""
-    # B-2026-08-25-1: the search guard runs FIRST — a tool name run as a shell
+    # The search guard runs FIRST — a tool name run as a shell
     # command ("system_search operation=...") must steer to a tool call, not be
     # caught by the NL guard (which would tell the model to write a shell
     # command instead). Broad find/du also redirect here before anything runs.
@@ -932,7 +932,7 @@ class ShellContract(ToolContract):
 
         try:
             content, risk = await asyncio.get_event_loop().run_in_executor(None, _sync)
-            # B-2026-08-18-10: propagate a command FAILURE as a real tool error.
+            # Propagate a command FAILURE as a real tool error.
             # Shell used to return success=True even for a timeout / nonzero exit
             # (the failure was buried as "Command failed: ..." in the output), so
             # the loop's recovery layer never engaged: the agent could spin on
@@ -962,7 +962,7 @@ class ShellContract(ToolContract):
                 error_message=str(exc),
             )
         except _NLCommandError as exc:
-            # Session 113: the model passed natural language as the command
+            # The model passed natural language as the command
             # (e.g. "Check git status in the localmind repo" instead of
             # "git status"). Reject with a corrective error so the agent
             # loop retries with a real command — never run NL as-is.
@@ -975,7 +975,7 @@ class ShellContract(ToolContract):
                 error_message=str(exc),
             )
         except _SearchRedirectError as exc:
-            # B-2026-08-25-1: a broad filesystem search that would time out —
+            # A broad filesystem search that would time out —
             # redirect the model to system_search deterministically (works on
             # weak/free models that ignore the prompt steering).
             return ToolResult(
@@ -1054,14 +1054,14 @@ async def shell_exec(message: str) -> ToolResult:
 
     # Case 2 — raw shell command (deterministic gate, no heuristics).
     # _RAW_CMD_TOKENS is the module-level union of builtins and known
-    # command names (see the Session 113 guard above) — operators are
+    # command names (see the natural-language guard above) — operators are
     # checked explicitly so "a | b" routes even with an unknown first token.
-    # Session 189: PowerShell cmdlets (Get-ChildItem, Get-Content, ...) are
+    # PowerShell cmdlets (Get-ChildItem, Get-Content, ...) are
     # real commands — the model is told it's on PowerShell on Windows and
     # emits cmdlets whose first token is NOT in _RAW_CMD_TOKENS and often
     # carries no shell operator (e.g. `Get-ChildItem -Path $env:USERPROFILE\Desktop`).
     # Without this, every cmdlet fell through to Case 3 and was rejected with
-    # nl_dispatch_removed (live user bug, Session 258).
+    # nl_dispatch_removed (live user bug).
     first_token = message.strip().split()[0].lower() if message.strip() else ""
     has_operator = any(op in message for op in {"&&", "||", ">>", ">", ";", "|"})
     if has_operator or first_token in _RAW_CMD_TOKENS or _looks_like_powershell(message):

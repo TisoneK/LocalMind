@@ -1,4 +1,4 @@
-"""Session 366 — VectorStore WAL busy race (B-2026-08-23-14).
+"""VectorStore WAL busy race.
 
 Root cause: `_persist` ran a deferred `BEGIN`, then a dedup SELECT (which
 takes a WAL read snapshot), then INSERTs. If any other connection commits

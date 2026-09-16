@@ -1,4 +1,4 @@
-"""Session 344 — Presentation Intelligence tests."""
+"""Presentation Intelligence tests."""
 from __future__ import annotations
 
 from core.presentation import (

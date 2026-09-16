@@ -1,5 +1,5 @@
 """
-Tests for ADR-12 per-stage timing (B-2026-08-09-2).
+Tests for ADR-12 per-stage timing.
 
 The Observe panel's "Agent Pipeline" section previously derived stage status
 from a frontend heuristic that left "Tool Select" orange forever on completed
@@ -80,7 +80,7 @@ class TestEngineStageTiming:
     @pytest.mark.asyncio
     async def test_trivial_turn_emits_truthful_stage_timings(self):
         """A trivial greeting must report intent_classify/generate done and
-        tool_select/execute SKIPPED — not stuck 'running' (ADR-12)."""
+        tool_select/execute SKIPPED — not stuck 'running' ."""
         from core.engine import Engine
 
         engine = Engine()
@@ -112,7 +112,7 @@ class TestEngineStageTiming:
 
     @pytest.mark.asyncio
     async def test_conversational_question_emits_truthful_stage_timings(self):
-        """Conversational-question short-circuit (ADR-11) also reports
+        """Conversational-question short-circuit also reports
         truthful stage timings (generate done, tools skipped)."""
         from core.engine import Engine
 

@@ -1,6 +1,6 @@
 """
 code_exec RECOVERS a run-a-file command by running it via the shell tool
-(B-2026-08-18-8).
+.
 
 The model often reaches for code_exec to run a script it just wrote
 ("python C:\\...\\fib_check.py 55"). code_exec runs INLINE Python source, not a

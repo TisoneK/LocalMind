@@ -1,4 +1,4 @@
-"""Session 326 regression tests — harness-owned synthesized todos (B-2026-08-20-23).
+"""Session 326 regression tests — harness-owned synthesized todos.
 
 The warm-kernel runtime (``agent_runtime`` passes ``skip_planning=True``) gates
 out ALL plan→todo branches in ``loop.py``, so the Todos panel was structurally

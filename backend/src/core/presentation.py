@@ -1,5 +1,5 @@
 """
-Session 344 — Presentation Intelligence.
+Presentation Intelligence.
 
 The user's principle:
   > The model decides the semantic form of the answer.

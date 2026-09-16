@@ -1,4 +1,4 @@
-"""Session 359 — memory end-to-end fixes.
+"""Memory end-to-end fixes.
 
 Three gaps closed:
 - Gap A: memory_op's SQLite fallback omitted `timestamp` from metadata, so

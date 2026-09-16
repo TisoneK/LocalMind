@@ -1,5 +1,5 @@
 /**
- * Tests for useTheme (Session 218 — theming-multi-palette).
+ * Tests for useTheme.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -50,7 +50,7 @@ describe('useTheme', () => {
     expect(result.current.resolvedMode).toBe('dark');
   });
 
-  // ── B-2026-08-23-19: custom palette + tone ──
+  // ── custom palette + tone ──
 
   it('applies a custom palette inline and persists it (fresh module reload)', () => {
     const custom = { name: 'Ocean', accent: '#3b82f6', background: '#0b1220', surface: '#16202f', text: '#e2e8f0' };

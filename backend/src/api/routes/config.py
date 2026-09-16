@@ -26,27 +26,27 @@ class SettingsResponse(BaseModel):
     # Context window (num_ctx) the loop budgets / Ollama allocates.
     # 0 = auto-detect the model's real declared window; >0 = explicit override.
     num_ctx: int = 0
-    # Whether the shell tool is enabled (Session 292: was env-only, now UI-toggle).
+    # Whether the shell tool is enabled (was env-only, now UI-toggle).
     shell_enabled: bool = False
     providers: dict
-    # ADR-41 (Session 254): reasoning-model thinking policy (z.ai/GLM).
+    # Reasoning-model thinking policy (z.ai/GLM).
     # Mirrored to the Settings UI so users can tune thinking without env vars.
     thinking: str = "enabled"
     reasoning_timeout: float = 180.0
     reasoning_plan_timeout: float = 30.0
     reasoning_max_wall_clock: float = 360.0
     reasoning_effort: str = ""
-    # B-2026-08-23-19: UI appearance (theme/mode/custom palette/tone),
+    # UI appearance (theme/mode/custom palette/tone),
     # persisted in settings.json by POST /api/settings/appearance.
     theme: str = "graphite"
     mode: str = "dark"
     custom_theme: Optional[dict] = None
     tone: float = 1.0
-    # B-2026-08-23-27: startup session behavior — "resume" or "new".
+    # Startup session behavior — "resume" or "new".
     startup_session: str = "new"
-    # B-2026-08-23-34: Chat mode — "auto" | "agent" | "direct".
+    # Chat mode — "auto" | "agent" | "direct".
     chat_mode: str = "auto"
-    # B-2026-08-23-33: Configurable operation permissions.
+    # Configurable operation permissions.
     permissions: dict = {
         "file_read": True,
         "file_write": True,
@@ -65,7 +65,7 @@ class AdapterConfig(BaseModel):
 
 
 class ThinkingSettingsRequest(BaseModel):
-    """Body for POST /api/settings/thinking (ADR-41 reasoning policy).
+    """Body for POST /api/settings/thinking (reasoning policy).
 
     All fields optional so a partial update is safe: only provided fields
     are applied and persisted. reasoning_effort="" clears the effort.
@@ -85,13 +85,13 @@ class ProviderKeyRequest(BaseModel):
 
 
 class StartupSessionRequest(BaseModel):
-    """Body for POST /api/settings/startup-session (B-2026-08-23-27)."""
+    """Body for POST /api/settings/startup-session."""
     startup_session: str  # "resume" | "new"
 
 
 @router.post("/settings/startup-session")
 async def set_startup_session(req: StartupSessionRequest):
-    """Persist the startup session behavior (B-2026-08-23-27).
+    """Persist the startup session behavior.
 
     "resume" = auto-open the most recent session on launch.
     "new" = start with a blank chat every time.
@@ -109,13 +109,13 @@ async def set_startup_session(req: StartupSessionRequest):
 
 
 class ChatModeRequest(BaseModel):
-    """Body for POST /api/settings/chat-mode (B-2026-08-23-34)."""
+    """Body for POST /api/settings/chat-mode."""
     chat_mode: str  # "auto" | "agent" | "direct"
 
 
 @router.post("/settings/chat-mode")
 async def set_chat_mode(req: ChatModeRequest):
-    """Persist the chat mode (B-2026-08-23-34).
+    """Persist the chat mode.
 
     "auto" = classifier decides (default).
     "agent" = always full agent loop.
@@ -134,7 +134,7 @@ async def set_chat_mode(req: ChatModeRequest):
 
 
 class PermissionsRequest(BaseModel):
-    """Body for POST /api/settings/permissions (B-2026-08-23-33).
+    """Body for POST /api/settings/permissions.
 
     All fields optional so a partial update is safe. Only recognized keys
     are applied; unknown keys are silently ignored.
@@ -152,7 +152,7 @@ class PermissionsRequest(BaseModel):
 
 @router.post("/settings/permissions")
 async def set_permissions(req: PermissionsRequest):
-    """Update operation permissions and persist to settings.json (B-2026-08-23-33)."""
+    """Update operation permissions and persist to settings.json."""
     payload = {}
     for key in ("file_read", "file_write", "file_edit", "shell", "code_exec", "web_search", "web_fetch", "memory_op"):
         val = getattr(req, key, None)
@@ -168,7 +168,7 @@ async def set_permissions(req: PermissionsRequest):
 
 
 class AppearanceRequest(BaseModel):
-    """Body for POST /api/settings/appearance (B-2026-08-23-19).
+    """Body for POST /api/settings/appearance.
 
     All fields optional so a partial update is safe. `theme` is one of the
     built-in palette ids plus "custom" (user-defined palette via the UI);
@@ -184,7 +184,7 @@ class AppearanceRequest(BaseModel):
 
 @router.post("/settings/appearance")
 async def set_appearance(req: AppearanceRequest):
-    """Apply and persist the UI appearance (B-2026-08-23-19).
+    """Apply and persist the UI appearance.
 
     The user's chosen theme (built-in palette or a custom palette defined in
     the UI), mode, custom palette definition, and tone/brightness are saved
@@ -273,7 +273,7 @@ async def get_settings():
     Get current adapter and model configuration.
     """
     adapter = settings.localmind_adapter
-    # B-2026-08-23-19: persisted appearance (theme/mode/custom palette/tone).
+    # Persisted appearance (theme/mode/custom palette/tone).
     appearance = _read_appearance()
 
     # Derive the model-setting map from ADAPTER_MODEL_FIELDS (single source
@@ -316,17 +316,17 @@ async def get_settings():
         reasoning_plan_timeout=settings.localmind_reasoning_plan_timeout_secs,
         reasoning_max_wall_clock=settings.localmind_reasoning_max_wall_clock_secs,
         reasoning_effort=settings.localmind_reasoning_effort,
-        # B-2026-08-23-19: appearance from settings.json (theme/mode/custom
+        # Appearance from settings.json (theme/mode/custom
         # palette/tone) so the UI restores the persisted choice on launch.
         theme=appearance.get("theme", "graphite"),
         mode=appearance.get("mode", "dark"),
         custom_theme=appearance.get("custom_theme"),
         tone=float(appearance.get("tone", 1.0) or 1.0),
-        # B-2026-08-23-27: startup session behavior
+        # Startup session behavior
         startup_session=getattr(settings, "localmind_startup_session", "new"),
-        # B-2026-08-23-34: chat mode
+        # Chat mode
         chat_mode=getattr(settings, "localmind_chat_mode", "auto"),
-        # B-2026-08-23-33: operation permissions
+        # Operation permissions
         permissions=dict(getattr(settings, "localmind_permissions", {})),
     )
 
@@ -348,7 +348,7 @@ def _read_appearance():
 @router.post("/settings/thinking")
 async def set_thinking_settings(req: ThinkingSettingsRequest):
     """
-    Update the reasoning-model thinking policy (ADR-41) and persist it to
+    Update the reasoning-model thinking policy and persist it to
     settings.json so it survives restarts.
 
     Applies only the fields the client actually sends. The adapter reads
@@ -528,7 +528,7 @@ async def set_adapter(req: AdapterConfig):
     # Persist runtime settings to JSON file for restart survival.
     # save_runtime_settings preserves existing values when a kwarg is empty,
     # so passing model="" won't wipe a previously-saved model.
-    # Session 292: Ollama persists under its DEDICATED ollama_model key (the
+    # Ollama persists under its DEDICATED ollama_model key (the
     # generic `model` key is cloud-only on load), so an Ollama model survives a
     # restart and a stale cloud model never loads as the Ollama model.
     if req.adapter == "ollama":
@@ -642,7 +642,7 @@ async def delete_provider_key(req: DeleteProviderKeyRequest):
     }
 
 
-# ── B-2026-08-23-28: One-click embed-model download ─────────────────────
+# ── One-click embed-model download ─────────────────────
 
 OLLAMA_PULL_URL_TEMPLATE = "{base}/api/pull"
 

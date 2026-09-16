@@ -32,7 +32,7 @@ describe('createSSEParser', () => {
   });
 
   it('flushes a [DONE] event that arrives without a trailing newline', () => {
-    // Session 37 backlog: a proxy/server close without a trailing newline
+    // A proxy/server close without a trailing newline
     // can hide the final `done` event. `flush()` must process the buffered
     // `[DONE]` line and fire onDone exactly once.
     const onData = vi.fn();
@@ -50,7 +50,7 @@ describe('createSSEParser', () => {
 
   it('buffers a data line split across network chunks and delivers it on flush', () => {
     // A partial `data:` line at a chunk boundary must be retained and
-    // delivered once the stream ends — not dropped (Session 37 backlog).
+    // delivered once the stream ends — not dropped.
     const onData = vi.fn();
     const onDone = vi.fn();
     const parser = createSSEParser(onData, onDone);

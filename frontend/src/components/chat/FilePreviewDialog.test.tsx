@@ -234,7 +234,7 @@ describe('FilePreviewDialog', () => {
     });
   });
 
-  describe('diff mode (B-2026-08-23-18)', () => {
+  describe('diff mode', () => {
     const sampleHunks = [
       {
         filePath: '/tmp/demo/a.txt',
@@ -316,7 +316,7 @@ describe('FilePreviewDialog', () => {
     });
   });
 
-  describe('edit mode (B-2026-08-23-6 follow-up)', () => {
+  describe('edit mode', () => {
     it('shows an Edit button for text files and edits the draft in a textarea', async () => {
       mockClient.getFileContent.mockResolvedValue(textContent());
       render(<FilePreviewDialog path="/tmp/demo/a.txt" onClose={() => {}} />);

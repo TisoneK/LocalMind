@@ -1,4 +1,4 @@
-"""Dispatch-level tests for the legacy code_exec tool (Session 108).
+"""Dispatch-level tests for the legacy code_exec tool.
 
 Regression coverage for the pre-dispatch validator contradiction: the agent
 loop passes the model's raw tool_call 'code' argument (unfenced — the schema

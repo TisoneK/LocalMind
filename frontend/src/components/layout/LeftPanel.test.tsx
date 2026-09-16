@@ -169,7 +169,7 @@ describe('LeftPanel multi-select', () => {
     expect(onChatTabShown).toHaveBeenCalledTimes(1);
   });
 
-  it('B-2026-08-23-5: consuming forceChatTab on Chat does not fight the first tool event', () => {
+  it('consuming forceChatTab on Chat does not fight the first tool event', () => {
     // The reported bug: New Chat while ALREADY on the Chat tab left
     // forceChatTab=true (the old guard `activeTab !== 'chat'` never fired).
     // The FIRST tool event then switched to Actions, and the still-set flag
@@ -233,7 +233,7 @@ describe('LeftPanel multi-select', () => {
     expect(screen.getByText('1 step')).toBeInTheDocument();
   });
 
-  it('B-2026-08-23: expands a chat to list its workspace artifacts', async () => {
+  it('expands a chat to list its workspace artifacts', async () => {
     const entries = [
       { name: 'notes.txt', type: 'file' as const, path: '/tmp/ws/notes.txt', relPath: 'notes.txt', size: 42, modified: '' },
       { name: 'sub', type: 'folder' as const, path: '/tmp/ws/sub', relPath: 'sub', size: 0, modified: '' },
@@ -250,7 +250,7 @@ describe('LeftPanel multi-select', () => {
     expect(await screen.findByText(/Preview/i)).toBeInTheDocument();
   });
 
-  it('B-2026-08-23: shows the empty state when a chat has no artifacts', async () => {
+  it('shows the empty state when a chat has no artifacts', async () => {
     vi.spyOn(client, 'getSessionFiles').mockResolvedValue([]);
     renderPanel();
     fireEvent.click(screen.getByTestId('session-files-toggle-a'));

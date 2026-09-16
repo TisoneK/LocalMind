@@ -9,7 +9,7 @@
  * proportional bar: thinking vs each tool vs the answer, colored and labeled,
  * exact ms on hover.
  *
- * It is the visible payoff of the thinking-timer fix (B-2026-09-04-4): the bar
+ * It is the visible payoff of the thinking-timer fix: the bar
  * is only honest because thinking time no longer overlaps tool time, so the
  * segments compose without double-counting.
  *

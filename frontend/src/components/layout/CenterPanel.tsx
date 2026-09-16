@@ -16,7 +16,7 @@ import { ChatInput } from '@/components/chat/ChatInput';
 import { TranscriptContextMenu } from '@/components/chat/TranscriptContextMenu';
 import { localmindClient } from '@/lib/localmind/client';
 
-// ADR-34 B-10: the intent badge and INTENT_LABELS map are retired.
+// The intent badge and INTENT_LABELS map are retired.
 // Intent classification is no longer a product-facing surface — the
 // Agent Workspace is the canonical live UI for agent state.
 
@@ -36,7 +36,7 @@ interface HealthState {
   status: 'online' | 'offline' | 'checking';
   version?: string;
   uptime?: number;
-  // ADR-52 phase 2 (Session 309): distinct parent-kernel readiness.
+  // Distinct parent-kernel readiness.
   // When parentReady is false, the boot kernel is degraded (provider
   // warmup failed) — the parent will retry lazily on the first turn.
   // parentDegradedReason carries the failure string for the tooltip.
@@ -85,11 +85,11 @@ interface CenterPanelProps {
    *  meter opens a breakdown panel so the user can see WHAT fills the
    *  window — system prompt, tool schemas, history, tool results, ... */
   contextBreakdown?: Record<string, number>;
-  /** B-2026-08-23-18: per-path diff hunks captured this turn (preview Diff mode). */
+  /** Per-path diff hunks captured this turn (preview Diff mode). */
   fileDiffs?: Record<string, DiffData>;
-  /** B-2026-08-23-34: Current chat mode. */
+  /** Current chat mode. */
   chatMode?: string;
-  /** B-2026-08-23-34: Callback to change chat mode. */
+  /** Callback to change chat mode. */
   onChatModeChange?: (mode: 'auto' | 'agent' | 'direct') => void;
 }
 
@@ -112,12 +112,12 @@ export function CenterPanel({
   onChatModeChange,
 }: CenterPanelProps) {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  // B-2026-08-23-14: guide the user in chat when the configured embed model
+  // Guide the user in chat when the configured embed model
   // isn't pulled in Ollama but an alternative is — memory stores would
   // otherwise silently fail. Dismissed per session (sessionStorage) so it
   // doesn't nag after the user has seen it once.
   const [embedGuide, setEmbedGuide] = useState<{ configured: string; suggested: string } | null>(null);
-  // One-click auto-fix (B-2026-08-23-14 follow-up): switching the embed model
+  // One-click auto-fix: switching the embed model
   // right from the banner instead of sending the user to Settings.
   const [embedFixing, setEmbedFixing] = useState(false);
   const [embedFixed, setEmbedFixed] = useState(false);
@@ -385,7 +385,7 @@ export function CenterPanel({
               <WifiOff className="h-3 w-3 text-brand-red" />
             )}
           </div>
-          {/* ADR-52 phase 2 (Session 309): distinct parent-kernel readiness.
+          {/* Distinct parent-kernel readiness.
               Shows a warning dot when the parent kernel is degraded (provider
               warmup failed at boot). The parent still serves requests via
               lazy retry, but the user should know something is off. Hidden
@@ -408,7 +408,7 @@ export function CenterPanel({
         </div>
       </div>
 
-      {/* B-2026-08-23-14: embed-model guide — shown when the configured
+      {/* Embed-model guide — shown when the configured
           embedding model isn't installed but an alternative is pulled.
           One-click fix: the primary button applies the suggested model via
           the same settings endpoint the Settings modal uses. */}
@@ -493,7 +493,7 @@ export function CenterPanel({
           </div>
 
         {/* Streaming indicator — only show when assistant content is still empty */}
-        {/* Session 30: replace static "Thinking..." with real pipeline status. */}
+        {/* Replace static "Thinking..." with real pipeline status. */}
         {/* The engine emits status_update events ("Let me search the web...", */}
         {/* "Understanding your request...", etc.) — show those instead of a */}
         {/* dead "Thinking..." label. Only show "Thinking" when the model is */}
@@ -502,7 +502,7 @@ export function CenterPanel({
             const lastMsg = messages[messages.length - 1];
             const hasContent = lastMsg && lastMsg.role === 'assistant' && lastMsg.content && lastMsg.content.trim().length > 0;
             const hasThinking = lastMsg && lastMsg.role === 'assistant' && lastMsg.thinking && lastMsg.thinking.trim().length > 0;
-            // Session 352: only hide the status indicator when the FINAL ANSWER
+            // Only hide the status indicator when the FINAL ANSWER
             // (content) is being streamed — not when thinking text is visible.
             // The old check (hasContent || hasToolCalls) hid the status as soon
             // as thinking started, leaving the user in the dark for the entire
@@ -525,7 +525,7 @@ export function CenterPanel({
                     <span className="w-1 h-1 bg-brand-green rounded-full animate-bounce [animation-delay:300ms]" />
                   </span>
                 </div>
-                {/* Session 118: animated activity bar — the agent is working */}
+                {/* Animated activity bar — the agent is working */}
                 <div className="mt-2 h-0.5 w-full max-w-[260px] rounded-full bg-brand-border/60 overflow-hidden">
                   <div className="h-full w-1/3 rounded-full bg-brand-green animate-[slide-x_1.2s_ease-in-out_infinite]" />
                 </div>

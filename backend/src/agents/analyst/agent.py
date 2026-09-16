@@ -1,7 +1,7 @@
 """
 AnalystAgent — the requirements-analysis specialist BaseAgent subclass.
 
-Per ADR-6 (refines ADR-5): a thin subclass of BaseAgent that supplies
+A thin subclass of BaseAgent that supplies
 analyst-specific context_builder, scoped tools, and is_done().
 
 The analyst is the agent that understands WHAT needs to be built —
@@ -21,7 +21,7 @@ Scoped toolset: file_task + git + delegate (3 tools — the tightest
 toolset). Excludes: shell, code_exec, file_write, edit_file, process,
 web, browser, memory, sysinfo.
 
-This is the eighth and final agent from the gap analysis (B-2026-07-31-8).
+This is the eighth and final agent from the capability gap analysis.
 """
 
 from __future__ import annotations

@@ -1,5 +1,5 @@
 /**
- * Session 344 — Response Block System (frontend types)
+ * Response Block System (frontend types)
  *
  * The agent produces semantic blocks; the frontend renders them.
  * The agent decides WHAT to show; the UI decides HOW it looks.

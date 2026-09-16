@@ -1,4 +1,4 @@
-"""B-2026-08-25-1: broad filesystem searches redirect to system_search.
+"""Broad filesystem searches redirect to system_search.
 
 Weak/free models ignore the prompt steering and run `find /` / `du ~` /
 recursive `Get-ChildItem`, which scan the whole disk/home tree and time out

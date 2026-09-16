@@ -48,7 +48,7 @@ def test_init_prompt_is_under_budget():
     - Pre-B-12: 7039 chars (monolithic plan-stream prompt)
     - ADR-38: 2969 chars (classify-only, capability summary)
     - ADR-49: +260 chars (ordered `plan` output for live Todos checklist) → 3000 budget
-    - Session 331 (B-2026-08-21): +450 chars (clarify exception for bare verb phrases,
+    - Session 331: +450 chars (clarify exception for bare verb phrases,
       ACT-not-ask bias refinement, acknowledgement/title contract) → 3500 budget
     - Session 332 (cyber-café fix): no init-prompt changes (fast-path bypasses init
       entirely for trivial/conversational prompts)
@@ -68,7 +68,7 @@ def test_init_prompt_is_under_budget():
 
 
 def test_init_prompt_is_classify_only_no_tool_catalog():
-    """Step 1 (ADR-38): the classifier does NOT see the tool catalog — it
+    """Step 1: the classifier does NOT see the tool catalog — it
     only picks the tier. Tool names must NOT appear in the prompt."""
     from tools import available_tools
 
@@ -115,7 +115,7 @@ def test_init_prompt_has_no_plan_or_assessment_fields():
 
 
 def test_init_prompt_keeps_act_not_ask_rule():
-    """The act-not-ask bias (Sessions 235-237) survives the rewrite."""
+    """The act-not-ask bias survives the rewrite."""
     prompt = build_initialization_prompt(
         user_message="read my CV",
         env_context="",
@@ -127,7 +127,7 @@ def test_init_prompt_keeps_act_not_ask_rule():
 
 
 def test_initialization_decision_has_prompt_chars_field():
-    """ADR-34 B-12: InitializationDecision must have an init_prompt_chars
+    """InitializationDecision must have an init_prompt_chars
     field for budget measurement."""
     decision = InitializationDecision()
     assert hasattr(decision, "init_prompt_chars")

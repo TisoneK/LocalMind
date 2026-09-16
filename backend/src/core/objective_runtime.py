@@ -36,7 +36,7 @@ class ObjectiveRuntime:
     LEASE_SECONDS = 900.0
     MAX_OBJECTIVE_SECONDS = 600.0
 
-    # ADR-16 / B-2026-08-09-13: the specific-task workflow is a LOOP, not a
+    # The specific-task workflow is a LOOP, not a
     # single engine pass. Each round is one `engine.process()` call on the
     # SAME execution session (history accumulates). The engine's
     # `agent_loop_done` obs event with hit_limit=True means the model ran out
@@ -127,7 +127,7 @@ class ObjectiveRuntime:
                 self._active_id = None
 
     async def _execute(self, objective: Objective) -> None:
-        """Run the ADR-16 specific-task loop: plan → execute → observe → decide.
+        """Run the specific-task loop: plan → execute → observe → decide.
 
         Each round is one `engine.process()` call on the SAME execution
         session (so history — and thus "observe what I did" — accumulates).

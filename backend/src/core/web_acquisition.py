@@ -1,5 +1,5 @@
 """
-Session 340 — Adaptive Web Acquisition System.
+Adaptive Web Acquisition System.
 
 The user's diagnosis:
   > The solution is not "add a browser tool." The solution is to make web
@@ -99,7 +99,7 @@ class AcquisitionMethod(Enum):
     SEARCH_ONLY = "search_only"  # only snippets available, no full content
 
 
-# ── Session 341: WebIntent — capability selection, not fallback hierarchy ───
+# ── WebIntent — capability selection, not fallback hierarchy ────────────────
 #
 # The user's correction:
 #   > Do not model the browser as: "Static fetch failed, therefore try browser."
@@ -205,7 +205,7 @@ def classify_web_intent(message: str, url_provided: bool = False) -> WebIntent:
 class WebResult:
     """The result of a web acquisition attempt.
 
-    Session 341: extended with evidence-validation fields per the user's
+    Extended with evidence-validation fields per the user's
     recommendation:
       WebResult {
           status
@@ -234,7 +234,7 @@ class WebResult:
     error: Optional[str] = None  # if FAILED, why
     attempted_strategies: list[str] = field(default_factory=list)
 
-    # Session 341: evidence-validation fields
+    # Evidence-validation fields
     acquisition_trace: list[str] = field(default_factory=list)  # ordered steps taken
     # categorized failure: stale / wrong_entity / boilerplate / unreachable / js_render_failed
     failure_reason: Optional[str] = None
@@ -782,7 +782,7 @@ async def acquire_web_content(
     )
 
 
-# ── News-feed source (B-2026-09-04-3 follow-up) ──────────────────────────────
+# ── News-feed source (a follow-up) ──────────────────────────────
 # Keyword web_search is the WRONG tool for "what's trending / breaking news /
 # top headlines": the query carries no distinctive TOPIC to match, so search
 # returns generic junk and web_research burns calls discovering nothing (the
@@ -911,9 +911,9 @@ async def web_research(
         # Per-source: CHEAP strategies only (static + browser_read). The heavy
         # scrapamoja stealth render is NOT run per source — in a multi-source
         # loop that stacked ~65s per thin source and blew whole turns past the
-        # provider rate limit (B-2026-09-02). It runs at most ONCE below.
+        # provider rate limit (live finding). It runs at most ONCE below.
         result = await acquire_web_content(url, query=query, max_strategies=2)
-        # Session 341: run evidence validation after acquisition
+        # Run evidence validation after acquisition
         result = validate_web_result(result, query=query)
         if result.is_success():
             return result  # got it — return immediately
@@ -966,7 +966,7 @@ def _extract_urls_from_search(search_content: str) -> list[str]:
     return urls[:5]  # cap at 5 sources
 
 
-# ── Session 341: Evidence-aware validation pipeline ─────────────────────────
+# ── Evidence-aware validation pipeline ─────────────────────────
 #
 # The user's diagnosis:
 #   > keyword overlap can produce false confidence. A page containing

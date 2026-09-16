@@ -149,7 +149,7 @@ def _get_unlabeled(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
         WHERE outcome IS NULL
           AND zone IN ('amber', 'red')
         ORDER BY ts ASC
-        LIMIT ?
+        LIMIT?
         """,
         (limit,),
     ).fetchall()

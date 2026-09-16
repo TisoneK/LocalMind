@@ -5,7 +5,7 @@ from tools import file_reader as fr
 from tools.file_reader import _chunk_text, _extract_path_candidates, parse_file
 
 
-# ── Path extraction: read-back must survive Windows backslash paths (S264) ────
+# ── Path extraction: read-back must survive Windows backslash paths  ────
 # The disease: file_task's extractor used a forward-slash-only char class, so a
 # Windows absolute path the writer had just produced (C:\Users\tison\Desktop\x.md)
 # was truncated to the bare filename, looked up under ~/ and cwd, and reported
@@ -42,7 +42,7 @@ def test_extract_bare_filename_and_no_path():
     assert _extract_path_candidates("just prose, nothing to open here") == []
 
 
-# ── Windows-RELATIVE backslash paths survive whole (S325) ─────────────────────
+# ── Windows-RELATIVE backslash paths survive whole  ─────────────────────
 # The S264 fix covered drive-absolute paths; a WINDOWS-RELATIVE path
 # (dev\test-run\notes.txt) still hit the forward-slash-only bare class and was
 # truncated to the bare filename — so a file the writer just created read back
@@ -178,7 +178,7 @@ async def test_parse_file_unknown_extension():
     assert len(attachment.chunks) >= 1
 
 
-# ── Cloud-file (OneDrive Files-On-Demand) recovery (S422) ────────────────────
+# ── Cloud-file (OneDrive Files-On-Demand) recovery  ────────────────────
 # The "find my CV" transcript: a PINNED OneDrive placeholder with the cloud
 # provider down fails EVERY read with OSError EINVAL (Win32 362 "The cloud
 # file provider is not running"). Pre-S422 file_task surfaced a bare
@@ -414,7 +414,7 @@ async def test_file_task_plain_einval_stays_internal_error(monkeypatch, tmp_path
     assert res.error_type != "cloud_file_unavailable"
 
 
-# ── Content-sniffed parser dispatch (S422) ───────────────────────────────────
+# ── Content-sniffed parser dispatch  ───────────────────────────────────
 
 def test_sniff_format_known_signatures():
     assert fr._sniff_format(b"%PDF-1.7\n...") == "pdf"

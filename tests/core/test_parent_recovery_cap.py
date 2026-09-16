@@ -133,10 +133,10 @@ def test_parent_path_gets_three_recovery_attempts():
 
 def test_non_parent_path_still_capped_at_two():
     """The non-parent path must still cap at 2 recoveries (unchanged behavior)."""
-    from tests.adapters.test_thinking_policy_adr41 import (
+    from tests.adapters.test_thinking_policy import (
         _collect_with_dispatch,
     )
-    from tests.adapters.test_thinking_policy_adr41 import (
+    from tests.adapters.test_thinking_policy import (
         _EmptyAfterToolAdapter as _NonParentAdapter,
     )
 

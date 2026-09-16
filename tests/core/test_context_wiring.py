@@ -68,7 +68,7 @@ async def _run_loop_once(task_type: str = "", intent: Intent = Intent.SHELL):
 
 @pytest.mark.asyncio
 async def test_shell_settles_to_code_when_hint_empty():
-    """ADR-19 x ADR-22 re-key (Session 186): an EMPTY dispatcher hint on a
+    """ADR-19 x ADR-22 re-key: an EMPTY dispatcher hint on a
     SHELL agent turn settles to task_type 'code' — the agent's planning
     intent is the settled routing, not the hint. The 184 smoke showed the
     free-tier dispatcher leaves hints empty/misclassified; re-keying on the

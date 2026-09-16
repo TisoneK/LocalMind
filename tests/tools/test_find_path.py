@@ -1,5 +1,5 @@
 """
-Tests for the find_path tool (Session 125).
+Tests for the find_path tool.
 
 Design contract: name-match search for files AND folders, path-only output,
 bounded by depth + result caps, never a full listing. This is the tool that
@@ -60,7 +60,7 @@ def test_matches_empty_pattern():
 
 
 def test_matches_multi_word_is_unordered_and():
-    """B-2026-08-16-16: multi-word plain patterns are an unordered AND — the
+    """Multi-word plain patterns are an unordered AND — the
     name must contain EVERY word, in any order. A single glob/fnmatch pattern
     cannot express this, so `name="tison cv"` previously only matched the
     literal phrase "tison cv" in that exact order."""
@@ -83,7 +83,7 @@ def test_matches_single_word_and_glob_unchanged():
 
 
 def test_matches_brace_groups():
-    """B-2026-08-16-17: shell-style {a,b} braces expand — fnmatch alone
+    """Shell-style {a,b} braces expand — fnmatch alone
     treats them literally, so `*.{docx,pdf}` previously matched nothing."""
     assert _matches("report.docx", "*.{docx,pdf}")
     assert _matches("report.pdf", "*.{docx,pdf}")
@@ -231,7 +231,7 @@ async def test_find_path_no_match(tmp_path, monkeypatch):
     assert "No files or folders matching" in result.content
 
 
-# ── Catalog contract (Session 194) ─────────────────────────────────────
+# ── Catalog contract  ─────────────────────────────────────
 # glob/grep-style enumeration: walk once (time-budgeted, not result-capped),
 # cache the walk, serve filters/pagination from memory. The result is a
 # CATALOG (total + folder/type breakdown + a small page) and the structured

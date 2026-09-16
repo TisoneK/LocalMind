@@ -1,5 +1,5 @@
 /**
- * Session 344 Phase 4 — Response Block Renderer
+ * Response Block Renderer
  *
  * Renders structured ResponseBlocks natively in the UI.
  * The agent decides WHAT to show; the UI decides HOW it looks.

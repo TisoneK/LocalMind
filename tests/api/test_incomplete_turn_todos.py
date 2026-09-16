@@ -1,4 +1,4 @@
-"""B-2026-08-24-15: don't auto-complete plan todos when a turn is cut short.
+"""Don't auto-complete plan todos when a turn is cut short.
 
 `_finalize_plan_todos` flips remaining plan todos to "completed" at turn end,
 UNLESS the turn didn't finish its work. Previously "didn't finish" only meant an

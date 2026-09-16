@@ -5,9 +5,9 @@ same failure happens twice, the flaw log wasn't consulted or the fix
 wasn't applied — that's a process failure.
 
 ---
-## 2026-07-26 — Silent failure at boundaries (Sessions 21–27 pattern)
+## 2026-07-26 — Silent failure at boundaries (early-development pattern)
 
-- **Pattern:** nearly every bug found in Sessions 21–27 was silent
+- **Pattern:** nearly every bug found in early development was silent
   failure at a boundary — between sessions, between tools and
   generation, between reasoning and display, between adapters and
   unsupported params.
@@ -18,13 +18,13 @@ wasn't applied — that's a process failure.
   confidence. The bugs live at boundaries that unit tests don't
   exercise. E2e behavioral tests (session lifecycle, adapter contracts,
   tool failure paths) are needed to catch boundary bugs.
-- **Fix applied:** ADR-7 (persistent learning + workflow constraints).
+- **Fix applied:** the persistent-learning design (workflow constraints + failure memory).
   The `.context/` system + `workflows/` directory give the agent
   boundaries to reason within, and the learning step feeds back so
   the same failure doesn't recur.
 
 ---
-## 2026-07-27 — UI dead air (Session 27)
+## 2026-07-27 — UI dead air
 
 - **Pattern:** the UI sat dead ("Thinking...") with no output while the
   engine worked. The user saw no progress, no plan, no indication of
@@ -34,7 +34,7 @@ wasn't applied — that's a process failure.
   from the orchestrator path.
 - **What was learned:** the user needs to see what the agent is doing.
   A dead UI is worse than a slow UI — the user can't tell if it's
-  working or hung. The todo plan system (Session 27) gives the UI
+  working or hung. The todo plan system gives the UI
   real content to display.
 - **Fix applied:** engine `_emit_todo_plan()` creates a per-intent
   plan and emits SSE events. The UI now shows the plan immediately.

@@ -1,5 +1,5 @@
 """
-Tests for ADR-19 P2 (Session 178): cross-session decision ledger.
+Tests for ADR-19 P2: cross-session decision ledger.
 
 The user's lossy-compression case: "user wants PostgreSQL, rejected
 MongoDB, wants SQLite locally, production uses PostgreSQL" must not

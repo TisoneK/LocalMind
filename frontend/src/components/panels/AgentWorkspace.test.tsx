@@ -49,7 +49,7 @@ describe('AgentWorkspace', () => {
     expect(screen.getByText('research')).toBeInTheDocument();
     fireEvent.click(screen.getByText('research'));
     expect(screen.getByText('Search upstream docs')).toBeInTheDocument();
-    // S296: the workspace now groups by turn — one parent turn here.
+    // The workspace now groups by turn — one parent turn here.
     expect(screen.getByText('Turns')).toBeInTheDocument();
   });
 

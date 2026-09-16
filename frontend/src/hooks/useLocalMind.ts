@@ -42,7 +42,7 @@ import type {
   DiffData,
 } from '@/types';
 
-// S296: cap the accumulated per-turn run groups in the Agent Workspace so a
+// cap the accumulated per-turn run groups in the Agent Workspace so a
 // long session doesn't grow the DOM unbounded (older turns pruned, newest kept).
 const MAX_WORKSPACE_TURNS = 10;
 
@@ -109,7 +109,7 @@ interface HealthState {
   status: 'online' | 'offline' | 'checking';
   version?: string;
   uptime?: number;
-  // ADR-52 phase 2 (Session 305): distinct parent-kernel readiness.
+  // Distinct parent-kernel readiness.
   // parent_ready is true when the boot kernel built without a degraded
   // state; parent_degraded_reason carries the warmup failure string.
   // These are distinct from `status` (which aggregates provider +
@@ -228,7 +228,7 @@ interface TerminalEventData {
 
 interface ChatState {
   messages: ChatMessage[];
-  /** B-2026-08-23-18: file diffs captured from edit_file `diff` SSE events,
+  /** File diffs captured from edit_file `diff` SSE events,
    *  keyed by absolute path (latest wins) — powers the preview dialog's Diff
    *  mode and the inline DiffBlock in chat. */
   fileDiffs: Record<string, DiffData>;
@@ -240,13 +240,13 @@ interface ChatState {
   liveObservation: ObservationData | null;
   lastMetrics: PerformanceMetrics | null;
   elapsedMs: number;
-  /** Cumulative per-chat totals (B-2026-08-11-5 / stats split): the bottom-
+  /** Cumulative per-chat totals (stats split): the bottom-
    *  right corner answers "how is this session doing overall" while each
    *  bubble keeps its own per-message line. */
   sessionStats: SessionStats;
   send: (message: string, sessionIdOverride?: string, tool?: string) => void;
   abort: () => void;
-  /** B-2026-08-02-5 (A5): inject a user message at the next step boundary
+  /** Inject a user message at the next step boundary
    *  of the in-flight agent turn without aborting it. No-op when idle. */
   steer: (message: string) => void;
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
@@ -283,7 +283,7 @@ export function useChat(
   onTerminalEvent?: (event: TerminalEventData) => void
 ): ChatState {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  // B-2026-08-23-18: file diffs captured from edit_file `diff` SSE events,
+  // File diffs captured from edit_file `diff` SSE events,
   // keyed by absolute path (latest wins). Powers the preview dialog's Diff
   // mode and the inline DiffBlock in chat (message.diffData).
   const [fileDiffs, setFileDiffs] = useState<Record<string, DiffData>>({});
@@ -323,7 +323,7 @@ export function useChat(
   const sessionStatsBySessionRef = useRef<Map<string, SessionStats>>(new Map());
   const streamStartedAtRef = useRef<number | null>(null);
   const abortRef = useRef<(() => void) | null>(null);
-  // Session 133: last time ANY SSE payload arrived for the current stream.
+  // Last time ANY SSE payload arrived for the current stream.
   // The old force-reset fired after 120s of STREAMING (wall clock), killing
   // legitimate slow requests (a tool loop chaining 4-7 free-tier model calls
   // at 20-40s/call legitimately runs 80-280s). It now fires only after 120s
@@ -363,7 +363,7 @@ export function useChat(
     return () => window.clearInterval(timer);
   }, [isStreaming]);
 
-  // B-2026-08-09-3 (ADR-13): when a turn completes with real metrics, attach
+  // When a turn completes with real metrics, attach
   // them to the assistant message that produced them so each reply shows its
   // own latency/token line — not the session-global last-turn values.
   // send() clears lastMetrics at turn start, so the values observed here
@@ -516,7 +516,7 @@ export function useChat(
           setCurrentConfidence(undefined);
           setActiveToolCalls([]);
           setAgentRuns([]);
-          // B-2026-08-09-3: don't let the previous session's metrics attach
+          // Don't let the previous session's metrics attach
           // to a different session's messages on the next turn.
           setLastMetrics(null);
           // Stats split: new chat / cleared session → fresh counters.
@@ -536,7 +536,7 @@ export function useChat(
         setCurrentConfidence(undefined);
         setActiveToolCalls([]);
         setAgentRuns([]);
-        // B-2026-08-09-3: clearing lastMetrics on session switch prevents the
+        // Clearing lastMetrics on session switch prevents the
         // attach-on-complete effect from stamping the OLD session's turn
         // metrics onto the newly loaded history's last message (review fix).
         setLastMetrics(null);
@@ -566,7 +566,7 @@ export function useChat(
       const history = await localmindClient.getSessionHistory(sessionId);
       if (mounted) {
         setMessages(history);
-        // Session 267: restore the Agent Workspace run tree. The Agents tab
+        // Restore the Agent Workspace run tree. The Agents tab
         // shows the most recent turn's tree (each send replaces it), so pick
         // the LAST assistant message that carries one — earlier turns' trees
         // are superseded by the latest turn's work.
@@ -622,7 +622,7 @@ export function useChat(
         content: '',
         timestamp: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }),
         toolCalls: [],
-        // Session 30: immediate acknowledgment — the user sees this
+        // Immediate acknowledgment — the user sees this
         // instantly instead of a dead "Thinking..." while the pipeline
         // spins up. Updated by status_update events as stages progress.
         statusText: 'Got it — working on your request...',
@@ -635,7 +635,7 @@ export function useChat(
       // fresh turn number so the accumulation effect can attribute it.
       turnCounterRef.current += 1;
       turnSessionRef.current = effectiveSessionId;
-      // Session 133 addendum: re-arm the stall timer at stream START, not
+      // Re-arm the stall timer at stream START, not
       // component mount. lastActivityRef is only otherwise written on SSE
       // payloads, so if the app sat idle >120s before sending (and the
       // first payload is delayed by a slow model/busy backend), the silence
@@ -657,7 +657,7 @@ export function useChat(
         startedAt: Date.now(),
         tools: [],
       }];
-      // S296 (issue 2): ACCUMULATE per-turn run groups instead of wiping the
+      // ACCUMULATE per-turn run groups instead of wiping the
       // workspace every turn. Finalize any run still marked running from a
       // prior/interrupted turn, then append this turn's tree. Keep only the
       // most recent MAX_WORKSPACE_TURNS parent turns (+ their descendants) so a
@@ -688,7 +688,7 @@ export function useChat(
       let currentContent = '';
       let thinkingContent = '';
       let streamedProgressText = '';
-      // B-2026-09-04-4: thinking spans multiple model calls with TOOL EXECUTIONS
+      // Thinking spans multiple model calls with TOOL EXECUTIONS
       // between them. Measuring thinkMs as (last − first) thinking-token wall time
       // counts the tool time too, so "Thinking Ns" + the per-tool durations sum to
       // MORE than the turn (observed: 47.6 + 12 + 12 + 2.1 = 73.7s > 57.1s turn).
@@ -775,7 +775,7 @@ export function useChat(
               }
 
               case 'thinking_start': {
-                // Session 146: DON'T wipe earlier phases' reasoning. The
+                // DON'T wipe earlier phases' reasoning. The
                 // dispatcher, chat-agent, and agent-loop phases each emit
                 // thinking_start; resetting on every one discarded everything
                 // streamed before — the pre-tool phase rendered as a silent
@@ -861,7 +861,7 @@ export function useChat(
                   window.dispatchEvent(new CustomEvent('localmind:tool-call-started', {
                     detail: { tool: tc.name || tc.tool || 'unknown' },
                   }));
-                  // B-2026-09-04-4: a tool is running now — pause the thinking
+                  // A tool is running now — pause the thinking
                   // timer so its duration is not double-counted against the turn.
                   thinkPause();
                 }
@@ -989,7 +989,7 @@ export function useChat(
               }
 
               case 'anomaly': {
-                // Session 123: the backend detected an anomaly on this turn
+                // The backend detected an anomaly on this turn
                 // (stall / token leak). Accumulate into the observation so
                 // the Observe panel renders alert cards. Dedupe by kind — a
                 // re-detected anomaly replaces the earlier one; cap at 5.
@@ -1014,7 +1014,7 @@ export function useChat(
                 break;
               }
 
-              // B-2026-08-23-18: edit_file diff events. The backend bridges
+              // Edit_file diff events. The backend bridges
               // file_diff obs events to a top-level `diff` SSE event with
               // hunks/language/filePath. Previously unhandled — the events
               // were dropped and message.diffData (and the inline DiffBlock in
@@ -1049,7 +1049,7 @@ export function useChat(
 
               case 'obs_event': {
                 const obs = parsed.obs_event || parsed;
-                // Session 123: an anomaly may also arrive wrapped as an
+                // An anomaly may also arrive wrapped as an
                 // obs_event (the bridge drains every obs event to SSE). Treat
                 // it the same as the top-level 'anomaly' case.
                 if (obs.type === 'anomaly') {
@@ -1077,7 +1077,7 @@ export function useChat(
                 // attach the initialization / planning / thinker / loop phases
                 // to the PARENT run so the Agents tab's active agent node
                 // shows the whole turn. The chat phase strip keeps ONLY the
-                // Session 181 decision history (plan/gate/orchestrator) — see
+                // Decision history (plan/gate/orchestrator) — see
                 // PHASE_EVENT_TYPES below.
                 const RUN_LIFECYCLE_TYPES = new Set([
                   'agent_initialization_start',
@@ -1094,7 +1094,7 @@ export function useChat(
                 // the parent run's heading instead of "Turn N" (rides the
                 // existing init event — no extra model call).
                 if (obs.type === 'agent_initialization_done') {
-                  // B-2026-08-30-5: sanitize the classify title before it heads
+                  // Sanitize the classify title before it heads
                   // the turn — a weak model can echo the raw user message (a
                   // pasted 6KB JSON blob became the turn title). Collapse
                   // whitespace to one line and hard-cap the length so the turn
@@ -1127,7 +1127,7 @@ export function useChat(
                     });
                   }
                 }
-                // ADR-36: the acknowledgement is the Agent's opening line —
+                // The acknowledgement is the Agent's opening line —
                 // route it to the assistant message's `acknowledgement` field
                 // (rendered as the opening line above the thinking block).
                 // It is ALSO a run-lifecycle phase (handled above) so the
@@ -1135,7 +1135,7 @@ export function useChat(
                 // agent_initialization_understanding is intentionally NOT
                 // mirrored to the chat message here: it already reaches the
                 // user through the thinking_token channel into the message's
-                // ThinkingBlock (ADR-36). The run node above narrates it for
+                // ThinkingBlock. The run node above narrates it for
                 // the Agents tab.
                 if (obs.type === 'agent_initialization_ack') {
                   const ackData = obs.data || obs;
@@ -1155,9 +1155,9 @@ export function useChat(
                 // agent_initialization_understanding is intentionally NOT
                 // mirrored to the workspace run here: it already reaches the
                 // user through the thinking_token channel into the message's
-                // ThinkingBlock (see ADR-36 — the Thinker's assessment lives
+                // ThinkingBlock (the Thinker's assessment lives
                 // on the thinking surface, not the workspace).
-                // ADR-34 B-8: evidence boundary — tool results are handed to
+                // Evidence boundary — tool results are handed to
                 // the parent model. Record as an EvidenceEntry on the parent
                 // run so the Agent Workspace can show evidence flowing in.
                 if (obs.type === 'evidence_to_parent') {
@@ -1177,7 +1177,7 @@ export function useChat(
                   });
                   break;
                 }
-                // ADR-18 P3 (Session 176): delegation streaming — the
+                // Delegation streaming — the
                 // sub-agent's lifecycle shows as one running tool step
                 // ("Delegating to research…") in the Actions panel; the
                 // child's own tool_call events (forwarded by the backend,
@@ -1258,7 +1258,7 @@ export function useChat(
                   }
                   break;
                 }
-                // Session 115 + 132: the dispatcher used to emit
+                // The dispatcher used to emit
                 // thinking_start/thinking_done with the internal routing
                 // placeholder intent="dispatch", which clobbered the real
                 // classification in the Observe panel. The OLD guard read
@@ -1281,7 +1281,7 @@ export function useChat(
                   setCurrentConfidence(Number(obsData.confidence));
                 }
                 if (obsData) {
-                  // ADR-12 (B-2026-08-09-2): the engine's _StageClock emits
+                  // The engine's _StageClock emits
                   // stage_timing obs events with real per-stage latency +
                   // authoritative status (done/skipped). Accumulate them so
                   // the Observe pipeline renders truth instead of a guess.
@@ -1311,14 +1311,14 @@ export function useChat(
                     confidence: Number(isPlaceholderIntent
                       ? (prev?.confidence || 0)
                       : (obsData.confidence || obs.confidence || prev?.confidence || 0)),
-                    // B-2026-08-09-8: an empty tools_used on turn_complete is REAL
+                    // An empty tools_used on turn_complete is REAL
                     // (no tools ran this turn) — reset instead of inheriting the
                     // previous turn's tools forever.
                     toolsUsed: obsData.tools_used !== undefined
                       ? (obsData.tools_used ? obsData.tools_used.split(',') : [])
                       : (prev?.toolsUsed ?? []),
                     // Backend sends 'memory_facts' in turn_complete, not 'memory_hits'.
-                    // B-2026-08-09-8: a real 0 (fresh session, nothing retrieved)
+                    // A real 0 (fresh session, nothing retrieved)
                     // must not fall through to the previous turn's count.
                     memoryHits: obsData.memory_facts !== undefined
                       ? Number(obsData.memory_facts)
@@ -1430,7 +1430,7 @@ export function useChat(
                   }
                 }
 
-                // Session 181 — F4 Frontend Phase Visibility. Handle the
+                // Frontend Phase Visibility. Handle the
                 // backend obs events that surface the agent's DECISION
                 // history. Each appends a phase entry to the LAST assistant
                 // message's `agentPhases` array — the strip renders in
@@ -1511,7 +1511,7 @@ export function useChat(
                     return updated;
                   });
                 }
-                // B-2026-08-24-16: Chat mode asked to switch to Agent for an
+                // Chat mode asked to switch to Agent for an
                 // action — attach the prompt so ChatMessage renders the gate.
                 if (parsed.switch_to_agent) {
                   const sw = parsed.switch_to_agent as { message?: string };
@@ -1530,7 +1530,7 @@ export function useChat(
                 break;
               }
 
-              // Session 344 Phase 3: structured response blocks from the
+              // Structured response blocks from the
               // Presentation Intelligence layer. The backend emits these
               // alongside the text stream so the frontend can render tables,
               // charts, diagrams, and metrics natively.
@@ -1555,7 +1555,7 @@ export function useChat(
               case 'error': {
                 const err = parsed.error;
                 if (err && typeof err === 'object' && 'code' in err) {
-                  // ADR-20 (Session 167): the backend now emits the canonical
+                  // The backend now emits the canonical
                   // error OBJECT — store it on the message and let the
                   // ErrorMessage card render it. Never stuff it into content
                   // (that's what leaked the raw provider JSON into the chat).
@@ -1681,7 +1681,7 @@ export function useChat(
 
               case 'status_update': {
                 // Real-time progress feedback during tool execution.
-                // Session 29: DON'T overwrite thinking with status text —
+                // DON'T overwrite thinking with status text —
                 // that caused "Searching the web" to appear in the chat.
                 // Instead, set a separate `statusText` field that the UI
                 // can show in the status area, not in the thinking block.
@@ -1698,7 +1698,7 @@ export function useChat(
                     promptTokens: prev?.promptTokens || 0,
                     completionTokens: prev?.completionTokens || 0,
                   }));
-                  // B-2026-09-04-4: status_update fires DURING tool execution —
+                  // Status_update fires DURING tool execution —
                   // do NOT resume the thinking timer here (that recounted tool
                   // time as thinking). Report the frozen accumulated value; the
                   // tool has its own duration on the Actions card.
@@ -1722,7 +1722,7 @@ export function useChat(
 
               case 'todo_created':
               case 'todo_added': {
-                // Session 27: the engine emitted a todo from its plan.
+                // The engine emitted a todo from its plan.
                 // Dispatch a custom event so the useTodos hook can add
                 // it to the todos panel.
                 const todo = parsed.todo || {};
@@ -1739,7 +1739,7 @@ export function useChat(
 
               case 'todo_completed':
               case 'todo_updated': {
-                // Session 27: a todo's status changed (in_progress / done).
+                // A todo's status changed (in_progress / done).
                 const todo = parsed.todo || {};
                 if (todo.id || todo.order !== undefined) {
                   window.dispatchEvent(new CustomEvent('localmind:todo-updated', {
@@ -1750,7 +1750,7 @@ export function useChat(
               }
 
               case 'todo_cleared': {
-                // Session 27: clear all todos for this session (new request).
+                // Clear all todos for this session (new request).
                 window.dispatchEvent(new CustomEvent('localmind:todo-cleared'));
                 break;
               }
@@ -1814,7 +1814,7 @@ export function useChat(
             }
           }
         },
-        // Session 142: dispatched here (stream END — after the backend's
+        // Dispatched here (stream END — after the backend's
         // post-loop _finalize_plan_todos commits) rather than on the SSE
         // 'done' event, which fires MID-stream before the DB finalize. The
         // backend always finalizes ALL plan todos in its finally block, so
@@ -1882,7 +1882,7 @@ export function useChat(
             return updated;
           });
         },
-        // B-2026-08-09-6 (ADR-11 client half): toolHint is passed as the
+        // toolHint is passed as the
         // X-LocalMind-Intent header so the backend can skip the dispatcher.
         // An explicitly-picked tool always wins; otherwise a deterministic
         // classifier hints 'chat' for obvious conversational sends. It never
@@ -1903,7 +1903,7 @@ export function useChat(
   }, []);
 
   const abort = useCallback(() => {
-    // B-2026-08-02-2 (A2): also tell the backend to stop — closing the SSE
+    // Also tell the backend to stop — closing the SSE
     // stream alone left the AgentLoop running until the wall-clock cap.
     const target = streamingSessionRef.current;
     if (target) {
@@ -1989,7 +1989,7 @@ const LIFECYCLE_PHASE_RANK: Record<string, number> = {
   turn_done: 8,
 };
 
-// ─── Session 181 — F4 Frontend Phase Visibility ──────────────────────
+// ─── Frontend Phase Visibility ──────────────────────
 //
 // buildAgentPhase converts a backend obs event into an AgentPhase entry.
 // Two consumers: the chat phase strip (plan/gate/orchestrator decision
@@ -2000,9 +2000,9 @@ const LIFECYCLE_PHASE_RANK: Record<string, number> = {
 // payload is missing required fields (defensive — surfaces only render
 // entries that have something useful to say).
 //
-// Exported for direct unit testing (Session 181).
+// Exported for direct unit testing .
 /**
- * B-2026-08-30-6: collapse consecutive identical phases into one entry with a
+ * Collapse consecutive identical phases into one entry with a
  * run count. Lifecycle phases fire per-iteration, so a multi-iteration turn
  * repeated "Working out the approach" / "Approach ready" 5× each. Adjacent
  * phases with the same `type` AND `label` are merged (keeping the first, whose
@@ -2365,7 +2365,7 @@ export function useActions(sessionId: string | null, live = false) {
     try { const data = await localmindClient.getActions(sessionId); setActions(data); } catch { /* keep */ }
   }, [sessionId]);
 
-  // Session 118: realtime — while a turn is streaming, poll the backend
+  // Realtime — while a turn is streaming, poll the backend
   // actions store so newly completed tools appear live in the panel. Gated
   // on `live` (the parent's isStreaming) so we don't re-render the panel
   // every 2.5s when idle (review fix: unconditional polling was wasteful).
@@ -2507,7 +2507,7 @@ export function useTodos(sessionId: string | null) {
     };
   }, []);
 
-  // Session 142: re-sync todos from the DB when the turn ends. The backend
+  // Re-sync todos from the DB when the turn ends. The backend
   // finalizes ALL plan todos in its SSE-bridge `finally` block, so this
   // refetch makes the panel agree with the DB even when a live
   // todo_completed event was missed (silent tool runs never advance the
@@ -2526,7 +2526,7 @@ export function useTodos(sessionId: string | null) {
     return () => window.removeEventListener('localmind:todo-refetch', refetch);
   }, [sessionId]);
 
-  // Session 29: Listen for todo-cleared events — clear all todos
+  // Listen for todo-cleared events — clear all todos
   // when the engine starts a new request.
   useEffect(() => {
     const handler = () => {
@@ -2984,7 +2984,7 @@ export function useMemory() {
     } catch { /* keep */ }
   }, []);
 
-  // B-2026-08-23-14 follow-up: correct a stored fact. The id changes (it is
+  // Correct a stored fact. The id changes (it is
   // derived from the content hash), so re-fetch the whole list on success.
   const editFact = useCallback(async (id: string, content: string) => {
     try {

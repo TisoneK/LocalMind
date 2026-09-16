@@ -223,7 +223,7 @@ def test_format_read_evidence_truncates():
     assert len(out) == 1000 + len(marker)
     assert "[... content truncated for performance]" in out
 
-# ── Engine wiring (Session 193) ─────────────────────────────────────────
+# ── Engine wiring  ─────────────────────────────────────────
 
 
 @pytest.mark.skip(reason="legacy pipeline shortcut removed; file operations now run through the parent agent loop")
@@ -322,7 +322,7 @@ async def test_engine_file_ops_respects_tool_fence(tmp_path, monkeypatch):
     assert dispatched == []
 
 
-# ── Catalog continuation through the deterministic chain (Session 194) ──
+# ── Catalog continuation through the deterministic chain  ──
 
 
 @pytest.mark.asyncio

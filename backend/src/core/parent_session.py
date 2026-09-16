@@ -1,4 +1,4 @@
-"""Per-chat rolling session state for the Parent agent (ADR-52 phase 2).
+"""Per-chat rolling session state for the Parent agent.
 
 The ``ParentSession`` lives for the lifetime of a chat session. It carries:
 
@@ -11,7 +11,7 @@ The ``ParentSession`` lives for the lifetime of a chat session. It carries:
 
 The kernel (``ParentKernel``) is boot-owned and immutable per settings; the
 ``ParentSession`` is chat-owned and mutable per turn. Together they form the
-ADR-52 two-layer warm context: kernel = static operating context, session =
+Two-layer warm context: kernel = static operating context, session =
 the rolling conversation memory.
 
 Compaction policy

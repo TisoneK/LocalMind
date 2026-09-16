@@ -1,4 +1,4 @@
-"""Regression: fire-and-forget title tasks must be retained (B-2026-08-24-4).
+"""Regression: fire-and-forget title tasks must be retained.
 
 Agent-mode turns skip the classifier, so they never get a classify-derived
 title and rely entirely on the async `refine_title_async` fallback. That

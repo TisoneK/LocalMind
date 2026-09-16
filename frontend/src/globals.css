@@ -89,8 +89,8 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   Theming system (Session 217 — theming-multi-palette). Supersedes the
-   Session-103 dark-only decision. Components keep referencing the legacy
+   Theming system (multi-palette). Supersedes the
+   the earlier dark-only decision. Components keep referencing the legacy
    --brand-* tokens; those map ONCE onto a compact set of semantic anchors
    (--acc*, --s-*, --t-*, --line*, --warn/--danger/--info/--alt, --code-text).
    Each theme × mode below sets ONLY the anchors, so every component AND
@@ -102,7 +102,7 @@
 :root {
   --radius: 0.625rem;
 
-  /* B-2026-08-23-19: UI tone — brightness multiplier 0.5–1.5 (1 = unchanged),
+  /* UI tone — brightness multiplier 0.5–1.5 (1 = unchanged),
      set inline on <html> by useTheme; body applies it as a filter. */
   --ui-tone: 1;
 
@@ -167,7 +167,7 @@
   --brand-bg-base: var(--s-base);
   --brand-bg-code: var(--s-1);
   --brand-bg-panel: var(--s-2);
-  /* B-2026-08-24-13: the app-shell surface. Elevated (panel) in DARK so the
+  /* The app-shell surface. Elevated (panel) in DARK so the
      window reads like the Settings surface; plain base (white) in LIGHT —
      the elevated grey looked wrong as a full-app background (light-mode
      override below). */
@@ -196,7 +196,7 @@
   --brand-gh-red-bg: #4a2424; --brand-gh-green-bg: #18281b; --brand-gh-green-border: #2d5535;
 }
 
-/* B-2026-08-24-13: in ANY light theme the app-shell surface stays plain white
+/* In ANY light theme the app-shell surface stays plain white
    (base) — the elevated panel grey was wrong as a full-app background. Dark
    themes keep the elevated panel via the :root default above. */
 :root[data-mode="light"] {
@@ -258,7 +258,7 @@
   --code-text: #2a2317;
 }
 
-/* ── Custom theme (B-2026-08-23-19) ──────────────────────────────────────── */
+/* ── Custom theme ──────────────────────────────────────── */
 /* The user's palette is applied inline on <html> as the core anchors
    (--acc, --s-base, --s-1, --s-2, --t-primary). Everything else is derived
    from those anchors via color-mix, so every component + shadcn/ui token
@@ -300,7 +300,7 @@
   }
   body {
     @apply bg-background text-foreground;
-    /* B-2026-08-23-19: UI tone (brightness) — set var(--ui-tone) on <html>. */
+    /* UI tone (brightness) — set var(--ui-tone) on <html>. */
     filter: brightness(var(--ui-tone));
   }
 }
@@ -378,7 +378,7 @@
 /* Prevent body scroll */
 html, body {
   overflow: hidden;
-  /* B-2026-08-24-13: app ground = the shell surface (elevated panel in dark,
+  /* App ground = the shell surface (elevated panel in dark,
      plain white in light — see --brand-bg-app). */
   background: var(--brand-bg-app);
 }
@@ -456,7 +456,7 @@ code:not(pre code) {
   overflow: hidden;
 }
 
-/* Session 118: agent activity bar sweep */
+/* Agent activity bar sweep */
 @keyframes slide-x {
   0% {
     transform: translateX(-120%);
@@ -466,7 +466,7 @@ code:not(pre code) {
   }
 }
 
-/* Session 215: terminal block cursor — blinks at the idle prompt and while
+/* Terminal block cursor — blinks at the idle prompt and while
    a command executes, giving the panel a live shell feel. Reduced motion
    holds it steady. */
 @keyframes terminal-blink {

@@ -21,9 +21,9 @@ interface RightPanelProps {
   onTerminalSessionChange?: (sessionId: string) => void;
   memoryFacts: MemoryFact[];
   onMemoryDelete?: (id: string) => void;
-  /** Persist a manually entered fact via the memory API (B-2026-08-23-14). */
+  /** Persist a manually entered fact via the memory API. */
   onMemoryStore?: (content: string, source: string) => Promise<void>;
-  /** Correct a stored fact's content (B-2026-08-23-14 follow-up). */
+  /** Correct a stored fact's content. */
   onMemoryEdit?: (id: string, content: string) => Promise<void>;
   /** Re-fetch memory facts (tab polls while visible). */
   onMemoryRefresh?: () => Promise<void>;
@@ -46,13 +46,13 @@ interface RightPanelProps {
   forceTerminalTab?: boolean;
   /** Called after the terminal tab has been shown */
   onTerminalTabShown?: () => void;
-  /** ADR-34 B-9: Force the Agents tab to be active when a parent turn starts
+  /** Force the Agents tab to be active when a parent turn starts
    * (initialization begins). The Agents workspace is the canonical live
    * surface for parent/child agent state. */
   forceAgentsTab?: boolean;
   /** Called after the Agents tab has been shown */
   onAgentsTabShown?: () => void;
-  /** B-2026-08-23-15: Force the Memory tab when a memory_op tool runs. */
+  /** Force the Memory tab when a memory_op tool runs. */
   forceMemoryTab?: boolean;
   /** Called after the Memory tab has been shown */
   onMemoryTabShown?: () => void;
@@ -61,7 +61,7 @@ interface RightPanelProps {
   onModelsRefresh?: () => Promise<void>;
 }
 
-// ADR-34 B-10: the Observe tab and its Intent Classification / Agent Pipeline
+// The Observe tab and its Intent Classification / Agent Pipeline
 // visualization are retired. The Agents tab is the canonical live surface.
 type RightTab = 'terminal' | 'memory' | 'agents';
 
@@ -98,11 +98,11 @@ export function RightPanel({
   width = 320,
   onModelsRefresh,
 }: RightPanelProps) {
-  // ADR-34 B-10: default to the Agents tab — it is the canonical live surface.
+  // Default to the Agents tab — it is the canonical live surface.
   const [activeTab, setActiveTab] = useState<RightTab>('agents');
   const [showSettings, setShowSettings] = useState(false);
 
-  // B-2026-08-23-4: the chat tool timeline's "Open Settings" guide button
+  // The chat tool timeline's "Open Settings" guide button
   // dispatches a window event (ToolSteps is deep in the chat tree, outside
   // this panel) — open the Settings modal here when it fires.
   useEffect(() => {
@@ -117,7 +117,7 @@ export function RightPanel({
   const refreshModels = onModelsRefresh || (() => Promise.resolve());
   const isCompact = width < 250;
 
-  // B-2026-08-23-15: consume the force flags UNCONDITIONALLY (the forceChatTab
+  // Consume the force flags UNCONDITIONALLY (the forceChatTab
   // fix). The old guarded consume (`activeTab !== target`) left the flag set
   // when the user was already on the target tab, so a LATER event (another
   // force flag, a tool event) could re-fire it and yank the panel away from
@@ -176,7 +176,7 @@ export function RightPanel({
     };
   }, [activeTab, collapsed, onToggleCollapse]);
 
-  // B-2026-08-23-26: left panel ⋮ menu → focus Agents tab.
+  // Left panel ⋮ menu → focus Agents tab.
   useEffect(() => {
     const handler = () => {
       if (collapsed) onToggleCollapse();
@@ -186,7 +186,7 @@ export function RightPanel({
     return () => window.removeEventListener('localmind:focus-agents', handler);
   }, [activeTab, collapsed, onToggleCollapse]);
 
-  // B-2026-08-23-26: left panel ⋮ menu → focus Memory tab.
+  // Left panel ⋮ menu → focus Memory tab.
   useEffect(() => {
     const handler = () => {
       if (collapsed) onToggleCollapse();

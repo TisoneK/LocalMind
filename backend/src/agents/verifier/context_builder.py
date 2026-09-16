@@ -7,12 +7,12 @@ Gathers verification-specific context before each turn:
     - Memory facts (passed in by the caller)
     - Orchestrator plan (passed in by the caller)
 
-Per ADR-6: each agent supplies its own build_context(). The verifier's
+Each agent supplies its own build_context(). The verifier's
 context is verification-centric — it primes the model to think like a
 tester, not a builder.
 
 The workspace_state snapshot (git status/diff/build result) is injected
-by AgentLoop.run() per Session 16 — this context_builder does NOT
+by AgentLoop.run() — this context_builder does NOT
 duplicate it. For the verifier, workspace state is especially important:
 it shows what changed since the last turn, which is the primary
 diagnostic tool for understanding test failures.
@@ -28,7 +28,7 @@ from core.models import Intent
 
 logger = logging.getLogger(__name__)
 
-# Path to the verifier playbook file. Per ADR-8 Phase 2, the playbook
+# Path to the verifier playbook file. The playbook
 # is co-located with the agent class.
 _PLAYBOOK_PATH = Path(__file__).resolve().parent / "playbook.md"
 
@@ -70,7 +70,7 @@ def build_verifier_context(
     tools, report clearly.
 
     The workspace_state snapshot (git status/diff/build result) is
-    already injected by AgentLoop.run() per Session 16 — this
+    already injected by AgentLoop.run() — this
     context_builder does NOT duplicate it.
     """
     playbook_md = _load_playbook()

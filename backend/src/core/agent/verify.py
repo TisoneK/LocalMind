@@ -1,5 +1,5 @@
 """
-Deterministic acceptance-gate checkers (ADR-18 P0 / B-2026-08-12-1).
+Deterministic acceptance-gate checkers.
 
 The gate's job: turn "the model says done" into "the model says done
 AND the success criteria have receipts." Every checker here is
@@ -102,10 +102,10 @@ _PATH_RE = re.compile(
 
 def _norm(s: str) -> str:
     """Normalize a string for substring evidence matching: lowercase and
-    treat Windows backslashes as path separators. Session 330 — a criterion
+    treat Windows backslashes as path separators. A criterion
     derived from the user's forward-slash message must match tool evidence
     the model produced with backslashes on Windows (same disease family as
-    S264/S325: platform-aware path handling)."""
+    platform-aware path handling)."""
     return (s or "").lower().replace("\\", "/")
 
 
@@ -358,7 +358,7 @@ def criteria_gate(
     unmet_label: str = "criteria not yet met",
 ) -> tuple[bool, str]:
     """Shared criteria-verified gate used by every agent's is_done()
-    (ADR-18 P0/P1). Evaluates the trace's success_criteria against its
+    Evaluates the trace's success_criteria against its
     tool evidence; stores results/gate_passed/gate_summary back on the
     trace so the final-answer path can report honestly.
 

@@ -16,8 +16,8 @@ def main():
         g = input(f"Guess 1-10 ({attempts} left): ") 
         try: 
             if int(g) == target: print("You win!"); break 
-            print("Too low!" if int(g)  target else "Too high!" if int(g)  target else "") 
-            attempts -=  
+            print("Too low!" if int(g) < target else "Too high!" if int(g) > target else "") 
+            attempts -= 1
         except: print("Invalid") 
     if not attempts: print(f"The number was {target}") 
     print(f"Thanks, {name}!") 

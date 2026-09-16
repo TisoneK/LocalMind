@@ -1,4 +1,4 @@
-"""Tests for the code_exec ToolContract — sandboxed runner wiring (Session 107).
+"""Tests for the code_exec ToolContract — sandboxed runner wiring.
 
 Regression coverage for the broken legacy bridge: the Phase-3 contracts
 path (workspace orchestrator) previously serialised the typed payload to

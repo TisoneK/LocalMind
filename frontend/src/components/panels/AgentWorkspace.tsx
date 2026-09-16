@@ -83,7 +83,7 @@ function RunNode({
   const expanded = manualExpanded ?? defaultExpanded;
   const runningTools = run.tools.filter((tool) => isActiveToolStatus(tool.status)).length;
   const completedTools = run.tools.filter((tool) => tool.status === 'done').length;
-  // ADR-34 B-9: expand the node when evidence arrives so the user sees
+  // Expand the node when evidence arrives so the user sees
   // evidence flowing in without clicking.
   const hasEvidence = Boolean(run.evidence && run.evidence.length > 0);
   const hasPhases = Boolean(run.phases && run.phases.length > 0);
@@ -94,7 +94,7 @@ function RunNode({
   // classify call, replacing a bare "Turn N". Falls back to "Turn N" until the
   // classify result arrives or when the model omitted a title. Ordinal stays
   // in the badge.
-  // B-2026-08-30-5: sanitize defensively — collapse whitespace to one line and
+  // Sanitize defensively — collapse whitespace to one line and
   // cap the length so a turn heading is never a wall of pasted text, regardless
   // of what set run.title (live classify or a reloaded run tree).
   const rawTurnLabel = run.role === 'parent' ? (run.title || '').replace(/\s+/g, ' ').trim() : '';
@@ -254,7 +254,7 @@ function RunNode({
               </div>
             )}
 
-            {/* ADR-34 B-8: evidence entries handed to the parent model */}
+            {/* Evidence entries handed to the parent model */}
             {run.evidence && run.evidence.length > 0 && (
               <div className="space-y-0.5">
                 {run.evidence.map((entry, idx) => (

@@ -1,4 +1,4 @@
-"""Regression tests for the ADR-40 lean tool schemas (B-2026-08-16-1).
+"""Regression tests for the ADR-40 lean tool schemas.
 
 The model-facing tool catalog (TOOL_DEFINITIONS) was ~24,230 chars
 (~6,057 tokens) of kitchen-sink self-manual prose, re-sent on EVERY model
@@ -33,7 +33,7 @@ def _catalog_chars() -> int:
 def test_lean_catalog_size_budget() -> None:
     """The full tool catalog must stay under the lean budget.
 
-    Pre-ADR-40: 24,230 chars (~6,057 est tokens). Post-cut (Session 251):
+    Pre-ADR-40: 24,230 chars (~6,057 est tokens). Post-cut:
     ~15,981 chars (~3,995 est tokens). Budget was 17,000; bumped to 18,500
     after Session 340 added web_research tool (~600 chars); bumped to 19,500
     after Session 400 added system_search (~1,000 chars trimmed to the bone —

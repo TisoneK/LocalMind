@@ -80,7 +80,7 @@ class TestEmptyIter0Nudge:
     async def test_empty_then_nudge_then_tool_call_runs(self):
         """The money case: an empty iter-0 response gets ONE forced-tool
         nudge; the next call CAN produce a real tool call that executes —
-        instead of failing the turn with 'empty response' (Session 237)."""
+        instead of failing the turn with 'empty response' ."""
         loop = AgentLoop(adapter=MagicMock())
         seen = {"calls": 0, "nudge_seen": False}
 
@@ -112,7 +112,7 @@ class TestEmptyIter0Nudge:
 
         assert seen["calls"] == 3, f"expected empty→nudge→tool→fail, got {seen['calls']} calls"
         assert seen["nudge_seen"], "the forced-tool nudge must reach the model"
-        # B-2026-08-20-14: the tool evidence (file1.txt) now lives in the
+        # The tool evidence (file1.txt) now lives in the
         # Actions panel, NOT in the chat bubble. The chat bubble gets a clean
         # fallback message. Assert the turn ended with a non-empty honest
         # message (the tool ran — the test's core invariant).
@@ -145,7 +145,7 @@ class TestEmptyIter0Nudge:
         full = "".join(c.text for c in chunks)
 
         assert seen["calls"] == 2, "empty after a tool must fail immediately (no nudge)"
-        # B-2026-08-20-14: clean fallback message, not "empty response" debug text
+        # Clean fallback message, not "empty response" debug text
         assert full.strip(), f"expected honest fallback, got {full!r}"
 
 
@@ -208,7 +208,7 @@ class TestTextWithoutToolIter0Nudge:
 
 
 class TestThinkerStreamSilent:
-    """Session 324 + ADR-57 slice 1 (S425): the ADR-42 Thinker consult streams
+    """Session 324 + ADR-57 slice 1: the ADR-42 Thinker consult streams
     its PROSE reasoning to the user-visible thinking stream (no call runs
     silent), but the JSON structure NEVER surfaces — the echo/JSON leak that
     motivated Session 324 is cut structurally at the Thinker (surfacing stops
@@ -285,5 +285,5 @@ class TestNonToolIntentsUntouched:
 
         assert seen["calls"] == 1, "chat intent must not be nudged"
         assert seen["tool_choice"] is None, "chat intent must not force tool_choice"
-        # B-2026-08-20-14: clean fallback message, not "empty response" debug text
+        # Clean fallback message, not "empty response" debug text
         assert full.strip(), f"expected honest fallback, got {full!r}"

@@ -42,8 +42,8 @@ class Role(str, Enum):
 
 class Intent(str, Enum):
     FILE_TASK = "file_task"
-    FIND_PATH = "find_path"  # Session 125: name-match search for files/folders (path-only, capped)
-    # Session 400: unified local search (files/recent/largest/duplicates/apps/open_with)
+    FIND_PATH = "find_path"  # name-match search for files/folders (path-only, capped)
+    # unified local search (files/recent/largest/duplicates/apps/open_with)
     SYSTEM_SEARCH = "system_search"
     # Bounded read-only folder inspection (list/tree/stat)
     DIR_EXPLORER = "dir_explorer"
@@ -52,17 +52,17 @@ class Intent(str, Enum):
     CODE_EXEC = "code_exec"
     SHELL = "shell"
     SYSINFO = "sysinfo"
-    OBSERVE = "observe"  # B-2026-07-31-9: desktop awareness (window, clipboard, apps, state, recent files)
-    CALCULATE = "calculate"  # B-2026-07-31-10: safe arithmetic evaluation
-    CSV = "csv"  # B-2026-07-31-10: bounded CSV file parsing
-    JSON = "json"  # B-2026-07-31-10: bounded JSON parse/query
-    SQL = "sql"  # B-2026-07-31-10: read-only SQLite queries
+    OBSERVE = "observe"  # desktop awareness (window, clipboard, apps, state, recent files)
+    CALCULATE = "calculate"  # safe arithmetic evaluation
+    CSV = "csv"  # bounded CSV file parsing
+    JSON = "json"  # bounded JSON parse/query
+    SQL = "sql"  # read-only SQLite queries
     MEMORY_OP = "memory_op"
     FILE_WRITE = "file_write"
     FILE_EDIT = "file_edit"
     BROWSE = "browse"  # Real browser interaction (click, fill, scroll, screenshot)
     GIT = "git"  # Structured Git operations (status, diff, log, branch, commit, etc.)
-    GREP_SEARCH = "grep_search"  # B-2026-08-23-31: grep-like text search (works without shell)
+    GREP_SEARCH = "grep_search"  # grep-like text search (works without shell)
     PROCESS = "process"  # Process management (start, stop, restart, status, logs, wait)
     VERIFY = "verify"  # Verification (run tests, reproduce bugs, check acceptance criteria)
     REVIEW = "review"  # Code review (spec conformance, quality assessment, best practices)
@@ -70,21 +70,21 @@ class Intent(str, Enum):
     ANALYZE = "analyze"  # Analysis (understand requirements, clarify what to build)
     DIAGNOSTICS = "diagnostics"  # Diagnostics (inspect errors, analyze tracebacks, inspect logs)
     CHAT = "chat"
-    DELEGATE = "delegate"  # ADR-8 Phase 3: agent-initiated delegation
-    DELEGATE_PARALLEL = "delegate_parallel"  # B-2026-08-02-6: parallel delegation fan-out
-    DELEGATE_INLINE = "delegate_inline"  # B-2026-08-02-9: inline delegation (child rewrites parent history)
-    PROPOSE_EDIT = "propose_str_replace"  # B-2026-08-02-7: stage an edit proposal (no write)
-    PROPOSE_WRITE = "propose_write_file"  # B-2026-08-02-7: stage a write proposal (no write)
-    APPLY_PROPOSED = "apply_proposed_edit"  # B-2026-08-02-7: write a staged proposal to disk
-    ADD_SUBGOAL = "add_subgoal"  # B-2026-08-02-8: add a subgoal to the scratchpad
-    UPDATE_SUBGOAL = "update_subgoal"  # B-2026-08-02-8: update a subgoal's status/notes
-    CREATE_PLAN = "create_plan"  # B-2026-08-02-8: create multiple subgoals from a plan
-    SKILL = "skill"  # B-2026-08-02-12: load a skill (markdown playbook) into context
-    BEST_OF_N_EDIT = "best_of_n_edit"  # B-2026-08-02-11: N candidate edits → selector → apply winner
-    DESCRIBE_TOOL = "describe_tool"  # ADR-40 option C: load a long-tail tool's full schema on demand
-    TODO_WRITE = "todo_write"  # ADR-43: agent-driven live UI todo checklist (create/update/mark)
-    WEB_RESEARCH = "web_research"  # Session 340: adaptive web acquisition (search + fetch + browser)
-    SEARCH_TOOL_RESULTS = "search_tool_results"  # P0 Step 4 slice 2: read back a large stored tool result
+    DELEGATE = "delegate"  # agent-initiated delegation
+    DELEGATE_PARALLEL = "delegate_parallel"  # parallel delegation fan-out
+    DELEGATE_INLINE = "delegate_inline"  # inline delegation (child rewrites parent history)
+    PROPOSE_EDIT = "propose_str_replace"  # stage an edit proposal (no write)
+    PROPOSE_WRITE = "propose_write_file"  # stage a write proposal (no write)
+    APPLY_PROPOSED = "apply_proposed_edit"  # write a staged proposal to disk
+    ADD_SUBGOAL = "add_subgoal"  # add a subgoal to the scratchpad
+    UPDATE_SUBGOAL = "update_subgoal"  # update a subgoal's status/notes
+    CREATE_PLAN = "create_plan"  # create multiple subgoals from a plan
+    SKILL = "skill"  # load a skill (markdown playbook) into context
+    BEST_OF_N_EDIT = "best_of_n_edit"  # N candidate edits → selector → apply winner
+    DESCRIBE_TOOL = "describe_tool"  # load a long-tail tool's full schema on demand
+    TODO_WRITE = "todo_write"  # agent-driven live UI todo checklist (create/update/mark)
+    WEB_RESEARCH = "web_research"  # adaptive web acquisition (search + fetch + browser)
+    SEARCH_TOOL_RESULTS = "search_tool_results"  # read back a large stored tool result
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -127,9 +127,9 @@ class Capability(str, Enum):
 
     # ── System ──
     SYSINFO = "sysinfo"
-    OBSERVE = "observe"  # B-2026-07-31-9: desktop awareness — "what's happening right now"
+    OBSERVE = "observe"  # desktop awareness — "what's happening right now"
 
-    # ── Data (B-2026-07-31-10) ──
+    # ── Data ──
     CALCULATE = "calculate"  # safe arithmetic evaluation
     CSV = "csv"  # bounded CSV file parsing
     JSON = "json"  # bounded JSON parse/query
@@ -168,19 +168,19 @@ class Message(BaseModel):
     file_path: Optional[str] = None
     file_size: Optional[int] = None
     file_type: Optional[str] = None
-    # Session 266: per-turn artifacts persisted with the assistant message so
+    # Per-turn artifacts persisted with the assistant message so
     # they survive a reload. Stored as JSON in the messages table; the history
     # endpoint returns them and the frontend restores thinking blocks, error
     # cards, tool-step pills, and the cumulative context counter.
     thinking: Optional[str] = None  # accumulated reasoning trace
-    # Session 290: the ADR-36 opening acknowledgement ("I'll do X") the parent
+    # The opening acknowledgement ("I'll do X") the parent
     # streamed before the answer — shown live but previously lost on reload,
     # the same gap the thinking block had.
     acknowledgement: Optional[str] = None
-    error: Optional[str] = None  # raw provider error string (normalized at the history boundary per ADR-20)
+    error: Optional[str] = None  # raw provider error string (normalized at the history boundary)
     tool_calls: Optional[list] = None  # tool-call timeline (pills)
     metrics: Optional[dict] = None  # {prompt_tokens, completion_tokens, latency_ms}
-    # Session 267: the Agent Workspace run tree + phase strip rebuilt
+    # The Agent Workspace run tree + phase strip rebuilt
     # server-side from the request's obs events (frontend AgentRun[] /
     # AgentPhase[] shapes) so the Agents tab survives a reload.
     agent_runs: Optional[list] = None
@@ -252,7 +252,7 @@ class ToolResult(BaseModel):
 class AgentAbortedError(Exception):
     """Raised inside AgentLoop.run() when the user aborts the turn.
 
-    B-2026-08-02-2 (A2): an asyncio.Event is threaded through
+    An asyncio.Event is threaded through
     AgentLoop.run() / BaseAgent.run(); when it is set, the loop raises
     this at the next iteration boundary so the engine can yield a clean
     "stopped" response instead of letting the backend run to the

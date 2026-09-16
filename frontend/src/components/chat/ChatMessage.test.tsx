@@ -78,7 +78,7 @@ describe('ChatMessage hover action row', () => {
   });
 });
 
-describe('ChatMessage acknowledgement (ADR-36)', () => {
+describe('ChatMessage acknowledgement', () => {
   it('renders the opening acknowledgement as the first line of an assistant reply', () => {
     render(<ChatMessage message={makeMessage({ acknowledgement: "I'll list all projects." })} />);
 
@@ -108,7 +108,7 @@ describe('ChatMessage markdown table <br> handling', () => {
   });
 });
 
-// ── B-2026-08-25-6: Accept collapses the diff card to the normal view ──────
+// ── Accept collapses the diff card to the normal view ──────
 
 /** A minimal single-hunk diff payload shaped like the live `diff` SSE event. */
 function makeDiffData() {
@@ -132,7 +132,7 @@ function makeDiffData() {
   };
 }
 
-describe('ChatMessage diff accept flow (B-2026-08-25-6)', () => {
+describe('ChatMessage diff accept flow', () => {
   it('renders the full diff with an Accept bar while pending', () => {
     render(<ChatMessage message={makeMessage({ diffData: makeDiffData() })} onRetry={() => {}} />);
     expect(screen.getByRole('button', { name: /accept/i })).toBeTruthy();

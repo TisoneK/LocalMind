@@ -1,5 +1,5 @@
 /**
- * Tests for TerminalPanel realtime cues (Session 215 — realtime-alive-ui).
+ * Tests for TerminalPanel realtime cues.
  *
  * The terminal must feel live without animating high-volume output: a
  * blinking "executing…" cursor shows while a command runs, and the prompt

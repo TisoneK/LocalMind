@@ -19,7 +19,7 @@ Migration status (Phase 3 progress):
     ✅ file_write  — bypasses legacy bridge; calls _do_write() directly
     ✅ edit_file   — bypasses legacy bridge; calls _edit_from_payload() directly (v7)
     ✅ code_exec   — full ToolContract; execute() calls the sandboxed runner
-                     (tools.code_executor.runner.run_code) directly (Session 107).
+                     (tools.code_executor.runner.run_code) directly.
                      The legacy bridge was BROKEN for code_exec: it serialised
                      the payload to JSON and dispatched to the string-based
                      legacy tool, whose pre-dispatch validator demands a
@@ -240,7 +240,7 @@ class FileWriteContract(_LegacyBridgeContract):
         )
         # RiskLevel imported at module level — no inner re-import
 
-        # Session 376: normalize free-tier aliases (file_path → path,
+        # Normalize free-tier aliases (file_path → path,
         # text/body/code → content) before reading the fields below.
         payload = _normalize_write_payload(payload)
 
@@ -253,7 +253,7 @@ class FileWriteContract(_LegacyBridgeContract):
 
         if is_scratch_only:
             # No user destination — write to scratch and stay there.
-            # B-2026-08-23-17 follow-up: default scratch = session workspace
+            # Default scratch = session workspace
             # when a session is active (mirrors tools/file_writer.py).
             filename = Path(raw_path).name if raw_path else f"output_{int(_time.time())}.txt"
             home = Path(os.path.expandvars(settings.localmind_home)).expanduser().resolve()
@@ -335,7 +335,7 @@ class FileWriteContract(_LegacyBridgeContract):
             final_dest.parent.mkdir(parents=True, exist_ok=True)
             logger.info("[contracts] resolved unresolvable path to: %s", final_dest)
 
-        # Always write to scratch first, then copy back. B-2026-08-23-17
+        # Always write to scratch first, then copy back.
         # follow-up: the scratch write lands in the session's workspace folder
         # when a session is active (artifacts stay with the session and are
         # deleted with it); without a session the historic ~/LocalMind/
@@ -409,7 +409,7 @@ class EditFileContract(ToolContract):
         all the heavy lifting: path resolution, backup creation, edit
         application, diff generation, and error handling.
         """
-        # Session 376: normalize free-tier model aliases (old_pattern/new_string,
+        # Normalize free-tier model aliases (old_pattern/new_string,
         # content-only → rewrite) BEFORE the action validation below — a
         # content-only payload would otherwise be rejected here without ever
         # reaching prepare_edit's normalizer.

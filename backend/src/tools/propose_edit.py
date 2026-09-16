@@ -1,5 +1,5 @@
 """
-propose_str_replace tool — B-2026-08-02-7 (B2, propose-stage tools).
+propose_str_replace tool — Propose-stage tools.
 
 Stages a search/replace-style edit as a PROPOSAL without touching disk.
 The model can stage MULTIPLE candidate edits for the same file

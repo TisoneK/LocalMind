@@ -1,6 +1,6 @@
 """
-ADR-22 P1 — Session episode memory (the system-level "keeps learning and
-session context" layer, Session 190).
+Session episode memory — the system-level "keeps learning and
+session context" layer.
 
 Design: a `.context/`-style agent writes a compact "what happened this
 session, what changed, what's next" record at session close and loads it

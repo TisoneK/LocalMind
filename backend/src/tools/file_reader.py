@@ -45,13 +45,13 @@ logger = logging.getLogger(__name__)
 # model knows exactly how much is missing.
 _FULL_CONTENT_MAX_BYTES: int = 100 * 1024  # 100 KB
 
-# ── Cloud-file (OneDrive Files-On-Demand) handling (S422) ───────────────────
+# ── Cloud-file (OneDrive Files-On-Demand) handling ───────────────────
 # OneDrive "Files On-Demand" leaves placeholder entries on disk whose bytes
 # live in the cloud. Reading one is supposed to hydrate it transparently —
 # but when the cloud provider process (OneDrive.exe) is not running, EVERY
 # read fails with OSError EINVAL (Win32 ERROR_CLOUD_FILE_* family; observed
 # 362 "The cloud file provider is not running" on a real PINNED placeholder).
-# Before S422 this surfaced as a bare "[Errno 22] Invalid argument" that the
+# Before this handling, a cloud placeholder surfaced as a bare "[Errno 22] Invalid argument" that the
 # model misdiagnosed and worked around with zipfile / raw-byte / shell
 # attempts (the "find my CV" transcript). We now classify the condition and
 # give one bounded provider nudge; everything else is an honest, precise
@@ -106,7 +106,7 @@ def _classify_cloud_file_error(e: OSError, attrs: int) -> bool:
     - ``e.winerror`` inside the ERROR_CLOUD_FILE_* family (strong, OS-given);
     - EINVAL + placeholder attributes (Python's io layer raises
       OSError(errno=EINVAL) WITHOUT winerror for filter-driver failures —
-      verified on the real S422 placeholder, where GetLastError() held 362
+      verified on the real cloud placeholder, where GetLastError() held 362
       but ``e.winerror`` was None).
     """
     winerr = getattr(e, "winerror", None)
@@ -266,7 +266,7 @@ def _cloud_file_unavailable_message(p: Path, diag: dict) -> str:
     return "\n".join(lines)
 
 
-# ── Content-sniffed parser dispatch (S422) ──────────────────────────────────
+# ── Content-sniffed parser dispatch ──────────────────────────────────
 # Extension-based dispatch misreads mislabeled files (a renamed .pub served
 # line-numbered binary garbage; a text file named .docx died inside
 # python-docx). Dispatch is now content-first: magic bytes decide, and the
@@ -745,7 +745,7 @@ async def parse_file(
 
     text = ""
     try:
-        # S422: content-first dispatch — magic bytes decide the parser, the
+        # Content-first dispatch — magic bytes decide the parser, the
         # extension is trusted only when the content has no known signature.
         sniff = _sniff_format(data)
         kind, _note = _resolve_read_kind(ext, sniff, data)
@@ -823,10 +823,10 @@ async def parse_file(
 
 
 # Readable file extensions used by the path extractor below.
-# S422: .pub added — a Publisher file in a user message must resolve to a
+# .pub added — a Publisher file in a user message must resolve to a
 # path so it can reach the honest unsupported_format result (previously it
 # was invisible to the extractor and reported not_found).
-# S422: image extensions added — the OCR parser existed but a .jpg path in a
+# Image extensions added — the OCR parser existed but a .jpg path in a
 # message never resolved ("No file found"), so the capability was unreachable
 # by path reference.
 _READ_EXTS = (
@@ -841,12 +841,12 @@ _READ_EXTS = (
 # AND backslashes. A Windows absolute path (C:\Users\tison\Desktop\file.md) would
 # otherwise be truncated at the backslashes down to the bare filename, then looked
 # up under ~/ and cwd and never found — so a file the agent just wrote to the
-# Desktop reads back as not_found (Session 264). The dedicated Windows-drive
+# Desktop reads back as not_found (seen live on Windows). The dedicated Windows-drive
 # pattern (backslashes OR forward slashes, spaces allowed) MUST run before the
 # bare pattern so the full absolute path is offered as the first candidate. The
 # backslash in the bare class is what lets a WINDOWS-RELATIVE path
 # (dev\test-run\notes.txt) survive whole instead of truncating to notes.txt —
-# the read-back-after-write failure reproduced live on Windows (Session 325).
+# the read-back-after-write failure reproduced live on Windows.
 _PATH_PATTERNS = [
     re.compile(rf"""["']([^"'\n]+?\.(?:{_READ_EXTS}))["']""", re.IGNORECASE),
     re.compile(rf"""([A-Za-z]:[\\/][^\n\r"'<>|*?]+?\.(?:{_READ_EXTS}))""", re.IGNORECASE),
@@ -916,7 +916,7 @@ async def file_task(message: str, original_path: str = None) -> ToolResult:
                     error_message=f"Path not in allowed read paths: {p}",
                 )
             try:
-                # S422: canonical read with cloud-placeholder recovery. A
+                # Canonical read with cloud-placeholder recovery. A
                 # Files-On-Demand placeholder raises EINVAL when the cloud
                 # provider is down; without this the model burningly
                 # retried via zipfile / raw reads / shell (the "find my

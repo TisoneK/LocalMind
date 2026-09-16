@@ -1,6 +1,6 @@
-"""Regression tests for the provider-registry derivation (Session 319).
+"""Regression tests for the provider-registry derivation.
 
-Adding B.AI (ADR-55) surfaced that ``models.py`` still held two hardcoded
+Adding B.AI surfaced that ``models.py`` still held two hardcoded
 provider→settings-field maps that had drifted from ``PROVIDER_CONFIGS`` —
 the ADR-9 ZenMux entry was silently missing from both, so
 ``_model_setting_attr("zenmux")`` returned ``None`` and
@@ -27,10 +27,10 @@ def test_build_model_setting_map_covers_every_provider():
 
 
 def test_bankofai_is_registered():
-    """BankOfAI (ADR-55) is a first-class OpenAI-compatible provider."""
+    """BankOfAI is a first-class OpenAI-compatible provider."""
     cfg = PROVIDER_CONFIGS["bankofai"]
     assert cfg.name == "bankofai"
-    # Session 321: canonical domain is api.bankofai.io (b.ai → bankofai.io).
+    # Canonical domain is api.bankofai.io (b.ai → bankofai.io).
     assert cfg.base_url == "https://api.bankofai.io/v1"
     assert cfg.key_env == "BANKOFAI_API_KEY"
     assert cfg.model_env == "BANKOFAI_MODEL"
@@ -67,7 +67,7 @@ def test_bankofai_resolves_in_derived_maps():
 
 
 def test_omniroute_is_registered():
-    """OmniRoute (Session 405) — a self-hosted OpenAI-compatible gateway.
+    """OmniRoute  — a self-hosted OpenAI-compatible gateway.
 
     base_url points at the local gateway and is env-overridable via
     OMNIROUTE_BASE_URL (the port/host can differ per install); the key is the

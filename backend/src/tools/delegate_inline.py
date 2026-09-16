@@ -1,5 +1,5 @@
 """
-Delegate Inline tool — B-2026-08-02-9 (B4): inline delegation.
+Delegate Inline tool — inline delegation.
 
 Borrowed from Codebuff's `spawn_agent_inline`. Unlike `delegate`
 (handoff — the child returns a result and the parent continues with it)

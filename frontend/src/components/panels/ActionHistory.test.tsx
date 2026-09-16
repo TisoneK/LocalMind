@@ -1,5 +1,5 @@
 /**
- * Tests for ActionHistory (Session 213 — realtime-alive-ui).
+ * Tests for ActionHistory.
  *
  * The left-panel action trace groups a turn's steps into a numbered,
  * connected chain under the plan step they serve, and emphasises the
@@ -49,7 +49,7 @@ describe('ActionHistory', () => {
     expect(screen.getByText('Run tests')).toBeInTheDocument();
   });
 
-  it('renders the winning search engine as a badge (Session 271)', () => {
+  it('renders the winning search engine as a badge', () => {
     render(
       <ActionHistory
         actions={[
@@ -137,7 +137,7 @@ describe('ActionHistory', () => {
     expect(num.className).toContain('text-brand-purple');
   });
 
-  it('shows the Why block when reasoning has real content (Session 122)', () => {
+  it('shows the Why block when reasoning has real content', () => {
     render(
       <ActionHistory
         actions={[action({ id: 'a1', label: 'Run command', reasoning: 'Plan step: list files', iteration: 1 })]}
@@ -148,7 +148,7 @@ describe('ActionHistory', () => {
     expect(screen.getByText('Plan step: list files')).toBeInTheDocument();
   });
 
-  it('hides the Why block when reasoning is empty or whitespace-only (Session 265)', () => {
+  it('hides the Why block when reasoning is empty or whitespace-only', () => {
     render(
       <ActionHistory
         actions={[

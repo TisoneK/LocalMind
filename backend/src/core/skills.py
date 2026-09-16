@@ -1,5 +1,5 @@
 """
-Skills system — B-2026-08-02-12 (C3): lightweight prompt injection.
+Skills system — lightweight prompt injection.
 
 Skills are markdown files with YAML frontmatter (name, description)
 dropped in `backend/data/skills/<slug>/SKILL.md`. The `SkillLoader`

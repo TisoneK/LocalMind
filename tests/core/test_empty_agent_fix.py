@@ -195,7 +195,7 @@ class TestP9ReflectionLoop:
                 obs=obs,
             )
 
-        # Session 31: correction should be emitted as an obs event, NOT
+        # Correction should be emitted as an obs event, NOT
         # stored as a visible chat message.
         events = obs.drain()
         correction_events = [e for e in events if e.type == "reflection_correction"]

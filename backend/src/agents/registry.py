@@ -1,12 +1,12 @@
 """
 Agent registry — name → agent class.
 
-Per ADR-6: the intent router / UI picker selects an agent by name from
+The intent router / UI picker selects an agent by name from
 this registry, rather than an if/else buried in a chat handler. Direct
 Mode vs Agent Mode becomes a registry lookup: DirectAgent vs the user-
 selected agent.
 
-Per ADR-8 Principle 5 (Session 34, Phase 1): the registry auto-discovers
+The registry auto-discovers
 agent directories under `agents/` that contain an `agent.py` file. Each
 such directory's `__init__.py` re-exports the agent class. Adding a new
 agent = adding a new directory under `agents/` with an `agent.py` file —
@@ -76,7 +76,7 @@ def register(name: str, agent_class: type) -> None:
 def auto_discover_agents(package: str = "agents") -> int:
     """Auto-discover agent directories and register their classes.
 
-    Per ADR-8 Principle 5 (Session 34, Phase 1): scans `agents/` for
+    Scans `agents/` for
     subdirectories that contain an `agent.py` module. Each such
     directory's `__init__.py` is expected to re-export the agent class
     (e.g., `agents/coding/__init__.py` re-exports `CodingAgent`). This

@@ -1,4 +1,4 @@
-"""B-2026-08-24-2: the iteration cap is a failsafe for a FAILING loop, not a
+"""The iteration cap is a failsafe for a FAILING loop, not a
 penalty on a long task whose tools keep succeeding.
 
 `_iteration_budget_extendable(trace)` decides whether the loop may continue

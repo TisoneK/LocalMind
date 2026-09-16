@@ -2,7 +2,7 @@
 """
 S449 (Otto) — batch-8 probes, in a SEPARATE file on purpose.
 
-Maya (S452) holds the claim on scripts/lm_edge_sets.py (B-2026-09-09-4:
+Maya holds the claim on scripts/lm_edge_sets.py (B-2026-09-09-4:
 result-file overwrite/merge rework), so this file only IMPORTS the
 harness and appends its own conversations to the module's catalog before
 calling its main(). No edits to lm_edge_sets.py from this side.

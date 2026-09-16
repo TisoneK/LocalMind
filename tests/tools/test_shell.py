@@ -276,7 +276,7 @@ def test_dash_named_executables_are_not_routed_to_powershell():
 
 
 def test_powershell_commands_are_not_mislabeled_as_nl():
-    # Session 189: PowerShell cmdlets used to be REJECTED by the NL guard
+    # PowerShell cmdlets used to be REJECTED by the NL guard
     # (first token not on PATH) before ever reaching the shell.
     assert not _looks_like_natural_language(
         "Get-ChildItem -Path C:\\Users\\tison -Recurse -File"

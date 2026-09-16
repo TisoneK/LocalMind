@@ -1,5 +1,5 @@
 """
-Tests for ADR-8 Phase 2 (Session 34): wire build_context() into the agent
+Tests for ADR-8 Phase 2: wire build_context() into the agent
 loop, and honor agent_config caps.
 
 Locks in:

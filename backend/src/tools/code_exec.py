@@ -69,7 +69,7 @@ _CODE_FENCE = re.compile(r"```(?:python|py)?\s*([\s\S]+?)```", re.IGNORECASE)
 # A command that RUNS a file (e.g. "python fib_check.py 55", "python3 x.py") —
 # not inline Python source. Inline code never starts with the literal word
 # "python", so this reliably catches the code_exec-vs-shell mix-up
-# (B-2026-08-18-8). code_exec runs inline source; the shell tool runs files.
+# code_exec runs inline source; the shell tool runs files.
 _RUN_FILE_COMMAND_RE = re.compile(r"^\s*(?:python3?|py|pypy3?)\b", re.IGNORECASE)
 
 
@@ -127,9 +127,9 @@ def _extract_code(message: str) -> str:
         # (word chars + spaces), so require at least one code-ish token
         # (paren, bracket, operator, '=', ',', ':' etc.) — otherwise the input
         # is prose and gets rejected instead of spawning a confusing subprocess.
-        # S422: backslash, single-quote, braces and semicolon added — a first
+        # Backslash, single-quote, braces and semicolon added — a first
         # line like  path = r"C:\Users\...\CV.docx"  (raw-string Windows path)
-        # was rejected as prose pre-S422 and burned a turn on the CV task.
+        # was rejected as prose before this fix and burned a turn on the CV task.
         looks_like_expr = (
             bool(re.match(r'^[\w\s\.\(\)\[\]\{\}\\\+\-\*/%=<>!,;:"\']+$', first_line))
             and len(first_line) < 200
@@ -145,7 +145,7 @@ async def code_exec(message: str) -> ToolResult:
     from core.config import settings
 
     stripped = message.strip()
-    # B-2026-08-18-8: the model often reaches for code_exec to RUN a script file
+    # The model often reaches for code_exec to RUN a script file
     # it just wrote (e.g. "python C:\...\fib_check.py 55", "python3 /a/b.py").
     # code_exec runs INLINE Python source, not a file. The model's INTENT is
     # unambiguous, so the harness RECOVERS structurally: run the command via the

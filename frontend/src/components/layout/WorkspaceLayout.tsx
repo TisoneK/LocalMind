@@ -25,7 +25,7 @@ import { exportSessions, copySessionsToClipboard, type ExportFormat } from '@/li
 
 export function WorkspaceLayout() {
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
-  // B-2026-08-23-34: Chat mode state ("auto" | "agent" | "direct").
+  // Chat mode state ("auto" | "agent" | "direct").
   const [chatMode, setChatMode] = useState<string>('auto');
   const [leftPanelWidth, setLeftPanelWidth] = useState(280);
   const [rightPanelWidth, setRightPanelWidth] = useState(320);
@@ -93,7 +93,7 @@ export function WorkspaceLayout() {
   // Terminal hook — created first so we can reference addToolOutput in useChat
   const terminal = useTerminal();
 
-  // B-2026-08-23-27: ref to avoid re-running the resume logic on every
+  // Ref to avoid re-running the resume logic on every
   // sessions update — only fire once on the first non-empty session load.
   const hasAutoSelectedRef = useRef(false);
 
@@ -105,7 +105,7 @@ export function WorkspaceLayout() {
     if (saved?.model) {
       setSelectedModel(saved.model);
     }
-    // B-2026-08-23-34: Load persisted chat mode from backend settings.
+    // Load persisted chat mode from backend settings.
     localmindClient.getSettings().then((s) => {
       if (s.chat_mode) setChatMode(s.chat_mode);
     }).catch(() => {});
@@ -127,7 +127,7 @@ export function WorkspaceLayout() {
   const health = useHealth();
   const { sessions, loading: sessionsLoading, refresh: refreshSessions, deleteSession, deleteSessions } = useSessions();
 
-  // B-2026-08-23-27: Auto-resume the most recent session on startup when
+  // Auto-resume the most recent session on startup when
   // the user has configured startup_session = "resume". Sessions are sorted
   // by last_active descending from the backend, so sessions[0] is the most
   // recent. Fires only once (guarded by hasAutoSelectedRef) and only when
@@ -148,12 +148,12 @@ export function WorkspaceLayout() {
   const { actions: apiActions, refresh: refreshActions } = useActions(currentSessionId, isStreaming);
   const { files, refresh: refreshFiles } = useFileTree();
   const { todos, toggleTodo, addTodo } = useTodos(currentSessionId);
-  // ADR-34 B-11: useObjectives keeps running for backend sync, but the
+  // useObjectives keeps running for backend sync, but the
   // sidebar no longer renders the ObjectivesPanel. The create/pause/resume/
   // cancel functions are intentionally unused — the objective persistence
   // layer stays warm for a future product decision.
   useObjectives(currentSessionId);
-  // ADR-34 B-10: useCapabilities() was retired — the Capability Catalog was
+  // useCapabilities() was retired — the Capability Catalog was
   // only rendered in the Observe tab, which is now removed.
   const { metrics: polledMetrics } = useMetrics(isStreaming);
   const { models, current: currentModelId, provider: modelProvider, selectModel, refresh: refreshModels } = useModels();
@@ -267,13 +267,13 @@ export function WorkspaceLayout() {
     }
   }, [activeToolCalls, rightPanelCollapsed]);
 
-  // ADR-34 B-9: Auto-switch right panel to Agents tab when a parent turn
+  // Auto-switch right panel to Agents tab when a parent turn
   // starts. The Agents workspace is the canonical live surface for
   // parent/child agent state — the user should see the initialization
   // events (ack, understanding, plan, tool evidence, synthesis) arrive
   // in real-time, not be hidden behind the Observe tab.
   const [forceAgentsTab, setForceAgentsTab] = useState(false);
-  // B-2026-08-23-15: Auto-switch right panel to Memory tab when the agent
+  // Auto-switch right panel to Memory tab when the agent
   // runs a memory_op tool (store/recall/forget) so the user sees the fact
   // land in memory immediately. Flag consumed by RightPanel exactly like
   // forceTerminalTab/forceAgentsTab (unconditional consume).
@@ -298,7 +298,7 @@ export function WorkspaceLayout() {
     prevParentRunning.current = parentRunning;
   }, [agentRuns, rightPanelCollapsed]);
 
-  // B-2026-08-23-15: memory_op tool activity → Memory tab (like the shell →
+  // memory_op tool activity → Memory tab (like the shell →
   // Terminal switch above). memory_op is the agent's explicit memory tool
   // (store/recall/forget/list) — a real signal the user should see.
   useEffect(() => {
@@ -373,7 +373,7 @@ export function WorkspaceLayout() {
         sessionIds,
         format,
         (id) => localmindClient.getSessionHistory(id),
-        // B-2026-08-23-3: include each session's todo checklist in the export.
+        // Include each session's todo checklist in the export.
         (id) => localmindClient.getTodos(id),
       );
     },
@@ -404,7 +404,7 @@ export function WorkspaceLayout() {
     [selectModel]
   );
 
-  // B-2026-08-23-34: Handle chat mode change — persist to backend.
+  // Handle chat mode change — persist to backend.
   const handleChatModeChange = useCallback(
     async (mode: 'auto' | 'agent' | 'direct') => {
       setChatMode(mode);
@@ -433,7 +433,7 @@ export function WorkspaceLayout() {
     [currentSessionId, send, refreshSessions, refreshActions]
   );
 
-  // B-2026-08-24-16: the Chat→Agent gate (in ChatMessage) dispatches this when
+  // The Chat→Agent gate (in ChatMessage) dispatches this when
   // the user accepts. Switch to Agent mode (persist to backend) THEN resend the
   // original message as an agent turn — the await ensures the backend has the
   // new mode before the turn runs.
@@ -449,7 +449,7 @@ export function WorkspaceLayout() {
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-brand-bg-app">
-      {/* ADR-34 B-11: deliberate LocalMind title-bar chrome */}
+      {/* Deliberate LocalMind title-bar chrome */}
       <TitleBar version="v0.5.16" />
       {/* Three-panel workspace */}
       <div className="flex flex-1 min-h-0">

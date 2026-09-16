@@ -1,10 +1,10 @@
-"""Session 123: anomaly detection for the Observe panel.
+"""Anomaly detection for the Observe panel.
 
 The detectors are pure functions in core.anomalies — these tests lock the
 exact failure shapes the user reported:
-- STALL: "it hung for 108.6s and returned 23 tokens" (Session 115).
+- STALL: "it hung for 108.6s and returned 23 tokens".
 - TOKEN_LEAK: "prompt: 5705 on a new chat, close to the previous attempt's
-  5653 — context did not reset between chats" (Session 115/117).
+  5653 — context did not reset between chats".
 """
 
 from core.anomalies import (

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S426: fast-path gate + parent-only catalog live traces.
+"""Fast-path gate + parent-only catalog live traces.
 
 Probes (baseline vs fix-N on the SAME prompts, isolated port 8765 + scratch
 LOCALMIND_HOME, per memory/system/live-testing.md):

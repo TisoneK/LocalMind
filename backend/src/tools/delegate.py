@@ -1,7 +1,7 @@
 """
-Delegate tool — ADR-8 Phase 3 (Session 34): agent-initiated delegation.
+Delegate tool — agent-initiated delegation.
 
-Per ADR-8 Principle 3: "Agents collaborate — a coding task needing
+The principle: "Agents collaborate — a coding task needing
 research delegates to the ResearchAgent — either parallel (both work
 simultaneously) or handoff (ResearchAgent returns results, CodingAgent
 continues). This replaces the retired pre-loop keyword heuristic with agent-initiated
@@ -216,7 +216,7 @@ async def delegate(message: str) -> ToolResult:
     # Construct the sub-agent with the current adapter. The adapter is
     # passed via a thread-local / context var set by the calling agent
     # loop. If no adapter is available, we can't run the sub-agent.
-    # B-2026-08-02-10 (C1): per-agent model routing — the child uses its
+    # Per-agent model routing — the child uses its
     # LOCALMIND_AGENT_MODEL_<NAME> override when one is configured (an
     # AgentConfig-declared model is resolved inside BaseAgent.run(), the
     # single source of truth). Falls back to the parent's adapter.
@@ -263,7 +263,7 @@ async def delegate(message: str) -> ToolResult:
             error_type="adapter_unavailable",
         )
 
-    # ADR-18 P3: the parent's ObsCollector (if any) streams the sub-agent's
+    # The parent's ObsCollector (if any) streams the sub-agent's
     # work into the UI. The child runs with a ChildObsProxy so its own
     # tool activity is forwarded to the parent collector (Actions panel)
     # while its internal events (CHAT intent, turn_complete, …) stay local.
@@ -314,7 +314,7 @@ async def delegate(message: str) -> ToolResult:
         target_agent, current_depth + 1, MAX_DELEGATION_DEPTH, task[:200],
     )
 
-    # ADR-18 P3: delegation lifecycle events — the frontend sees the
+    # Delegation lifecycle events — the frontend sees the
     # sub-agent start and finish (collapsed into one running tool step).
     _emit_delegation(
         parent_obs,
@@ -328,8 +328,8 @@ async def delegate(message: str) -> ToolResult:
     # Run the sub-agent. Use a wall-clock cap to prevent a single
     # delegation from consuming the entire turn budget. The sub-agent's
     # own max_iterations / max_wall_clock_secs also apply (via its
-    # AgentConfig, honored per ADR-8 Phase 2).
-    # B-2026-08-02-9 (B4): the child runs its OWN AgentLoop, which publishes
+    # AgentConfig, now honored).
+    # The child runs its OWN AgentLoop, which publishes
     # its own inline-mutation scope (overwriting the parent's in this
     # context). Restore the parent's scope when the child exits so a later
     # delegate_inline in the parent still targets the parent's history.
@@ -372,7 +372,7 @@ async def delegate(message: str) -> ToolResult:
                 available_tools=[],  # the sub-agent's config().allowed_tools is used
                 confidence=1.0,
                 allowed_tool_names=child_allowed_tools,
-                obs=child_obs,  # ADR-18 P3: stream the child's work into the UI
+                obs=child_obs,  # stream the child's work into the UI
             ):
                 if chunk.text:
                     chunks.append(chunk.text)
@@ -560,7 +560,7 @@ def set_current_adapter(adapter) -> None:
 
 
 def set_current_obs(obs) -> None:
-    """Set the parent's ObsCollector for delegation (ADR-18 P3).
+    """Set the parent's ObsCollector for delegation.
 
     Called alongside set_current_adapter at the start of each tool
     dispatch. The delegate tools read it to stream the sub-agent's

@@ -84,7 +84,7 @@ def cap_facts_to_budget(facts: list[str], budget_tokens: int = _MEMORY_TOKEN_BUD
         used += cost
     return kept
 
-# ADR-19 P1 (Session 177): context-hierarchy levels. Every stored fact is
+# Context-hierarchy levels. Every stored fact is
 # tagged with a `memory_level` so retrieval can be LEVEL-AWARE per task
 # type instead of always pulling the same global pool. Hierarchy:
 #   turn      — ephemeral, this turn's working context
@@ -93,10 +93,9 @@ def cap_facts_to_budget(facts: list[str], budget_tokens: int = _MEMORY_TOKEN_BUD
 #   long_term — durable user facts (the historical default)
 MEMORY_LEVELS = ("turn", "session", "project", "long_term")
 
-# ADR-19 P1: preferred levels per task type, most-relevant first (design.md
-# §6 — "the same conversation can produce different compressed contexts
-# depending on the next task"). Unknown/default → None = legacy behavior
-# (no level filter, exactly the pre-P1 retrieval).
+# Preferred levels per task type, most-relevant first — "the same
+# conversation can produce different compressed contexts depending on the
+# next task". Unknown/default → None = legacy behavior (no level filter).
 _TASK_TYPE_LEVELS: dict[str, tuple[str, ...]] = {
     "debug": ("session", "turn", "long_term"),
     "plan": ("project", "long_term"),
@@ -108,7 +107,7 @@ _TASK_TYPE_LEVELS: dict[str, tuple[str, ...]] = {
 
 
 def level_priorities(task_type: Optional[str]) -> Optional[tuple[str, ...]]:
-    """ADR-19 P1: resolve the preferred memory levels for a task type.
+    """Resolve the preferred memory levels for a task type.
 
     Pure + deterministic. Unknown/empty/default → None, which callers treat
     as "no level filter" — EXACTLY the pre-P1 retrieval behavior (a wiring
@@ -138,7 +137,7 @@ class MemoryComposer:
     ) -> list[str]:
         """Retrieve memory facts for a query with 4-factor scoring.
 
-        ADR-19 P1: `levels` optionally restricts retrieval to facts tagged
+        `levels` optionally restricts retrieval to facts tagged
         with one of the given context-hierarchy levels (turn/session/
         project/long_term). None = legacy behavior (any level). Facts
         stored before P1 carry no `memory_level` metadata — they are
@@ -177,7 +176,7 @@ class MemoryComposer:
             if distance > threshold:
                 continue
 
-            # ADR-19 P1: level-aware filter. Facts without a memory_level
+            # Level-aware filter. Facts without a memory_level
             # tag (pre-P1 stores) default to long_term so nothing is lost.
             if levels is not None:
                 fact_level = str(metadata.get("memory_level", "long_term"))
@@ -233,7 +232,7 @@ class MemoryComposer:
     ) -> bool:
         """Store a fact with importance rating (0.0=trivial, 1.0=critical).
 
-        ADR-19 P1: `level` tags the fact with a context-hierarchy level
+        `level` tags the fact with a context-hierarchy level
         (turn/session/project/long_term). Default long_term keeps the
         historical behavior. Stored in metadata as `memory_level` so the
         level-aware retriever can filter on it.
@@ -260,7 +259,7 @@ class MemoryComposer:
         task_type: Optional[str] = None,
         top_k: int = _MAX_FACTS,
     ) -> list[str]:
-        """ADR-19 P1: level-aware retrieval for the current task type.
+        """Level-aware retrieval for the current task type.
 
         Resolves the task type's preferred memory levels and composes with
         that filter. Unknown/default task_type → legacy compose (no

@@ -105,7 +105,7 @@ class DelegationInstructionPacket:
     def to_prompt(self) -> str:
         """Render literal instructions for the child model's user message.
 
-        The bounded-instruction contract (ADR-15 §3): every delegated run
+        The bounded-instruction contract: every delegated run
         gets an explicit DO / DO NOT / RETURN structure — what to
         accomplish, what is forbidden, and the exact report shape — even
         when the optional sections are empty.
@@ -145,7 +145,7 @@ class DelegationInstructionPacket:
             lines.append(
                 "- A concise report of work performed, evidence observed, blockers, and next steps."
             )
-        # B-2026-08-09-15 (ADR-15 §1): a SPECIFIC sub-agent (e.g. reviewer)
+        # A SPECIFIC sub-agent (e.g. reviewer)
         # may declare an OUTPUT CONTRACT in its system prompt that demands
         # a fixed JSON shape. That contract is authoritative — it exists
         # so the parent can parse the child's result — so the generic
@@ -255,7 +255,7 @@ def reset_current_run_id(token) -> None:
     _current_run_id.reset(token)
 
 
-# ── Inline delegation (B-2026-08-02-9 / B4) ───────────────────────────────────
+# ── Inline delegation ───────────────────────────────────
 # Inline delegation lets a special child agent rewrite the PARENT agent's
 # live message history in place (the context-pruner pattern). This breaks
 # the strict isolation invariant of handoff/parallel delegation, so it is

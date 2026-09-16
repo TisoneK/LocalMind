@@ -6,7 +6,7 @@ Why this exists
 ───────────────
 A research-heavy turn produces big tool outputs (web_fetch pages, file reads,
 shell dumps). Carrying them inline balloons the context (measured 91 → 4228
-tokens in one turn, S410). Slice 1 built the hybrid FTS5+vec0 store
+tokens in one turn). The first slice built the hybrid FTS5+vec0 store
 (``storage/tool_result_index.ToolResultIndex``); the agent loop now indexes any
 result over the ~5 KB threshold and replaces the inline copy with a short
 stub + pointer (``id=<result_id>``). THIS tool is how the model pulls the

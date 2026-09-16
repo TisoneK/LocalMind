@@ -33,7 +33,7 @@ class HealthResponse(BaseModel):
     status: str
     provider_reachable: bool
     engine_ready: bool
-    # ADR-52 phase 2: distinct parent-kernel readiness (separate from
+    # Distinct parent-kernel readiness (separate from
     # engine_ready, which only tracks startup completion). parent_ready
     # is True when the boot kernel is built and not in a degraded state;
     # parent_degraded_reason carries the warmup failure string when set.
@@ -72,7 +72,7 @@ async def health():
     # Get model based on adapter. Derived from PROVIDER_CONFIGS (single
     # source of truth) so a new provider is picked up automatically — the
     # old hardcoded dict here was the last remaining duplicate and had
-    # already drifted from models.py (Session 319).
+    # already drifted from models.py (seen live).
     adapter_name = settings.localmind_adapter
     from adapters.openai_compat import PROVIDER_CONFIGS
 
@@ -82,7 +82,7 @@ async def health():
     }
     current_model = model_setting_map.get(adapter_name) or settings.ollama_model
 
-    # ADR-52 phase 2: surface the parent kernel's distinct readiness state.
+    # Surface the parent kernel's distinct readiness state.
     # ``engine_ready`` only confirms startup completed; ``parent_ready``
     # confirms the boot kernel built without a degraded_reason (provider
     # warmup succeeded). The two can differ when a cloud provider is down

@@ -1,6 +1,6 @@
 """Backward-compat shim — re-exports DirectAgent from agents.direct.agent.
 
-Per ADR-8 Phase 1 (Session 34): the DirectAgent class moved INTO its
+The DirectAgent class moved INTO its
 agent directory at `agents/direct/agent.py`. This thin shim preserves
 backward compatibility. New code should import from
 `agents.direct.agent` (or via the package: `from agents import

@@ -13,7 +13,7 @@ const RATE_LIMIT: ModelError = {
   raw: 'zen returned 429: {"type":"error"}',
 };
 
-describe('ErrorMessage (ADR-20)', () => {
+describe('ErrorMessage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });

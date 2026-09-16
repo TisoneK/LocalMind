@@ -1,7 +1,7 @@
 """
 Find Path tool — name-match search for files AND folders, path-only output.
 
-Why this exists (Session 124/125): the agent, asked to "check git status on
+Why this exists: the agent, asked to "check git status on
 the localmind repo", ran `dir C:\\Users\\tison` — dumping the ENTIRE home
 directory into context (~2K tokens of noise, plus a 20K+ prompt downstream)
 when it only needed to locate one folder. The existing shell `find_files`
@@ -9,7 +9,7 @@ action searches by FILE TYPE (`*.py`), not by name, and can't match
 directories. A narrow find-by-name tool makes the output size bounded BY
 CONSTRUCTION: it returns only matching paths, never a full listing.
 
-Catalog contract (Session 194): the tool is a glob/grep-style ENUMERATION,
+Catalog contract: the tool is a glob/grep-style ENUMERATION,
 not a one-shot capped lookup. It walks ONCE (bounded by a time budget + an
 entry cap, not by result count), holds the full match list in a bounded
 TTL cache, and serves every follow-up — "show more", "only pdf", "in
@@ -86,13 +86,13 @@ _HEAVY_DIR_NAMES = frozenset(
     }
 )
 
-# ── Catalog cache (Session 194) ─────────────────────────────────────────
+# ── Catalog cache ─────────────────────────────────────────
 # "Find ALL files and paths once, then filter." The first find_path call for
 # a given (root, pattern, exact, depth, budget) walks and caches the match
 # list; every follow-up — page 2, "only pdf", "in Documents" — filters or
 # slices that list in memory. No re-walk, no repeated disk I/O.
 #
-# Bounded on all sides (code-review, Session 194): a 60s TTL so a newly
+# Bounded on all sides (a code review): a 60s TTL so a newly
 # created file shows up on the next identical request (a 5-minute window was
 # too stale for a desktop app), a small entry cap so a long-running server
 # can't accumulate tens of thousands of stale paths, and the stored match
@@ -124,7 +124,7 @@ def _cache_put(key: tuple, matches: list[str], scanned: int, complete: bool, tot
 
 
 def _search(root: Path, pattern: str, max_depth: int, max_results: int) -> list[Path]:
-    """Legacy bounded search (Session 125 tests + agent-era callers).
+    """Legacy bounded search (old tests + agent-era callers).
 
     Returns the first `max_results` matches of a catalog walk — same name
     matching, same heavy-dir/symlink policy, but stops early: a small budget
@@ -195,7 +195,7 @@ def _split_brace_alternatives(body: str) -> list[str]:
 def _matches(name: str, pattern: str, exact: bool = False) -> bool:
     """Case-insensitive substring, fnmatch (with {a,b} braces), or exact.
 
-    B-2026-08-16-16: multi-word PLAIN input (no glob chars) is an unordered
+    Multi-word PLAIN input (no glob chars) is an unordered
     AND — the name must contain EVERY whitespace-separated token, in any
     order. A single fnmatch pattern can't express "contains X and Y" order-
     independently, so `name="tison cv"` previously only matched the literal
@@ -203,7 +203,7 @@ def _matches(name: str, pattern: str, exact: bool = False) -> bool:
     both "tison" and "cv" (a strict superset — phrase matches still pass, and
     single-token / glob / exact behavior is unchanged).
 
-    B-2026-08-16-17: shell-style brace groups `{a,b}` (fnmatch's missing
+    Shell-style brace groups `{a,b}` (fnmatch's missing
     feature) expand into concrete patterns — `*.{docx,pdf}` matches both
     extensions, `{tison,cv}*` matches either prefix.
     """
@@ -259,7 +259,7 @@ def _walk_catalog(
             if scanned >= max_entries:
                 complete = False
                 break
-            # Security (Session 125 review): never follow symlinks — a symlink
+            # Security: never follow symlinks — a symlink
             # inside the search root could point OUTSIDE the allowed folders
             # and leak paths past the is_path_allowed root check.
             try:
@@ -551,10 +551,10 @@ async def find_path(message: str) -> ToolResult:
         content="\n".join(lines),
         risk=RiskLevel.LOW,
         source="find_path",
-        # Session 193 (deterministic file-ops layer): expose the matched
+        # Deterministic file-ops layer: expose the matched
         # paths STRUCTURED so the engine's deterministic executor can pick
         # and read without re-parsing the human-facing content lines.
-        # Session 194: catalog fields (total/groups/extensions/walk_complete)
+        # Catalog fields (total/groups/extensions/walk_complete)
         # let the executor present scale honestly and filter/continue
         # against the full list.
         metadata={

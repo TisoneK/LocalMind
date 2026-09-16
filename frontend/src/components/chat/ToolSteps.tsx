@@ -35,7 +35,7 @@ interface ToolStepsProps {
   compact?: boolean;
   /** Whether the parent message is still streaming. When true, the group
    *  auto-expands and the running step pulses so the user watches the
-   *  agent work in realtime (Session 118; timeline redesign Session 210). */
+   *  agent work in realtime (with a later timeline redesign). */
   isStreaming?: boolean;
   /** Turn Anatomy: when set (and changed), scroll the matching tool chip into
    *  view and flash it — the timeline segment above jumps here. `at` is a
@@ -158,7 +158,7 @@ function StepDetail({ toolCall }: { toolCall: ToolCall }) {
   const filePath = isFileWrite ? toolCall.input : null;
   return (
     <div className="mt-1 rounded-md border border-brand-border/50 bg-brand-bg-dark px-2.5 py-2">
-      {/* Session 265: only render the Why block when the reasoning has real
+      {/* Only render the Why block when the reasoning has real
           content — a whitespace-only plan-step label would otherwise show an
           empty "Why" section that wastes space. */}
       {toolCall.reasoning?.trim() && (
@@ -236,7 +236,7 @@ function TimelineRow({
   const stepMatch = toolCall.todoId?.match(/^plan-(\d+)$/);
   const inputStr = toolCall.input || '';
   const isCodeTool = toolCall.name === 'code_exec';
-  // Session 265: whitespace-only reasoning (empty plan step) is not detail —
+  // Whitespace-only reasoning (empty plan step) is not detail —
   // it must not make the row expandable to an empty Why block.
   const hasDetail = !!(toolCall.reasoning?.trim() || toolCall.input || toolCall.output);
 
@@ -298,7 +298,7 @@ function TimelineRow({
             </span>
           )}
         </button>
-        {/* Inline reasoning peek (visible without expanding) — Session 265:
+        {/* Inline reasoning peek (visible without expanding) —
             hide when the reasoning is whitespace-only (blank "why:" line). */}
         {toolCall.reasoning?.trim() && !expanded && (
           <div className="px-1.5">
@@ -445,7 +445,7 @@ function ActionTimeline({ toolCalls, isStreaming }: { toolCalls: ToolCall[]; isS
   );
 }
 
-// B-2026-08-23-4: detect a blocked shell call (the shell tool's own guard
+// Detect a blocked shell call (the shell tool's own guard
 // returns "Shell tool is disabled…" when LOCALMIND_SHELL_ENABLED=false).
 function isShellBlocked(tc: ToolCall): boolean {
   if (tc.name !== 'shell' || tc.status !== 'failed') return false;
@@ -454,7 +454,7 @@ function isShellBlocked(tc: ToolCall): boolean {
 }
 
 /**
- * B-2026-08-23-4: when a shell call was blocked, show the user WHY and how to
+ * When a shell call was blocked, show the user WHY and how to
  * fix it — a one-line guide with an "Open Settings" button. The user asked for
  * a UI guide that helps them open settings and toggle Shell on/off; this
  * surfaces exactly when it's relevant (a shell call was just rejected).
@@ -495,7 +495,7 @@ export function ToolSteps({ toolCalls, compact, isStreaming, focusSignal }: Tool
     return () => clearTimeout(t);
   }, [focusSignal]);
   // v0.7: Compact mode — minimal inline chips showing tool status.
-  // B-2026-08-23-9: each pill gets a hover Tooltip with full input/output summary.
+  // Each pill gets a hover Tooltip with full input/output summary.
   if (compact) {
     return (
       <TooltipProvider delayDuration={400}>

@@ -1,5 +1,5 @@
 """
-ADR-41 regression tests (Session 254): stop disabling GLM's reasoning.
+ADR-41 regression tests: stop disabling GLM's reasoning.
 
 B-2026-08-16-3: `_add_provider_params` unconditionally sent
 `thinking: {type: disabled}` for z.ai — a workaround for the ThinkingDispatcher's
@@ -68,7 +68,7 @@ class TestZaiThinkingPolicy:
         assert adapter.thinking_enabled is True
 
     def test_reasoning_effort_applies_to_all_glm(self, monkeypatch):
-        """Session 262: the reasoning_effort 'thinking level' applies to ALL GLM
+        """The reasoning_effort 'thinking level' applies to ALL GLM
         versions, not just >=5.2 — glm-4.5-flash was live-verified to ACCEPT it
         (and its unbounded thinking was the user's "thinks too hard" complaint).
         A version that rejects it degrades via the 400-retry, so this stays
@@ -228,7 +228,7 @@ def test_per_call_timeout_scales_with_slow_provider(monkeypatch):
 
 
 def test_plan_timeout_scales_with_slow_provider(monkeypatch):
-    """Session 289: for a slow local model the init call GENERATES the whole
+    """For a slow local model the init call GENERATES the whole
     `direct` decision (greeting response included), so the plan/init timeout
     must use the generous chat budget — the 30s plan budget timed the init out,
     fell open to EXECUTE, and cascaded 'Hi' into the full tool loop. Floored at
@@ -414,7 +414,7 @@ def test_force_final_answer_forwards_thinking():
     assert any(chunk.done for chunk in chunks), "loop must emit a done chunk"
 
 
-# ── 7. Empty-after-reasoning recovery (Session 256) ────────────────────────
+# ── 7. Empty-after-reasoning recovery  ────────────────────────
 # Live user bug (z.ai/glm-4.5-flash, thinking ON): iter-1 called a tool,
 # iter-2 streamed reasoning but returned NO content and NO tool call, and the
 # whole turn failed with empty_response. The loop must do ONE bounded retry
@@ -503,7 +503,7 @@ def test_second_empty_after_reasoning_still_fails_fast():
     chunks = _collect_with_dispatch(AgentLoop(adapter=adapter), adapter)
 
     text = "".join(chunk.text for chunk in chunks)
-    # B-2026-08-18-11: after the bounded retries the loop now SYNTHESIZES a final
+    # After the bounded retries the loop now SYNTHESIZES a final
     # answer from the evidence + the model's own reasoning (thinking off) before
     # falling back to the trace dump — so the turn always ENDS with output. The
     # invariant this test guards is the retry BOUND, not the specific fallback.

@@ -7,13 +7,13 @@ Gathers review-specific context before each turn:
     - Memory facts (passed in by the caller)
     - Orchestrator plan (passed in by the caller)
 
-Per ADR-6: each agent supplies its own build_context(). The reviewer's
+Each agent supplies its own build_context(). The reviewer's
 context primes the model to think like a code reviewer — assessing
 quality, checking conformance, and identifying issues — not building
 or fixing.
 
 The workspace_state snapshot (git status/diff/build result) is injected
-by AgentLoop.run() per Session 16. For the reviewer, git diff is the
+by AgentLoop.run() . For the reviewer, git diff is the
 primary input — it shows exactly what changed and needs review.
 """
 

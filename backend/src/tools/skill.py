@@ -1,5 +1,5 @@
 """
-skill tool — B-2026-08-02-12 (C3): lightweight prompt injection.
+skill tool — lightweight prompt injection.
 
 Lets the model pull a specialized playbook ("skill" — a markdown file
 with YAML frontmatter in `backend/data/skills/<slug>/SKILL.md`) into

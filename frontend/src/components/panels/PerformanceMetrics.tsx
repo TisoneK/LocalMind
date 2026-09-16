@@ -41,7 +41,7 @@ export function PerformanceMetrics({
     ? lastMetrics
     : metrics;
 
-  // ── Session aggregates (B-2026-08-11-5 / stats split) ────────────────
+  // ── Session aggregates ────────────────
   const sessionPrompt = sessionStats?.promptTokens ?? 0;
   const sessionCompletion = sessionStats?.completionTokens ?? 0;
   const sessionTurnCount = sessionStats?.turnCount ?? 0;

@@ -236,8 +236,8 @@ def test_leading_trailing_whitespace():
     assert is_trivial_input("\thello\n") is True
 
 
-# ── Conversational questions (Session 68 / ADR-11 fast-path) ────────────────
-# B-2026-08-09-1: obviously-conversational questions must short-circuit to a
+# ── Conversational questions (fast-path) ────────────────
+# Obviously-conversational questions must short-circuit to a
 # single direct chat call, skipping the ThinkingDispatcher's LLM
 # capability-inference call (verified root cause of ~40s "What can you do?"
 # latency — two sequential LLM calls). The detector is deliberately
@@ -344,7 +344,7 @@ def test_conversational_question_not_an_opener():
 def test_conversational_question_size_caps():
     """Over-long or over-wordy messages must fall through.
 
-    Session 334: the word cap was bumped from 20 to 25 (to catch the
+    The word cap was bumped from 20 to 25 (to catch the
     branch-count logic question at 22 words). These fixtures stay above
     the new cap or fail the no-opener fast-path.
     """
@@ -414,7 +414,7 @@ async def test_conversational_response_fallback_on_adapter_error():
 @pytest.mark.asyncio
 async def test_conversational_response_forwards_provider_usage():
     """Provider-reported usage flows through the fast path so the engine can
-    emit real prompt/completion token counts (Session 111 — Context Tokens
+    emit real prompt/completion token counts (Context Tokens
     and the bottom-bar prompt count were stuck at 0 on fast-path turns)."""
 
     async def mock_chat(messages, intent="chat", **kwargs):
@@ -503,7 +503,7 @@ async def test_conversational_response_does_not_override_provider_prompt_count()
     assert done.usage.get("completion_tokens") == 5
 
 
-# ── Empty-stream fallback (Session 153 / silent-failure contract) ───────────
+# ── Empty-stream fallback (silent-failure contract) ───────────
 # Free-tier models can return EMPTY or reasoning-only streams on the direct
 # chat fast path — the provider reports usage but never emits content. Before
 # this fix the UI showed a status update with an EMPTY bubble ("message not
@@ -532,7 +532,7 @@ async def test_conversational_response_empty_stream_falls_back():
 @pytest.mark.asyncio
 async def test_trivial_response_empty_stream_falls_back():
     """The yes_no short-circuit gets the same empty-stream fallback.
-    (Session 187: pure social intents no longer reach the LLM at all —
+    (pure social intents no longer reach the LLM at all —
     "yes" is a yes_no intent that still streams through the adapter.)"""
 
     async def mock_chat(messages, intent="chat", **kwargs):
@@ -552,7 +552,7 @@ async def test_conversational_response_streamed_error_chunk_is_normalized():
     """A streamed provider error (429/auth) must surface in the fallback —
     but as the canonical friendly message, never as the raw provider payload.
     The raw error is forwarded on chunk.error so the SSE boundary emits the
-    error card (ADR-20/21)."""
+    error card ."""
 
     async def mock_chat(messages, intent="chat", **kwargs):
         yield MagicMock(text="", done=True, error="zen returned 429: rate limit")
@@ -576,8 +576,8 @@ async def test_conversational_response_streamed_error_chunk_is_normalized():
 @pytest.mark.asyncio
 async def test_trivial_response_zen_payload_never_leaks_raw_json():
     """The exact user-reported case: the full Zen 429 JSON payload must not
-    appear in the fallback text — only the friendly message (Session 171).
-    (Session 187: uses "yes" — a yes_no intent that still streams through
+    appear in the fallback text — only the friendly message.
+    (uses "yes" — a yes_no intent that still streams through
     the adapter — since pure social intents no longer call the LLM.)"""
 
     async def mock_chat(messages, intent="chat", **kwargs):
@@ -689,7 +689,7 @@ async def test_all_social_intents_go_through_the_model():
 
 @pytest.mark.asyncio
 async def test_greeting_canned_fallback_when_provider_dies():
-    """The degraded path keeps the Session 187 guarantee: the adapter raising
+    """The degraded path keeps the guarantee: the adapter raising
     mid-call on a social gesture falls back to the canned warm line (with the
     synthetic flag — no fabricated provider tokens), never an error card."""
 
@@ -726,13 +726,13 @@ async def test_yes_no_still_streams_from_adapter():
     mock_adapter.chat.assert_called_once()
 
 
-# ── Engine wiring (Session 68 / ADR-11) ────────────────────────────────────
+# ── Engine wiring ────────────────────────────────────
 
 
 @pytest.mark.asyncio
 async def test_engine_conversational_question_skips_dispatcher():
     """The engine must short-circuit a conversational question BEFORE the
-    parent agent loop (single LLM call — the ADR-11 fix)."""
+    parent agent loop (single LLM call)."""
     from core.engine import Engine
 
     engine = Engine()
@@ -755,7 +755,7 @@ async def test_engine_conversational_question_skips_dispatcher():
 async def test_engine_conversational_question_emits_prompt_tokens():
     """End-to-end: the conversational fast-path turn_complete must carry
     prompt_tokens_approx (provider-reported, not 0) so the Observe panel
-    Context Tokens and the bottom-bar prompt count populate (Session 111 —
+    Context Tokens and the bottom-bar prompt count populate (
     both were stuck at 0 / "—" on fast-path turns)."""
     from core.engine import Engine
     from core.obs import ObsCollector
@@ -895,7 +895,7 @@ async def test_engine_conversational_followup_uses_direct_chat_context():
     assert all(event.data.get("fast_path") for event in obs.history() if event.type == "agent_initialization_done")
 
 
-# ── Session 332-D — message_implies_tool_action helper ─────────────────────
+# ── message_implies_tool_action helper ─────────────────────
 
 
 def test_message_implies_tool_action_positive():
@@ -926,12 +926,12 @@ def test_message_implies_tool_action_negative():
     assert message_implies_tool_action("") is False
 
 
-# ── Session 334 — fast-path for complete thoughts ending in "?" ────────────
+# ── Fast-path for complete thoughts ending in "?" ────────────
 
 
 def test_conversational_question_complete_thought_ending_in_question_mark():
     """A short complete thought ending in "?" with no blocked keywords must
-    fast-path — even without an interrogative opener. Session 334: this is
+    fast-path — even without an interrogative opener. This is
     the cyber-café-style logic question that previously fell through to the
     parent-agent pipeline (which polluted the prompt with git workspace
     context, causing the model to waste tokens wondering if "branches"
@@ -951,7 +951,7 @@ def test_conversational_question_complete_thought_ending_in_question_mark():
 
 def test_conversational_question_short_fragment_without_history_falls_through():
     """Short fragments like 'Like what?' need history to qualify — without
-    prior assistant context they fall through. Session 334: the
+    prior assistant context they fall through. The
     _CONVERSATIONAL_NO_OPENER_MIN_WORDS=5 guard prevents fragments from
     being mis-classified as complete thoughts."""
     # 2 words, ends with "?", no opener — under the 5-word minimum.

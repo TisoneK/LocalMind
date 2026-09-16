@@ -21,14 +21,14 @@ export function TodoList({ todos, actions = [], onToggle, onAdd }: TodoListProps
   const [newTodoText, setNewTodoText] = useState('');
   const [showInput, setShowInput] = useState(false);
 
-  // B-2026-08-23-8: sub-goal rows (plan-{i}-sub-{j}) are ordered guidance
+  // Sub-goal rows (plan-{i}-sub-{j}) are ordered guidance
   // nested under their parent goal — rendered indented, never counted in
   // the denominator (the parent plan rows own the n/n contract).
   const isSubRow = (id: string) => /^plan-\d+-sub-\d+$/.test(id);
   const parentRows = todos.filter((t) => !isSubRow(t.id));
   const completed = parentRows.filter((t) => t.completed).length;
   const total = parentRows.length;
-  // B-2026-08-23-11: the visible label is the short title when present.
+  // The visible label is the short title when present.
   // The full content (paths/commands) is preserved for the tooltip and
   // the agent context (todos are persisted with it).
   const displayText = (t: TodoItem) => t.title || t.text;
@@ -134,7 +134,7 @@ export function TodoList({ todos, actions = [], onToggle, onAdd }: TodoListProps
         )}
         <AnimatePresence initial={false}>
           {todos.map((todo) => {
-            // B-2026-08-23-8: skip sub-goal rows here — they render
+            // Skip sub-goal rows here — they render
             // nested right under their parent below.
             if (isSubRow(todo.id)) return null;
             const counts = countByTodo.get(todo.id);
@@ -212,7 +212,7 @@ export function TodoList({ todos, actions = [], onToggle, onAdd }: TodoListProps
                   </span>
                 )}
               </motion.div>
-              {/* B-2026-08-23-8: sub-goal route rows — ordered guidance
+              {/* Sub-goal route rows — ordered guidance
                   nested under the parent goal, informational only (no
                   checkbox, no action badge), never counted in n/n. */}
               {subRows.map((sub) => (

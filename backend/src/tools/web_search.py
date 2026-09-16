@@ -13,7 +13,7 @@ Architecture (v10 — RACING TIERS):
 - Tier 4: Brave - Premium optional layer, requires API key. Only tried
   if all free tiers fail.
 
-v10 changes vs v9 (Session 268 follow-up):
+v10 changes vs v9:
 - ADD Bing as a reliable no-key free tier. Public SearXNG instances
   churn constantly (rate-limited / behind anti-bot within days), so the
   SearXNG fallback chain is a stopgap, not a dependable second tier.
@@ -25,7 +25,7 @@ v10 changes vs v9 (Session 268 follow-up):
   to the real destination; challenge/verification pages are detected
   and reported as such instead of "no results".
 
-v9 changes vs v8 (Session 268):
+v9 changes vs v8:
 - FIX: SearXNG was effectively dead. The default instance (searx.be) is
   behind an Anubis anti-bot challenge that returns HTTP 200 + HTML, so
   ``r.json()`` raised a JSONDecodeError on EVERY search and the tier
@@ -135,7 +135,7 @@ def _fallback_is_on_topic(query: str, results: list[dict]) -> bool:
     Below that it is off-topic garbage — a fast provider latching onto one
     generic word — and surfacing it is worse than returning nothing: it wastes
     the model's turn on junk and can expose the user to inappropriate results
-    (observed 2026-09-04, B-2026-09-04-3: "top trending news stories today
+    (observed 2026-09-04: "top trending news stories today
     September 4 2026" → dictionary definitions of the word "top" [coverage
     ≤2/6]; "breaking news headlines today" → OnlyFans blog/status pages
     [coverage 0/3]). When the best held set is below this floor, web_search
@@ -204,7 +204,7 @@ async def _search_ddg(query: str) -> tuple[list[dict], str, str]:
 
     for attempt in range(max_attempts):
         try:
-            # B-2026-08-20-16: the duckduckgo-search package renamed its import.
+            # The duckduckgo-search package renamed its import.
             # Prefer the NEW `ddgs` package (the old `duckduckgo_search` is
             # deprecated and returns 0 results). Fall back to the old name
             # only if the new one isn't installed.
@@ -695,7 +695,7 @@ async def web_search(query: str) -> ToolResult:
 
     # No provider cleared the relevance bar → use the best-effort set ONLY if it
     # is still on-topic (covers ≥ half the query's distinctive terms). A set below
-    # that floor is off-topic garbage (B-2026-09-04-3) — discard it and return no
+    # that floor is off-topic garbage — discard it and return no
     # relevant results so the model tries another source, rather than surfacing
     # dictionary defs / unrelated (possibly adult) pages as if they answered.
     if not results and fallback is not None:
@@ -727,7 +727,7 @@ async def web_search(query: str) -> ToolResult:
             _brave_results, error_type, error_message = await _search_brave(
                 query, settings.brave_search_api_key
             )
-            # B-2026-09-04-3: Brave is not exempt from the relevance floor — an
+            # Brave is not exempt from the relevance floor — an
             # off-topic paid result is still off-topic. Gate it like the free
             # tiers so junk is never surfaced just because it came from Brave.
             if _brave_results and _fallback_is_on_topic(query, _brave_results):

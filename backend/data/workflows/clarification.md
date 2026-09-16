@@ -26,7 +26,7 @@ Either:
 3. **Don't carry stale intent.** If the user's previous message used
    a tool (e.g., sysinfo), that does NOT mean the current message
    wants the same tool. Classify fresh per message. (This is the
-   Session 25 bug — tool selection persisted across sessions.)
+   the cross-session tool-stickiness bug.)
 
 4. **Reformulate before re-running.** If you asked a clarifying
    question and the user answered, combine the original request +

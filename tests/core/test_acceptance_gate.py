@@ -1,4 +1,4 @@
-"""ADR-18 P0 acceptance-gate wiring tests (Session 156).
+"""ADR-18 P0 acceptance-gate wiring tests.
 
 Covers the wiring points of the locked P0 design:
   1. Explicit success_criteria flow via the loop's `success_criteria=`
@@ -114,7 +114,7 @@ def test_is_coding_done_no_criteria_returns_false():
 
 
 def test_shared_criteria_gate_speaks_the_agents_dialect():
-    """Session 174: the shared criteria_gate drives both agents' is_done;
+    """The shared criteria_gate drives both agents' is_done;
     the unmet_label keeps each agent's dialect without duplicating the
     gate logic."""
     from agents.coding.is_done import is_coding_done
@@ -254,7 +254,7 @@ async def test_loop_gate_passes_cleanly_and_preempts_model_call():
 
 @pytest.mark.asyncio
 async def test_loop_gate_passes_with_empty_reason_yields_nonempty_answer():
-    """ADR-36 B-7: a gate that passes without an explicit reason must still
+    """A gate that passes without an explicit reason must still
     produce a non-empty final reply — no turn ends with zero output."""
     loop = AgentLoop(adapter=MagicMock())
     obs = ObsCollector()
@@ -308,7 +308,7 @@ async def test_loop_seeds_trace_criteria_from_param():
     assert captured["criteria"] == ["pytest passes", "tsc clean"]
 
 
-# ── 5. Final-answer gate + explicit replan (Session 157) ─────────────────────
+# ── 5. Final-answer gate + explicit replan  ─────────────────────
 
 
 def _trace_with_tool_runs(tool_runs, criteria=None):
@@ -436,7 +436,7 @@ async def test_gate_unmet_at_cap_is_honest_final():
 
 @pytest.mark.asyncio
 async def test_gate_honest_stop_emits_event_and_todo_state():
-    """Session 330: at the cap with unmet criteria the gate must emit the
+    """At the cap with unmet criteria the gate must emit the
     honest-stop signal + per-goal todo state — the panel shows the TRUE
     fraction and the SSE bridge skips finalizing the unmet items."""
     loop = AgentLoop(adapter=MagicMock())
@@ -486,7 +486,7 @@ async def test_emit_honest_stop_passed_only():
 
 @pytest.mark.asyncio
 async def test_loop_skip_head_gate_prevents_premature_criteria_stop():
-    """Session 330: with a harness-derived goal checklist the criteria gate
+    """With a harness-derived goal checklist the criteria gate
     must NOT fire at the iteration head — an early criteria-verified stop
     would end the turn with a bare "✓ n/n" before the model's synthesis.
     The gate still runs at the final-answer point instead."""
@@ -682,7 +682,7 @@ async def test_loop_without_gate_fn_unchanged():
     assert any(c.done for c in chunks)
 
 
-# ── 6. Engine wiring (Session 173) ──────────────────────────────────────────
+# ── 6. Engine wiring  ──────────────────────────────────────────
 # The Verify stage was dead code on the engine's DIRECT loop path: both
 # `self._agent_loop.run()` call sites passed success_criteria but never
 # is_done_fn, so the acceptance gate only ran when agent selection (ADR-8
@@ -808,7 +808,7 @@ async def test_engine_escalate_path_wires_acceptance_gate():
     assert any(getattr(c, "done", False) for c in chunks)
 
 
-# ── 7. ADR-18 P1 — Verifier as a stage (Session 174) ───────────────────────
+# ── 7. ADR-18 P1 — Verifier as a stage  ───────────────────────
 # P1 promotes VerifierAgent from an intent-routing destination to the
 # acceptance stage for high-stakes intents (file write/edit, code exec):
 #  (a) real is_verifier_done (criteria-verified, same verify.py checkers)
@@ -1048,7 +1048,7 @@ def test_same_tool_streak_different_tool_breaks():
 
 @pytest.mark.asyncio
 async def test_gate_same_tool_streak_stops_honestly_without_replan():
-    """Session 192 — the 480s spiral: 2+ consecutive failures on the SAME
+    """The 480s spiral: 2+ consecutive failures on the SAME
     tool must end the turn with an honest report, not another replan."""
     loop = AgentLoop(adapter=MagicMock())
     trace = _trace_with_failures(
@@ -1101,7 +1101,7 @@ async def test_gate_single_failure_below_cap_still_replans():
 
 @pytest.mark.asyncio
 async def test_gate_verifier_path_streak_blocks_replan():
-    """Session 192 — the post-execution-verifier replan path must honor
+    """The post-execution-verifier replan path must honor
     the same-tool bound too: criteria pass but the LAST tool's output
     shows an error marker AND the same tool failed repeatedly → honest
     stop, no replan, no loop."""
@@ -1141,7 +1141,7 @@ async def test_gate_verifier_path_streak_blocks_replan():
 
 @pytest.mark.asyncio
 async def test_gate_verifier_path_below_cap_still_replans():
-    """Session 192 — one verifier failure below the cap must keep the
+    """One verifier failure below the cap must keep the
     existing replan behavior (strategy change is still allowed)."""
     loop = AgentLoop(adapter=MagicMock())
     trace = AgentTrace(success_criteria=["pytest passes"])
@@ -1219,7 +1219,7 @@ async def test_gate_accepts_zero_tool_date_answer_without_replan():
     adapter = _ReplanAdapter()
     # Built from the real clock — the gate's grounded class compares against
     # the real clock, so a literal date is only true on the day it was written
-    # (B-2026-09-10-4).
+    # .
     suffix, is_final = await _run_parent_gate(
         loop,
         _zero_tool_trace(_grounded_date_answer(datetime.datetime.now())),

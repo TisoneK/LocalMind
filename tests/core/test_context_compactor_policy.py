@@ -1,4 +1,4 @@
-"""ADR-19 selective compactor v2 tests (Session 161).
+"""ADR-19 selective compactor v2 tests.
 
 `simplify_tool_results(..., policy=...)` keeps the positional legacy path
 byte-identical when policy is None/default, and adds TASK-AWARE selection

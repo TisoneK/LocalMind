@@ -62,14 +62,14 @@ class TestEmptyResponseFastFail:
                 chunks.append(chunk)
 
         full = "".join(c.text for c in chunks)
-        # B-2026-08-20-14: the fallback message is now a clean user-facing
+        # The fallback message is now a clean user-facing
         # message ("I couldn't generate a response...") instead of the old
         # "empty response" debug text. Assert the turn ends with a non-empty
         # honest message (not raw tool dumps or a silent fail).
         assert full.strip(), "expected honest fallback message, got empty"
-        # Session 238: the FIRST tool iteration gets ONE forced-tool nudge
+        # The FIRST tool iteration gets ONE forced-tool nudge
         # (bounded reprompt) before the honest fail — the empty-response
-        # fast-fail (Session 115) still applies to the second empty reply.
+        # fast-fail still applies to the second empty reply.
         assert seen["calls"] == 2, (
             f"loop must retry an iter-0 empty output at most once, then fail "
             f"honestly (chat_with_tools called {seen['calls']}x)"
@@ -162,7 +162,7 @@ class TestEmptyResponseFastFail:
 
     @pytest.mark.asyncio
     async def test_terminal_planning_error_stops_before_tool_call(self):
-        """ADR-32: a terminal provider error on the first provider call must
+        """A terminal provider error on the first provider call must
         not be swallowed by planning and retried in the parent loop."""
         loop = AgentLoop(adapter=MagicMock())
         seen = {"planning": 0, "tool_calls": 0}
@@ -223,7 +223,7 @@ class TestEmptyResponseFastFail:
         mock_adapter = MagicMock()
         mock_adapter.chat = failing_plan
         mock_adapter.chat_with_tools = final_chat
-        # Session 342: this mock doubles `adapter.chat` as the planning-call
+        # This mock doubles `adapter.chat` as the planning-call
         # counter. A non-reasoning adapter (thinking_enabled=False) skips the
         # pre-tool Thinker consult — which is ALSO a plain `adapter.chat` call
         # and would otherwise inflate the planning count. The gate matches the
@@ -242,7 +242,7 @@ class TestEmptyResponseFastFail:
                 )
             ]
 
-        # Session 238: the first tool-required call gets one forced-tool
+        # The first tool-required call gets one forced-tool
         # nudge (iter-0 text is not accepted as the answer), then the
         # model's text is streamed on the second pass.
         assert seen == {"planning": 1, "tool_calls": 2}
@@ -250,7 +250,7 @@ class TestEmptyResponseFastFail:
 
     @pytest.mark.asyncio
     async def test_stream_error_propagates_adapter_message(self):
-        """Session 187: when the adapter yields an error chunk (e.g. zen 429),
+        """When the adapter yields an error chunk (e.g. zen 429),
         the loop must pass the adapter's error message through to the SSE
         error event. Previously the MiniMax buffering dropped the message
         (error=""), so the chat route skipped the error event and the
@@ -356,7 +356,7 @@ class TestEmptyResponseFastFail:
         full = "".join(chunk.text for chunk in chunks)
         assert seen["calls"] == 2
         assert not [chunk.error for chunk in chunks if chunk.error]
-        # B-2026-08-20-15/17: the 429-preserve-evidence path now tries
+        # The 429-preserve-evidence path now tries
         # deterministic extraction first, then a CLEAN message (not the raw
         # _summarize_trace_for_user dump). Assert the clean message OR an
         # extracted answer — either is acceptable; the raw dump is not.
@@ -368,7 +368,7 @@ class TestEmptyResponseFastFail:
 
     @pytest.mark.asyncio
     async def test_degraded_synthesis_surfaces_thinker_analysis(self):
-        """B-2026-08-16-12: when the Thinker computed a correct analysis
+        """When the Thinker computed a correct analysis
         before the final synthesis call is rate-limited, the degraded reply
         must carry that analysis — the exact user repro (disk-space task:
         tool succeeds, Thinker works out the answer, final call 429s).
@@ -443,7 +443,7 @@ class TestEmptyResponseFastFail:
 
         full = "".join(chunk.text for chunk in chunks)
         assert seen["calls"] == 2
-        # B-2026-08-20-15/17: the 429-preserve-evidence path now tries
+        # The 429-preserve-evidence path now tries
         # deterministic extraction first, then a CLEAN message. The Thinker's
         # analysis may or may not be extractable deterministically; the key
         # invariant is that a non-empty message reaches the user (not a raw
@@ -454,7 +454,7 @@ class TestEmptyResponseFastFail:
 
 
 class TestFileWriteVerificationReadbackDirective:
-    """B-2026-08-18-7: the file_write verification line is FACTUAL evidence
+    """The file_write verification line is FACTUAL evidence
     ("file_write confirmed — N chars verified on disk at <path>") and must NOT
     tell the agent whether to read the file back. The old "do NOT read it back" /
     "read it back with file_task" directive was a phantom self-verification
@@ -498,7 +498,7 @@ class TestFileWriteVerificationReadbackDirective:
 
     @pytest.mark.asyncio
     async def test_verification_reports_file_size_not_report_length(self):
-        """B-2026-08-20-22: the verification number is the file's REAL on-disk
+        """The verification number is the file's REAL on-disk
         size from file_task metadata — not the length of the read-back report.
         Live Windows trace: file_write confirmed "79 chars verified on disk"
         for a 19-byte file because len(content) counted the "File: <path> / Size:
@@ -538,7 +538,7 @@ class TestFileWriteVerificationReadbackDirective:
 
     @pytest.mark.asyncio
     async def test_verification_flags_truncation_by_file_size_not_header(self):
-        """B-2026-08-20-22: the truncation check compares the file's real size
+        """The truncation check compares the file's real size
         against what was written. Under the old len(report) metric, the ~60-char
         header masked real content loss — a 200-char write that landed as 90
         bytes produced a report ~150 chars long and slipped past the 50% bar."""
@@ -649,7 +649,7 @@ class TestFileWriteVerificationReadbackDirective:
         assert seen["calls"] == 2, f"expected tool call + synthesis, got {seen['calls']}"
         assert "Here are the facts" in full
         # The factual VERIFICATION line reaches the model, with NO read-back
-        # instruction of any kind (B-2026-08-18-7).
+        # instruction of any kind.
         assert seen["synthesis_messages"] is not None
         joined = " ".join(str(m.get("content", "")) for m in seen["synthesis_messages"])
         assert "VERIFICATION" in joined, f"verification line missing: {joined!r}"

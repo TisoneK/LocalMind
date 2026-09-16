@@ -10,7 +10,7 @@ interface MemoryTabProps {
   onDelete?: (id: string) => void;
   /** Persist a manually entered fact via the memory API (POST /api/memory). */
   onStore?: (content: string, source: string) => Promise<void>;
-  /** Correct a stored fact's content (B-2026-08-23-14 follow-up). */
+  /** Correct a stored fact's content. */
   onEdit?: (id: string, content: string) => Promise<void>;
   /** Re-fetch facts (used by the tab's polling while it is visible). */
   onRefresh?: () => Promise<void>;
@@ -181,11 +181,11 @@ function FactCard({
 export function MemoryTab({ facts, onDelete, onStore, onEdit, onRefresh }: MemoryTabProps) {
   const safeFacts = facts ?? [];
   const [query, setQuery] = useState('');
-  // Manual store affordance (B-2026-08-23-14).
+  // Manual store affordance.
   const [draft, setDraft] = useState('');
   const [storing, setStoring] = useState(false);
   const [storeError, setStoreError] = useState<string | null>(null);
-  // Semantic recall (B-2026-08-23-14 follow-up): top-k most relevant facts
+  // Semantic recall: top-k most relevant facts
   // for a query, via the vector store — distinct from the local substring
   // filter above.
   const [recallQuery, setRecallQuery] = useState('');
@@ -276,7 +276,7 @@ export function MemoryTab({ facts, onDelete, onStore, onEdit, onRefresh }: Memor
         </div>
       </div>
 
-      {/* Manual store affordance (B-2026-08-23-14) */}
+      {/* Manual store affordance */}
       {onStore && (
         <div className="bg-brand-bg-code border border-brand-border rounded-md p-2" data-testid="memory-store">
           <div className="flex items-center gap-1.5 mb-1.5">
@@ -330,7 +330,7 @@ export function MemoryTab({ facts, onDelete, onStore, onEdit, onRefresh }: Memor
         </div>
       )}
 
-      {/* Semantic recall (B-2026-08-23-14 follow-up): top-k most relevant
+      {/* Semantic recall: top-k most relevant
           facts for a query via the vector store. Distinct from the local
           substring filter above — this answers "what do I remember about X?". */}
       <div className="bg-brand-bg-code border border-brand-border rounded-md p-2" data-testid="memory-recall">

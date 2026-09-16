@@ -1,4 +1,4 @@
-"""Tests for todo_write — the agent's live UI todo control surface (ADR-43)."""
+"""Tests for todo_write — the agent's live UI todo control surface ."""
 
 import pytest
 

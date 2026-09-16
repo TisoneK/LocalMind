@@ -1,6 +1,6 @@
 """
-Session 337 — Pre-init deterministic classifiers for the 4 root-cause
-clusters identified by the Session 336 benchmark.
+Pre-init deterministic classifiers for the root-cause
+clusters identified by a benchmark run.
 
 Cluster A (tool-first reflex): hallucination-class prompts
   ("What did John tell me about X?", "What is the password stored in Y?")
@@ -74,7 +74,7 @@ class PreInitOverride:
 # Past-tense / third-party cues that signal "I cannot know this"
 _HALLUCINATION_CUES = [
     # Third-party past-tense references — "what did X tell me" OR
-    # "what X told me" (Session 338: COL-3 revealed the pattern is broader
+    # "what X told me" (a benchmark case revealed the pattern is broader
     # than "what did" — "analyze what John told me" also qualifies).
     r"\bwhat\s+did\s+\w+\s+tell\s+me\b",
     r"\bwhat\s+did\s+\w+\s+say\b",
@@ -125,7 +125,7 @@ _ANALYZE_ONLY_CUES = [
     r"\bdo\s+not\s+implement\s+(?:anything|it|yet)\b",
     r"\bdo\s*n['']?t\s+implement\s+(?:anything|it|yet)\b",
     r"\bdo\s+not\s+write\s+implementation\s+code\b",
-    # Session 338 (COL-6): "do not inspect any files yet" — the user
+    # Another benchmark case: "do not inspect any files yet" — the user
     # is explicitly saying "don't run inspection tools". Treat as
     # analyze-only.
     r"\bdo\s+not\s+inspect\s+(?:any\s+)?(?:files?|the\s+\w+)\s*(?:yet|before)\b",
@@ -249,11 +249,11 @@ def _detect_impossible_constraint(message: str) -> Optional[str]:
     return None
 
 
-# ── Session 344 (B-2026-08-22-5): Cluster F — vague imperative → clarify ──
+# ── Cluster F — vague imperative → clarify ─────────────────────────────────
 
 # CAT2-2 "Improve the system." was live-caught asking the RIGHT clarifying
 # question only after burning 10 tools / 164s exploring the workspace first
-# (the S336 Cluster A tool-first reflex, still firing for vague imperatives
+# (the Cluster A tool-first reflex, still firing for vague imperatives
 # while the rest of CAT2 runs 0 tools). A request like "Fix my project." /
 # "Improve the system." has NO concrete target — the correct first move is
 # to ASK, not to explore. This cluster fires deterministically (like
@@ -288,7 +288,7 @@ _VAGUE_EXCLUSION_RE = re.compile(
     r"|\b(?:files?|folders?|directories?|paths?|scripts?|code|functions?|classes?|apis?|databases?|dbs?|servers?|"
     r"frontend|backend|ui|react|python|javascript|typescript|node|django|flask|express|json|yaml|configs?|tests?|"
     r"git|url|http|install|packages?|weather|news|search|bugs?|errors?|crashes?|exceptions?|"
-    # B-2026-08-30-14: a named tool/capability or web-navigation cue makes the
+    # A named tool/capability or web-navigation cue makes the
     # request concrete — "Use browser agent, navigate to wikipedia and browse"
     # is actionable, not a vague imperative to clarify.
     r"browse|browser|browsing|navigate|navigating|website|webpages?|web\s?page|wikipedia|links?|screenshots?|"
@@ -297,7 +297,7 @@ _VAGUE_EXCLUSION_RE = re.compile(
 )
 
 
-# ── Session 343 (B-2026-08-22-1/-2): pressured re-ask of a refused
+# ── Pressured re-ask of a refused
 # ── unanswerable (multi-turn fabrication / credential hunt) ────────────────
 
 # The single-turn clusters above can't see the multi-turn pressure case:
@@ -408,7 +408,7 @@ def _detect_pressured_reask(message: str, history) -> bool:
 # ── Public entry point ──────────────────────────────────────────────────────
 
 
-# ── Cluster G (B-2026-08-25-9): unresolved reference → clarify ───────────────
+# ── Cluster G: unresolved reference → clarify ──────────────────────────────────────────
 # "Send the report to him", "Fix the issue with the file", "Open the latest one
 # and summarize it" — an action on an entity named ONLY by a pronoun or a bare
 # definite article, with NO antecedent (first turn). The right first move is to
@@ -484,7 +484,7 @@ def classify_pre_init(message: str, history: Optional[list[dict]] = None) -> Pre
     """Run the cluster guards against the user message.
 
     `history` (optional) is a list of recent prior {role, content} turns;
-    when provided, the Session 343 pressured-reask guard can also fire on
+    when provided, the pressured-reask guard can also fire on
     multi-turn pressure after a refusal. When `mode` is set, the init LLM
     call is skipped and this decision is used directly. When
     `skip_workspace_state` is True, the loop must skip workspace_state
@@ -508,7 +508,7 @@ def classify_pre_init(message: str, history: Optional[list[dict]] = None) -> Pre
         override.title = "Resolve Constraints"
         return override
 
-    # Cluster F (Session 344): vague imperative → deterministic clarify. The
+    # Cluster F: vague imperative → deterministic clarify. The
     # tool-first reflex wasted 10 tools on CAT2-2 before it asked; this
     # returns the clarifying question BEFORE any tool runs. Same mode path
     # as Cluster D.
@@ -525,7 +525,7 @@ def classify_pre_init(message: str, history: Optional[list[dict]] = None) -> Pre
         override.skip_workspace_state = True
         return override
 
-    # Cluster G (B-2026-08-25-9): unresolved reference → clarify. An action on an
+    # Cluster G: unresolved reference → clarify. An action on an
     # entity named only by a pronoun / bare definite with no antecedent.
     unresolved_q = _detect_unresolved_reference(message, history)
     if unresolved_q:
@@ -537,9 +537,9 @@ def classify_pre_init(message: str, history: Optional[list[dict]] = None) -> Pre
         override.skip_workspace_state = True
         return override
 
-    # Session 343: pressured re-ask of an already-refused unanswerable →
-    # deterministic direct refusal (closes B-2026-08-22-1 fabrication and
-    # B-2026-08-22-2 credential hunt). Runs before Cluster C/A: the
+    # Pressured re-ask of an already-refused unanswerable →
+    # deterministic direct refusal (closes the fabrication and
+    # credential-hunt failures). Runs before Cluster C/A: the
     # follow-up pressure message itself has no sensitive topic, so C/A
     # can't see it — only the history can.
     if _detect_pressured_reask(message, history):
@@ -593,7 +593,7 @@ def classify_pre_init(message: str, history: Optional[list[dict]] = None) -> Pre
     if _detect_analyze_only(message):
         override.skip_workspace_state = True
 
-    # Session 339 (Cluster E): tool-selection abstraction enforcement.
+    # Cluster E: tool-selection abstraction enforcement.
     # When the user asks for an outcome that needs a tool (fresh data,
     # files, calculations, web info), inject a reminder that the agent
     # must select the tool autonomously and NEVER expose tool names/schemas.

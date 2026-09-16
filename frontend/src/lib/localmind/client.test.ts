@@ -159,7 +159,7 @@ describe('getObservability', () => {
   });
 });
 
-describe('getSessionHistory (Session 266 artifacts)', () => {
+describe('getSessionHistory artifacts', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -207,10 +207,10 @@ describe('getSessionHistory (Session 266 artifacts)', () => {
 
     // Thinking block + error card survive a reload.
     expect(assistant.thinking).toBe('Listing projects to answer the request.');
-    // Session 290: the ThinkingBlock render is gated on `isAgent`; a restored
+    // The ThinkingBlock render is gated on `isAgent`; a restored
     // assistant turn must carry it or the persisted thinking never renders.
     expect(assistant.isAgent).toBe(true);
-    // Session 290: the ADR-36 opening acknowledgement survives reload too.
+    // The opening acknowledgement survives reload too.
     expect(assistant.acknowledgement).toBe("I'll list your projects.");
     expect(assistant.error).toMatchObject({ code: 'rate_limit', retryable: true });
     // Tool-step pills survive — snake_case wire shape mapped to ToolCall.
@@ -349,7 +349,7 @@ describe('getSessionHistory (Session 266 artifacts)', () => {
   });
 });
 
-describe('classifyClientIntent (B-2026-08-09-6 / ADR-11)', () => {
+describe('classifyClientIntent', () => {
   it('hints chat for greetings, farewells, thanks, and acknowledgments', () => {
     expect(classifyClientIntent('hi')).toBe('chat');
     expect(classifyClientIntent('Hello!')).toBe('chat');
@@ -390,7 +390,7 @@ describe('classifyClientIntent (B-2026-08-09-6 / ADR-11)', () => {
   });
 });
 
-describe('streamChat SSE integration (B-2026-07-31 follow-up)', () => {
+describe('streamChat SSE integration', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });

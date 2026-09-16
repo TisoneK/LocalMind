@@ -59,7 +59,7 @@ export function ThinkingBlock({ thinking, thinkMs, isStreaming }: ThinkingBlockP
   // Start expanded during streaming so thinking content is visible.
   // Collapse automatically when streaming finishes.
   const [collapsed, setCollapsed] = useState(!isStreaming);
-  // Session 265: copy state for the footer button (copies the full trace).
+  // Copy state for the footer button (copies the full trace).
   const [copied, setCopied] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -76,7 +76,7 @@ export function ThinkingBlock({ thinking, thinkMs, isStreaming }: ThinkingBlockP
   const content = typeof thinking === 'string' ? thinking : thinking.content;
   const duration = thinkMs;
 
-  // Session 265: keep newly streamed reasoning visible — whenever the
+  // Keep newly streamed reasoning visible — whenever the
   // content grows (or the block is re-expanded), scroll to the bottom so
   // the latest thought is in view instead of hiding above the fold.
   useEffect(() => {
@@ -117,8 +117,8 @@ export function ThinkingBlock({ thinking, thinkMs, isStreaming }: ThinkingBlockP
           }`}
         />
         <span className={`text-[10px] font-medium uppercase tracking-wider ${stepColor || (isStreaming ? 'text-brand-amber' : 'text-brand-green-muted')}`}>
-          {/* Session 332-E — user-facing label. Previously "Thought process"
-              (exposing internal reasoning). B-2026-08-24-5 — the user-facing
+          {/* User-facing label. Previously "Thought process"
+              (exposing internal reasoning). The user-facing
               box is now "Thinking" (the internal analysis pass is labeled
               "Approach" in AgentPhases; names swapped, no behavior change).
               "Working" while streaming. */}

@@ -1,4 +1,4 @@
-"""ADR-19 task-aware summarizer tests (Session 162).
+"""ADR-19 task-aware summarizer tests.
 
 `maybe_compress_history(..., policy=...)`:
   - policy=None / default → the original generic summary (byte-identical
