@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "localmind"
 version = "0.5.16"
 description = "Make local AI work like Claude — file reading, web search, memory, and tool use on top of Ollama"
-# Session 377: hatchling rejects readme/license paths outside the project
+# Hatchling rejects readme/license paths outside the project
 # directory ("Readme path must be within the project directory"), which broke
 # `pip install -e .[dev]` from backend/ on Windows. backend/README.md and
 # backend/LICENSE are the package-local copies (the full project docs stay at
@@ -67,7 +67,7 @@ dependencies = [
     # System info — powers sysinfo's disk/RAM/CPU/network/process/uptime
     # sections cross-platform. Was never declared, so it was absent on every
     # install and sysinfo degraded to a bare summary, forcing the agent to
-    # shell out for basic hardware info (B-2026-08-24-11).
+    # shell out for basic hardware info.
     "psutil>=5.9.0",
 ]
 
@@ -133,7 +133,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["../tests"]
-# Session 333: add ".." (repo root) to pythonpath so cross-test imports like
+# Add ".." (repo root) to pythonpath so cross-test imports like
 # `from tests.adapters.test_thinking_policy import _collect_with_dispatch`
 # (in test_parent_recovery_cap.py) resolve. Previously only "src" was on the
 # path, causing `ModuleNotFoundError: No module named 'tests'`.

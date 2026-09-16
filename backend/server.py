@@ -48,14 +48,14 @@ def is_port_in_use(port: int, host: str = "127.0.0.1") -> bool:
 
     POSIX: bind-probe with SO_REUSEADDR — matches uvicorn's own binding, so
     lingering TIME_WAIT sockets from the previous instance don't produce a
-    FALSE "port in use" (Session 188), while a genuinely LISTENING process
+    FALSE "port in use" (a live finding), while a genuinely LISTENING process
     still fails the bind.
 
     Windows flips SO_REUSEADDR's meaning: a probe socket WITH the flag can
     bind over another process's ACTIVE listener, so a bind-probe reports
     genuinely-busy ports as free. Probe by connecting instead: a listening
     owner completes (or rejects) the connection → in use; TIME_WAIT
-    leftovers refuse it → free, preserving the Session 188 restart behavior.
+    leftovers refuse it → free, preserving that restart behavior.
     """
     if sys.platform == "win32":
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
