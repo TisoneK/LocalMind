@@ -37,3 +37,6 @@ records.
 
 - **2026-09-15 — Session 4** — Zuri / qwen3.8-flash — context-usage breakdown shipped: clickable occupancy meter shows per-category shares of the last model call (system prompt / tool schemas / history / tool results / ...), scaled to the provider total; live-verified on zai (bankofai quota-exhausted — owner action). Core synced 1.1.1→1.1.3. Discovered B-2026-09-15-1 (1438 legacy ledger-citation hits in product comments; Baraka/S005 took the sweep).
   Detail: .context_ledger/memory/office/reviews/2026-09-15-review-s4-breakdown.md
+
+- **2026-09-16 — Session 5** — Baraka / qwen3.8-flash — ledger-vocabulary sweep of the product runtime surface: ~2,650 citation lines rewritten by hand into plain words (backend, frontend, scripts, migrations, app data, CHANGELOG; 2 test files renamed); ~540 remain in tests/docs/scripts per the updated backlog row. Exit-gate pytest failures bisected to pre-exist on main (documented Windows flaky family).
+  Detail: .context_ledger/memory/office/reviews/2026-09-16-review-s5-vocab-strip.md

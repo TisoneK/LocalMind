@@ -36,7 +36,6 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Baraka | S005 | qwen3.8-flash | Tree-wide sweep stripping .context_ledger vocabulary leaks from product files (ADR refs, bug IDs, ledger paths) | Working | Checked in; reading office, then claiming scope |
 | Chemi | S013 | Qwen3.8 Flash | Backlog triage: 84 rows → cap 20 — split knowledge into parking-lot.md, prune done/stale rows | Working | Checked in; reading office, then claiming scope |
 
 **Clock out when your session ends**: remove your row in the closing

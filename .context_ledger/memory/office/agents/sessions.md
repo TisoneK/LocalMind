@@ -156,3 +156,13 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** none — worktree board is clean. Owner note: origin still carries ~20 `collab/*` remote branches; pruning those is a separate call.
 - **Notes:** logged a protocol-adherence flaw this session — I ran the startup analysis before pushing my check-in row and the supervisor had to call it out (see flaws log).
 - **Report:** none (maintenance session — this entry is the record)
+
+---
+## 2026-09-16 — Session 5
+- **Agent:** Baraka (ZCode local) | **Model:** qwen3.8-flash (per system prompt `cf02d3d0-245-43ea-aef1-da470b683985/qwen3.8-flash`) | **Platform:** Windows 11 (10.0.26200 x64), Lameck checkout | **Role:** engineer | **Core:** 1.1.3 → verify OK (1.2.0 in gate check)
+- **Task:** B-2026-09-15-1 — tree-wide strip of `.context_ledger` vocabulary from product files. Supervisor method directive mid-session: strip by hand with per-line understanding, no scripted bulk transform.
+- **Commits:** 19 (claim `dbb5647f` + loop.py `b49d16d1` on main; sweep branch 12 commits → merge `5e85c342`; `9035b969`, `cefff469`, stragglers) — product diff vs pre-sweep: 366 files, +3585/−2289 (includes peers' merged code; the sweep itself removed ~2,650 citation lines).
+- **Outcome:** done for the product runtime surface — backend/src, backend/data (app runtime memory data), frontend/src + index.html, electron, scripts, migrations, CHANGELOG, localmind.md now have ZERO ADR-N / bug-ID / Session-NNN / `.context_ledger/` citations; two test files renamed out of the adr-tag class (live import + pyproject repointed); 3 ledger-service scripts parameterized instead of exempted; AGENTS.md/CLAUDE.md + ruff-noqa + test_db fixture exemptions documented in overrides. ~540 citation lines remain ONLY in tests/ (~384), docs/ (~95) and live-test script headers (~50) — the same mechanical class, handoff state recorded on the backlog row.
+- **Open items:** B-2026-09-15-1 stays open for the tests/docs remainder (method + exact census on the row). Exit gate: 24 pytest failures — bisected (`5e85c342^1`): they PRE-EXIST on main and are the documented Windows flaky family (B-2026-09-09-7 / B-2026-09-05-4); ruff/tsc/eslint/conflict-marker/bookkeeping all pass on the merged tree.
+- **Notes:** `.context_ledger/memory/office/sessions/2026-09-15-5/notes.md` + report below. Two process failures owned in the logs: a blind-regex attempt (retired before write after it demonstrated corruption) and one `git commit` that swept a peer's staged closeout into b49d16d1 (correction note `20260915T140409Z-Baraka-c6daa516`, flaw entry logged).
+- **Report:** `.context_ledger/memory/office/reviews/2026-09-16-review-s5-vocab-strip.md`

@@ -12,7 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-09-16 — Chemi / Qwen3.8 Flash (S013)
-- **Feature:** none
-- **Task:** backlog triage — 84 rows vs the new cap of 20 (supervisor directive, deliberately deferred to a dedicated session). Split knowledge/deferred/advisory rows into `tasks/parking-lot.md`, delete done/stale/not-a-task rows, keep ≤20 actionable one-line rows in `tasks/backlog.md`. Resolves the `ledger-mem check` warn that fires every run.
-- **Status:** in-progress (owned by S013)
+- **Session:** —
+- **Task:** none — no session in progress (Session 5 complete: ledger-vocabulary sweep of the product runtime surface shipped; remainder on B-2026-09-15-1)
+- **Status:** idle

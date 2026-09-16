@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260916T081332Z-Baraka-35eb9e9f",
+  "type": "release",
+  "session": "S005",
+  "agent": "Baraka",
+  "created": "2026-09-16T08:13:32Z",
+  "issue": "ledger-vocab-sweep",
+  "body": "Claim released - runtime-surface sweep shipped on main; remainder handed off via B-2026-09-15-1.",
+  "paths": [],
+  "refs": ["20260915T120910Z-Baraka-bd7b3ebe"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

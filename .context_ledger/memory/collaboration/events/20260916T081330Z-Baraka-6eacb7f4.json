@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260916T081330Z-Baraka-6eacb7f4",
+  "type": "note",
+  "session": "S005",
+  "agent": "Baraka",
+  "created": "2026-09-16T08:13:30Z",
+  "issue": "ledger-vocab-sweep",
+  "body": "S005 sweep integrated on main (merge 5e85c342 + stragglers). Releasing the claim: product runtime surface (backend/src, backend/data, frontend, electron, CHANGELOG, scripts, migrations) is citation-free; ~540 lines remain only in tests/, docs/ and live-test script headers - state + proven method recorded on backlog B-2026-09-15-1 for the next session. Office lesson logged: shared-checkout commit swept a peer's staged files (see flaws log) - the correction note stands.",
+  "paths": [],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

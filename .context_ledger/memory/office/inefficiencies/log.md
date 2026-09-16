@@ -149,3 +149,12 @@ never makes an entry eligible.
   tree.
 - **Prevent next time:** never combine Set-Location + relative paths in an
   async terminal command; absolute paths are the habit here.
+
+---
+## 2026-09-16 — Baraka / qwen3.8-flash (S005) — shell-output traps recurred; plus the blind-transform near-miss
+
+- **Problem:** (1) A long `python - << EOF` heredoc with multi-line replacement strings got truncated in flight AGAIN (known trap, logged 2026-09-12) and a `ValueError: not enough values to unpack` shipped from a half-applied tuple table; (2) piping the exit-gate through `grep | head -15` closed the pipe early and the gate VERDICT was lost, forcing a 7-minute full re-run; (3) a first-pass regex transform for tests/ demonstrably corrupted `demo.py`-style lines (spaced-punctuation cleanup firing on CODE lines) — caught by dry-run review before any write; (4) `git grep -v` with backslash paths silently matched nothing (Git Bash prints `\` paths).
+- **Cost:** ~15 min (re-runs + bisect of pre-existing gate failures).
+- **Cause:** Windows Git-Bash + long inline commands; head-truncated pipes hiding exit codes; over-clever global regex post-processing.
+- **Workaround / fix:** replacement TABLES live in Write-tool'd scratch scripts (never inline heredocs); the exit gate redirects to a scratch file then greps the file; global "cleanup" regexes were deleted in favor of per-file exact pairs with count assertions; grep filters use forward-slash paths.
+- **Prevent next time:** gate output goes to a file, always; dry-run any bulk transform and READ every changed line before writing; count-assert every table row.
