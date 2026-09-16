@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — no session in progress (Session 5 complete: ledger-vocabulary sweep of the product runtime surface shipped; remainder on B-2026-09-15-1)
-- **Status:** idle
+- **Session:** 2026-09-16 — Chemi / Qwen3.8 Flash (S013)
+- **Task:** backlog triage to the core-1.2.0 cap (supervisor directive): 84 rows → 20 actionable in `tasks/backlog.md`, 59 knowledge/deferred rows parked in `tasks/parking-lot.md` as `P-2026-09-16-1`…`-59` under their former B- IDs, 5 rows deleted as done/stale
+- **Status:** in-progress

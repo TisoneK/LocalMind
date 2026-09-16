@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260916T162321Z-Chemi-c90f8fcf",
+  "type": "claim",
+  "session": "S013",
+  "agent": "Chemi",
+  "created": "2026-09-16T16:23:21Z",
+  "issue": "backlog-triage",
+  "body": "S013 resuming: executing the backlog triage from my 15:03 draft (scratch/backlog-new-s013.md) - 84 rows to 20 actionable rows in backlog.md; 59 rows parked in parking-lot.md as P-2026-09-16-1..59 with former B- IDs; 5 rows deleted as done/stale; one merged pair (B-2026-08-25-2 + B-2026-08-25-10). Main tree, solo (Baraka clocked out, current.md idle).",
+  "paths": [".context_ledger/memory/office/tasks/backlog.md", ".context_ledger/memory/office/tasks/parking-lot.md"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
