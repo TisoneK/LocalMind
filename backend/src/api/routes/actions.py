@@ -34,9 +34,9 @@ class ActionItem(BaseModel):
     output: Optional[str] = None
     error: Optional[str] = None
     iteration: Optional[int] = None  # agent loop step number (for chaining)
-    todo_id: Optional[str] = None  # plan todo this action serves 
-    reasoning: Optional[str] = None  # model's thought that led to this action 
-    provider: Optional[str] = None  # which backend engine answered 
+    todo_id: Optional[str] = None  # plan todo this action serves
+    reasoning: Optional[str] = None  # model's thought that led to this action
+    provider: Optional[str] = None  # which backend engine answered
 
 
 def _to_action_item(row: dict) -> ActionItem:
