@@ -1,0 +1,6 @@
+[before] tool input 'list'
+  wrote to memory: ['list']
+  returned: 'Remembered: *list*'
+[after] tool input 'list'
+  wrote to memory: nothing
+  returned: '**Stored memory (1 facts):**'

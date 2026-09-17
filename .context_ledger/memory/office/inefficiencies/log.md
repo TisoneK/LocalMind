@@ -168,3 +168,37 @@ never makes an entry eligible.
 - **Cause:** inline heredocs remain unreliable on this Windows box regardless of content; parser termination state that only updates between lines cannot validate the final row; and a build that mutates a list it also slices aliases the original.
 - **Workaround / fix:** scripts and multi-line content go through the file-writing tool, never inline heredocs (re-learned); parsers track per-row completion immediately (end-of-row check on the same line); builds that substitute cells operate on the new string, not the aliased list.
 - **Prevent next time:** same standing rule, now three-times-logged: nothing with backslashes, fences, or multi-line structure is trusted to an inline heredoc; verify counts and shapes immediately after any generated-file write (the orphan B- lines were caught by a shape assert, not by eye).
+
+---
+
+## 2026-09-17 — Buffy / model unknown (S014) — three tool-layer traps on the Windows box
+
+- **Problem:** (1) the `code_search` tool is dead on this machine — every call
+  fails with `ENOENT ... vendor/ripgrep/x64-win32/rg.exe` (the bundled ripgrep
+  is missing from the Freebuff install), so content searching has to fall back
+  to `grep -rn` in the terminal; (2) the live-trace harness aborted mid-run with
+  `UnicodeEncodeError: 'charmap' codec can't encode character` the moment the
+  model's answer contained a non-ASCII character — the Windows console is
+  cp1252 and the trace printed model text to stdout, killing a run that had
+  already spent provider calls; (3) the full backend suite exceeds the 600 s
+  command ceiling (3094 tests), so a SYNC run is killed part-way with no
+  results.
+- **Cost:** ~10 minutes re-deriving search results through grep; one wasted
+  live pass (three turns of provider calls) before the encode fix; two aborted
+  full-suite runs.
+- **Cause:** (1) a missing vendored binary in the desktop app's install, not
+  project code; (2) `print()` of model output inherits the console encoding,
+  and `errors="replace"` was never set on stdout; (3) the suite's wall time is
+  roughly 20 minutes on this box under load.
+- **Workaround / fix:** (1) use `grep -rn -E` with explicit file globs; (2) call
+  `sys.stdout.reconfigure(errors="replace")` at the top of any live-trace script
+  and run it with `PYTHONUTF8=1` (this also clears the long-standing cp1252
+  UnicodeDecodeError family in the source-grepping tests — the same fix the
+  queue item for `scripts/ci-check.sh` asks for); (3) launch the suite with
+  `nohup ... &` writing to `scratch/<session>/pytest-full.log` and poll the log
+  — the backgrounded process survives the tool call on this box, unlike a SYNC
+  run against the 600 s ceiling.
+- **Prevent next time:** in live-trace scripts, reconfigure stdout at entry
+  (a trace must never die on its own output); for the full suite, always log to
+  a file and poll. Neither is a product bug — recorded so the next session does
+  not re-pay for the diagnosis.

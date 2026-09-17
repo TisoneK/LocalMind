@@ -1,0 +1,556 @@
+data: {"obs_event": {"type": "agent_runtime_start", "data": {"agent": "parent"}}}
+
+data: {"obs_event": {"type": "agent_context_ready", "data": {"memory_facts": 1, "attachment": false}}}
+
+data: {"obs_event": {"type": "stage_timing", "data": {"stage": "intent_classify", "latency_ms": 0, "status": "skipped"}}}
+
+data: {"obs_event": {"type": "stage_timing", "data": {"stage": "context_build", "latency_ms": 0, "status": "done"}}}
+
+data: {"obs_event": {"type": "stage_timing", "data": {"stage": "tool_select", "latency_ms": 0, "status": "skipped"}}}
+
+data: {"obs_event": {"type": "agent_loop_start", "data": {"intent": "analyze"}}}
+
+data: {"obs_event": {"type": "task_type_settled", "data": {"task_type": "", "source": "routing", "plan_len": 0}}}
+
+data: {"obs_event": {"type": "agent_thinker_start", "data": {"iteration": 0}}}
+
+data: {"type": "status_update", "status": "Agent is still working \u2014 this can take a moment on slower models."}
+
+: agent-working
+
+data: {"type": "status_update", "status": "Agent is still working \u2014 this can take a moment on slower models."}
+
+: agent-working
+
+data: {"type": "status_update", "status": "Agent is still working \u2014 this can take a moment on slower models."}
+
+: agent-working
+
+data: {"type": "status_update", "status": "Agent is still working \u2014 this can take a moment on slower models."}
+
+: agent-working
+
+data: {"type": "status_update", "status": "Agent is still working \u2014 this can take a moment on slower models."}
+
+: agent-working
+
+data: {"type": "status_update", "status": "Agent is still working \u2014 this can take a moment on slower models."}
+
+: agent-working
+
+data: {"type": "status_update", "status": "Agent is still working \u2014 this can take a moment on slower models."}
+
+: agent-working
+
+data: {"type": "status_update", "status": "Agent is still working \u2014 this can take a moment on slower models."}
+
+: agent-working
+
+data: {"type": "thinking_token", "thinking": "\n"}
+
+data: {"type": "thinking_token", "thinking": "The"}
+
+data: {"type": "thinking_token", "thinking": " user"}
+
+data: {"type": "thinking_token", "thinking": " wants"}
+
+data: {"type": "thinking_token", "thinking": " me"}
+
+data: {"type": "thinking_token", "thinking": " to"}
+
+data: {"type": "thinking_token", "thinking": ":\n"}
+
+data: {"type": "thinking_token", "thinking": "1"}
+
+data: {"type": "thinking_token", "thinking": "."}
+
+data: {"type": "thinking_token", "thinking": " Call"}
+
+data: {"type": "thinking_token", "thinking": " the"}
+
+data: {"type": "thinking_token", "thinking": " memory"}
+
+data: {"type": "thinking_token", "thinking": "_op"}
+
+data: {"type": "thinking_token", "thinking": " tool"}
+
+data: {"type": "thinking_token", "thinking": " with"}
+
+data: {"type": "thinking_token", "thinking": " operation"}
+
+data: {"type": "thinking_token", "thinking": " \""}
+
+data: {"type": "thinking_token", "thinking": "list"}
+
+data: {"type": "thinking_token", "thinking": "\"\n"}
+
+data: {"type": "thinking_token", "thinking": "2"}
+
+data: {"type": "thinking_token", "thinking": "."}
+
+data: {"type": "thinking_token", "thinking": " Then"}
+
+data: {"type": "thinking_token", "thinking": " repeat"}
+
+data: {"type": "thinking_token", "thinking": " its"}
+
+data: {"type": "thinking_token", "thinking": " raw"}
+
+data: {"type": "thinking_token", "thinking": " output"}
+
+data: {"type": "thinking_token", "thinking": " exactly"}
+
+data: {"type": "thinking_token", "thinking": ","}
+
+data: {"type": "thinking_token", "thinking": " including"}
+
+data: {"type": "thinking_token", "thinking": " each"}
+
+data: {"type": "thinking_token", "thinking": " fact"}
+
+data: {"type": "thinking_token", "thinking": " id"}
+
+data: {"type": "thinking_token", "thinking": "\n\n"}
+
+data: {"type": "thinking_token", "thinking": "Let"}
+
+data: {"type": "thinking_token", "thinking": " me"}
+
+data: {"type": "thinking_token", "thinking": " call"}
+
+data: {"type": "thinking_token", "thinking": " memory"}
+
+data: {"type": "thinking_token", "thinking": "_op"}
+
+data: {"type": "thinking_token", "thinking": " with"}
+
+data: {"type": "thinking_token", "thinking": " operation"}
+
+data: {"type": "thinking_token", "thinking": " \""}
+
+data: {"type": "thinking_token", "thinking": "list"}
+
+data: {"type": "thinking_token", "thinking": "\""}
+
+data: {"type": "thinking_token", "thinking": " first"}
+
+data: {"type": "thinking_token", "thinking": "."}
+
+data: {"obs_event": {"type": "tool_force_recovery", "data": {"recovery_num": 1, "reason": "empty response on first tool iteration", "intent": "analyze", "iteration": 1}}}
+
+data: {"type": "status_update", "status": "Agent is still working \u2014 this can take a moment on slower models."}
+
+: agent-working
+
+data: {"type": "status_update", "status": "Agent is still working \u2014 this can take a moment on slower models."}
+
+: agent-working
+
+data: {"type": "thinking_token", "thinking": "\n"}
+
+data: {"type": "thinking_token", "thinking": "The"}
+
+data: {"type": "thinking_token", "thinking": " user"}
+
+data: {"type": "thinking_token", "thinking": " is"}
+
+data: {"type": "thinking_token", "thinking": " asking"}
+
+data: {"type": "thinking_token", "thinking": " me"}
+
+data: {"type": "thinking_token", "thinking": " to"}
+
+data: {"type": "thinking_token", "thinking": ":\n"}
+
+data: {"type": "thinking_token", "thinking": "1"}
+
+data: {"type": "thinking_token", "thinking": "."}
+
+data: {"type": "thinking_token", "thinking": " Call"}
+
+data: {"type": "thinking_token", "thinking": " the"}
+
+data: {"type": "thinking_token", "thinking": " memory"}
+
+data: {"type": "thinking_token", "thinking": "_op"}
+
+data: {"type": "thinking_token", "thinking": " tool"}
+
+data: {"type": "thinking_token", "thinking": " with"}
+
+data: {"type": "thinking_token", "thinking": " operation"}
+
+data: {"type": "thinking_token", "thinking": " \""}
+
+data: {"type": "thinking_token", "thinking": "list"}
+
+data: {"type": "thinking_token", "thinking": "\"\n"}
+
+data: {"type": "thinking_token", "thinking": "2"}
+
+data: {"type": "thinking_token", "thinking": "."}
+
+data: {"type": "thinking_token", "thinking": " Then"}
+
+data: {"type": "thinking_token", "thinking": " repeat"}
+
+data: {"type": "thinking_token", "thinking": " its"}
+
+data: {"type": "thinking_token", "thinking": " raw"}
+
+data: {"type": "thinking_token", "thinking": " output"}
+
+data: {"type": "thinking_token", "thinking": " exactly"}
+
+data: {"type": "thinking_token", "thinking": ","}
+
+data: {"type": "thinking_token", "thinking": " including"}
+
+data: {"type": "thinking_token", "thinking": " each"}
+
+data: {"type": "thinking_token", "thinking": " fact"}
+
+data: {"type": "thinking_token", "thinking": " id"}
+
+data: {"type": "thinking_token", "thinking": "\n\n"}
+
+data: {"type": "thinking_token", "thinking": "I"}
+
+data: {"type": "thinking_token", "thinking": " need"}
+
+data: {"type": "thinking_token", "thinking": " to"}
+
+data: {"type": "thinking_token", "thinking": " call"}
+
+data: {"type": "thinking_token", "thinking": " memory"}
+
+data: {"type": "thinking_token", "thinking": "_op"}
+
+data: {"type": "thinking_token", "thinking": " with"}
+
+data: {"type": "thinking_token", "thinking": " operation"}
+
+data: {"type": "thinking_token", "thinking": " \""}
+
+data: {"type": "thinking_token", "thinking": "list"}
+
+data: {"type": "thinking_token", "thinking": "\""}
+
+data: {"type": "thinking_token", "thinking": " first"}
+
+data: {"type": "thinking_token", "thinking": ","}
+
+data: {"type": "thinking_token", "thinking": " then"}
+
+data: {"type": "thinking_token", "thinking": " report"}
+
+data: {"type": "thinking_token", "thinking": " the"}
+
+data: {"type": "thinking_token", "thinking": " output"}
+
+data: {"type": "thinking_token", "thinking": " exactly"}
+
+data: {"type": "thinking_token", "thinking": " as"}
+
+data: {"type": "thinking_token", "thinking": " returned"}
+
+data: {"type": "thinking_token", "thinking": "."}
+
+data: {"obs_event": {"type": "empty_reasoning_recovery", "data": {"recovery_num": 1, "intent": "analyze", "iteration": 2}}}
+
+data: {"type": "status_update", "status": "Agent is still working \u2014 this can take a moment on slower models."}
+
+: agent-working
+
+data: {"type": "status_update", "status": "Agent is still working \u2014 this can take a moment on slower models."}
+
+: agent-working
+
+data: {"type": "status_update", "status": "Agent is still working \u2014 this can take a moment on slower models."}
+
+: agent-working
+
+data: {"obs_event": {"type": "todo_created", "data": {"id": "syn-0", "text": "Memory op: list", "completed": false, "status": "in_progress"}}}
+
+data: {"type": "todo_created", "todo": {"id": "syn-0", "text": "Memory op: list", "content": "Memory op: list", "completed": false, "status": "in_progress"}}
+
+data: {"type": "todo_created", "todo": {"id": "syn-0", "text": "Memory op: list", "content": "Memory op: list", "completed": false, "status": "in_progress"}}
+
+data: {"obs_event": {"type": "tool_call", "data": {"tool": "memory_op", "label": "Memory: list", "status": "started", "tool_args": "list", "iteration": 3, "todo_id": "syn-0", "thought": "\n", "reasoning": ""}}}
+
+data: {"type": "tool_call", "tool_call": {"id": "tc-memory_op-iter3-10ae9f", "name": "memory_op", "label": "Memory: list", "status": "started", "iteration": 3, "latency_ms": "", "output": "", "tool_args": "list", "arguments": "list", "todo_id": "syn-0", "thought": "\n", "reasoning": "\n", "agent": null}}
+
+data: {"type": "status_update", "status": "Checking my memory\u2026"}
+
+data: {"type": "status_update", "status": "Memory: list"}
+
+data: {"obs_event": {"type": "terminal_output", "data": {"tool": "memory_op", "command": "list", "output": "**Stored memory (1 facts):**\n- #98802f19 [user_preference | importance=0.8] I prefer concise answers", "success": "True", "latency_ms": "4110", "label": "Memory: list", "tool_args": "{\"operation\": \"list\"}"}}}
+
+data: {"type": "terminal_event", "terminal_event": {"tool": "memory_op", "command": "list", "output": "**Stored memory (1 facts):**\n- #98802f19 [user_preference | importance=0.8] I prefer concise answers", "success": true, "latencyMs": 4110, "label": "Memory: list", "toolArgs": "{\"operation\": \"list\"}"}}
+
+data: {"type": "status_update", "status": "Done \u2014 Memory: list (4110ms)"}
+
+data: {"obs_event": {"type": "tool_call", "data": {"tool": "memory_op", "label": "Memory: list", "status": "done", "output": "**Stored memory (1 facts):**\n- #98802f19 [user_preference | importance=0.8] I prefer concise answers", "latency_ms": 4110, "tool_args": "list", "iteration": 3, "todo_id": "syn-0", "thought": "\n", "reasoning": ""}}}
+
+data: {"type": "tool_call", "tool_call": {"id": "tc-memory_op-iter3-10ae9f", "name": "memory_op", "label": "Memory: list", "status": "done", "iteration": 3, "latency_ms": 4110, "output": "**Stored memory (1 facts):**\n- #98802f19 [user_preference | importance=0.8] I prefer concise answers", "tool_args": "list", "arguments": "list", "todo_id": "syn-0", "thought": "\n", "reasoning": "\n", "agent": null, "provider": null}}
+
+data: {"obs_event": {"type": "todo_completed", "data": {"id": "syn-0", "completed": true}}}
+
+data: {"type": "todo_completed", "todo": {"id": "syn-0", "completed": true}}
+
+data: {"obs_event": {"type": "agent_thinker_start", "data": {"iteration": 3}}}
+
+data: {"obs_event": {"type": "evidence_to_parent", "data": {"tool": "memory_op", "iteration": 3, "evidence_chars": 222, "failed": false}}}
+
+data: {"type": "status_update", "status": "Agent is working with tools \u2014 the latest result is shown above."}
+
+: agent-working
+
+data: {"type": "status_update", "status": "Agent is working with tools \u2014 the latest result is shown above."}
+
+: agent-working
+
+data: {"type": "status_update", "status": "Agent is working with tools \u2014 the latest result is shown above."}
+
+: agent-working
+
+data: {"type": "status_update", "status": "Agent is working with tools \u2014 the latest result is shown above."}
+
+: agent-working
+
+data: {"type": "thinking_token", "thinking": "\n"}
+
+data: {"type": "thinking_token", "thinking": "The"}
+
+data: {"type": "thinking_token", "thinking": " user"}
+
+data: {"type": "thinking_token", "thinking": " asked"}
+
+data: {"type": "thinking_token", "thinking": " me"}
+
+data: {"type": "thinking_token", "thinking": " to"}
+
+data: {"type": "thinking_token", "thinking": " call"}
+
+data: {"type": "thinking_token", "thinking": " the"}
+
+data: {"type": "thinking_token", "thinking": " memory"}
+
+data: {"type": "thinking_token", "thinking": "_op"}
+
+data: {"type": "thinking_token", "thinking": " tool"}
+
+data: {"type": "thinking_token", "thinking": " with"}
+
+data: {"type": "thinking_token", "thinking": " operation"}
+
+data: {"type": "thinking_token", "thinking": " \""}
+
+data: {"type": "thinking_token", "thinking": "list"}
+
+data: {"type": "thinking_token", "thinking": "\""}
+
+data: {"type": "thinking_token", "thinking": " and"}
+
+data: {"type": "thinking_token", "thinking": " then"}
+
+data: {"type": "thinking_token", "thinking": " repeat"}
+
+data: {"type": "thinking_token", "thinking": " its"}
+
+data: {"type": "thinking_token", "thinking": " raw"}
+
+data: {"type": "thinking_token", "thinking": " output"}
+
+data: {"type": "thinking_token", "thinking": " exactly"}
+
+data: {"type": "thinking_token", "thinking": ","}
+
+data: {"type": "thinking_token", "thinking": " including"}
+
+data: {"type": "thinking_token", "thinking": " each"}
+
+data: {"type": "thinking_token", "thinking": " fact"}
+
+data: {"type": "thinking_token", "thinking": " id"}
+
+data: {"type": "thinking_token", "thinking": "."}
+
+data: {"type": "thinking_token", "thinking": " I"}
+
+data: {"type": "thinking_token", "thinking": "'ve"}
+
+data: {"type": "thinking_token", "thinking": " done"}
+
+data: {"type": "thinking_token", "thinking": " that"}
+
+data: {"type": "thinking_token", "thinking": " and"}
+
+data: {"type": "thinking_token", "thinking": " got"}
+
+data: {"type": "thinking_token", "thinking": " the"}
+
+data: {"type": "thinking_token", "thinking": " tool"}
+
+data: {"type": "thinking_token", "thinking": " output"}
+
+data: {"type": "thinking_token", "thinking": "."}
+
+data: {"type": "thinking_token", "thinking": " Now"}
+
+data: {"type": "thinking_token", "thinking": " I"}
+
+data: {"type": "thinking_token", "thinking": " need"}
+
+data: {"type": "thinking_token", "thinking": " to"}
+
+data: {"type": "thinking_token", "thinking": " repeat"}
+
+data: {"type": "thinking_token", "thinking": " that"}
+
+data: {"type": "thinking_token", "thinking": " raw"}
+
+data: {"type": "thinking_token", "thinking": " output"}
+
+data: {"type": "thinking_token", "thinking": " exactly"}
+
+data: {"type": "thinking_token", "thinking": " as"}
+
+data: {"type": "thinking_token", "thinking": " shown"}
+
+data: {"type": "thinking_token", "thinking": ".\n\n"}
+
+data: {"type": "thinking_token", "thinking": "The"}
+
+data: {"type": "thinking_token", "thinking": " tool"}
+
+data: {"type": "thinking_token", "thinking": " output"}
+
+data: {"type": "thinking_token", "thinking": " shows"}
+
+data: {"type": "thinking_token", "thinking": ":\n"}
+
+data: {"type": "thinking_token", "thinking": "``"}
+
+data: {"type": "thinking_token", "thinking": "`\n"}
+
+data: {"type": "thinking_token", "thinking": "**"}
+
+data: {"type": "thinking_token", "thinking": "Stored"}
+
+data: {"type": "thinking_token", "thinking": " memory"}
+
+data: {"type": "thinking_token", "thinking": " ("}
+
+data: {"type": "thinking_token", "thinking": "1"}
+
+data: {"type": "thinking_token", "thinking": " facts"}
+
+data: {"type": "thinking_token", "thinking": "):"}
+
+data: {"type": "thinking_token", "thinking": "**\n"}
+
+data: {"type": "thinking_token", "thinking": "-"}
+
+data: {"type": "thinking_token", "thinking": " #"}
+
+data: {"type": "thinking_token", "thinking": "9"}
+
+data: {"type": "thinking_token", "thinking": "88"}
+
+data: {"type": "thinking_token", "thinking": "02"}
+
+data: {"type": "thinking_token", "thinking": "f"}
+
+data: {"type": "thinking_token", "thinking": "19"}
+
+data: {"type": "thinking_token", "thinking": " ["}
+
+data: {"type": "thinking_token", "thinking": "user"}
+
+data: {"type": "thinking_token", "thinking": "_preference"}
+
+data: {"type": "thinking_token", "thinking": " |"}
+
+data: {"type": "thinking_token", "thinking": " importance"}
+
+data: {"type": "thinking_token", "thinking": "="}
+
+data: {"type": "thinking_token", "thinking": "0"}
+
+data: {"type": "thinking_token", "thinking": "."}
+
+data: {"type": "thinking_token", "thinking": "8"}
+
+data: {"type": "thinking_token", "thinking": "]"}
+
+data: {"type": "thinking_token", "thinking": " I"}
+
+data: {"type": "thinking_token", "thinking": " prefer"}
+
+data: {"type": "thinking_token", "thinking": " concise"}
+
+data: {"type": "thinking_token", "thinking": " answers"}
+
+data: {"type": "thinking_token", "thinking": "\n"}
+
+data: {"type": "thinking_token", "thinking": "``"}
+
+data: {"type": "thinking_token", "thinking": "`\n\n"}
+
+data: {"type": "thinking_token", "thinking": "I"}
+
+data: {"type": "thinking_token", "thinking": " need"}
+
+data: {"type": "thinking_token", "thinking": " to"}
+
+data: {"type": "thinking_token", "thinking": " repeat"}
+
+data: {"type": "thinking_token", "thinking": " this"}
+
+data: {"type": "thinking_token", "thinking": " exactly"}
+
+data: {"type": "thinking_token", "thinking": " as"}
+
+data: {"type": "thinking_token", "thinking": " shown"}
+
+data: {"type": "thinking_token", "thinking": ","}
+
+data: {"type": "thinking_token", "thinking": " including"}
+
+data: {"type": "thinking_token", "thinking": " the"}
+
+data: {"type": "thinking_token", "thinking": " fact"}
+
+data: {"type": "thinking_token", "thinking": " id"}
+
+data: {"type": "thinking_token", "thinking": " #"}
+
+data: {"type": "thinking_token", "thinking": "9"}
+
+data: {"type": "thinking_token", "thinking": "88"}
+
+data: {"type": "thinking_token", "thinking": "02"}
+
+data: {"type": "thinking_token", "thinking": "f"}
+
+data: {"type": "thinking_token", "thinking": "19"}
+
+data: {"type": "thinking_token", "thinking": "."}
+
+data: {"type": "token", "content": "\n**Stored memory (1 facts):**\n- #98802f19 [user_preference | importance=0.8] I prefer concise answers"}
+
+data: {"obs_event": {"type": "agent_loop_done", "data": {"intent": "analyze", "iterations": 4}}}
+
+data: {"obs_event": {"type": "stage_timing", "data": {"stage": "generate", "latency_ms": 97922, "status": "done"}}}
+
+data: {"obs_event": {"type": "stage_timing", "data": {"stage": "execute", "latency_ms": 0, "status": "done"}}}
+
+data: {"obs_event": {"type": "agent_runtime_done", "data": {"agent": "parent", "elapsed_ms": 97984, "response_chars": 100}}}
+
+data: {"obs_event": {"type": "turn_complete", "data": {"intent": "parent", "confidence": 1.0, "tokens_approx": 143, "prompt_tokens_approx": 5991, "total_latency_ms": 97984, "memory_facts": 1, "agent_mode": true, "provider_usage": {"total_prompt_tokens": 28947, "total_completion_tokens": 307, "total_cached_tokens": 16932, "llm_calls": 5, "prompt_tokens": 5991, "completion_tokens": 143, "total_tokens": 6134, "cached_tokens": 43, "context_breakdown": {"system_prompt": 1964, "turn_context": 772, "tool_schemas": 2854, "history": 27, "current_message": 25, "turn_additions": 164}}, "cached_tokens": 43, "llm_calls": 5}}}
+
+data: {"type": "response_blocks", "blocks": [{"type": "presentation_hint", "presentation_type": "list"}]}
+
+data: {"type": "done", "provider_usage": {"total_prompt_tokens": 28947, "total_completion_tokens": 307, "total_cached_tokens": 16932, "llm_calls": 5, "prompt_tokens": 5991, "completion_tokens": 143, "total_tokens": 6134, "cached_tokens": 43, "context_breakdown": {"system_prompt": 1964, "turn_context": 772, "tool_schemas": 2854, "history": 27, "current_message": 25, "turn_additions": 164}}}
+

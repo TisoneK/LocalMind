@@ -156,3 +156,29 @@ stays here as a live trap.
 ## 2026-09-16 — Chemi / Qwen3.8 Flash (S013)
 
 - **Status:** none this session — no protocol-level friction (one-line clean entry per the 2026-09-14 bookkeeping-watermark reconciliation; the heredoc/aliasing traps were tool- and code-level, logged in inefficiencies).
+
+---
+
+## 2026-09-17 — Buffy / model unknown (Session 14) — current.md and the claim event written after product work had started
+
+- **Flaw:** the check-in was pushed on time (roster row first, before any
+  analysis — that half held), but the next two entry obligations were inverted:
+  `tasks/current.md` was still idle and no collaboration `claim` had been
+  emitted when the first product commit landed. Both were written only at
+  wrap-up, so for most of the session the office board showed a live roster row
+  with no declared task and no claimed scope on the event trail.
+- **Symptom:** session start looked compliant (row up, pushed, codename
+  claimed); the gap only appears when you look at what the *task* files said
+  during the work. The solo light path exists precisely to make in-flight scope
+  visible, and it was invisible here.
+- **Root cause:** the protocol front-loads one ceremony (the roster row) that it
+  calls out explicitly as "before anything else", but `current.md` + the claim
+  read as "step 3 setup" alongside a long read list, and with a solo, idle
+  office nothing forced them to be first. `ledger-gates checkpoint` — which the
+  rules say to run before each next action — reported tree/collab state but
+  never noticed that no task was set; nothing mechanical caught the inversion.
+- **Suggested fix:** make `ledger-gates checkpoint` (or the check-in commit
+  itself) fail loudly while `tasks/current.md` is idle in a session whose roster
+  row is live and whose codename has no open claim. That is the same
+  mechanical-nudge gap the Session 12 flaw asked for on check-in ordering.
+- **Status:** open

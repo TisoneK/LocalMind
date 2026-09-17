@@ -36,7 +36,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Buffy | S014 | unknown | engineer — picking up the next top-priority backlog item (memory write path) | Working | Checked in; scoping the backlog head before any edits |
+| Buffy | S014 | unknown | engineer — shipped the typed memory write path; now on the follow-up backlog head `B-2026-09-17-1` (deterministic memory read/delete routing) | Working | Write path shipped and live-verified (`9ba42626`, `b1a8aa96`); scoping the intent router for reads/deletes |
 
 **Clock out when your session ends**: remove your row in the closing
 `chore(ledger):` commit. The board shows who is in the office *now*;

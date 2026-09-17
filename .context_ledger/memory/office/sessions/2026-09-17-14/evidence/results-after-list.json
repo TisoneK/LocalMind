@@ -1,0 +1,37 @@
+{
+  "label": "after-list",
+  "session": "memory-write-after-list-1789647403",
+  "turns": [
+    {
+      "turn": "turn2_preference",
+      "message": "Remember that I prefer concise answers. Just acknowledge.",
+      "wall_s": 11.3,
+      "text": "Remembered: *I prefer concise answers*"
+    },
+    {
+      "turn": "turn4_list",
+      "message": "Call the memory_op tool with operation list, then repeat its raw output exactly, including each fact id.",
+      "wall_s": 98.5,
+      "text": "\n**Stored memory (1 facts):**\n- #98802f19 [user_preference | importance=0.8] I prefer concise answers"
+    }
+  ],
+  "rows": [],
+  "rest": {
+    "listed": 1,
+    "deleted": true,
+    "rows_after": 0
+  },
+  "checks": {
+    "volatile_value_refused": false,
+    "volatile_rows_in_store": 0,
+    "rows_for_preference": 0,
+    "rows_total": 0,
+    "keyed_rows": 0,
+    "listed_ids_in_chat": 1,
+    "forget_confirmed_in_chat": false,
+    "rest_listed": 1,
+    "rest_delete_by_short_id": true,
+    "rest_rows_after_delete": 0,
+    "rest_error": ""
+  }
+}

@@ -1,0 +1,28 @@
+data: {"obs_event": {"type": "agent_runtime_start", "data": {"agent": "parent"}}}
+
+data: {"obs_event": {"type": "parent_ready", "data": {"reason": "", "adapter": "zai", "model": "glm-4.5-flash"}}}
+
+data: {"obs_event": {"type": "agent_loop_start", "data": {"intent": "memory_op"}}}
+
+data: {"obs_event": {"type": "stage_timing", "data": {"stage": "intent_classify", "latency_ms": 0, "status": "memory_write"}}}
+
+data: {"obs_event": {"type": "stage_timing", "data": {"stage": "tool_select", "latency_ms": 0, "status": "skipped"}}}
+
+data: {"obs_event": {"type": "stage_timing", "data": {"stage": "context_build", "latency_ms": 0, "status": "memory_write"}}}
+
+data: {"type": "status_update", "status": "Agent is still working \u2014 this can take a moment on slower models."}
+
+: agent-working
+
+data: {"obs_event": {"type": "stage_timing", "data": {"stage": "generate", "latency_ms": 10641, "status": "done"}}}
+
+data: {"obs_event": {"type": "stage_timing", "data": {"stage": "execute", "latency_ms": 0, "status": "skipped"}}}
+
+data: {"obs_event": {"type": "agent_runtime_done", "data": {"agent": "parent", "elapsed_ms": 10641, "response_chars": 64}}}
+
+data: {"obs_event": {"type": "turn_complete", "data": {"intent": "memory_op", "confidence": 1.0, "tokens_approx": 16, "prompt_tokens_approx": 0, "total_latency_ms": 10641, "memory_facts": 0, "agent_mode": false, "provider_usage": {}}}}
+
+data: {"type": "token", "content": "Remembered: *my public IP is 41.90.11.7 and my ISP is Safaricom*"}
+
+data: {"type": "done"}
+

@@ -1,0 +1,68 @@
+{
+  "label": "before",
+  "session": "memory-write-before-1789647233",
+  "turns": [
+    {
+      "turn": "turn1_live_value",
+      "message": "Remember that my public IP is 41.90.11.7 and my ISP is Safaricom. Just acknowledge.",
+      "wall_s": 11.6,
+      "text": "Remembered: *my public IP is 41.90.11.7 and my ISP is Safaricom*"
+    },
+    {
+      "turn": "turn2_preference",
+      "message": "Remember that I prefer concise answers. Just acknowledge.",
+      "wall_s": 11.1,
+      "text": "Remembered: *I prefer concise answers*"
+    },
+    {
+      "turn": "turn3_restate",
+      "message": "Remember this: I prefer concise answers.",
+      "wall_s": 6.9,
+      "text": "Remembered: *I prefer concise answers*"
+    }
+  ],
+  "rows": [
+    {
+      "id": "b1dd79c2-39d8-4267-9831-e0ac760c2ee3",
+      "content": "my public IP is 41.90.11.7 and my ISP is Safaricom",
+      "memory_key": "",
+      "memory_kind": "",
+      "memory_freshness": "",
+      "memory_type": "general"
+    },
+    {
+      "id": "e51ae74c-2adb-4604-bf3b-9f313df5e625",
+      "content": "I prefer concise answers",
+      "memory_key": "",
+      "memory_kind": "",
+      "memory_freshness": "",
+      "memory_type": "user_preference"
+    },
+    {
+      "id": "34dcd9c9-c91c-4952-abec-850a09b47213",
+      "content": "I prefer concise answers",
+      "memory_key": "",
+      "memory_kind": "",
+      "memory_freshness": "",
+      "memory_type": "user_preference"
+    }
+  ],
+  "rest": {
+    "listed": 3,
+    "deleted": false,
+    "rows_after": 3
+  },
+  "checks": {
+    "volatile_value_refused": false,
+    "volatile_rows_in_store": 1,
+    "rows_for_preference": 2,
+    "rows_total": 3,
+    "keyed_rows": 0,
+    "listed_ids_in_chat": 0,
+    "forget_confirmed_in_chat": false,
+    "rest_listed": 3,
+    "rest_delete_by_short_id": false,
+    "rest_rows_after_delete": 3,
+    "rest_error": ""
+  }
+}

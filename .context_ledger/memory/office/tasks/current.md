@@ -12,7 +12,7 @@ backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-09-17 — Buffy (S014) / model unknown
+- **Session:** 2026-09-17 — Buffy (S014, extended) / model unknown
 - **Feature:** memory-write-path
-- **Task:** backlog head — typed memory write path: durability policy in code (volatile refused, stable facts tagged), one row per fact by canonical key, read-back confirmations, deletion by id/prefix/content/key, id-bearing list. Shipped `9ba42626`/`b1a8aa96` + live before/after trace; now in the bookkeeping + gate phase.
-- **Status:** in-progress (writing the report/session/closeout and running the exit gate)
+- **Task:** `B-2026-09-17-1` — route memory READS and DELETES through the deterministic path like writes, so an id-bearing list / forget-by-id is reachable without the model choosing the tool, then live-verify the answer comes from the store. (Follow-up to the shipped write path `9ba42626`/`b1a8aa96`, same session, same codename.)
+- **Status:** in-progress (scoping the intent router)
