@@ -87,3 +87,6 @@ logs/
 
 # Isolated live-test scratch (contains copied settings with API keys — never commit)
 /scratch/
+
+# Freebuff desktop agent local state
+.freebuff/
