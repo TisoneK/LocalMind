@@ -36,6 +36,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
+| Buffy | S014 | unknown | engineer — picking up the next top-priority backlog item (memory write path) | Working | Checked in; scoping the backlog head before any edits |
 
 **Clock out when your session ends**: remove your row in the closing
 `chore(ledger):` commit. The board shows who is in the office *now*;
