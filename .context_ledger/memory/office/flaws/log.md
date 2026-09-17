@@ -150,3 +150,9 @@ stays here as a live trap.
   `ledger-gates checkpoint` that fails when HEAD's roster lacks a row for
   the session doing the checking would catch it mechanically.
 - **Status:** open
+
+---
+
+## 2026-09-16 — Chemi / Qwen3.8 Flash (S013)
+
+- **Status:** none this session — no protocol-level friction (one-line clean entry per the 2026-09-14 bookkeeping-watermark reconciliation; the heredoc/aliasing traps were tool- and code-level, logged in inefficiencies).

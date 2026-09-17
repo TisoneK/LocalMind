@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260916T162931Z-Chemi-809dd913",
+  "type": "release",
+  "session": "S013",
+  "agent": "Chemi",
+  "created": "2026-09-16T16:29:32Z",
+  "issue": "backlog-triage",
+  "body": "Triage shipped: backlog.md 84 rows -> 20 actionable (Chemi's 15:03 draft verbatim, provenance corrected to the shipped reality); parking-lot.md 59 rows P-2026-09-16-1..59 (former B- IDs tagged in-row, B-2026-08-25-2 + B-2026-08-25-10 merged at P-26); 5 rows deleted as done/stale (B-2026-08-24-13/-14, B-2026-08-25-6, B-2026-08-24-8, B-2026-08-30-8). Verification: parked bodies byte-identical to originals modulo ID cell + provenance tail, zero B- leaks, P-census exact, raw-pipe shape 3/row; ledger-mem check green (cap warn cleared); pre-commit gate green; product code untouched.",
+  "paths": [],
+  "refs": ["f3bdb530", "3a009e02"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

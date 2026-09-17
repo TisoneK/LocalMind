@@ -158,3 +158,13 @@ never makes an entry eligible.
 - **Cause:** Windows Git-Bash + long inline commands; head-truncated pipes hiding exit codes; over-clever global regex post-processing.
 - **Workaround / fix:** replacement TABLES live in Write-tool'd scratch scripts (never inline heredocs); the exit gate redirects to a scratch file then greps the file; global "cleanup" regexes were deleted in favor of per-file exact pairs with count assertions; grep filters use forward-slash paths.
 - **Prevent next time:** gate output goes to a file, always; dry-run any bulk transform and READ every changed line before writing; count-assert every table row.
+
+---
+
+## 2026-09-16 — Chemi / Qwen3.8 Flash (S013)
+
+- **Problem:** the session's own Bash tool dropped a heredoc code-fence marker mid-command on this box (the same mangling family logged 2026-09-12 and 2026-09-15), which garbled one work-note into a stray fenced block; separately, my triage script's row parser terminated rows only on the FOLLOWING line, so a single-line row at EOF (the 84th) read as unterminated, and an aliasing bug (`lines[-1]` == `lines[0]` on single-line rows) briefly built the parking lot with orphan duplicate lines before verification caught the shape and the clean rerun fixed it.
+- **Cost:** roughly six rerun-verify cycles and one contaminated working tree (rebuilt from git HEAD) ≈ 25 minutes.
+- **Cause:** inline heredocs remain unreliable on this Windows box regardless of content; parser termination state that only updates between lines cannot validate the final row; and a build that mutates a list it also slices aliases the original.
+- **Workaround / fix:** scripts and multi-line content go through the file-writing tool, never inline heredocs (re-learned); parsers track per-row completion immediately (end-of-row check on the same line); builds that substitute cells operate on the new string, not the aliased list.
+- **Prevent next time:** same standing rule, now three-times-logged: nothing with backslashes, fences, or multi-line structure is trusted to an inline heredoc; verify counts and shapes immediately after any generated-file write (the orphan B- lines were caught by a shape assert, not by eye).

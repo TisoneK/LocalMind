@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-09-16 — Chemi / Qwen3.8 Flash (S013)
-- **Task:** backlog triage to the core-1.2.0 cap (supervisor directive): 84 rows → 20 actionable in `tasks/backlog.md`, 59 knowledge/deferred rows parked in `tasks/parking-lot.md` as `P-2026-09-16-1`…`-59` under their former B- IDs, 5 rows deleted as done/stale
-- **Status:** in-progress
+- **Session:** —
+- **Task:** none — no session in progress (Session 13 complete: backlog triaged to the 1.2.0 cap — 20 actionable rows, 59 parked as P-2026-09-16-1..59 with B- IDs preserved, 5 deleted)
+- **Status:** idle

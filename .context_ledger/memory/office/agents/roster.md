@@ -36,7 +36,6 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Chemi | S013 | Qwen3.8 Flash | Backlog triage: 84 rows → cap 20 — split knowledge into parking-lot.md, prune done/stale rows | Working | Resumed: draft found (scratch/backlog-new-s013.md), parking lot + backlog rebuilt and verified; bookkeeping next |
 
 **Clock out when your session ends**: remove your row in the closing
 `chore(ledger):` commit. The board shows who is in the office *now*;
