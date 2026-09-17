@@ -18,7 +18,12 @@ import logging
 import re
 import time as _time
 
-from core.memory_intent import extract_memory_content
+from core.memory_intent import (
+    MemoryDurability,
+    canonical_key,
+    durability_profile,
+    extract_memory_content,
+)
 from core.models import Intent, RiskLevel, ToolResult
 from tools import register_tool
 
@@ -36,6 +41,19 @@ _RECALL_PAT = re.compile(
     r"^\s*(?:please\s+)?(?:recall|search(?:\s+memory)?|find(?:\s+in\s+memory)?)\s+(.+)$",
     re.IGNORECASE,
 )
+# A fact id as the list output prints it ("#3f2a91cd") or a full 16-char id.
+# Ids make a specific fact addressable — the user can see one and ask for it
+# back without quoting the stored wording.
+_FACT_ID_RE = re.compile(r"(?:#\s*)?\b([0-9a-f]{8,16})\b", re.IGNORECASE)
+
+# The tool schema advertises operation = store|recall|forget|list, so the
+# dispatcher can hand us the operation WORD alone ("list", no content). That
+# must mean that operation: it used to fall through to the store path and
+# persist "list" as a fact, which is both a junk memory and a garbled list.
+# Exact word (plus optional colon) only — "list my project files" is not a
+# memory listing.
+_BARE_OP_RE = re.compile(r"^(store|recall|forget|list|facts|memory)\s*[:;]?\s*$", re.IGNORECASE)
+_LIST_WORDS = {"list", "facts", "memory"}
 
 # A durable fact should be a short, meaningful statement — not a
 # raw paste. When the user said "remember this source" + a 6KB weather-JSON dump,
@@ -111,42 +129,49 @@ async def memory_op(
 
     store = VectorStore()
 
-    # ── List all facts ────────────────────────────────────────────────────
-    if _LIST_PAT.search(message):
-        facts = await store.list_all_with_metadata()
-        if not facts:
-            return ToolResult(
-                content="No facts stored in memory yet.",
-                risk=RiskLevel.LOW,
-                source="memory",
-            )
-        lines = []
-        for f in facts:
-            mtype = f.get("memory_type", "?")
-            imp = float(f.get("importance", 0.5))
-            lines.append(f"- [{mtype} | importance={imp:.1f}] {f['fact']}")
-        content = f"**Stored memory ({len(facts)} facts):**\n" + "\n".join(lines)
+    # A bare operation word is that operation, not a fact to store.
+    _bare = _BARE_OP_RE.match(message.strip())
+    _bare_word = _bare.group(1).lower() if _bare else ""
+    if _bare_word == "recall":
+        return await _recall_recent(store)
+    if _bare_word == "forget":
         return ToolResult(
-            content=content,
+            content=(
+                "Which fact should I remove? Ask me to list memory and give me its id, "
+                "or quote the fact."
+            ),
             risk=RiskLevel.LOW,
             source="memory",
-            metadata={"fact_count": len(facts)},
         )
+    if _bare_word == "store":
+        return ToolResult(
+            content="What should I remember? Give me the fact and I'll keep it.",
+            risk=RiskLevel.LOW,
+            source="memory",
+        )
+
+    # ── List all facts ────────────────────────────────────────────────────
+    if _LIST_PAT.search(message) or _bare_word in _LIST_WORDS:
+        return await _list_facts(store)
 
     # ── Forget a fact ─────────────────────────────────────────────────────
     if _FORGET_PAT.search(message):
-        # Extract what to forget — everything after the trigger word
-        fact = re.sub(r"^\s*(forget|delete|remove)\b\s*", "", message, flags=re.IGNORECASE).strip()
+        # Extract what to forget — everything after the trigger word. A
+        # discourse marker ("forget THAT I prefer dark mode") is part of the
+        # sentence, not of the stored fact, so it goes too.
+        fact = re.sub(
+            r"^\s*(?:forget|delete|remove)\b\s*(?:that\s+|about\s+|the fact that\s+)?",
+            "",
+            message,
+            flags=re.IGNORECASE,
+        ).strip()
         if fact:
-            success = await store.forget(fact)
-            if success:
-                return ToolResult(
-                    content=f"Removed from memory: *{fact}*",
-                    risk=RiskLevel.LOW,
-                    source="memory",
-                )
+            return await _forget_with_read_back(store, fact)
         return ToolResult(
-            content="Couldn't find that specific fact to remove. Try listing memory first.",
+            content=(
+                "Tell me which fact to remove — for example \"forget that I prefer dark mode\" "
+                "or \"forget #3f2a91cd\" from the list."
+            ),
             risk=RiskLevel.LOW,
             source="memory",
         )
@@ -239,6 +264,23 @@ async def memory_op(
         )
     fact = _distilled
 
+    # Durability policy, enforced here rather than asked for in the prompt:
+    # a live value is refused at the door. Storing one guarantees a stale fact
+    # the agent later has to hunt down, and the prompt that asked nicely does
+    # not hold on every model.
+    _durability = durability_profile(fact)
+    if _durability.kind is MemoryDurability.VOLATILE:
+        return ToolResult(
+            content=(
+                f"I'd rather not keep *{fact}* — {_durability.reason}. "
+                "Ask me for it and I'll read it fresh instead. If part of that is "
+                "durable, tell me that part and I'll keep it."
+            ),
+            risk=RiskLevel.LOW,
+            source="memory",
+            metadata={"declined_reason": "volatile_fact", "fact": fact},
+        )
+
     # Infer importance from wording
     importance = (
         0.8
@@ -249,15 +291,22 @@ async def memory_op(
     # Use the canonical session_id so facts are retrievable in the same session scope.
     # Falls back to a named bucket for CLI/direct tool calls without a session.
     effective_session_id = "explicit_memory_op"
+    _key = canonical_key(fact)
+    _metadata = {
+        "memory_type": memory_type or "semantic",
+        "importance": str(importance),
+        "access_count": "0",
+        "memory_key": _key,
+        "memory_kind": _durability.kind.value,
+        "memory_freshness": _durability.freshness,
+        "memory_confidence": str(_durability.confidence),
+    }
     success = await store.store(
         fact=fact,
         session_id=effective_session_id,
         source="user",
-        extra_metadata={
-            "memory_type": memory_type or "semantic",
-            "importance": str(importance),
-            "access_count": "0",
-        },
+        extra_metadata=_metadata,
+        key=_key,
     )
 
     # Fallback to plain SQLite storage when the vector store
@@ -288,22 +337,23 @@ async def memory_op(
                     created_at  REAL NOT NULL DEFAULT (unixepoch('now'))
                 )
             """)
-            import uuid as _uuid
             metadata = _json.dumps({
                 "session_id": effective_session_id,
                 "source": "user",
-                "memory_type": memory_type or "semantic",
-                "importance": str(importance),
-                "access_count": "0",
                 "fallback": "true",  # stored without embedding
                 # The vector path writes a timestamp; the fallback
                 # MUST too, or warm_start_facts treats the fact as ancient and
                 # the agent never sees it (age = now - 0 > 30 days → dropped).
                 "timestamp": str(_time.time()),
+                **_metadata,
             })
+            # Keyed id + REPLACE, not a fresh uuid: a write that cannot embed
+            # must still land on the fact's one row, or every re-statement
+            # appends another copy (this is how the same fact ended up stored
+            # several times over while embeddings were unavailable).
             conn.execute(
-                "INSERT INTO vector_facts (id, content, metadata) VALUES (?, ?, ?)",
-                (str(_uuid.uuid4()), fact, metadata),
+                "INSERT OR REPLACE INTO vector_facts (id, content, metadata) VALUES (?, ?, ?)",
+                (store.fact_id_for_key(_key), fact, metadata),
             )
             conn.commit()
             conn.close()
@@ -312,22 +362,156 @@ async def memory_op(
         except Exception as fallback_exc:
             logger.warning("[memory_op] fallback storage also failed: %s", fallback_exc)
 
-    if success:
-        _msg = f"Remembered: *{fact}*"
-        if _distill_note:
-            _msg += f"\n\n(I {_distill_note} rather than storing the whole block.)"
+    if not success:
+        # Never present intent as state: without a write there is nothing to
+        # claim, and a cheerful "I'll remember that" is a lie the user only
+        # discovers later.
         return ToolResult(
-            content=_msg,
+            content=(
+                "That didn't reach memory — the store refused the write. "
+                "Want me to try again?"
+            ),
             risk=RiskLevel.LOW,
             source="memory",
-            metadata={"fact": fact, "importance": importance},
+            success=False,
+            metadata={"fact": fact, "stored": False},
         )
+
+    # Read back before claiming anything: the confirmation reports the state
+    # that is actually in the store, not the state the write intended. A store
+    # that fails the read is an unverified write, never a raised turn.
+    try:
+        _verified = await store.find_by_key(_key)
+    except Exception as exc:  # pragma: no cover - store failure is environment
+        logger.warning("[memory_op] read-back failed: %s", exc)
+        _verified = None
+    if _verified is None:
+        return ToolResult(
+            content=(
+                f"I tried to store *{fact}* but it isn't there when I read memory "
+                "back — so I won't claim it's saved. Want me to try again?"
+            ),
+            risk=RiskLevel.LOW,
+            source="memory",
+            success=False,
+            metadata={"fact": fact, "stored": False, "verified": False},
+        )
+
+    _msg = f"Remembered: *{fact}*"
+    if _distill_note:
+        _msg += f"\n\n(I {_distill_note} rather than storing the whole block.)"
     return ToolResult(
-        content="Got it — I'll remember that.",
+        content=_msg,
         risk=RiskLevel.LOW,
         source="memory",
-        success=False,
+        metadata={
+            "fact": fact,
+            "fact_id": _verified.get("id", ""),
+            "importance": importance,
+            "memory_kind": _durability.kind.value,
+            "stored": True,
+            "verified": True,
+        },
     )
+
+
+async def _list_facts(store) -> ToolResult:
+    """List every stored fact, each named by the short id it can be acted on."""
+    facts = await store.list_all_with_metadata()
+    if not facts:
+        return ToolResult(
+            content="No facts stored in memory yet.",
+            risk=RiskLevel.LOW,
+            source="memory",
+            metadata={"fact_count": 0, "fact_ids": []},
+        )
+    lines = []
+    for f in facts:
+        mtype = f.get("memory_type", "?")
+        imp = float(f.get("importance", 0.5))
+        # The short id is load-bearing: it is how a single fact is named later
+        # (forget/recall) without re-quoting its wording.
+        lines.append(f"- #{str(f.get('id', ''))[:8]} [{mtype} | importance={imp:.1f}] {f['fact']}")
+    content = f"**Stored memory ({len(facts)} facts):**\n" + "\n".join(lines)
+    return ToolResult(
+        content=content,
+        risk=RiskLevel.LOW,
+        source="memory",
+        metadata={"fact_count": len(facts), "fact_ids": [f.get("id", "") for f in facts]},
+    )
+
+
+async def _forget_with_read_back(store, target: str) -> ToolResult:
+    """Remove the facts `target` names, then report from the state it left.
+
+    The failure this closes is a claim, not a deletion: "Done — I've cleaned up
+    your memory entry" arriving while the row was still there. So the message
+    is built from a read-back AFTER the delete, and a miss says so plainly
+    instead of reusing the old "couldn't find that" line for both cases.
+    """
+    candidates: list[str] = []
+    id_match = _FACT_ID_RE.search(target)
+    if id_match:
+        token = id_match.group(1)
+        # An explicit id: either marked with "#" as the list prints it, a full
+        # 16-char id, or the whole target being the id token.
+        if "#" in id_match.group(0) or len(token) == 16 or _content_words(target) == 1:
+            candidates.append(token)
+    candidates.extend(store.matching_ids(target))
+    candidates = list(dict.fromkeys(candidates))
+
+    if not candidates:
+        total = await store.count()
+        if total:
+            return ToolResult(
+                content=(
+                    f"Nothing in memory matches *{target}* — {total} fact(s) are stored; "
+                    "ask me to list them and I'll show you their ids."
+                ),
+                risk=RiskLevel.LOW,
+                source="memory",
+                metadata={"removed": 0},
+            )
+        return ToolResult(
+            content="There's nothing in memory to remove yet.",
+            risk=RiskLevel.LOW,
+            source="memory",
+            metadata={"removed": 0},
+        )
+
+    for fact_id in candidates:
+        await store.forget_by_id(fact_id)
+
+    still_there = [fid for fid in candidates if await store.get_fact(fid) is not None]
+    removed = len(candidates) - len(still_there)
+    if not removed:
+        return ToolResult(
+            content=(
+                f"I couldn't remove *{target}* — it's still in memory. "
+                "Nothing was deleted, so tell me again if you want it gone."
+            ),
+            risk=RiskLevel.LOW,
+            source="memory",
+            success=False,
+            metadata={"removed": 0, "remaining": len(still_there)},
+        )
+
+    _msg = f"Removed from memory: *{target}*"
+    if removed > 1:
+        _msg += f" ({removed} matching facts)"
+    if still_there:
+        _msg += f" — {len(still_there)} matching entr(y/ies) could not be removed."
+    return ToolResult(
+        content=_msg,
+        risk=RiskLevel.LOW,
+        source="memory",
+        metadata={"removed": removed, "remaining": len(still_there)},
+    )
+
+
+def _content_words(text: str) -> int:
+    """How many words carry meaning — "#3f2a91cd" is one, a sentence is not."""
+    return len(re.findall(r"[a-z0-9]+", (text or "").lower()))
 
 
 async def _recall_recent(store) -> ToolResult:

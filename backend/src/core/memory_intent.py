@@ -187,6 +187,188 @@ def _classify_memory_type(content: str, is_source_knowledge: bool) -> MemoryType
     return MemoryType.GENERAL
 
 
+# ── Durability: what may be remembered at all ────────────────────────────────
+# MemoryType says what a fact is ABOUT. Durability is the other axis: does the
+# fact stay true? Two failure modes come from conflating them — a live value
+# (the machine's public IP / ISP) stored as a durable default, and the cleanup
+# session that then had to hunt the stale copies down. A value that drifts on
+# its own is re-derived when it is asked for, never remembered. This is policy
+# in code: it must hold whatever the prompt says and whichever model runs.
+
+
+class MemoryDurability(Enum):
+    """Whether a fact belongs in durable storage, and how fresh it stays.
+
+    PREFERENCE   — how the user wants things done. Durable, never drifts.
+    STABLE_FACT  — true of the user/machine/project, may need a refresh
+                   (locale, timezone, hardware, project name).
+    VOLATILE     — live state: network identity, momentary resource readings,
+                   "right now" snapshots. Never persisted as a durable default.
+    """
+
+    PREFERENCE = "preference"
+    STABLE_FACT = "stable_fact"
+    VOLATILE = "volatile"
+
+
+@dataclass(frozen=True)
+class Durability:
+    """A durability verdict plus the tags a stored fact carries with it.
+
+    `freshness` — "static" (does not drift) or "boot" (re-derived at startup,
+    so a stored copy is a cache that can self-heal rather than a claim of
+    permanent truth).
+    `confidence` — how much the statement should be trusted as a default.
+    `reason`     — plain words explaining the verdict, used when a volatile
+                   fact is refused so the user hears WHY, not just "no".
+    """
+
+    kind: MemoryDurability
+    freshness: str
+    confidence: float
+    reason: str = ""
+
+
+# A remembered URL is source knowledge, not a live value — strip URLs before
+# the identity checks so a stored endpoint is never read as an IP fact.
+_URL_IN_TEXT_RE = re.compile(r"https?://\S+", re.IGNORECASE)
+_IPV4_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+_IPV6_RE = re.compile(r"\b(?:[0-9a-f]{1,4}:){3,}[0-9a-f]{1,4}\b", re.IGNORECASE)
+_MAC_RE = re.compile(r"\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b", re.IGNORECASE)
+
+# Network identity: who the machine is talking through changes with every
+# reconnect, VPN toggle, or carrier reassignment.
+_VOLATILE_INFRA_RE = re.compile(
+    r"\b(?:isp|internet service provider|broadband provider|carrier|public ip"
+    r"|external ip|assigned ip|dynamic ip|ip address|vpn exit|dns server)\b",
+    re.IGNORECASE,
+)
+# Momentary machine state: true only while it is being read.
+_VOLATILE_LIVE_RE = re.compile(
+    r"\b(?:battery (?:level|percentage|charge|state)|charging now"
+    r"|free (?:ram|memory|disk|space)|available (?:ram|memory|disk|space)"
+    r"|cpu (?:load|usage|temperature)|uptime|running processes"
+    r"|ambient temperature|weather right now|what am i running)\b",
+    re.IGNORECASE,
+)
+# Explicitly framed as momentary. Checked after the preference markers so
+# "I prefer concise answers right now" stays a preference.
+_VOLATILE_MOMENT_RE = re.compile(
+    r"\b(?:right now|at the moment|for now|this session|currently (?:using|running|at|on))\b",
+    re.IGNORECASE,
+)
+# Facts that are true of the user/environment but can be re-derived at startup.
+_STABLE_REFRESH_RE = re.compile(
+    r"\b(?:i (?:live|am based|am located)|my (?:city|country|town|timezone|time zone"
+    r"|locale|region|machine|workstation|laptop|desktop)\b|local time|utc ?[+-]?\d|gmt\b)",
+    re.IGNORECASE,
+)
+
+_VOLATILE_FRESHNESS_REASON = (
+    "it is live state that changes on its own (network identity and momentary "
+    "readings are wrong as soon as they are written down)"
+)
+
+
+def _volatile(freshness_reason: str) -> Durability:
+    """One verdict shape for every volatile rule — never persisted."""
+    return Durability(
+        MemoryDurability.VOLATILE,
+        freshness="on_demand",
+        confidence=0.0,
+        reason=f"{freshness_reason} and {_VOLATILE_FRESHNESS_REASON}",
+    )
+
+
+def durability_profile(content: str) -> Durability:
+    """Decide whether a fact may be persisted, and with which freshness tags.
+
+    Rules run in a fixed order so the verdict is predictable: hard live-value
+    shapes first (an IP literal, ISP, a battery reading), then preference
+    wording, then explicit "right now" framing, then refreshable environment
+    facts, and finally a durable fact by default. Only wildly-shaped live
+    values are refused — a false positive would reject something the user
+    explicitly asked to keep.
+    """
+    text = (content or "").strip()
+    if not text:
+        return Durability(MemoryDurability.STABLE_FACT, "static", 0.5)
+
+    without_urls = _URL_IN_TEXT_RE.sub(" ", text)
+
+    if _IPV4_RE.search(without_urls):
+        return _volatile("it is an IP address")
+    if _MAC_RE.search(without_urls) or _IPV6_RE.search(without_urls):
+        return _volatile("it is a network address")
+    if _VOLATILE_INFRA_RE.search(without_urls):
+        return _volatile("your network provider changes with every reconnect")
+    if _VOLATILE_LIVE_RE.search(without_urls):
+        return _volatile("it is a live reading of the machine")
+
+    if _PREFERENCE_RE.search(text):
+        return Durability(MemoryDurability.PREFERENCE, "static", 0.9)
+
+    if _VOLATILE_MOMENT_RE.search(without_urls):
+        return _volatile("it is described as momentary")
+
+    if _STABLE_REFRESH_RE.search(text):
+        # Stored, but tagged as re-derivable: the value can be refreshed on a
+        # later boot instead of being treated as a permanent claim.
+        return Durability(MemoryDurability.STABLE_FACT, "boot", 0.7)
+
+    return Durability(MemoryDurability.STABLE_FACT, "static", 0.6)
+
+
+# ── Fact identity: one row per fact, whatever the wording ────────────────────
+
+_KEY_STOPWORDS = frozenset(
+    {
+        "a", "an", "the", "my", "me", "i", "im", "i'm", "is", "are", "was", "be",
+        "of", "to", "and", "or", "for", "with", "that", "this", "it", "in", "on",
+        "at", "as", "by", "from", "user", "users", "you", "your", "please", "just",
+    }
+)
+
+# Subjects that describe ONE thing, so two statements about them are the same
+# fact and must land on the same row. Anything else falls back to its leading
+# content words — deliberately conservative, because collapsing two unrelated
+# preferences into one row would lose data.
+_SINGLE_VALUED_SUBJECTS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\b(?:live|living|based|located|hometown|city|country|town|region)\b", re.IGNORECASE), "location"),
+    (re.compile(r"\b(?:time ?zone|utc|gmt)\b", re.IGNORECASE), "timezone"),
+    (re.compile(r"\b(?:my name|call me|i am called|i'm called)\b", re.IGNORECASE), "name"),
+    (re.compile(r"\b(?:e-?mail)\b", re.IGNORECASE), "email"),
+    (re.compile(r"\b(?:phone|mobile) (?:number|no)\b", re.IGNORECASE), "phone"),
+    (re.compile(r"\b(?:company|employer|works? (?:at|for))\b", re.IGNORECASE), "employer"),
+)
+
+
+def canonical_key(content: str, max_words: int = 6) -> str:
+    """A deterministic identity for a fact, independent of embeddings.
+
+    The store dedups paraphrases by vector distance, but that only works while
+    the embedding backend answers — the degraded plain-text path used to append
+    a new row per write. A key hashed into the row id gives every fact a stable
+    identity that survives restarts, backend changes, and re-phrasing, so
+    re-stating it replaces the row instead of accumulating near-copies.
+
+    Single-valued subjects (location, timezone, name, email, phone, employer)
+    map to a named subject key; everything else uses its leading content words.
+    """
+    text = (content or "").strip()
+    if not text:
+        return "fact:empty"
+
+    for pattern, subject in _SINGLE_VALUED_SUBJECTS:
+        if pattern.search(text):
+            return f"subject:{subject}"
+
+    words = [w for w in re.findall(r"[a-z0-9]+", text.lower()) if w not in _KEY_STOPWORDS]
+    if not words:
+        return f"fact:{abs(hash(text)) % (10**12)}"
+    return "fact:" + "-".join(words[:max_words])
+
+
 # ── Deterministic content extraction ────────────────────────────────────────
 # The memory-cue prefix strip. Two forms consume the cue:
 #   verb + space + optional ("two things:" / "this:") → "Remember this: X"

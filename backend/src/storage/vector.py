@@ -256,6 +256,15 @@ def _normalise_text(text: str) -> str:
     return re.sub(r"\s+", " ", text.strip()).lower()
 
 
+def _content_signature(text: str) -> str:
+    """Compare-worthy form of a fact: case- and punctuation-insensitive.
+
+    Two statements of one fact differ in far more than case — "I prefer Python."
+    and "i prefer python" must match when a user asks to forget either one.
+    """
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", (text or "").lower())).strip()
+
+
 @lru_cache(maxsize=4096)
 def _embed_cached(norm_text: str, mode: str, url: str, model: str) -> tuple:
     """
@@ -1022,15 +1031,24 @@ class VectorStore:
         session_id: str,
         source: str = "user",
         extra_metadata: Optional[dict] = None,
+        key: Optional[str] = None,
     ) -> bool:
-        """Embed + persist one fact.  Use store_batch() for bulk ingestion."""
+        """Embed + persist one fact.  Use store_batch() for bulk ingestion.
+
+        `key` is the fact's durable identity when the caller has one (see
+        core.memory_intent.canonical_key). With a key, re-stating the same fact
+        — in different words, or with a live part added — replaces that fact's
+        row instead of accumulating a near-copy next to it.
+        """
         vec = await self._embed(fact)
         if vec is None:
             logger.warning("Embedding failed — fact not stored")
             return False
         if not _is_normalised(vec):
             vec = _normalise(vec)
-        return (await self._persist([(fact, vec)], session_id, source, extra_metadata)) == 1
+        return (
+            await self._persist([(fact, vec)], session_id, source, extra_metadata, keys=[key])
+        ) == 1
 
     async def store_batch(
         self,
@@ -1076,6 +1094,7 @@ class VectorStore:
         session_id: str,
         source: str,
         extra_metadata: Optional[dict],
+        keys: Optional[list[Optional[str]]] = None,
     ) -> int:
         """
         Write N (fact, normalised_vec) pairs in a single transaction.
@@ -1121,29 +1140,52 @@ class VectorStore:
             # to snapshot-upgrade. Taking the write lock up front makes the
             # transaction immune to the race (WAL still allows concurrent reads).
             conn.execute("BEGIN IMMEDIATE")
-            for fact, vec in pairs:
+            for idx, (fact, vec) in enumerate(pairs):
                 blob = _pack(vec)
-                target_id = self._fact_id(fact)
+                key = keys[idx] if keys and idx < len(keys) else None
+                # Identity. A keyed fact owns the row id derived from its key, so
+                # the same fact keeps ONE row across re-statements and restarts;
+                # an unkeyed write keeps the content-hash id (legacy behavior).
+                target_id = self._fact_id(f"key:{key}") if key else self._fact_id(fact)
 
                 # Deduplication — reuses already-computed vec (no extra embed call)
                 try:
-                    for row in conn.execute(
-                        """
-                        SELECT vf.id, ve.distance
-                        FROM vector_embeddings ve
-                        JOIN vector_facts vf ON vf.rowid = ve.rowid
-                        WHERE ve.embedding MATCH ? AND k = 3
-                        ORDER BY ve.distance
-                        """,
-                        [blob],
-                    ).fetchall():
+                    close_ids = [
+                        row["id"]
+                        for row in conn.execute(
+                            """
+                            SELECT vf.id, ve.distance
+                            FROM vector_embeddings ve
+                            JOIN vector_facts vf ON vf.rowid = ve.rowid
+                            WHERE ve.embedding MATCH ? AND k = 3
+                            ORDER BY ve.distance
+                            """,
+                            [blob],
+                        ).fetchall()
                         # distance is vec0 L2, not a dot product — see _l2_to_score.
-                        if _l2_to_score(row["distance"]) < 0.15:
-                            target_id = row["id"]
-                            logger.debug("[memory] dedup id=%s", target_id[:8])
-                            break
+                        if _l2_to_score(row["distance"]) < 0.15
+                    ]
                 except Exception:
-                    pass
+                    close_ids = []
+
+                if not key:
+                    if close_ids:
+                        target_id = close_ids[0]
+                        logger.debug("[memory] dedup id=%s", target_id[:8])
+                elif not conn.execute(
+                    "SELECT 1 FROM vector_facts WHERE id = ?", (target_id,)
+                ).fetchone():
+                    # First write under this key: a close row for the same fact may
+                    # already exist from before the fact had a key. Supersede those
+                    # rows rather than leaving two rows describing one thing.
+                    for old_id in close_ids:
+                        conn.execute(
+                            "DELETE FROM vector_embeddings WHERE rowid = "
+                            "(SELECT rowid FROM vector_facts WHERE id = ?)",
+                            (old_id,),
+                        )
+                        conn.execute("DELETE FROM vector_facts WHERE id = ?", (old_id,))
+                        logger.debug("[memory] superseded unkeyed row id=%s", old_id[:8])
 
                 conn.execute(
                     """
@@ -1222,13 +1264,123 @@ class VectorStore:
             return []
 
     async def forget(self, fact: str) -> bool:
-        return await self.forget_by_id(self._fact_id(fact))
+        """Delete a fact by id, by content, or by its key.
+
+        A content-hash id only matches the exact wording that stored a fact, so
+        "forget X" re-worded (or aimed at a keyed fact) used to report a miss
+        even though the fact was right there. Resolution order: the argument as
+        an id, then its content hash, then a punctuation/case-insensitive
+        content or key match. Returns True only if a row actually went away.
+        """
+        target = (fact or "").strip()
+        if not target:
+            return False
+        if await self.forget_by_id(target):
+            return True
+        if await self.forget_by_id(self._fact_id(target)):
+            return True
+        removed = False
+        for fact_id in self.matching_ids(target):
+            removed = await self.forget_by_id(fact_id) or removed
+        return removed
+
+    def matching_ids(self, target: str) -> list[str]:
+        """Ids whose content or key describes `target`.
+
+        Deliberately narrow: exact normalized content, or a long normalized
+        prefix the user quoted, or a key match. Anything looser risks deleting
+        facts the user never asked about.
+        """
+        norm = _content_signature(target)
+        if not norm:
+            return []
+        try:
+            rows = (
+                self._connect()
+                .execute("SELECT id, content, metadata FROM vector_facts ORDER BY created_at")
+                .fetchall()
+            )
+        except Exception:
+            return []
+        ids: list[str] = []
+        for row in rows:
+            content_sig = _content_signature(row["content"])
+            if content_sig == norm or (len(norm) >= 12 and content_sig.startswith(norm)):
+                ids.append(row["id"])
+                continue
+            try:
+                key = str((json.loads(row["metadata"]) or {}).get("memory_key") or "")
+            except (ValueError, TypeError):
+                key = ""
+            if key and _content_signature(key) in norm:
+                ids.append(row["id"])
+        return ids
+
+    async def get_fact(self, fact_id: str) -> Optional[dict]:
+        """Read one fact back by id — the read-back half of a mutation.
+
+        Callers that change the store (and report the change) read this instead
+        of trusting that the write did what they asked. A unique id prefix
+        resolves, like forget_by_id.
+        """
+        resolved = self._resolve_id(fact_id)
+        if resolved is None:
+            return None
+        fact_id = resolved
+        try:
+            row = (
+                self._connect()
+                .execute(
+                    "SELECT id, content, metadata FROM vector_facts WHERE id = ?",
+                    (fact_id,),
+                )
+                .fetchone()
+            )
+        except Exception as exc:
+            logger.debug("get_fact failed: %s", exc)
+            return None
+        if not row:
+            return None
+        try:
+            meta = json.loads(row["metadata"]) or {}
+        except (ValueError, TypeError):
+            meta = {}
+        return {"id": row["id"], "fact": row["content"], **meta}
+
+    async def find_by_key(self, key: str) -> Optional[dict]:
+        """Read back the row that owns `key`.
+
+        Checks the key-derived id first (the fast path for keyed writes), then
+        falls back to scanning metadata so rows written by the degraded
+        plain-text path — which cannot embed and therefore keeps its own id —
+        are still found.
+        """
+        key = (key or "").strip()
+        if not key:
+            return None
+        row = await self.get_fact(self.fact_id_for_key(key))
+        if row is not None:
+            return row
+        all_facts = await self.list_all_with_metadata()
+        for entry in reversed(all_facts):
+            if str(entry.get("memory_key") or "") == key:
+                return entry
+        return None
 
     async def forget_by_id(self, fact_id: str) -> bool:
         """Delete a fact by id. Returns True only if a row was actually
         removed — a missing id returns False so callers (the DELETE route's
         404, the agent's "couldn't find that fact") report truthfully instead
-        of a silent success on nothing."""
+        of a silent success on nothing.
+
+        A unique id PREFIX resolves too: the agent's list output shows the
+        first eight characters, and an id the user can read must be an id the
+        user can act on.
+        """
+        resolved = self._resolve_id(fact_id)
+        if resolved is None:
+            return False
+        fact_id = resolved
         try:
             conn = self._connect()
             row = conn.execute("SELECT rowid FROM vector_facts WHERE id = ?", (fact_id,)).fetchone()
@@ -1241,6 +1393,27 @@ class VectorStore:
         except Exception as exc:
             logger.error("forget_by_id failed: %s", exc)
             return False
+
+    def _resolve_id(self, fact_id: str) -> Optional[str]:
+        """Exact id, or a unique prefix of one. None when absent/ambiguous."""
+        fact_id = (fact_id or "").strip()
+        if not fact_id:
+            return None
+        try:
+            conn = self._connect()
+            if conn.execute("SELECT 1 FROM vector_facts WHERE id = ?", (fact_id,)).fetchone():
+                return fact_id
+            rows = conn.execute(
+                "SELECT id FROM vector_facts WHERE id LIKE ? || '%' LIMIT 2", (fact_id,)
+            ).fetchall()
+        except Exception as exc:
+            logger.debug("id resolution failed: %s", exc)
+            return None
+        return rows[0]["id"] if len(rows) == 1 else None
+
+    def fact_id_for_key(self, key: str) -> str:
+        """The row id a fact owns for `key` (what find_by_key checks first)."""
+        return self._fact_id(f"key:{key}")
 
     async def update_content(self, fact_id: str, new_content: str) -> str | None:
         """Correct an existing fact's content.

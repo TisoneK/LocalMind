@@ -229,6 +229,8 @@ class MemoryComposer:
         source: str = "user",
         importance: float = 0.5,
         level: str = "long_term",
+        key: Optional[str] = None,
+        extra_metadata: Optional[dict] = None,
     ) -> bool:
         """Store a fact with importance rating (0.0=trivial, 1.0=critical).
 
@@ -236,19 +238,28 @@ class MemoryComposer:
         (turn/session/project/long_term). Default long_term keeps the
         historical behavior. Stored in metadata as `memory_level` so the
         level-aware retriever can filter on it.
+
+        `key` is the fact's durable identity (see memory_intent.canonical_key):
+        callers that have one make re-statements of the same fact replace a
+        single row instead of accumulating near-copies. `extra_metadata`
+        carries the durability tags (kind / freshness / confidence).
         """
         if level not in MEMORY_LEVELS:
             level = "long_term"
+        metadata = {
+            "memory_type": memory_type,
+            "importance": str(importance),
+            "access_count": "0",
+            "memory_level": level,
+        }
+        if extra_metadata:
+            metadata.update(extra_metadata)
         return await self._store.store(
             fact=fact,
             session_id=session_id,
             source=source,
-            extra_metadata={
-                "memory_type": memory_type,
-                "importance": str(importance),
-                "access_count": "0",
-                "memory_level": level,
-            },
+            extra_metadata=metadata,
+            key=key,
         )
 
     async def retrieve_for_task(

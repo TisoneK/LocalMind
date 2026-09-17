@@ -173,6 +173,9 @@ class TestRecallOperation:
 
         store = MagicMock()
         store.store = AsyncMock(return_value=True)
+        # The write path reads the fact back before it confirms anything, so a
+        # store double has to answer that read too.
+        store.find_by_key = AsyncMock(return_value={"id": "deadbeefdeadbeef"})
         with patch("storage.vector.VectorStore", return_value=store):
             result = await memory_op("remember that I prefer Python")
         assert result.success is True
@@ -188,6 +191,9 @@ class TestRecallOperation:
 
         store = MagicMock()
         store.store = AsyncMock(return_value=True)
+        # The write path reads the fact back before it confirms anything, so a
+        # store double has to answer that read too.
+        store.find_by_key = AsyncMock(return_value={"id": "deadbeefdeadbeef"})
         with patch("storage.vector.VectorStore", return_value=store):
             result = await memory_op(
                 "Remember this: my project is called Falcon. Just acknowledge."
@@ -210,6 +216,9 @@ class TestRecallOperation:
 
         store = MagicMock()
         store.store = AsyncMock(return_value=True)
+        # The write path reads the fact back before it confirms anything, so a
+        # store double has to answer that read too.
+        store.find_by_key = AsyncMock(return_value={"id": "deadbeefdeadbeef"})
         with patch("storage.vector.VectorStore", return_value=store):
             result = await memory_op(
                 "Remember two things: my project is called Falcon "
@@ -233,6 +242,9 @@ class TestGapBClassifierContentThrough:
 
         store = MagicMock()
         store.store = AsyncMock(return_value=True)
+        # The write path reads the fact back before it confirms anything, so a
+        # store double has to answer that read too.
+        store.find_by_key = AsyncMock(return_value={"id": "deadbeefdeadbeef"})
         with patch("storage.vector.VectorStore", return_value=store):
             result = await memory_op(
                 "note down my project uses FastAPI",
@@ -261,6 +273,9 @@ class TestGapBClassifierContentThrough:
 
         store = MagicMock()
         store.store = AsyncMock(return_value=True)
+        # The write path reads the fact back before it confirms anything, so a
+        # store double has to answer that read too.
+        store.find_by_key = AsyncMock(return_value={"id": "deadbeefdeadbeef"})
         with patch("storage.vector.VectorStore", return_value=store):
             await memory_op(
                 intent.raw_message,

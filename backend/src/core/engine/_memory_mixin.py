@@ -239,8 +239,10 @@ class _MemoryMixin:
     ) -> None:
         """
         Shared fact validation + storage used by both user and response paths.
-        Applies: negative learning gate → deduplication gate → importance scoring → store.
+        Applies: negative learning gate → durability policy → deduplication
+        gate → importance scoring → keyed store.
         """
+        from core.memory_intent import MemoryDurability, canonical_key, durability_profile
 
         _BLOCKED_PATTERNS = [
             r"\b(ignore|bypass|override|disable|forget)\b.{0,30}\b(safety|rules|guidelines|instructions|system prompt|restrictions)\b",  # noqa: E501
@@ -259,6 +261,15 @@ class _MemoryMixin:
                 logger.warning(f"[memory gate] blocked harmful fact: {fact[:80]}")
                 obs.emit("memory_blocked", reason="negative_learning_gate", preview=fact[:60])
                 return
+
+        # Durability gate — the autonomous paths need the same policy as the
+        # explicit one, or a live value simply arrives by another door (the
+        # passive path is where the machine's IP/ISP got stored).
+        _durability = durability_profile(fact)
+        if _durability.kind is MemoryDurability.VOLATILE:
+            logger.info(f"[memory gate] refused volatile fact: {fact[:80]}")
+            obs.emit("memory_blocked", reason="volatile_fact", preview=fact[:60])
+            return
 
         # Deduplication gate: skip if a near-identical fact already exists
         existing_facts = await self._memory.search(query=fact, session_id=session_id, top_k=3)
@@ -284,6 +295,14 @@ class _MemoryMixin:
             memory_type="semantic",
             source=source,
             importance=importance,
+            # The key is the fact's identity: re-stating it replaces its row
+            # instead of appending another near-copy.
+            key=canonical_key(fact),
+            extra_metadata={
+                "memory_kind": _durability.kind.value,
+                "memory_freshness": _durability.freshness,
+                "memory_confidence": str(_durability.confidence),
+            },
         )
         if stored:
             obs.emit("memory_stored", fact_preview=fact[:60], importance=importance, source=source)
