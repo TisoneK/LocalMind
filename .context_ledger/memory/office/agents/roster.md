@@ -36,6 +36,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
+| Chemi | S013 | Qwen3.8 Flash | Re-check-in: gitignore .freebuff/ (supervisor directive) | Working | Session 13 extended; .gitignore edit next |
 
 **Clock out when your session ends**: remove your row in the closing
 `chore(ledger):` commit. The board shows who is in the office *now*;
