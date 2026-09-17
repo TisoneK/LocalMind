@@ -178,3 +178,9 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** none new. The 59 parked rows keep their B- IDs; promote back to the backlog when one turns actionable (the provenance tail preserves every pointer).
 - **Notes:** two Windows-box tool traps hit first-hand and logged in inefficiencies (heredoc fence/escape mangling thrice-logged family; plus my own parser/aliasing lesson). Supervisor correction honored: check-in had already happened pre-9:00 (row verified at the door, not re-created).
 - **Report:** .context_ledger/memory/office/reviews/2026-09-16-review-s013-backlog-triage.md
+
+**Re-check-in — same session, supervisor follow-up ("Add .freebuff/ to .gitignore and commit it"); extends this entry, not a second Session 13:**
+- Re-added my roster row same name/codename, `current.md` set live (re-check-in rule), pushed as `ba30a86c`.
+- Shipped: `.freebuff/` (the desktop agent's local project marker — one UUID file, untracked) appended to `.gitignore` under its own comment block; `git check-ignore -v` verified the rule bites. Committed as `25a0fc2a` (`chore(gitignore):`) and pushed. Pre-commit gate green on the product diff (tsc, ruff, conflict-markers, backlog-dups); the worktree is now fully clean — no untracked residue.
+- Clock-out: row removed, `current.md` idle, entry extended in this closing commit.
+- **Commits (extended):** 5 ledger (resume + claim `f3bdb530`, triage `3a009e02`, closeout `ad7d3617`, re-check-in `ba30a86c`, this closing commit) + 1 product (`25a0fc2a`).

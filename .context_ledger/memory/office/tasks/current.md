@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-09-16 — Chemi / Qwen3.8 Flash (S013)
-- **Task:** add `.freebuff/` to `.gitignore` (supervisor directive) — one-line product-config change, pre-commit gated
-- **Status:** in-progress
+- **Session:** —
+- **Task:** none — no session in progress (Session 13 complete, extended: backlog triage + `.freebuff/` gitignored per directive)
+- **Status:** idle
