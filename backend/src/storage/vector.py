@@ -1386,7 +1386,14 @@ class VectorStore:
             row = conn.execute("SELECT rowid FROM vector_facts WHERE id = ?", (fact_id,)).fetchone()
             if not row:
                 return False
-            conn.execute("DELETE FROM vector_embeddings WHERE rowid = ?", (row["rowid"],))
+            # A fact written by the plain-text fallback has no embedding row (it
+            # could not be embedded) and the vector table may not exist at all in
+            # that store — a missing index entry must not block the delete, or
+            # nothing can be forgotten exactly while embeddings are unavailable.
+            try:
+                conn.execute("DELETE FROM vector_embeddings WHERE rowid = ?", (row["rowid"],))
+            except sqlite3.Error as exc:
+                logger.debug("no embedding row to delete for %s: %s", fact_id[:8], exc)
             conn.execute("DELETE FROM vector_facts WHERE id = ?", (fact_id,))
             conn.commit()
             return True
@@ -1454,7 +1461,14 @@ class VectorStore:
                     "SELECT rowid FROM vector_facts WHERE id = ?", (fact_id,)
                 ).fetchone()
                 if old_row:
-                    conn.execute("DELETE FROM vector_embeddings WHERE rowid = ?", (old_row["rowid"],))
+                    # Same tolerance as forget: without an embedding table (a store
+                    # built by the plain-text fallback) the row still gets edited.
+                    try:
+                        conn.execute(
+                            "DELETE FROM vector_embeddings WHERE rowid = ?", (old_row["rowid"],)
+                        )
+                    except sqlite3.Error as exc:
+                        logger.debug("no embedding row to move for %s: %s", fact_id[:8], exc)
                     conn.execute("DELETE FROM vector_facts WHERE id = ?", (fact_id,))
 
                 conn.execute(

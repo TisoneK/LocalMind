@@ -129,6 +129,34 @@ class TestForgetResolution:
         assert asyncio.run(store.count()) == 1
 
 
+class TestPlainTextStore:
+    """Facts stored while embeddings are unavailable live in a store with no
+    vector table. Deletion has to work there — otherwise the exact moment the
+    embedder is down is the moment nothing can be forgotten."""
+
+    def _plain_store_with_one_fact(self, tmp_path, monkeypatch):
+        store = _make_store(tmp_path, monkeypatch)
+        conn = sqlite3.connect(str(tmp_path / "localmind.db"))
+        conn.execute("DROP TABLE IF EXISTS vector_embeddings")
+        conn.execute(
+            "INSERT INTO vector_facts (id, content, metadata) VALUES (?, ?, ?)",
+            ("plainfact0000001", "I prefer concise answers", json.dumps({"memory_key": "k"})),
+        )
+        conn.commit()
+        conn.close()
+        return store
+
+    def test_forget_by_id_survives_a_missing_vector_table(self, tmp_path, monkeypatch):
+        store = self._plain_store_with_one_fact(tmp_path, monkeypatch)
+        assert asyncio.run(store.forget_by_id("plainfact0000001")) is True
+        assert asyncio.run(store.count()) == 0
+
+    def test_forget_by_content_survives_a_missing_vector_table(self, tmp_path, monkeypatch):
+        store = self._plain_store_with_one_fact(tmp_path, monkeypatch)
+        assert asyncio.run(store.forget("I prefer concise answers")) is True
+        assert asyncio.run(store.count()) == 0
+
+
 class TestReadBack:
     def test_get_fact_accepts_a_prefix(self, tmp_path, monkeypatch):
         store = _make_store(tmp_path, monkeypatch)
