@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260917T123840Z-Buffy-d834569d",
+  "type": "claim",
+  "session": "S014",
+  "agent": "Buffy",
+  "created": "2026-09-17T12:38:40Z",
+  "issue": "memory-write-path",
+  "body": "Solo light path (roster empty, current.md idle at arrival). Taking the top of the backlog queue: the typed memory write path. Scope: durability policy in the write path, one row per fact by key, read-back confirmations, deletion that resolves id/prefix/content/key, id-bearing list. Claim emitted late (after the first product commit) - logged as this session's protocol miss.",
+  "paths": ["backend/src/tools/memory_tool.py", "backend/src/storage/vector.py", "backend/src/core/memory_intent.py", "backend/src/core/memory.py", "backend/src/core/engine/_memory_mixin.py", "scripts/live_test_memory_write_path.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
