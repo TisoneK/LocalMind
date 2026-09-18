@@ -256,3 +256,17 @@ re-seeded into the new office explicitly, and nothing else carries over.
   `office/sessions/2026-09-17-14/evidence/routing/` (before/after results,
   server logs, turn-1/turn-3 SSE).
 - **Report:** `.context_ledger/memory/office/reviews/2026-09-18-review-s14-routing.md`
+- **Gate (exit, 2026-09-18):** pre-commit gate green before every commit. Exit legs:
+  ruff / conflict-markers / tsc / eslint (0 errors, exactly the 53 allowed
+  pre-existing warnings) / bookkeeping all PASSED. The pytest leg exited 1 on
+  24 failures = the 22-node baseline + 2 non-baseline
+  (`test_workspace_state::test_snapshot_diff_since_mark_turn_start` — a
+  test-internal `git add.` shell typo creating a temp git repo — and
+  `test_browser_agent::test_read_reextracts_current_page_without_url`), BOTH
+  run at the pre-work revision `ea4ad038` and reproduced identically there:
+  environmental, not a regression (provenance per the S008 precedent; 3198
+  passed). Baseline refresh stays owned by B-2026-09-09-7 — not done here.
+  Evidence: `scratch/s014-exit/` (full log, per-leg outputs, the bisect run).
+- **Clock-out:** row removed in the closing ledger commit; both scratch
+  worktrees removed; no branch was created (all work landed on main per push
+  policy).

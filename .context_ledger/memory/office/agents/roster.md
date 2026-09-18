@@ -36,7 +36,6 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Buffy | S014 | unknown | engineer — shipped the deterministic memory read/delete routing (follow-up to the typed write path) | Done | Shipped: reads/deletes answer from the store with zero model calls; re-worded forget now matches the stored row; live before/after on zai/glm-4.5-flash (`58ffec18`) |
 | Nia | S015 | deepseek/deepseek-v4-pro | engineer — planning the configurable AI connections layer (settings-driven provider endpoints instead of product-code providers) | Working | Architecture assessment delivered to owner; design parked as P-2026-09-18-1 awaiting approval to build |
 
 **Clock out when your session ends**: remove your row in the closing
