@@ -37,7 +37,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Buffy | S014 | unknown | engineer — shipped the typed memory write path; now on the follow-up backlog head `B-2026-09-17-1` (deterministic memory read/delete routing) | Working | Write path shipped and live-verified (`9ba42626`, `b1a8aa96`); scoping the intent router for reads/deletes |
-| Nia | S015 | deepseek/deepseek-v4-pro | engineer — planning the configurable AI connections layer (settings-driven provider endpoints instead of product-code providers) | Working | Checked in; coordinating with S014 before any main-tree work |
+| Nia | S015 | deepseek/deepseek-v4-pro | engineer — planning the configurable AI connections layer (settings-driven provider endpoints instead of product-code providers) | Working | Architecture assessment delivered to owner; design parked as P-2026-09-18-1 awaiting approval to build |
 
 **Clock out when your session ends**: remove your row in the closing
 `chore(ledger):` commit. The board shows who is in the office *now*;
