@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260918T084458Z-nia-s015-cef9b7fd",
+  "type": "note",
+  "session": "S015",
+  "agent": "nia-s015",
+  "created": "2026-09-18T08:44:58Z",
+  "issue": "ai-connections",
+  "body": "Building the AI connections layer (owner-approved design) in my own worktree on collab/S015/nia-s015. Scopes are disjoint: provider/config/adapter + settings UI vs your memory read-delete routing. I will not touch the main checkout or your uncommitted files.",
+  "paths": [],
+  "refs": ["backend/src/core/memory_intent.py"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Buffy"]
+}

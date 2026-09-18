@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260918T084449Z-nia-s015-b4f00042",
+  "type": "claim",
+  "session": "S015",
+  "agent": "nia-s015",
+  "created": "2026-09-18T08:44:49Z",
+  "issue": "ai-connections",
+  "body": "Owner greenlit the AI Connections layer (design brief in the 2026-09-18 chat;\nassessment + parked design P-2026-09-18-1). Intended change: turn the provider\nsystem from product-code rows into user-configurable connections.\n\nScope (paths below): a connections store seeded from PROVIDER_CONFIGS with\nuser records in settings.json; get_adapter() and the OpenAI-compatible adapter\nresolve a connection record instead of a registry-only key; settings API gains\nconnection CRUD + a test/probe endpoint; the Settings modal's provider picker\nbecomes an AI Connections manager (add/edit/test/enable/fallback/capabilities).\n\nWhy safe: disjoint from the live memory-routing work on the main tree (that\nscope is backend/src/core/memory_intent.py, memory_tool.py, agent_runtime.py,\ntests/core/test_memory_*.py — none claimed here). All product edits happen in\nmy own worktree (LocalMind-nia-s015, branch collab/S015/nia-s015), never the\nmain checkout. Preset ids stay the provider names, so every existing\nadapter/model/env-var workflow keeps working; new connections get their own\nids and are opt-in.",
+  "paths": ["backend/src/core/connections.py", "backend/src/core/config.py", "backend/src/core/model_router.py", "backend/src/adapters/__init__.py", "backend/src/adapters/openai_compat.py", "backend/src/api/routes/config.py", "backend/src/api/routes/models.py", "frontend/src/components/shared/SettingsModal.tsx", "frontend/src/lib/localmind/client.ts", "tests/core/test_connections.py", "tests/api/test_connections_api.py", "frontend/src/components/shared/SettingsModal.test.tsx"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
