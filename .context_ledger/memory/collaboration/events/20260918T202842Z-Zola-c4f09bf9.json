@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260918T202842Z-Zola-c4f09bf9",
+  "type": "note",
+  "session": "ledger-sync-20260918",
+  "agent": "Zola",
+  "created": "2026-09-18T20:28:42Z",
+  "issue": "pull-sync-context",
+  "body": "Pull + core sync only (no product code) — pulling latest, verifying/checking vendored core drift, bookkeeping. Disjoint from your connections-layer planning work; not touching anything under backend/ or frontend/.",
+  "paths": [],
+  "refs": [".context_ledger/memory"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Nia"]
+}

@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260918T202848Z-Zola-580b944f",
+  "type": "claim",
+  "session": "ledger-sync-20260918",
+  "agent": "Zola",
+  "created": "2026-09-18T20:28:48Z",
+  "issue": "pull-sync-context",
+  "body": "Ledger-only sync session: pull --ff-only, ledger-sync verify/status, session log + roster clock-out. No product paths touched.",
+  "paths": [".context_ledger/memory/office/agents/roster.md", ".context_ledger/memory/office/agents/sessions.md", ".context_ledger/memory/office/tasks/current.md"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
