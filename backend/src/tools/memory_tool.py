@@ -106,10 +106,99 @@ def _distill_fact(message: str, fact: str) -> tuple[str | None, str | None]:
     )
 
 
+def _normalize_operation(operation: str | None) -> str:
+    """Map an explicit operation onto store | list | recall | forget.
+
+    The schema advertises store/recall/forget/list; the model and the
+    classifier both add near-synonyms. Anything unrecognised becomes "" so the
+    caller falls back to reading the sentence rather than reaching the store.
+    """
+    op = (operation or "").strip().lower()
+    if op in ("list", "facts", "memory", "memories"):
+        return "list"
+    if op in ("store", "recall", "forget"):
+        return op
+    if op in ("delete", "remove"):
+        return "forget"
+    if op in ("search", "find"):
+        return "recall"
+    return ""
+
+
+def _forget_target(message: str, content: str | None) -> str:
+    """What a delete should aim at: the caller's target, else the sentence's.
+
+    A discourse marker ("forget THAT I prefer dark mode") is part of the
+    sentence, not of the stored fact, so it goes too.
+    """
+    if content and content.strip():
+        return content.strip()
+    return re.sub(
+        r"^\s*(?:forget|delete|remove)\b\s*(?:that\s+|about\s+|the fact that\s+)?",
+        "",
+        message,
+        flags=re.IGNORECASE,
+    ).strip()
+
+
+async def _recall_matching(store, query: str) -> ToolResult:
+    """Keyword-match `query` over the stored facts, embeddings or not.
+
+    Token or prefix overlap ("prefer" ~ "preferences") is deliberate: the
+    fallback store has no embeddings, so a semantic search can't find its rows.
+    """
+    q_words = set(re.findall(r"\w+", query.lower()))
+    if not q_words:
+        return await _recall_recent(store)
+    facts = await store.list_all_with_metadata()
+    scored = []
+    for f in facts:
+        f_text = str(f.get("fact", "")).lower()
+        f_words = set(re.findall(r"\w+", f_text))
+        if not f_words:
+            continue
+        matched = 0
+        for qw in q_words:
+            if qw in f_words:
+                matched += 1
+            elif any(qw.startswith(fw) or fw.startswith(qw) for fw in f_words):
+                matched += 1
+        overlap = matched / max(1, len(q_words))
+        if overlap >= 0.4:  # at least ~half the query words match
+            scored.append((overlap, f["fact"]))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    top = [fact for _, fact in scored[:3]]
+    if not top:
+        # Fallback: when nothing matches, surface the most recent facts
+        # rather than an empty miss — better than telling the user
+        # there's nothing when the store has content.
+        recent = [f["fact"] for f in facts[-3:]]
+        if recent:
+            body = (
+                "I couldn't find a specific match, but here's what I have "
+                "stored recently:\n" + "\n".join(f"- {f}" for f in reversed(recent))
+            )
+        else:
+            body = "I couldn't find anything matching that in memory."
+        return ToolResult(
+            content=body,
+            risk=RiskLevel.LOW,
+            source="memory",
+            metadata={"match_count": 0},
+        )
+    return ToolResult(
+        content="**From memory:**\n" + "\n".join(f"- {f}" for f in top),
+        risk=RiskLevel.LOW,
+        source="memory",
+        metadata={"match_count": len(top)},
+    )
+
+
 async def memory_op(
     message: str,
     content: str | None = None,
     memory_type: str | None = None,
+    operation: str | None = None,
 ) -> ToolResult:
     """
     Store, recall, or delete facts from persistent semantic memory.
@@ -124,17 +213,54 @@ async def memory_op(
         memory_type: optional category tag (user_preference / user_fact /
             source_knowledge / project_decision / general). Falls back to
             "semantic" when not provided.
+        operation: explicit operation (store | list | recall | forget).
+            When given it WINS over the prose patterns below: the caller
+            already decided, and re-reading the sentence for cues is how a
+            listing once landed in the store ("show me my memory" matches no
+            listing pattern here, fell through, and was persisted as a fact).
     """
     from storage.vector import VectorStore
 
     store = VectorStore()
 
+    # An explicit operation is the caller's decision — normalise the aliases
+    # the schema and the model use, and ignore anything unrecognised so a
+    # garbled value falls back to the sentence instead of the store path.
+    _op = _normalize_operation(operation)
+    # An explicit "store" skips the prose cues entirely: "remember to delete
+    # that file tomorrow" contains a delete cue, so re-reading the sentence
+    # would route a write to the forget branch.
+    _use_cues = not _op
+    if _op == "list":
+        return await _list_facts(store)
+    if _op == "forget":
+        fact = _forget_target(message, content)
+        if fact:
+            return await _forget_with_read_back(store, fact)
+        return ToolResult(
+            content=(
+                "Tell me which fact to remove — for example \"forget that I prefer dark mode\" "
+                "or \"forget #3f2a91cd\" from the list."
+            ),
+            risk=RiskLevel.LOW,
+            source="memory",
+        )
+    if _op == "recall":
+        query = (content or "").strip()
+        if query:
+            return await _recall_matching(store, query)
+        return await _recall_recent(store)
+
+    # No explicit operation: read the sentence's own cues. This is the path the
+    # MODEL's tool calls take — the dispatcher hands us "<operation> <content>"
+    # — so it stays exactly as it was for those callers.
+    #
     # A bare operation word is that operation, not a fact to store.
     _bare = _BARE_OP_RE.match(message.strip())
     _bare_word = _bare.group(1).lower() if _bare else ""
-    if _bare_word == "recall":
+    if _use_cues and _bare_word == "recall":
         return await _recall_recent(store)
-    if _bare_word == "forget":
+    if _use_cues and _bare_word == "forget":
         return ToolResult(
             content=(
                 "Which fact should I remove? Ask me to list memory and give me its id, "
@@ -143,7 +269,7 @@ async def memory_op(
             risk=RiskLevel.LOW,
             source="memory",
         )
-    if _bare_word == "store":
+    if _use_cues and _bare_word == "store":
         return ToolResult(
             content="What should I remember? Give me the fact and I'll keep it.",
             risk=RiskLevel.LOW,
@@ -151,20 +277,12 @@ async def memory_op(
         )
 
     # ── List all facts ────────────────────────────────────────────────────
-    if _LIST_PAT.search(message) or _bare_word in _LIST_WORDS:
+    if _use_cues and (_LIST_PAT.search(message) or _bare_word in _LIST_WORDS):
         return await _list_facts(store)
 
     # ── Forget a fact ─────────────────────────────────────────────────────
-    if _FORGET_PAT.search(message):
-        # Extract what to forget — everything after the trigger word. A
-        # discourse marker ("forget THAT I prefer dark mode") is part of the
-        # sentence, not of the stored fact, so it goes too.
-        fact = re.sub(
-            r"^\s*(?:forget|delete|remove)\b\s*(?:that\s+|about\s+|the fact that\s+)?",
-            "",
-            message,
-            flags=re.IGNORECASE,
-        ).strip()
+    if _use_cues and _FORGET_PAT.search(message):
+        fact = _forget_target(message, None)
         if fact:
             return await _forget_with_read_back(store, fact)
         return ToolResult(
@@ -184,59 +302,10 @@ async def memory_op(
     # Bare "recall" (no query content) — the model sometimes emits the
     # operation without a query. Never fall through to STORE for a recall
     # intent: surface recent facts instead.
-    if message.strip().lower().startswith("recall") and not _recall_m:
+    if _use_cues and message.strip().lower().startswith("recall") and not _recall_m:
         return await _recall_recent(store)
-    if _recall_m:
-        query = _recall_m.group(1).strip()
-        q_words = set(re.findall(r"\w+", query.lower()))
-        if not q_words:
-            return await _recall_recent(store)
-        facts = await store.list_all_with_metadata()
-        scored = []
-        for f in facts:
-            f_text = str(f.get("fact", "")).lower()
-            f_words = set(re.findall(r"\w+", f_text))
-            if not f_words:
-                continue
-            # Match on exact tokens OR prefix overlap ("prefer" ~
-            # "preferences") so recalls work without embeddings.
-            matched = 0
-            for qw in q_words:
-                if qw in f_words:
-                    matched += 1
-                elif any(qw.startswith(fw) or fw.startswith(qw) for fw in f_words):
-                    matched += 1
-            overlap = matched / max(1, len(q_words))
-            if overlap >= 0.4:  # at least ~half the query words match
-                scored.append((overlap, f["fact"]))
-        scored.sort(key=lambda x: x[0], reverse=True)
-        top = [fact for _, fact in scored[:3]]
-        if not top:
-            # Fallback: when nothing matches, surface the most recent facts
-            # rather than an empty miss — better than telling the user
-            # there's nothing when the store has content.
-            recent = [f["fact"] for f in facts[-3:]]
-            if recent:
-                content = (
-                    "I couldn't find a specific match, but here's what I have "
-                    "stored recently:\n"
-                    + "\n".join(f"- {f}" for f in reversed(recent))
-                )
-            else:
-                content = "I couldn't find anything matching that in memory."
-            return ToolResult(
-                content=content,
-                risk=RiskLevel.LOW,
-                source="memory",
-                metadata={"match_count": 0},
-            )
-        content = "**From memory:**\n" + "\n".join(f"- {f}" for f in top)
-        return ToolResult(
-            content=content,
-            risk=RiskLevel.LOW,
-            source="memory",
-            metadata={"match_count": len(top)},
-        )
+    if _use_cues and _recall_m:
+        return await _recall_matching(store, _recall_m.group(1).strip())
 
     # ── Store a fact ──────────────────────────────────────────────────────
     # Use the classifier's extraction when provided — it handles

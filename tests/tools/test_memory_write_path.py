@@ -14,6 +14,7 @@ confirmation built from a read-back of the state it left behind.
 from __future__ import annotations
 
 import hashlib
+import json
 from unittest.mock import patch
 
 import pytest
@@ -109,17 +110,17 @@ class _FakeStore:
         return len(self.facts)
 
     def matching_ids(self, target):
-        from storage.vector import _content_signature
+        # Same ladder the real store runs — the tool must resolve a delete
+        # identically whether the store is real or faked.
+        from storage.vector import _matching_ids_in_rows
 
-        norm = _content_signature(target)
-        if not norm:
-            return []
-        return [
-            f["id"]
+        rows = [
+            {"id": f["id"], "content": f["fact"], "metadata": json.dumps(
+                {"memory_key": f["memory_key"]} if f.get("memory_key") else {}
+            )}
             for f in self.facts
-            if _content_signature(f["fact"]) == norm
-            or (len(norm) >= 12 and _content_signature(f["fact"]).startswith(norm))
         ]
+        return _matching_ids_in_rows(rows, target)
 
     async def get_fact(self, fact_id):
         for f in self.facts:
@@ -248,6 +249,55 @@ class TestStorePath:
 
 
 class TestForgetPath:
+    @pytest.mark.asyncio
+    async def test_reworded_target_removes_the_stored_row(self):
+        # Live failure: the store wrote "The user prefers dark mode in their
+        # editor" but the user asks with their own words — "forget that I
+        # prefer dark mode". Signature matching needed the exact wording, so
+        # the deterministic delete reported a miss while the row sat there.
+        fake = _FakeStore(
+            [
+                {"id": "aaaaaaaaaaaaaaa1", "fact": "The user prefers dark mode in their editor."},
+                {"id": "bbbbbbbbbbbbbbb1", "fact": "The user's public IP is 41.90.44.19."},
+            ]
+        )
+        patcher, _ = _with_store(fake)
+        with patcher:
+            result = await memory_op("forget that I prefer dark mode")
+        assert fake.forgotten == ["aaaaaaaaaaaaaaa1"]
+        assert result.metadata["removed"] == 1
+        assert "Removed from memory" in result.content
+
+    @pytest.mark.asyncio
+    async def test_a_more_specific_row_is_not_loose_matched(self):
+        # "dark mode" must not reach a row about a dark-mode *keyboard* —
+        # the row describes something more specific than the target names.
+        fake = _FakeStore(
+            [
+                {"id": "aaaaaaaaaaaaaaa1", "fact": "The user prefers dark mode on their mechanical keyboard."},
+                {"id": "bbbbbbbbbbbbbbb1", "fact": "I prefer dark mode"},
+            ]
+        )
+        patcher, _ = _with_store(fake)
+        with patcher:
+            result = await memory_op("forget that I prefer dark mode")
+        assert fake.forgotten == ["bbbbbbbbbbbbbbb1"]
+        assert result.metadata["removed"] == 1
+
+    @pytest.mark.asyncio
+    async def test_vague_one_word_target_loose_matches_nothing(self):
+        fake = _FakeStore(
+            [
+                {"id": "aaaaaaaaaaaaaaa1", "fact": "The user prefers dark mode in their editor."},
+            ]
+        )
+        patcher, _ = _with_store(fake)
+        with patcher:
+            result = await memory_op("forget editor")
+        assert fake.forgotten == []
+        assert result.metadata["removed"] == 0
+        assert "Nothing in memory matches" in result.content
+
     @pytest.mark.asyncio
     async def test_all_matching_facts_are_removed_and_counted(self):
         fake = _FakeStore(

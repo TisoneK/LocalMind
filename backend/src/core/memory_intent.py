@@ -109,28 +109,92 @@ _WRITE_CUES = [
 ]
 _WRITE_RE = re.compile("|".join(_WRITE_CUES), re.IGNORECASE)
 
-# Patterns that signal a memory-read request
+# Patterns that signal a memory-read request.
+#
+# A read is routed straight to the store, so these patterns must mean "the
+# stored facts about me" and not merely contain the words. "What do you know
+# about Python?" is a general-knowledge question that must reach the model;
+# "What do you know about me?" / "What do you remember?" is the store. The
+# lookahead rejects an "about <anything but me/my>" tail for exactly that
+# reason.
 _READ_CUES = [
-    r"\bwhat\s+do\s+you\s+(?:know|remember)\b",
+    r"\bwhat\s+do\s+you\s+(?:know|remember)\b(?!\s+about\s+(?!me\b|myself\b|us\b|my\s+(?:memory|memories|facts?)\b))",
     r"\blist\s+(?:all\s+|my\s+)?(?:facts?|memory|memories)\b",
     r"\bshow\s+(?:me\s+)?(?:my\s+)?memory\b",
-    r"\brecall\s+(?:all|everything|what)\b",
-    r"\bwhat\s+have\s+you\s+remembered\b",
+    r"\brecall\s+(?:all\b|everything\b|(?:my\s+)?(?:memory|memories|facts?)\b)",
+    r"\bwhat\s+have\s+you\s+(?:remembered|stored)\b",
 ]
 _READ_RE = re.compile("|".join(_READ_CUES), re.IGNORECASE)
 
-# Patterns that signal a memory-delete request
+# Patterns that signal a memory-delete request.
 # Note: "don't forget" is a WRITE cue, NOT a delete. We only match
 # "forget" as a standalone command (optionally preceded by "please"),
 # not when it's part of "don't forget" / "do not forget".
+#
+# Delete is the dangerous route: it is deterministic (the model never sees the
+# turn), and "delete that" / "remove this" is ordinary file-and-code language.
+# So a bare "delete/remove <that|this|my>" is NOT enough — the target must name
+# memory itself ("delete that memory", "remove this fact from memory").
 _DELETE_CUES = [
     r"(?:^|\.\s+|!\s+)\s*(?:please\s+)?forget\s+",
-    r"\bdelete\s+(?:that|this|my)\b",
-    r"\bremove\s+(?:that|this|from\s+memory)\b",
-    r"\bdon'?t\s+use\s+\S+\s+anymore\b",
+    r"\b(?:delete|remove)\s+(?:that|this|my|the)\s+(?:memory|memories|fact|facts|entry|entries|note|notes)\b",
+    r"\b(?:delete|remove)\s+(?:that|this|it)\s+from\s+(?:my\s+)?memory\b",
+    r"\bdon'?t\s+use\s+.+?\s+anymore\b",
     r"\bstop\s+remembering\b",
 ]
 _DELETE_RE = re.compile("|".join(_DELETE_CUES), re.IGNORECASE)
+
+# "Forget that." / "forget that, let's move on" references the PRIOR TURN —
+# the demonstrative is punctuation-pinned discourse, not a named fact. These
+# fall through to the model, which has the conversation and can act on it.
+_DELETE_DISCOURSE_RE = re.compile(
+    r"\b(?:forget|delete|remove)\s+(?:that|this|it)\b\s*[,.!?;]", re.IGNORECASE
+)
+
+# Tokens that carry no fact of their own: discourse pronouns, and the memory
+# words the delete cue is built from.
+_DELETE_TARGET_FILLER = frozenset(
+    {
+        "it",
+        "that",
+        "this",
+        "them",
+        "those",
+        "these",
+        "all",
+        "everything",
+        "anything",
+        "memory",
+        "memories",
+        "fact",
+        "facts",
+        "entry",
+        "entries",
+        "note",
+        "notes",
+        "of",
+        "from",
+        "about",
+        "my",
+        "the",
+        "a",
+        "an",
+        "and",
+        "in",
+    }
+)
+
+
+def _delete_target_names_a_fact(content: str) -> bool:
+    """True when a delete target names something that could be removed.
+
+    "Forget it" / "forget that, let's move on" drops the *topic*; "delete that
+    memory" still needs its target. A deterministic delete needs a nameable
+    fact, so those messages fall through to the model rather than reaching the
+    store and coming back as a miss.
+    """
+    words = re.findall(r"[a-z0-9]+", (content or "").lower())
+    return any(word not in _DELETE_TARGET_FILLER for word in words)
 
 # Source-knowledge detection — "remember this site/website/source for X"
 _SOURCE_KNOWLEDGE_CUES = [
@@ -562,18 +626,32 @@ def classify_memory_intent(message: str) -> MemoryWriteIntent:
 
     # Check for delete first (most specific)
     if _DELETE_RE.search(message):
+        # Strip the cue verb AND the discourse demonstratives that can ride
+        # right behind it ("forget THAT I prefer dark mode"). The demonstrative
+        # is part of the sentence, not of the stored fact — leaving it in made
+        # the deterministic target "that I prefer dark mode", whose signature
+        # can never match the stored "I prefer dark mode", so the delete
+        # always reported a miss on the most natural phrasing.
         content = re.sub(
-            r"^\s*(forget|delete|remove|don'?t\s+use|stop\s+remembering)\s+",
+            r"^\s*(forget|delete|remove|don'?t\s+use|stop\s+remembering)\s+"
+            r"(?:(?:that|this|it|them|about|the\s+fact\s+that)\s+)*",
             "",
             message,
             flags=re.IGNORECASE,
         ).strip()
-        return MemoryWriteIntent(
-            is_write=False,
-            operation=MemoryOperation.DELETE,
-            content=content,
-            raw_message=message,
-        )
+        # A demonstrative pinned by punctuation ("forget that, let's move on")
+        # references the prior turn — the model owns it, not the store.
+        if _DELETE_DISCOURSE_RE.search(message):
+            pass  # fall through to read/write checks below
+        # Only a target that actually names a fact is a store deletion; a
+        # discourse marker is a topic change, not a memory operation.
+        elif _delete_target_names_a_fact(content):
+            return MemoryWriteIntent(
+                is_write=False,
+                operation=MemoryOperation.DELETE,
+                content=content,
+                raw_message=message,
+            )
 
     # Check for read
     if _READ_RE.search(message):

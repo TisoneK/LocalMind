@@ -209,7 +209,7 @@ class TestRuntimeMemoryWriteResolution:
 
         stored = {}
 
-        def fake_memory_op(message, content=None, memory_type=None):
+        def fake_memory_op(message, content=None, memory_type=None, operation=None):
             stored["content"] = content
             stored["type"] = memory_type
             result = MagicMock()
@@ -253,7 +253,7 @@ class TestRuntimeMemoryWriteResolution:
 
         memory_op_calls = []
 
-        def fake_memory_op(message, content=None, memory_type=None):
+        def fake_memory_op(message, content=None, memory_type=None, operation=None):
             memory_op_calls.append(content)
             result = MagicMock()
             result.success = True

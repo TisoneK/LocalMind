@@ -265,6 +265,85 @@ def _content_signature(text: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", (text or "").lower())).strip()
 
 
+# Words that are grammar or the app's/user's voice, not the fact's content:
+# "forget that I prefer dark mode" aims at the same row the store wrote as
+# "The user prefers dark mode in their editor" — the pronouns, determiners,
+# prepositions and the framing noun "user" differ, the skeleton does not.
+# Everything else (nouns, verbs, adjectives, values) must agree.
+_FRAMING_WORDS = frozenset(
+    {
+        "a", "an", "the",
+        "i", "me", "my", "we", "us", "our", "you", "your",
+        "he", "him", "his", "she", "her", "it", "its", "they", "them", "their",
+        "user", "users",
+        "in", "on", "at", "to", "for", "with", "of", "from", "by",
+        "is", "are", "am", "was", "were", "be", "been", "being",
+        "has", "have", "had", "do", "does", "did",
+        "and", "or", "but", "that", "this", "these", "those",
+        "s",  # possessive residue after punctuation stripping ("user's" -> "user s")
+    }
+)
+
+
+def _content_core(text: str) -> frozenset:
+    """The fact's skeleton: signature words minus grammar, stems plural-s-only.
+
+    The stemming is deliberately shallow and symmetric ("prefer"/"prefers",
+    "mode"/"modes") — a real morphology pass is out of scope, and a symmetric
+    heuristic that never invents a word cannot make two different facts equal.
+    """
+    words = set(_content_signature(text).split()) - _FRAMING_WORDS
+    return frozenset(w[:-1] if len(w) > 3 and w.endswith("s") else w for w in words)
+
+
+def _matching_ids_in_rows(rows, target: str) -> list[str]:
+    """Which of `rows` (id/content/metadata mappings) does `target` name?
+
+    Tiers, tightest first:
+    1. exact normalised content, or a long normalised prefix the user quoted;
+    2. the row's memory_key appearing in the target;
+    3. word-overlap: every content word the user named sits on the row, and
+       the row adds at most two content words the target never mentioned —
+       the app's voice tail ("in their editor"), not a different fact. More
+       than two means the row describes something more specific than the
+       target names, so this tier leaves it alone ("forget X" re-worded used
+       to match nothing while the fact sat in the store).
+    Tier 3 runs only when the tight tiers found nothing, so a loose match can
+    never widen a precise one. Anything looser than this risks deleting facts
+    the user never asked about.
+    """
+    norm = _content_signature(target)
+    if not norm:
+        return []
+    target_core = _content_core(target)
+    ids: list[str] = []
+    overlap: list[tuple[int, str]] = []
+    for row in rows:
+        content_sig = _content_signature(row["content"])
+        if content_sig == norm or (len(norm) >= 12 and content_sig.startswith(norm)):
+            ids.append(row["id"])
+            continue
+        try:
+            key = str((json.loads(row["metadata"]) or {}).get("memory_key") or "")
+        except (ValueError, TypeError):
+            key = ""
+        if key and _content_signature(key) in norm:
+            ids.append(row["id"])
+            continue
+        if not target_core:
+            continue
+        row_core = _content_core(row["content"])
+        extra = row_core - target_core
+        if not extra and target_core <= row_core:
+            overlap.append((0, row["id"]))
+        elif target_core <= row_core and len(extra) <= 2:
+            overlap.append((len(extra), row["id"]))
+    if overlap and not ids:
+        overlap.sort()
+        ids = [fact_id for _, fact_id in overlap]
+    return ids
+
+
 @lru_cache(maxsize=4096)
 def _embed_cached(norm_text: str, mode: str, url: str, model: str) -> tuple:
     """
@@ -1287,13 +1366,10 @@ class VectorStore:
     def matching_ids(self, target: str) -> list[str]:
         """Ids whose content or key describes `target`.
 
-        Deliberately narrow: exact normalized content, or a long normalized
-        prefix the user quoted, or a key match. Anything looser risks deleting
-        facts the user never asked about.
+        Delegates to the module-level ladder (shared with the tool-level fake
+        store so both resolve a delete the same way): exact/prefix content,
+        then key, then a conservative word-overlap tier.
         """
-        norm = _content_signature(target)
-        if not norm:
-            return []
         try:
             rows = (
                 self._connect()
@@ -1302,19 +1378,7 @@ class VectorStore:
             )
         except Exception:
             return []
-        ids: list[str] = []
-        for row in rows:
-            content_sig = _content_signature(row["content"])
-            if content_sig == norm or (len(norm) >= 12 and content_sig.startswith(norm)):
-                ids.append(row["id"])
-                continue
-            try:
-                key = str((json.loads(row["metadata"]) or {}).get("memory_key") or "")
-            except (ValueError, TypeError):
-                key = ""
-            if key and _content_signature(key) in norm:
-                ids.append(row["id"])
-        return ids
+        return _matching_ids_in_rows(rows, target)
 
     async def get_fact(self, fact_id: str) -> Optional[dict]:
         """Read one fact back by id — the read-back half of a mutation.

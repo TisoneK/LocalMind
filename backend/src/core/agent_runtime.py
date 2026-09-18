@@ -518,6 +518,74 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             file_type=content_type,
         )
 
+    async def _finish_memory_turn(
+        self,
+        session_id: str,
+        collector: ObsCollector,
+        text: str,
+        *,
+        message: str,
+        filename: Optional[str] = None,
+        original_path: Optional[str] = None,
+        file: Optional[bytes] = None,
+        content_type: Optional[str] = None,
+        elapsed_ms: int = 0,
+    ) -> None:
+        """Persist and emit the close of a deterministic memory turn.
+
+        The memory branches answer from the store without the model, so they
+        owe the turn the same trail a normal one leaves: the user row, the
+        reply row, the runtime-done and turn-complete events, and the
+        observation the anomaly checks read.
+        """
+        await self._persist_user_before_reply(
+            session_id,
+            message,
+            filename=filename,
+            original_path=original_path,
+            file=file,
+            content_type=content_type,
+        )
+        self._persist_assistant(
+            session_id,
+            text,
+            thinking=None,
+            acknowledgement=None,
+            error=None,
+            tool_calls=None,
+            metrics={
+                "prompt_tokens": 0,
+                "completion_tokens": len(text) // 4,
+                "latency_ms": elapsed_ms,
+            },
+        )
+        collector.emit(
+            "agent_runtime_done",
+            agent="parent",
+            elapsed_ms=elapsed_ms,
+            response_chars=len(text),
+        )
+        collector.emit(
+            "turn_complete",
+            intent="memory_op",
+            confidence=1.0,
+            tokens_approx=len(text) // 4,
+            prompt_tokens_approx=0,
+            total_latency_ms=elapsed_ms,
+            memory_facts=0,
+            agent_mode=False,
+            provider_usage={},
+        )
+        self._store_observation(
+            session_id,
+            collector,
+            intent="memory_op",
+            confidence=1.0,
+            memory_hits=0,
+            context_tokens=0,
+            latency_ms=elapsed_ms,
+        )
+
     def _persist_assistant(
         self,
         session_id: str,
@@ -989,6 +1057,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     message,
                     content=_content_to_store or None,
                     memory_type=_memory_intent.memory_type.value,
+                    operation="store",
                 )
                 _memory_success = _mem_result.success
                 _response_text = _mem_result.content
@@ -1066,6 +1135,112 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 memory_hits=0,
                 context_tokens=0,
                 latency_ms=_gen_ms,
+            )
+            yield StreamChunk(text=_response_text, done=False)
+            yield StreamChunk(text="", done=True)
+            return
+
+        # Deterministic memory-READ path.
+        # A memory question asks for the STORE's contents; it is not an
+        # invitation to answer from the conversation. Live, "What do you know
+        # about me?" was answered from context — listing a public IP the write
+        # path had just refused to store — because a read intent reached the
+        # tool only when the model happened to choose it. Reads now take the
+        # write path's route: the reply IS the store's listing (ids included),
+        # or a plain "nothing stored yet" — never a fact the store does not
+        # hold.
+        if _memory_intent.is_read and not _pre_init_override.mode:
+            logger.info("[agent-runtime] deterministic memory-read")
+            collector.emit("agent_loop_start", intent="memory_op")
+            for _stage, _status in (
+                ("intent_classify", "memory_read"),
+                ("tool_select", "skipped"),
+                ("context_build", "memory_read"),
+            ):
+                collector.emit("stage_timing", stage=_stage, latency_ms=0, status=_status)
+            _gen_start = time.monotonic()
+            try:
+                from tools.memory_tool import memory_op as _mem_op
+
+                _mem_result = await _mem_op(message, operation="list")
+                _response_text = _mem_result.content
+            except Exception as _mem_exc:
+                logger.warning("[agent-runtime] memory-read failed: %s", _mem_exc)
+                _response_text = (
+                    "I couldn't read memory just now — nothing was changed. "
+                    "Ask me again in a moment."
+                )
+            _gen_ms = round((time.monotonic() - _gen_start) * 1000)
+            collector.emit(
+                "stage_timing", stage="generate", latency_ms=_gen_ms, status="done"
+            )
+            collector.emit(
+                "stage_timing", stage="execute", latency_ms=0, status="skipped"
+            )
+            await self._finish_memory_turn(
+                session_id,
+                collector,
+                _response_text,
+                message=message,
+                filename=filename,
+                original_path=original_path,
+                file=file,
+                content_type=content_type,
+                elapsed_ms=_gen_ms,
+            )
+            yield StreamChunk(text=_response_text, done=False)
+            yield StreamChunk(text="", done=True)
+            return
+
+        # Deterministic memory-DELETE path — same reasoning as the read above.
+        # "Forget X" must not wait on the model's tool choice, and the reply
+        # reports the store's state AFTER the removal (read back), so a delete
+        # that did not take can never be confirmed.
+        if _memory_intent.is_delete and not _pre_init_override.mode:
+            logger.info(
+                "[agent-runtime] deterministic memory-delete: target=%r",
+                _memory_intent.content[:80],
+            )
+            collector.emit("agent_loop_start", intent="memory_op")
+            for _stage, _status in (
+                ("intent_classify", "memory_delete"),
+                ("tool_select", "skipped"),
+                ("context_build", "memory_delete"),
+            ):
+                collector.emit("stage_timing", stage=_stage, latency_ms=0, status=_status)
+            _gen_start = time.monotonic()
+            try:
+                from tools.memory_tool import memory_op as _mem_op
+
+                _mem_result = await _mem_op(
+                    message,
+                    content=_memory_intent.content or None,
+                    operation="forget",
+                )
+                _response_text = _mem_result.content
+            except Exception as _mem_exc:
+                logger.warning("[agent-runtime] memory-delete failed: %s", _mem_exc)
+                _response_text = (
+                    "I couldn't reach memory just now, so nothing was removed. "
+                    "Ask me again in a moment."
+                )
+            _gen_ms = round((time.monotonic() - _gen_start) * 1000)
+            collector.emit(
+                "stage_timing", stage="generate", latency_ms=_gen_ms, status="done"
+            )
+            collector.emit(
+                "stage_timing", stage="execute", latency_ms=0, status="skipped"
+            )
+            await self._finish_memory_turn(
+                session_id,
+                collector,
+                _response_text,
+                message=message,
+                filename=filename,
+                original_path=original_path,
+                file=file,
+                content_type=content_type,
+                elapsed_ms=_gen_ms,
             )
             yield StreamChunk(text=_response_text, done=False)
             yield StreamChunk(text="", done=True)
