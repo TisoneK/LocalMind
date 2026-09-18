@@ -60,6 +60,7 @@ async def _list_models_for_provider(provider: str) -> dict:
     provider's /models endpoint is unreachable or no API key is saved.
     """
     from adapters.openai_compat import PROVIDER_CONFIGS
+    from core.connections import get_connection_registry
 
     # Validate the provider ID
     if provider == "ollama":
@@ -67,11 +68,16 @@ async def _list_models_for_provider(provider: str) -> dict:
         # key-based provider. Return empty so the frontend hides the dropdown.
         return {"models": [], "current": "", "provider": "ollama"}
 
-    cfg = PROVIDER_CONFIGS.get(provider)
-    if not cfg:
+    connection = get_connection_registry().get(provider)
+    if connection is None:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
+    cfg = PROVIDER_CONFIGS.get(provider)
 
-    current_model = getattr(settings, _model_setting_attr(provider) or "", "") or ""
+    # The connection's declared model wins; presets fall back to the
+    # historical Settings field and the registry default.
+    current_model = connection.model or getattr(settings, _model_setting_attr(provider) or "", "") or ""
+    if not current_model and cfg is not None:
+        current_model = cfg.default_model
     model_options: list[dict] = []
 
     # Always include BOTH the provider's default model AND the currently
@@ -80,7 +86,7 @@ async def _list_models_for_provider(provider: str) -> dict:
     # (e.g. glm-4.5-flash, the free one) was never shown. This meant users
     # couldn't switch back to the free default from the dropdown.
     seen_ids: set[str] = set()
-    for model_id in (cfg.default_model, current_model):
+    for model_id in ((cfg.default_model if cfg else ""), current_model):
         if model_id and model_id not in seen_ids:
             model_options.append(
                 {"id": model_id, "name": model_id, "provider": provider, "size": "Cloud"}
@@ -113,7 +119,7 @@ async def _list_models_for_provider(provider: str) -> dict:
 
     return {
         "models": model_options,
-        "current": current_model or cfg.default_model,
+        "current": current_model or (cfg.default_model if cfg else ""),
         "provider": provider,
     }
 

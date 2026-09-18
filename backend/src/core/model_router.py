@@ -78,9 +78,10 @@ def parse_agent_spec(spec: str) -> tuple[str, str] | None:
     if ":" in spec:
         prefix, _, rest = spec.partition(":")
         # Lazy import — adapters.openai_compat is heavy and pulls API keys.
-        from adapters.openai_compat import CLOUD_PROVIDER_NAMES
+        # Known adapter names are the AI-connection ids (presets + custom).
+        from core.connections import get_connection_registry
 
-        if prefix == "ollama" or prefix in CLOUD_PROVIDER_NAMES:
+        if prefix == "ollama" or prefix in get_connection_registry().ids():
             return prefix, rest
     return settings.localmind_adapter, spec
 
@@ -262,27 +263,27 @@ def best_model_for(intent: Intent, fallback: str) -> str:
     """
     adapter_name = settings.localmind_adapter
 
-    # Cloud providers — use provider-specific model from settings.
-    # The provider→settings-field map is derived from PROVIDER_CONFIGS
-    # (single source of truth). No hardcoded provider list to drift.
+    # Cloud connections — resolve the model from the connection record,
+    # then the preset's Settings field, then the preset default. Preset ids
+    # are unchanged, so the historical resolution order holds for them.
     from adapters.openai_compat import PROVIDER_CONFIGS
+    from core.connections import get_connection_registry
 
-    provider_model_map = {
-        key: getattr(settings, cfg.settings_field, "")
-        for key, cfg in PROVIDER_CONFIGS.items()
-    }
-
-    if adapter_name in provider_model_map:
-        # Cloud provider selected — use configured model, or adapter default if not set
-        model = provider_model_map[adapter_name]
+    connection = get_connection_registry().get(adapter_name)
+    if connection is not None and connection.kind == "openai-compat":
+        cfg = PROVIDER_CONFIGS.get(adapter_name)
+        model = connection.model or (getattr(settings, cfg.settings_field, "") if cfg else "")
         if model:
             return model
-        # No model configured — get the adapter's default from PROVIDER_CONFIGS
-        if adapter_name in PROVIDER_CONFIGS:
-            return PROVIDER_CONFIGS[adapter_name].default_model
-        # Fallback shouldn't happen, but guard against misconfiguration
-        logger.warning(f"[model_router] no default model for adapter '{adapter_name}', using Ollama fallback")
-        # Don't fall through to Ollama logic — return a safe default
+        if cfg is not None:
+            return cfg.default_model
+        # A custom connection with no model — the adapter raises a clearer
+        # error at construction; fall through to the Ollama fallback here
+        # rather than returning an empty model to the loop.
+        logger.warning(
+            "[model_router] connection '%s' has no model configured — using the Ollama fallback",
+            adapter_name,
+        )
         return fallback
 
     # Ollama — use intent-based routing

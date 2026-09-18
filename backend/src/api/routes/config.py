@@ -6,12 +6,13 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from typing import Optional
 
 import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from adapters import clear_adapter_cache
 from core.config import settings
@@ -29,6 +30,11 @@ class SettingsResponse(BaseModel):
     # Whether the shell tool is enabled (was env-only, now UI-toggle).
     shell_enabled: bool = False
     providers: dict
+    # AI connections (preset providers + user-defined endpoints). Each entry:
+    # id, name, kind, base_url, model, protocol, capabilities, enabled,
+    # fallback_to, preset, api_key_set. The active adapter is one of these
+    # ids (or "ollama").
+    connections: list = Field(default_factory=list)
     # Reasoning-model thinking policy (z.ai/GLM).
     # Mirrored to the Settings UI so users can tune thinking without env vars.
     thinking: str = "enabled"
@@ -304,6 +310,39 @@ async def get_settings():
             "default_model": info["default_model"],
         }
 
+    # AI connections — the merged preset + user-defined list. The active
+    # connection sorts first so the UI can default to it; the rest follow
+    # registry order (presets, then custom) with disabled ones last.
+    from core.connections import get_connection_registry
+
+    registry = get_connection_registry()
+    all_connections = registry.all()
+    order: dict[str, int] = {}
+    for conn in all_connections:
+        rank = 0
+        if conn.id != adapter:
+            rank += 10
+        if not conn.enabled:
+            rank += 100
+        order[conn.id] = rank
+    ordered = sorted(all_connections, key=lambda c: (order.get(c.id, 0), registry.ids().index(c.id)))
+
+    connections = []
+    for conn in ordered:
+        connections.append({
+            "id": conn.id,
+            "name": conn.name,
+            "kind": conn.kind,
+            "base_url": conn.base_url,
+            "model": conn.model,
+            "protocol": conn.protocol,
+            "capabilities": conn.capabilities.to_dict(),
+            "enabled": conn.enabled,
+            "fallback_to": conn.fallback_to,
+            "preset": conn.preset,
+            "api_key_set": bool(settings.get_api_key(conn.id)),
+        })
+
     return SettingsResponse(
         adapter=adapter,
         model=current_model,
@@ -311,6 +350,7 @@ async def get_settings():
         num_ctx=int(getattr(settings, "ollama_num_ctx", 0) or 0),
         shell_enabled=bool(getattr(settings, "localmind_shell_enabled", False)),
         providers=providers,
+        connections=connections,
         thinking=settings.localmind_thinking,
         reasoning_timeout=settings.localmind_reasoning_timeout_secs,
         reasoning_plan_timeout=settings.localmind_reasoning_plan_timeout_secs,
@@ -476,14 +516,24 @@ async def set_local_settings(req: LocalSettingsRequest):
 @router.post("/settings/adapter")
 async def set_adapter(req: AdapterConfig):
     """
-    Switch to a different adapter (ollama, openai, anthropic, etc.).
+    Switch to a different adapter (ollama, a preset provider, or a custom
+    AI connection).
     """
-    valid_adapters = VALID_ADAPTERS
-    if req.adapter not in valid_adapters:
-        raise HTTPException(status_code=400, detail=f"Invalid adapter. Valid: {valid_adapters}")
+    from core.connections import get_connection_registry, invalidate_connection_registry
 
-    # For cloud providers, check if an API key is available.
-    # Check both runtime-stored keys (settings.json) and env vars.
+    registry = get_connection_registry()
+    connection = registry.get(req.adapter)
+    if connection is None:
+        raise HTTPException(status_code=400, detail=f"Invalid adapter. Valid: {sorted(registry.ids())}")
+    if not connection.enabled:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Connection '{connection.name}' is disabled — enable it in the AI Connections settings first.",
+        )
+
+    # For preset cloud providers, check if an API key is available (runtime
+    # storage or env var). Custom connections may legitimately run without a
+    # key (local gateways), so they skip the check.
     if req.adapter != "ollama":
         info = PROVIDER_INFO.get(req.adapter)
         if info:
@@ -499,42 +549,37 @@ async def set_adapter(req: AdapterConfig):
     # Clear adapter cache so new adapter is used for next request
     clear_adapter_cache()
 
-    # Resolve the model for this adapter: use the provided model, or fall
-    # back to the adapter's current model setting, or the provider default.
-    # Previously, calling set_adapter without a model saved model="" to
-    # settings.json, wiping any previously-saved model on restart.
-    # model_field is derived from ADAPTER_MODEL_FIELDS (single source of truth).
+    # Resolve the model: the explicitly requested model, then the
+    # connection's declared model, then the preset's saved model, then the
+    # preset default. For presets the resolved model persists through the
+    # historical Settings field; for custom connections it persists on the
+    # connection record itself.
     model_field = ADAPTER_MODEL_FIELDS.get(req.adapter)
     if model_field:
-        # Resolve the model in priority order: the explicitly requested model,
-        # then THIS provider's own saved model, then THIS provider's DEFAULT.
-        # The default fallback is load-bearing: switching provider without a
-        # model used to leave resolved_model="" when the new provider had no
-        # saved model, and save_runtime_settings PRESERVES an empty kwarg — so
-        # the top-level model kept the PREVIOUS provider's value (e.g. a
-        # Cerebras "gpt-oss-120b" stranded under the Gemini adapter, which then
-        # hit Gemini's free-tier limit). Falling through to the provider
-        # default makes an adapter switch always land on a valid model.
         resolved_model = (
             req.model
+            or connection.model
             or getattr(settings, model_field, "")
             or PROVIDER_INFO.get(req.adapter, {}).get("default_model", "")
         )
         if resolved_model:
             setattr(settings, model_field, resolved_model)
     else:
-        resolved_model = req.model or ""
+        resolved_model = req.model or connection.model or ""
 
     # Persist runtime settings to JSON file for restart survival.
-    # save_runtime_settings preserves existing values when a kwarg is empty,
-    # so passing model="" won't wipe a previously-saved model.
-    # Ollama persists under its DEDICATED ollama_model key (the
-    # generic `model` key is cloud-only on load), so an Ollama model survives a
-    # restart and a stale cloud model never loads as the Ollama model.
     if req.adapter == "ollama":
         settings.save_runtime_settings(adapter=req.adapter, ollama_model=resolved_model)
-    else:
+    elif model_field:
         settings.save_runtime_settings(adapter=req.adapter, model=resolved_model)
+    else:
+        # Custom connection — the model lives on the connection record.
+        record = connection.to_dict()
+        record["model"] = resolved_model
+        settings.save_connection_record(record)
+        settings.save_runtime_settings(adapter=req.adapter)
+        invalidate_connection_registry()
+        clear_adapter_cache()
 
     return {
         "adapter": settings.localmind_adapter,
@@ -556,24 +601,36 @@ async def set_provider_key(req: ProviderKeyRequest):
     temporarily unreachable. The `validated` field reflects the health
     check outcome.
     """
-    if req.provider not in PROVIDER_INFO:
-        raise HTTPException(status_code=400, detail=f"Unknown provider. Valid: {list(PROVIDER_INFO.keys())}")
+    if req.provider == "ollama":
+        raise HTTPException(status_code=400, detail="Ollama needs no API key.")
+    from core.connections import get_connection_registry
 
-    info = PROVIDER_INFO[req.provider]
+    connection = get_connection_registry().get(req.provider)
+    if connection is None:
+        valid = sorted(get_connection_registry().ids())
+        raise HTTPException(status_code=400, detail=f"Unknown provider. Valid: {valid}")
+
+    info = PROVIDER_INFO.get(req.provider, {"name": connection.name, "key_env": None})
 
     # Save the API key to runtime storage first — we want it persisted
     # even if the health check fails (user may be offline).
     settings.save_api_key(req.provider, req.api_key)
 
     # If a model was provided, persist it too so the adapter uses it
-    # on the next request. The settings field name comes from the derived
-    # ADAPTER_MODEL_FIELDS map (single source of truth in PROVIDER_CONFIGS),
-    # not from reconstructing it via string manipulation.
+    # on the next request. For presets that is the historical Settings
+    # field; for custom connections the model lives on the record.
     if req.model:
         model_field = ADAPTER_MODEL_FIELDS.get(req.provider, "")
         if model_field and hasattr(settings, model_field):
             setattr(settings, model_field, req.model)
             settings.save_runtime_settings(adapter=req.provider, model=req.model)
+        else:
+            from core.connections import invalidate_connection_registry
+
+            record = connection.to_dict()
+            record["model"] = req.model
+            settings.save_connection_record(record)
+            invalidate_connection_registry()
 
     # Run a health check against the provider to validate the key.
     # This is best-effort: a False result doesn't unsave the key.
@@ -629,9 +686,16 @@ async def delete_provider_key(req: DeleteProviderKeyRequest):
     endpoint allows the frontend to remove a key cleanly.
     """
     if req.provider not in PROVIDER_INFO:
-        raise HTTPException(status_code=400, detail=f"Unknown provider. Valid: {list(PROVIDER_INFO.keys())}")
+        from core.connections import get_connection_registry
 
-    info = PROVIDER_INFO[req.provider]
+        connection = get_connection_registry().get(req.provider)
+        if connection is None:
+            valid = sorted(get_connection_registry().ids())
+            raise HTTPException(status_code=400, detail=f"Unknown provider. Valid: {valid}")
+        info = {"name": connection.name}
+    else:
+        info = PROVIDER_INFO[req.provider]
+
     removed = settings.delete_api_key(req.provider)
 
     return {
@@ -640,6 +704,386 @@ async def delete_provider_key(req: DeleteProviderKeyRequest):
         "deleted": removed,
         "message": f"API key removed for {info['name']}" if removed else f"No API key was stored for {info['name']}",
     }
+
+
+# ── AI Connections — user-configurable endpoints ────────────────────────────
+# Preset providers + user-defined connections live in settings.json under
+# `connections` and overlay the seeded registry (core/connections.py). A new
+# endpoint — a gateway, a proxy, any OpenAI-compatible service — needs no
+# product-code change: add a connection here and switch to it.
+
+class ConnectionSaveRequest(BaseModel):
+    """Body for POST /api/settings/connections (create or update).
+
+    All fields optional for an update; a NEW connection (id not yet known)
+    requires id, name, base_url, and model.
+    """
+
+    id: Optional[str] = None
+    name: Optional[str] = None
+    kind: Optional[str] = None
+    base_url: Optional[str] = None
+    model: Optional[str] = None
+    protocol: Optional[str] = None
+    capabilities: Optional[dict] = None
+    enabled: Optional[bool] = None
+    fallback_to: Optional[str] = None
+
+
+_CAPABILITY_KEYS = ("streaming", "vision", "tool_calling", "structured_output", "context_window")
+
+
+def _validated_base_url(value: str) -> str:
+    value = (value or "").strip().rstrip("/")
+    if not value.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="base_url must start with http:// or https://")
+    return value
+
+
+@router.post("/settings/connections")
+async def save_connection(req: ConnectionSaveRequest):
+    """Create or update an AI connection.
+
+    Updating a preset stores an override record (the seed stays untouched;
+    deleting the record resets the preset). Creating a new connection adds
+    a user-defined endpoint with a fresh id.
+    """
+    from core.connections import (
+        get_connection_registry,
+        invalidate_connection_registry,
+        is_valid_connection_id,
+    )
+
+    registry = get_connection_registry()
+    existing = registry.get(req.id) if req.id else None
+
+    if existing is None:
+        # ── New custom connection ──
+        if not req.id or not is_valid_connection_id(req.id):
+            raise HTTPException(
+                status_code=400,
+                detail="New connections need an id: lowercase letters, digits and single dashes (e.g. 'atria-proxy').",
+            )
+        if req.id in registry.ids():
+            raise HTTPException(status_code=400, detail=f"A connection named '{req.id}' already exists.")
+        if not req.name or not req.name.strip():
+            raise HTTPException(status_code=400, detail="New connections need a name.")
+        if not req.base_url:
+            raise HTTPException(status_code=400, detail="New connections need a base URL.")
+        if not req.model or not req.model.strip():
+            raise HTTPException(status_code=400, detail="New connections need a model id.")
+        base_url = _validated_base_url(req.base_url)
+        record = {
+            "id": req.id,
+            "name": req.name.strip(),
+            "kind": "openai-compat",
+            "base_url": base_url,
+            "model": req.model.strip(),
+            "protocol": (req.protocol or "openai").strip(),
+            "capabilities": _validated_capabilities(req.capabilities),
+            "enabled": req.enabled if req.enabled is not None else True,
+            "fallback_to": (req.fallback_to or "").strip(),
+        }
+        message = f"Created connection '{req.name.strip()}'."
+    else:
+        # ── Update (preset override or custom edit) ──
+        record = existing.to_dict()
+        if req.name is not None:
+            if not req.name.strip():
+                raise HTTPException(status_code=400, detail="name cannot be empty.")
+            record["name"] = req.name.strip()
+        if req.base_url is not None:
+            record["base_url"] = _validated_base_url(req.base_url)
+        if req.model is not None:
+            record["model"] = req.model.strip()
+        if req.protocol is not None:
+            record["protocol"] = req.protocol.strip() or "openai"
+        if req.capabilities is not None:
+            caps = record.get("capabilities") or {}
+            caps.update(_validated_capabilities(req.capabilities))
+            record["capabilities"] = caps
+        if req.enabled is not None:
+            record["enabled"] = bool(req.enabled)
+        if req.fallback_to is not None:
+            record["fallback_to"] = (req.fallback_to or "").strip()
+        if req.kind is not None:
+            # Kind is structural (routes to the adapter family) — only the
+            # ollama preset uses "ollama"; refuse silent rewrites.
+            if req.kind not in ("openai-compat", "ollama"):
+                raise HTTPException(status_code=400, detail="kind must be 'openai-compat' or 'ollama'")
+            if req.kind != record.get("kind") and existing.preset:
+                raise HTTPException(status_code=400, detail="A preset connection's kind cannot be changed.")
+            record["kind"] = req.kind
+        message = f"Saved connection '{record['name']}'."
+
+    # A custom connection must end up with a model (presets may rely on
+    # their default).
+    if not existing and not record.get("model"):
+        raise HTTPException(status_code=400, detail="A connection needs a model id.")
+
+    settings.save_connection_record(record)
+    invalidate_connection_registry()
+    clear_adapter_cache(record["id"])
+    if record["id"] == settings.localmind_adapter:
+        clear_adapter_cache()
+
+    return {"connection": record, "message": message}
+
+
+def _validated_capabilities(capabilities: Optional[dict]) -> dict:
+    """Keep only the known capability keys, typed; reject nothing (unknown
+    keys are future-proofing noise from older/newer clients)."""
+    out: dict = {}
+    if not isinstance(capabilities, dict):
+        return out
+    for key in ("streaming", "vision", "tool_calling", "structured_output"):
+        if key in capabilities and isinstance(capabilities[key], bool):
+            out[key] = capabilities[key]
+    if "context_window" in capabilities:
+        try:
+            out["context_window"] = max(0, int(capabilities["context_window"]))
+        except (TypeError, ValueError):
+            pass
+    return out
+
+
+@router.delete("/settings/connections/{connection_id}")
+async def delete_connection(connection_id: str):
+    """Remove a custom connection, or reset a preset to its defaults."""
+    from core.connections import get_connection_registry, invalidate_connection_registry
+
+    registry = get_connection_registry()
+    connection = registry.get(connection_id)
+    if connection is None:
+        raise HTTPException(status_code=404, detail=f"No connection named '{connection_id}'.")
+    if connection.id == "ollama":
+        raise HTTPException(status_code=400, detail="The local Ollama connection cannot be deleted.")
+
+    removed = settings.delete_connection_record(connection_id)
+    invalidate_connection_registry()
+    clear_adapter_cache(connection_id)
+
+    if connection.preset:
+        message = f"Reset '{connection.name}' to its defaults."
+    else:
+        message = f"Deleted connection '{connection.name}'."
+        # Never leave the active adapter pointing at a deleted endpoint.
+        if settings.localmind_adapter == connection_id:
+            settings.localmind_adapter = "ollama"
+            settings.save_runtime_settings(adapter="ollama")
+            clear_adapter_cache()
+
+    return {
+        "connection": connection_id,
+        "deleted": removed,
+        "adapter": settings.localmind_adapter,
+        "message": message,
+    }
+
+
+def _probe_model_for(connection) -> str:
+    """Resolve the model the probe should exercise (connection → preset)."""
+    from adapters.openai_compat import PROVIDER_CONFIGS
+
+    cfg = PROVIDER_CONFIGS.get(connection.id)
+    model = connection.model or (getattr(settings, cfg.settings_field, "") if cfg else "")
+    if model:
+        return model
+    if cfg is not None:
+        return cfg.default_model
+    return ""
+
+
+@router.post("/settings/connections/{connection_id}/test")
+async def test_connection(connection_id: str):
+    """Probe a connection and report what the endpoint really supports.
+
+    Runs four bounded checks: /models reachability + auth, a non-streaming
+    chat completion, a streaming completion, and a tools-parameter probe.
+    Discovered facts (context window, streaming, tool-calling) are stored
+    back onto the connection so LocalMind learns instead of assuming.
+    """
+    from adapters.openai_compat import extract_context_window_from_model_entry
+    from core.connections import get_connection_registry, invalidate_connection_registry
+
+    registry = get_connection_registry()
+    connection = registry.get(connection_id)
+    if connection is None:
+        raise HTTPException(status_code=404, detail=f"No connection named '{connection_id}'.")
+    if connection.kind == "ollama":
+        raise HTTPException(
+            status_code=400,
+            detail="Ollama has its own health checks; test is for OpenAI-compatible connections.",
+        )
+
+    model = _probe_model_for(connection)
+    if not model:
+        raise HTTPException(status_code=400, detail="Set a model on this connection before testing it.")
+
+    api_key = settings.get_api_key(connection.id) or ""
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    base = connection.base_url.rstrip("/")
+
+    result: dict = {
+        "connection": connection_id,
+        "model": model,
+        "ok": False,
+        "reachable": False,
+        "auth_ok": False,
+        "chat_ok": False,
+        "streaming_ok": None,
+        "tools": None,
+        "models_count": None,
+        "context_window": None,
+        "latency_ms": None,
+        "error": None,
+    }
+
+    def _redact(text: str) -> str:
+        text = (text or "")[:300]
+        if api_key and api_key in text:
+            text = text.replace(api_key, "[redacted]")
+        return text
+
+    client = httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=10.0))
+    try:
+        # 1. /models — reachability, auth, and raw entries for the window.
+        models_raw: list[dict] = []
+        try:
+            resp = await client.get(f"{base}/models", headers=headers)
+            if resp.status_code == 200:
+                result["reachable"] = True
+                result["auth_ok"] = True
+                entries = [m for m in resp.json().get("data", []) if isinstance(m, dict)]
+                models_raw = entries
+                result["models_count"] = len(entries)
+            else:
+                result["reachable"] = True
+                result["auth_ok"] = resp.status_code not in (401, 403)
+                result["error"] = f"GET /models returned {resp.status_code}: {_redact(resp.text)}"
+        except httpx.ConnectError:
+            result["error"] = "Could not connect to the endpoint — check the base URL and that the service is running."
+        except Exception as exc:  # noqa: BLE001 — probe must never raise to the client
+            result["error"] = f"GET /models failed: {_redact(str(exc))}"
+
+        # 2. Context window from the /models metadata (no extra request).
+        if models_raw:
+            for entry in models_raw:
+                if str(entry.get("id", "")).lower() == model.lower():
+                    window = extract_context_window_from_model_entry(entry)
+                    if window:
+                        result["context_window"] = window
+                    break
+
+        if result["reachable"]:
+            chat_payload = {
+                "model": model,
+                "messages": [{"role": "user", "content": "ping"}],
+                "max_tokens": 8,
+            }
+            # 3. Non-streaming chat completion — the definitive "this works".
+            started = time.monotonic()
+            try:
+                resp = await client.post(f"{base}/chat/completions", json=chat_payload, headers=headers)
+                result["latency_ms"] = int((time.monotonic() - started) * 1000)
+                if resp.status_code == 200:
+                    result["chat_ok"] = True
+                    result["ok"] = True
+                    result["auth_ok"] = True
+                elif resp.status_code in (401, 403):
+                    result["error"] = (
+                        f"Chat request rejected ({resp.status_code}) — the API key was refused: "
+                        f"{_redact(resp.text)}"
+                    )
+                else:
+                    result["error"] = f"Chat request returned {resp.status_code}: {_redact(resp.text)}"
+            except Exception as exc:  # noqa: BLE001
+                result["latency_ms"] = int((time.monotonic() - started) * 1000)
+                result["error"] = f"Chat request failed: {_redact(str(exc))}"
+
+            # 4. Streaming probe — read a few SSE frames; success = a 200
+            # stream that emits at least one data frame.
+            stream_payload = dict(chat_payload, stream=True)
+            try:
+                async with client.stream(
+                    "POST", f"{base}/chat/completions", json=stream_payload, headers=headers
+                ) as stream_resp:
+                    if stream_resp.status_code == 200:
+                        frames = 0
+                        async for line in stream_resp.aiter_lines():
+                            if line and line.startswith("data:") and frames < 5:
+                                frames += 1
+                            if frames >= 2:
+                                break
+                        result["streaming_ok"] = frames >= 1
+                    else:
+                        result["streaming_ok"] = False
+            except Exception:  # noqa: BLE001
+                result["streaming_ok"] = False
+
+            # 5. Tools probe — the `tools` parameter is accepted (tentative),
+            # rejected, or unknown. tool_choice="none" keeps the model from
+            # actually calling anything.
+            tools_payload = {
+                **chat_payload,
+                "tools": [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "echo",
+                            "description": "Reply with the given text.",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {"text": {"type": "string"}},
+                                "required": ["text"],
+                            },
+                        },
+                    }
+                ],
+                "tool_choice": "none",
+            }
+            try:
+                tools_resp = await client.post(
+                    f"{base}/chat/completions", json=tools_payload, headers=headers
+                )
+                if tools_resp.status_code == 200:
+                    result["tools"] = "accepted"
+                else:
+                    body = tools_resp.text.lower()
+                    result["tools"] = "rejected" if "tool" in body else "unknown"
+            except Exception:  # noqa: BLE001
+                result["tools"] = "unknown"
+    finally:
+        await client.aclose()
+
+    # Learn instead of assuming: store what the probe measured onto the
+    # connection record. Only definitive results persist — a flaky network
+    # must not overwrite good declared values with absence.
+    stored = None
+    if result.get("chat_ok"):
+        record = connection.to_dict()
+        caps = record.get("capabilities") or {}
+        changed = False
+        if result.get("context_window") and not caps.get("context_window"):
+            caps["context_window"] = result["context_window"]
+            changed = True
+        if result.get("streaming_ok") is False and caps.get("streaming", True):
+            caps["streaming"] = False
+            changed = True
+        if result.get("tools") in ("accepted", "rejected"):
+            tool_value = result["tools"] == "accepted"
+            if caps.get("tool_calling", True) != tool_value:
+                caps["tool_calling"] = tool_value
+                changed = True
+        if changed:
+            record["capabilities"] = caps
+            settings.save_connection_record(record)
+            invalidate_connection_registry()
+            clear_adapter_cache(connection_id)
+            stored = caps
+
+    result["stored"] = stored
+    return result
 
 
 # ── One-click embed-model download ─────────────────────
