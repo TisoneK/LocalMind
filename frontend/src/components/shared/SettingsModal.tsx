@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Server, Key, Loader2, CheckCircle2, AlertCircle, Trash2, FileEdit, Palette, Sun, Moon, Monitor, Brain, Cpu, Database, RotateCcw, MessageSquarePlus, Download, Shield } from 'lucide-react';
-import { localmindClient } from '@/lib/localmind/client';
+import { X, Server, Key, Loader2, CheckCircle2, AlertCircle, Trash2, FileEdit, Palette, Sun, Moon, Monitor, Brain, Cpu, Database, RotateCcw, MessageSquarePlus, Download, Shield, Plug, Zap } from 'lucide-react';
+import { localmindClient, type ConnectionRecord, type ConnectionTestResult } from '@/lib/localmind/client';
 import { Progress } from '@/components/ui/progress';
 import { useTheme, THEMES, type CustomTheme, type ModePref } from '@/hooks/useTheme';
 
@@ -109,6 +109,23 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
   // dropdown instead of typing a free-text model ID.
   const [providerModels, setProviderModels] = useState<ModelOption[]>([]);
   const [providerModelsLoading, setProviderModelsLoading] = useState(false);
+  // AI Connections — preset providers + user-defined endpoints (GET
+  // /api/settings `connections`). Custom (non-preset) ones get their own
+  // manager section; ALL enabled ones (preset + custom) join the provider
+  // picker above so a custom connection can be selected as the active adapter.
+  const [connections, setConnections] = useState<ConnectionRecord[]>([]);
+  const [connectionsLoading, setConnectionsLoading] = useState(false);
+  // Draft for the "Add connection" form; '' id means the form is closed.
+  const [newConnDraft, setNewConnDraft] = useState<{
+    id: string; name: string; base_url: string; model: string;
+    tool_calling: boolean; streaming: boolean;
+  } | null>(null);
+  const [editingConnId, setEditingConnId] = useState<string>('');
+  const [editConnDraft, setEditConnDraft] = useState<{ name: string; base_url: string; model: string }>({
+    name: '', base_url: '', model: '',
+  });
+  const [connTestResults, setConnTestResults] = useState<Record<string, ConnectionTestResult>>({});
+  const [connTesting, setConnTesting] = useState<string>('');
   const [status, setStatus] = useState<Status>('idle');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -187,6 +204,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
         }
         setProviderKeys(keyStatus);
         setProviderDefaults(defaults);
+        setConnections(Array.isArray(settings.connections) ? settings.connections : []);
         // Local knobs: embedding model + context-window override + shell toggle.
         setEmbedModel(settings.embed_model ?? '');
         // '' = auto (0); a real override shows as its number.
@@ -498,6 +516,142 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
       setMessage(err instanceof Error ? err.message : 'Failed to delete API key');
     }
   }, [onSave]);
+
+  // Refresh the connections list from /api/settings (cheaper than a full
+  // reload — the rest of the settings snapshot doesn't need to move).
+  const refreshConnections = useCallback(async () => {
+    try {
+      const s = await localmindClient.getSettings();
+      setConnections(Array.isArray(s.connections) ? s.connections : []);
+    } catch {
+      /* non-fatal — the local optimistic update already applied */
+    }
+  }, []);
+
+  const handleCreateConnection = useCallback(async () => {
+    if (!newConnDraft) return;
+    const { id, name, base_url, model, tool_calling, streaming } = newConnDraft;
+    if (!id.trim() || !name.trim() || !base_url.trim() || !model.trim()) {
+      setStatus('error');
+      setMessage('A connection needs an id, name, base URL, and model.');
+      return;
+    }
+    setConnectionsLoading(true);
+    setStatus('saving');
+    setMessage(`Creating connection '${name}'...`);
+    try {
+      await localmindClient.saveConnection({
+        id: id.trim(),
+        name: name.trim(),
+        base_url: base_url.trim(),
+        model: model.trim(),
+        capabilities: { tool_calling, streaming },
+      });
+      setNewConnDraft(null);
+      await refreshConnections();
+      setStatus('success');
+      setMessage(`Connection '${name}' created — select it above to use it.`);
+      onSave();
+    } catch (err) {
+      setStatus('error');
+      setMessage(err instanceof Error ? err.message : 'Failed to create connection');
+    } finally {
+      setConnectionsLoading(false);
+    }
+  }, [newConnDraft, refreshConnections, onSave]);
+
+  const handleSaveConnectionEdit = useCallback(async (id: string) => {
+    setConnectionsLoading(true);
+    setStatus('saving');
+    setMessage(`Saving connection '${id}'...`);
+    try {
+      await localmindClient.saveConnection({
+        id,
+        name: editConnDraft.name.trim() || undefined,
+        base_url: editConnDraft.base_url.trim() || undefined,
+        model: editConnDraft.model.trim() || undefined,
+      });
+      setEditingConnId('');
+      await refreshConnections();
+      setStatus('success');
+      setMessage(`Connection '${id}' updated`);
+      onSave();
+    } catch (err) {
+      setStatus('error');
+      setMessage(err instanceof Error ? err.message : 'Failed to update connection');
+    } finally {
+      setConnectionsLoading(false);
+    }
+  }, [editConnDraft, refreshConnections, onSave]);
+
+  const handleToggleConnectionEnabled = useCallback(async (conn: ConnectionRecord) => {
+    setConnectionsLoading(true);
+    try {
+      await localmindClient.saveConnection({ id: conn.id, enabled: !conn.enabled });
+      await refreshConnections();
+      onSave();
+    } catch (err) {
+      setStatus('error');
+      setMessage(err instanceof Error ? err.message : 'Failed to toggle connection');
+    } finally {
+      setConnectionsLoading(false);
+    }
+  }, [refreshConnections, onSave]);
+
+  const handleDeleteConnection = useCallback(async (conn: ConnectionRecord) => {
+    setConnectionsLoading(true);
+    setStatus('saving');
+    setMessage(conn.preset ? `Resetting '${conn.name}'...` : `Deleting '${conn.name}'...`);
+    try {
+      const result = await localmindClient.deleteConnection(conn.id);
+      await refreshConnections();
+      setStatus('success');
+      setMessage(result.message);
+      if (result.adapter !== adapter) {
+        // The backend fell back to Ollama because the active adapter was
+        // the connection just deleted.
+        setAdapter(result.adapter);
+      }
+      onSave();
+    } catch (err) {
+      setStatus('error');
+      setMessage(err instanceof Error ? err.message : 'Failed to delete connection');
+    } finally {
+      setConnectionsLoading(false);
+    }
+  }, [adapter, refreshConnections, onSave]);
+
+  const handleTestConnection = useCallback(async (connectionId: string) => {
+    setConnTesting(connectionId);
+    try {
+      const result = await localmindClient.testConnection(connectionId);
+      setConnTestResults((prev) => ({ ...prev, [connectionId]: result }));
+      if (result.stored) {
+        await refreshConnections();
+      }
+    } catch (err) {
+      setConnTestResults((prev) => ({
+        ...prev,
+        [connectionId]: {
+          connection: connectionId,
+          model: '',
+          ok: false,
+          reachable: false,
+          auth_ok: false,
+          chat_ok: false,
+          streaming_ok: null,
+          tools: null,
+          models_count: null,
+          context_window: null,
+          latency_ms: null,
+          error: err instanceof Error ? err.message : 'Test failed',
+          stored: null,
+        },
+      }));
+    } finally {
+      setConnTesting('');
+    }
+  }, [refreshConnections]);
 
   const handleSaveOllamaUrl = useCallback(async () => {
     setStatus('saving');
@@ -828,6 +982,22 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                   }`}
                 >
                   {p.name}
+                </button>
+              ))}
+              {/* Custom (user-defined) connections — AI Connections below manages
+                  them; enabled ones are selectable here like any preset provider. */}
+              {connections.filter((c) => !c.preset && c.enabled).map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => handleAdapterSwitch(c.id)}
+                  title={c.base_url}
+                  className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                    adapter === c.id
+                      ? 'border-brand-green bg-brand-green/10 text-brand-green'
+                      : 'border-brand-border text-brand-green-muted hover:border-brand-green/30 hover:text-brand-green-soft'
+                  }`}
+                >
+                  {c.name}
                 </button>
               ))}
             </div>
@@ -1198,8 +1368,8 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
               {/* Unified provider list — each row shows key status and an
                   inline expand button. No separate dropdown needed. */}
               <div className="space-y-1.5">
-                {PROVIDERS.map((p) => {
-                  const hasKey = providerKeys[p.id];
+                {[...PROVIDERS, ...connections.filter((c) => !c.preset).map((c) => ({ id: c.id, name: c.name }))].map((p) => {
+                  const hasKey = providerKeys[p.id] ?? connections.find((c) => c.id === p.id)?.api_key_set ?? false;
                   const isEditing = newKeyProvider === p.id;
                   return (
                     <div key={p.id} className="rounded-lg border border-brand-border overflow-hidden">
@@ -1364,6 +1534,223 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
               </div>
             </section>
           )}
+
+          {/* ── AI Connections — custom OpenAI-compatible endpoints ── */}
+          <section>
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
+              <Plug className="h-4 w-4 text-brand-green" />
+              AI Connections
+            </h3>
+            <p className="mb-3 text-xs text-brand-green-muted">
+              Point LocalMind at any OpenAI-compatible endpoint — a gateway, a proxy, a
+              self-hosted service — without waiting on a built-in provider. Test a
+              connection to discover what it actually supports before switching to it.
+            </p>
+
+            <div className="space-y-1.5">
+              {connections.filter((c) => !c.preset).map((c) => {
+                const isEditing = editingConnId === c.id;
+                const testResult = connTestResults[c.id];
+                const isTesting = connTesting === c.id;
+                return (
+                  <div key={c.id} className="rounded-lg border border-brand-border overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="truncate text-sm text-brand-green-soft">{c.name}</span>
+                        <span className="shrink-0 truncate max-w-[160px] font-mono text-[11px] text-brand-green-muted" title={c.base_url}>
+                          {c.base_url}
+                        </span>
+                        {!c.enabled && (
+                          <span className="shrink-0 rounded bg-brand-border px-1.5 py-0.5 text-[10px] text-brand-green-muted">
+                            disabled
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          onClick={() => handleTestConnection(c.id)}
+                          disabled={isTesting || connectionsLoading}
+                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-brand-green-muted hover:bg-brand-border hover:text-brand-green-soft transition-colors disabled:opacity-50"
+                          title={`Probe ${c.name}`}
+                        >
+                          {isTesting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+                          Test
+                        </button>
+                        <button
+                          onClick={() => handleToggleConnectionEnabled(c)}
+                          disabled={connectionsLoading}
+                          className="rounded px-2 py-1 text-xs text-brand-green-muted hover:bg-brand-border hover:text-brand-green-soft transition-colors disabled:opacity-50"
+                        >
+                          {c.enabled ? 'Disable' : 'Enable'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingConnId(isEditing ? '' : c.id);
+                            setEditConnDraft({ name: c.name, base_url: c.base_url, model: c.model });
+                          }}
+                          disabled={connectionsLoading}
+                          className="rounded px-2 py-1 text-xs text-brand-green-muted hover:bg-brand-border hover:text-brand-green-soft transition-colors disabled:opacity-50"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteConnection(c)}
+                          disabled={connectionsLoading}
+                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-brand-red hover:bg-brand-red/10 transition-colors disabled:opacity-50"
+                          title={`Delete ${c.name}`}
+                          aria-label={`Delete ${c.name}`}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {isEditing && (
+                      <div className="border-t border-brand-border bg-brand-bg-base p-3 space-y-2">
+                        <input
+                          type="text"
+                          value={editConnDraft.name}
+                          onChange={(e) => setEditConnDraft((d) => ({ ...d, name: e.target.value }))}
+                          placeholder="Display name"
+                          className="w-full rounded-lg border border-brand-border bg-brand-bg-panel px-3 py-2 text-sm text-brand-green-soft focus:border-brand-green outline-none"
+                        />
+                        <input
+                          type="text"
+                          value={editConnDraft.base_url}
+                          onChange={(e) => setEditConnDraft((d) => ({ ...d, base_url: e.target.value }))}
+                          placeholder="https://api.example.com/v1"
+                          className="w-full rounded-lg border border-brand-border bg-brand-bg-panel px-3 py-2 text-sm text-brand-green-soft font-mono focus:border-brand-green outline-none"
+                        />
+                        <input
+                          type="text"
+                          value={editConnDraft.model}
+                          onChange={(e) => setEditConnDraft((d) => ({ ...d, model: e.target.value }))}
+                          placeholder="Model id"
+                          className="w-full rounded-lg border border-brand-border bg-brand-bg-panel px-3 py-2 text-sm text-brand-green-soft font-mono focus:border-brand-green outline-none"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleSaveConnectionEdit(c.id)}
+                            disabled={connectionsLoading}
+                            className="flex-1 rounded-lg border border-brand-green/30 bg-brand-green/10 px-4 py-2 text-sm font-medium text-brand-green hover:bg-brand-green/20 transition-colors disabled:opacity-50"
+                          >
+                            {connectionsLoading ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Save'}
+                          </button>
+                          <button
+                            onClick={() => setEditingConnId('')}
+                            disabled={connectionsLoading}
+                            className="rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-green-muted hover:text-brand-green-soft hover:border-brand-green/30 transition-colors disabled:opacity-50"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {testResult && (
+                      <div className="border-t border-brand-border bg-brand-bg-base px-3 py-2 text-[11px] space-y-1">
+                        <div className={`flex items-center gap-1 font-medium ${testResult.ok ? 'text-brand-green' : 'text-brand-red'}`}>
+                          {testResult.ok ? <CheckCircle2 className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
+                          {testResult.ok ? `Working — ${testResult.latency_ms ?? '?'}ms` : 'Test failed'}
+                        </div>
+                        <div className="text-brand-green-muted">
+                          reachable: {String(testResult.reachable)} · auth: {String(testResult.auth_ok)} ·
+                          {' '}streaming: {testResult.streaming_ok === null ? 'unknown' : String(testResult.streaming_ok)} ·
+                          {' '}tools: {testResult.tools ?? 'unknown'}
+                          {testResult.context_window ? ` · context: ${testResult.context_window.toLocaleString()}` : ''}
+                        </div>
+                        {testResult.error && (
+                          <div className="text-brand-red">{testResult.error}</div>
+                        )}
+                        {testResult.stored && (
+                          <div className="text-brand-green-muted">Learned capabilities saved to this connection.</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Add-connection form */}
+            {newConnDraft ? (
+              <div className="mt-2 rounded-lg border border-brand-border bg-brand-bg-base p-3 space-y-2">
+                <input
+                  type="text"
+                  value={newConnDraft.id}
+                  onChange={(e) => setNewConnDraft((d) => d && { ...d, id: e.target.value.toLowerCase() })}
+                  placeholder="id (lowercase, dashes — e.g. 'atria-proxy')"
+                  className="w-full rounded-lg border border-brand-border bg-brand-bg-panel px-3 py-2 text-sm text-brand-green-soft font-mono focus:border-brand-green outline-none"
+                />
+                <input
+                  type="text"
+                  value={newConnDraft.name}
+                  onChange={(e) => setNewConnDraft((d) => d && { ...d, name: e.target.value })}
+                  placeholder="Display name"
+                  className="w-full rounded-lg border border-brand-border bg-brand-bg-panel px-3 py-2 text-sm text-brand-green-soft focus:border-brand-green outline-none"
+                />
+                <input
+                  type="text"
+                  value={newConnDraft.base_url}
+                  onChange={(e) => setNewConnDraft((d) => d && { ...d, base_url: e.target.value })}
+                  placeholder="https://api.example.com/v1"
+                  className="w-full rounded-lg border border-brand-border bg-brand-bg-panel px-3 py-2 text-sm text-brand-green-soft font-mono focus:border-brand-green outline-none"
+                />
+                <input
+                  type="text"
+                  value={newConnDraft.model}
+                  onChange={(e) => setNewConnDraft((d) => d && { ...d, model: e.target.value })}
+                  placeholder="Model id"
+                  className="w-full rounded-lg border border-brand-border bg-brand-bg-panel px-3 py-2 text-sm text-brand-green-soft font-mono focus:border-brand-green outline-none"
+                />
+                <div className="flex gap-3 text-xs text-brand-green-muted">
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={newConnDraft.tool_calling}
+                      onChange={(e) => setNewConnDraft((d) => d && { ...d, tool_calling: e.target.checked })}
+                    />
+                    Supports tool calling
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={newConnDraft.streaming}
+                      onChange={(e) => setNewConnDraft((d) => d && { ...d, streaming: e.target.checked })}
+                    />
+                    Supports streaming
+                  </label>
+                </div>
+                <p className="text-[11px] text-brand-green-muted">
+                  An API key (if the endpoint needs one) can be added below via "Add Key" once
+                  the connection is created — it appears alongside the built-in providers.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleCreateConnection}
+                    disabled={connectionsLoading}
+                    className="flex-1 rounded-lg border border-brand-green/30 bg-brand-green/10 px-4 py-2 text-sm font-medium text-brand-green hover:bg-brand-green/20 transition-colors disabled:opacity-50"
+                  >
+                    {connectionsLoading ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Create connection'}
+                  </button>
+                  <button
+                    onClick={() => setNewConnDraft(null)}
+                    disabled={connectionsLoading}
+                    className="rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-green-muted hover:text-brand-green-soft hover:border-brand-green/30 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setNewConnDraft({ id: '', name: '', base_url: '', model: '', tool_calling: true, streaming: true })}
+                className="mt-2 rounded-lg border border-brand-border px-3 py-1.5 text-xs text-brand-green hover:bg-brand-green/10 transition-colors"
+              >
+                + Add connection
+              </button>
+            )}
+          </section>
 
           {/* ── Operation Permissions ── */}
           <section>
