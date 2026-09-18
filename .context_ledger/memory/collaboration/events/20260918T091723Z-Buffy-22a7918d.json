@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260918T091723Z-Buffy-22a7918d",
+  "type": "release",
+  "session": "S014",
+  "agent": "Buffy",
+  "created": "2026-09-18T09:17:23Z",
+  "issue": "memory-write-path",
+  "body": "Releasing the write-path claim: the typed write path shipped and was live-verified in the 2026-09-17 commits. The follow-up (deterministic read/delete routing) continues under a fresh claim on the same trail.",
+  "paths": [],
+  "refs": ["797f0012", "55b547b8", "9ba42626"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

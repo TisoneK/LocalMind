@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260918T091745Z-Buffy-20f8b2ac",
+  "type": "claim",
+  "session": "S014",
+  "agent": "Buffy",
+  "created": "2026-09-18T09:17:46Z",
+  "issue": "memory-read-delete-routing",
+  "body": "Continuing S014 (same session, resumed after the connection drop; the write-path claim is released on this trail). Taking the follow-up head B-2026-09-17-1: route memory READS and DELETES through the deterministic path like writes.\n\nIntended change: the classifier already flags is_read/is_delete, so the runtime dispatches on them before the model sees the turn - reads answer from the store's id-bearing listing, deletes apply and confirm from a read-back, both leave the full turn trail. Classifier gates sharpened: a read cue means \"the stored facts about me\" (not \"what do you know about Python\"), a delete cue must name a removable fact (\"forget that I prefer dark mode\" routes; \"forget it, let's move on\" and \"delete that file\" do not), and an explicit operation on memory_op wins over re-reading the sentence for cues (the garbled-listing-gets-stored class).\n\nScope: backend/src/core/agent_runtime.py, backend/src/core/memory_intent.py, backend/src/tools/memory_tool.py, tests/core/test_memory_intent_routing.py (new), tests/core/test_memory_runtime_routing.py (new), tests/core/test_memory_resolution.py (signature tweak), CHANGELOG.md, plus the ledger surface.\n\nNoted: Nia (S015) is live on the connections layer with an explicitly disjoint claim - my scope touches none of her paths. Verification bar applies: live before/after on zai/glm-4.5-flash via the isolated-home harness before \"done\" is claimed.",
+  "paths": ["backend/src/core/agent_runtime.py", "backend/src/core/memory_intent.py", "backend/src/tools/memory_tool.py", "tests/core/test_memory_intent_routing.py", "tests/core/test_memory_runtime_routing.py", "tests/core/test_memory_resolution.py", "CHANGELOG.md"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
