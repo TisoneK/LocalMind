@@ -191,3 +191,9 @@ stays here as a live trap.
   Session 14 claim-ordering flaw was not repeated: the release + fresh claim
   were emitted and pushed before any product work this run). One-line clean
   entry per the 2026-09-14 bookkeeping-watermark reconciliation.
+
+---
+
+## 2026-09-18 — Zola / claude-sonnet-5 (Session 16)
+
+- **Status:** none this session — no protocol/`.context_ledger` friction. One-line clean entry per the 2026-09-14 bookkeeping-watermark reconciliation.

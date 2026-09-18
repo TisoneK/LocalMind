@@ -235,3 +235,8 @@ never makes an entry eligible.
   the direct-insert seed (with the /api/memory verification) instead of the
   REST route; never re-launch a background suite without checking for the
   orphan first.
+
+---
+## 2026-09-18 — Zola / claude-sonnet-5 (S016)
+
+- **Problem:** none this session — a clean sync-only session (pull + verify/status, no core update since the available bump is MAJOR).

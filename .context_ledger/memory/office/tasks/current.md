@@ -12,6 +12,6 @@ backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** idle
-- **Task:** none — no live session task (last task: B-2026-09-17-1, memory read/delete routing, completed and pushed 2026-09-18 by Buffy/S014)
-- **Status:** idle
+- **Session:** 2026-09-18 — Zola / claude-sonnet-5
+- **Task:** supervisor directive "pull and sync context" — pull, verify/status the vendored core, check for drift
+- **Status:** done

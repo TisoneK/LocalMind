@@ -270,3 +270,15 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Clock-out:** row removed in the closing ledger commit; both scratch
   worktrees removed; no branch was created (all work landed on main per push
   policy).
+
+---
+## 2026-09-18 — Session 16
+- **Agent:** Zola (Claude Code local) | **Model:** claude-sonnet-5 | **Platform:** macOS (Darwin 24.6.0), Tisone's checkout (main tree) | **Role:** engineer (ledger sync) | **Core:** 1.2.0
+- **Task:** supervisor directive "pull and sync context" (kickoff Step 1–2) — pull the project, verify the vendored core, check for drift.
+- **Commits:** 4 ledger (check-in `ff409104`, note+claim `dfd08f1b`, this bookkeeping/release commit); zero product commits.
+- **Outcome:** done — `git pull --ff-only` fast-forwarded `97894961..2f811970` cleanly (roster/sessions bookkeeping only, no conflicts). `ledger-sync verify` OK on 1.2.0 (every file matches MANIFEST.sha256, all ports parse — ps1 parse check skipped, no PowerShell engine on this Mac, covered by the manifest + a PS-hosted verify elsewhere). `ledger-sync status`: locked 1.2.0, update source (`../context/core`) reports **2.0.1 — a MAJOR bump**. Per kickoff Step 1 rule, a MAJOR update is noted only, not auto-applied: needs the owner's go-ahead plus a CHANGELOG.md read before `ledger-sync update --major`.
+- **Coordination:** NOT solo — Nia (S015) live on the board (connections-layer architecture planning, disjoint scope). Light path per collaboration README: note (heads-up, ledger-only, no product paths) + claim (roster/sessions/current.md) + this release, all citing the event trail; zero path overlap.
+- **Verification:** `ledger-sync verify`/`status` output above is the verification; no product surface touched so tsc/ruff/pytest gates are not applicable to this session's diff.
+- **Open items:** owner decision — apply the 2.0.1 MAJOR core update (read its CHANGELOG.md first) or stay on 1.2.0.
+- **Notes:** none
+- **Report:** none (sync-only session; chat summary delivered)

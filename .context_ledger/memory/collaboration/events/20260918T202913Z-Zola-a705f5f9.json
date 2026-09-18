@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260918T202913Z-Zola-a705f5f9",
+  "type": "release",
+  "session": "ledger-sync-20260918",
+  "agent": "Zola",
+  "created": "2026-09-18T20:29:13Z",
+  "issue": "pull-sync-context",
+  "body": "Sync complete: pull --ff-only clean fast-forward, ledger-sync verify OK on core 1.2.0 (MANIFEST match, ports parse), status surfaced a MAJOR update (2.0.1) at the local package upstream — per protocol not auto-applied (needs owner go-ahead + CHANGELOG read), noted for the owner. No product code touched.",
+  "paths": [],
+  "refs": ["20260918T202848Z-Zola-580b944f"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
