@@ -182,3 +182,12 @@ stays here as a live trap.
   row is live and whose codename has no open claim. That is the same
   mechanical-nudge gap the Session 12 flaw asked for on check-in ordering.
 - **Status:** open
+
+---
+
+## 2026-09-18 — Buffy / model unknown (Session 14, extended)
+
+- **Status:** none this session — no protocol/`.context_ledger` friction (the
+  Session 14 claim-ordering flaw was not repeated: the release + fresh claim
+  were emitted and pushed before any product work this run). One-line clean
+  entry per the 2026-09-14 bookkeeping-watermark reconciliation.

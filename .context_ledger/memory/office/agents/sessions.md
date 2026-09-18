@@ -197,3 +197,62 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** `B-2026-09-17-1` — filed from this session's own live finding (reads/deletes are not routed deterministically: a live "what do you know about me" was answered from conversation context, naming the very live value the write path had just refused) and taken up as this session's follow-up. Also open: the freshness tags have no consumer until the parked geolocation/context bootstrap lands; junk rows written by the bare-operation bug before today are unpromoted; `PATCH /api/memory/{id}` still needs the vector table for its re-embed.
 - **Notes:** one protocol flaw owned in the flaws log — check-in was on time, but `current.md` and the claim were written only after product work had started, leaving the in-flight scope invisible; logged with a mechanical-nudge suggestion. Three Windows tool traps logged in inefficiencies (`code_search` ripgrep missing → grep fallback; cp1252 `UnicodeEncodeError` killing a live run mid-way; the 600 s ceiling vs a 3094-test suite). Detail + evidence index: `office/sessions/2026-09-17-14/notes.md`.
 - **Report:** `.context_ledger/memory/office/reviews/2026-09-17-review-s14-memory-write-path.md`
+
+**Re-check-in — same session, resumed 2026-09-18 after two connection drops mid-turn (supervisor: "Continue"); extends this entry, not a second Session 14:**
+- Re-added the roster row (same name/codename), released the write-path claim and
+  claimed the follow-up on the event trail (`22a7918d` release + `20f8b2ac` claim,
+  `ea4ad038`) BEFORE touching product code this time — the Session 14 flaw not
+  repeated.
+- **Shipped `B-2026-09-17-1` (deterministic memory read/delete routing):**
+  `backend/src/core/agent_runtime.py` routes `is_read`/`is_delete` turns to
+  `memory_op` directly — the reply is the store's id-bearing listing, a removal
+  is confirmed from a read-back, both leave the full turn trail (user row before
+  reply via the existing `_persist_user_before_reply` seam, new
+  `_finish_memory_turn` epilog), and a failed store says so instead of raising
+  the turn. `memory_intent.py` gates sharpened: a read cue means the stored
+  facts about the user ("what do you know about Python" falls through to the
+  model); a delete cue must name a removable fact ("forget it, let's move on",
+  "delete that file" never reach memory); `memory_tool.py` takes an explicit
+  `operation` that WINS over re-reading the sentence for cues (the
+  garbled-listing-gets-stored class) with alias normalisation and honest
+  fallbacks (search→recall, garbage→sentence cues).
+- **Live bug found and fixed by the harness:** "forget that I prefer dark mode"
+  reported "Nothing in memory matches" — `matching_ids` needed the exact stored
+  wording. Added a conservative word-overlap tier under the exact/prefix/key
+  tiers in `storage/vector.py` (`_matching_ids_in_rows`, shared with the
+  tool-level fake): every content word the user named must sit on the row, the
+  row may add at most two content words of the app's voice tail; a
+  more-specific row ("dark mode on the mechanical keyboard") is left alone and
+  a vague one-word target matches nothing.
+- **Commits:** `ea4ad038` (claim/release events), `58ffec18` (the routing fix,
+  8 files, +812/−111), `75638e75` (live harness), `aff07f49` (CHANGELOG).
+- **Verification:** 57 new routing/intent tests + the two write-path signature
+  tweaks + 14 new/updated tool tests (incl. the re-worded-forget regression,
+  specific-row guard, vague-target guard) + 317 memory/persist/fastpath-core
+  tests + 72 vector/api/memory-adjacent tests all green; pre-commit gate green
+  (tsc, ruff on backend/src, conflict-markers, backlog-dups). LIVE-VERIFIED per
+  the bar, `scripts/live_test_memory_routing.py` (committed) on zai/glm-4.5-flash
+  with a scratch `LOCALMIND_HOME`, before/after on the same three turns: read
+  went model-improvised-from-context (echoing the live IP value the write path
+  refuses) → the store's own listing; list went 105.6 s rate-limited loop →
+  4.3 s listing; forget went error-with-row-still-there → "Removed from memory"
+  with the row read-back-gone. After the fix: all three turns ~4.5 s with zero
+  provider calls. Assumed, not proven: the app-voice-tail allowance (≤2 extra
+  content words) on stores whose facts were written by much longer template
+  sentences; no cloud embedder on this box, so the embed-present dedup path was
+  not exercised live.
+- **Coordination:** Nia (S015) live the whole session on the connections layer;
+  disjoint claimed paths, no conflicts; her `_provider_name`→`_provider_key`
+  fix sat uncommitted in the shared tree at my wrap-up — not mine, left alone,
+  flagged to her on the trail.
+- **Open items:** junk rows written by the bare-operation bug before 2026-09-17
+  are still unpromoted (owner call); `PATCH /api/memory/{id}` still needs the
+  vector table for its re-embed; the freshness tags still have no consumer
+  until the parked geolocation/context bootstrap lands.
+- **Notes:** two inefficiencies owned in the log (the connection drop eating
+  the sync-session's own background launch — `nohup`/`&` dies with the call,
+  `tasklist`-check-then-relaunch is the pattern; the direct-SQL seed route for
+  embedder-less boxes after REST seeding 503'd). Evidence:
+  `office/sessions/2026-09-17-14/evidence/routing/` (before/after results,
+  server logs, turn-1/turn-3 SSE).
+- **Report:** `.context_ledger/memory/office/reviews/2026-09-18-review-s14-routing.md`

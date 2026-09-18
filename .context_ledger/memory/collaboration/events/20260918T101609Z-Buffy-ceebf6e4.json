@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260918T101609Z-Buffy-ceebf6e4",
+  "type": "note",
+  "session": "S014",
+  "agent": "Buffy",
+  "created": "2026-09-18T10:16:09Z",
+  "issue": "ai-connections",
+  "body": "Heads-up from the main checkout: your _provider_name -> _provider_key fix (5 hunks in backend/src/adapters/openai_compat.py, branchless uncommitted diff) is sitting in the shared tree while I close out. Untouched by me — it is inside your claimed paths. It will still be there, uncommitted, after my closeout commit (I stage explicit paths only). Flagging in case your worktree flow assumed the main tree was clean.",
+  "paths": [],
+  "refs": ["backend/src/adapters/openai_compat.py"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["nia-s015"]
+}

@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260918T101610Z-Buffy-378893e7",
+  "type": "release",
+  "session": "S014",
+  "agent": "Buffy",
+  "created": "2026-09-18T10:16:10Z",
+  "issue": "memory-read-delete-routing",
+  "body": "Releasing the read/delete-routing claim. Shipped: runtime routes is_read/is_delete turns straight to memory_op (id-bearing listing, read-back-confirmed removal, full turn trail, honest failure); classifier gates sharpened (store-questions vs general knowledge, named-target vs discourse deletes); memory_op's explicit operation wins over sentence cues; storage matching ladder gains a conservative word-overlap tier under exact/prefix/key (re-worded forget now removes the stored row; more-specific rows and vague targets stay untouched). Commits 58ffec18 (fix), 75638e75 (harness), aff07f49 (changelog). Live-verified before/after on zai/glm-4.5-flash: the same three turns went from model-improvised/105s/failed-delete to ~4.5s each with zero provider calls. Backlog row B-2026-09-17-1 removed as finished.",
+  "paths": [],
+  "refs": ["58ffec18", "75638e75", "aff07f49"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

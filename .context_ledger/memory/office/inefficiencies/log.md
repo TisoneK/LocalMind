@@ -202,3 +202,36 @@ never makes an entry eligible.
   (a trace must never die on its own output); for the full suite, always log to
   a file and poll. Neither is a product bug — recorded so the next session does
   not re-pay for the diagnosis.
+
+---
+
+## 2026-09-18 — Buffy / model unknown (Session 14, extended)
+
+- **Problem:** (1) a backgrounded full-suite launch (`pytest ... &` inside a
+  SYNC tool call) does not return when the child keeps the call's streams open —
+  the call hangs until its timeout (this session: the 30 s ceiling, then the
+  connection dropped); blindly re-launching on retry would have run two
+  3000-test suites concurrently. (2) Seeding a live trace's store through the
+  app's own `POST /api/memory` 503s on an embedder-less box (the route embeds
+  every write; Ollama down, no cloud key) — the previous session's REST-seed
+  plan cannot work here.
+- **Cost:** one hung call plus a tasklist round-trip to notice the orphan;
+  ~20 minutes of harness redesign (REST seed → direct insert) mid-trace.
+- **Cause:** (1) the child survives the call (the nohup pattern holds) but the
+  CALL does not return promptly — and after a connection drop the retry reflex
+  is to relaunch, not to look; (2) the embed dependency in the REST route is by
+  design; the seed only needed an equivalent row written another way.
+- **Workaround / fix:** (1) after a dropped/hung background launch, check
+  `tasklist | grep python` and the log file's growth BEFORE relaunching — the
+  orphaned suite is usually still working; poll its tail and reuse it. (2) Seed
+  by inserting `(id, content, metadata)` rows directly into `vector_facts`
+  while the server runs — the store re-reads the table on every call
+  (`list_all_with_metadata`, the forget ladder, the routing reads all see it
+  immediately) — then verify through `GET /api/memory`. (3) For connection
+  drops generally: the recovery that worked each time was the checkpoint gate +
+  `git status` + re-reading `current.md`/roster/claim state before touching
+  anything.
+- **Prevent next time:** live harnesses that need a seeded store should ship
+  the direct-insert seed (with the /api/memory verification) instead of the
+  REST route; never re-launch a background suite without checking for the
+  orphan first.

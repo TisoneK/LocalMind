@@ -12,7 +12,6 @@ backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-09-17 — Buffy (S014, extended) / model unknown
-- **Feature:** memory-write-path
-- **Task:** `B-2026-09-17-1` — route memory READS and DELETES through the deterministic path like writes, so an id-bearing list / forget-by-id is reachable without the model choosing the tool, then live-verify the answer comes from the store. (Follow-up to the shipped write path `9ba42626`/`b1a8aa96`, same session, same codename.)
-- **Status:** in-progress (scoping the intent router)
+- **Session:** idle
+- **Task:** none — no live session task (last task: B-2026-09-17-1, memory read/delete routing, completed and pushed 2026-09-18 by Buffy/S014)
+- **Status:** idle

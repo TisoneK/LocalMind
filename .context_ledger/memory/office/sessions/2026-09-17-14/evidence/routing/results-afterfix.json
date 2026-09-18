@@ -1,0 +1,44 @@
+{
+  "label": "afterfix",
+  "session": "memory-routing-afterfix-1789724700",
+  "turns": [
+    {
+      "turn": "turn1_what_do_you_know",
+      "message": "What do you know about me?",
+      "wall_s": 4.5,
+      "text": "**Stored memory (2 facts):**\n- #67b32c6a [user_preference | importance=0.8] The user prefers dark mode in their editor.\n- #d5992981 [general | importance=0.5] The user's public IP is 41.90.44.19.",
+      "done_provider_usage": {}
+    },
+    {
+      "turn": "turn2_list",
+      "message": "list my memories",
+      "wall_s": 4.3,
+      "text": "**Stored memory (2 facts):**\n- #67b32c6a [user_preference | importance=0.8] The user prefers dark mode in their editor.\n- #d5992981 [general | importance=0.5] The user's public IP is 41.90.44.19.",
+      "done_provider_usage": {}
+    },
+    {
+      "turn": "turn3_forget",
+      "message": "forget that I prefer dark mode",
+      "wall_s": 4.4,
+      "text": "Removed from memory: *I prefer dark mode*",
+      "done_provider_usage": {}
+    }
+  ],
+  "rows": [
+    {
+      "id": "d5992981704a4e09b2f2400511442eeb",
+      "content": "The user's public IP is 41.90.44.19."
+    }
+  ],
+  "checks": {
+    "seeded_facts": 2,
+    "deterministic_read_logged": true,
+    "deterministic_delete_logged": true,
+    "listing_has_ids": true,
+    "listing_names_seeded_fact": true,
+    "delete_confirmed_in_chat": true,
+    "preference_row_gone_after_forget": 0,
+    "rows_total": 1,
+    "any_turn_with_provider_usage": false
+  }
+}

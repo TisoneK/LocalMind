@@ -1,0 +1,244 @@
+data: {"obs_event": {"type": "agent_runtime_start", "data": {"agent": "parent"}}}
+
+data: {"obs_event": {"type": "parent_ready", "data": {"reason": "", "adapter": "zai", "model": "glm-4.5-flash"}}}
+
+data: {"obs_event": {"type": "agent_loop_start", "data": {"intent": "chat"}}}
+
+data: {"obs_event": {"type": "stage_timing", "data": {"stage": "intent_classify", "latency_ms": 0, "status": "skipped"}}}
+
+data: {"obs_event": {"type": "stage_timing", "data": {"stage": "tool_select", "latency_ms": 0, "status": "skipped"}}}
+
+data: {"obs_event": {"type": "stage_timing", "data": {"stage": "context_build", "latency_ms": 0, "status": "skipped"}}}
+
+data: {"obs_event": {"type": "provider_call_start", "data": {"provider": "zai", "model": "glm-4.5-flash", "started_at": 11242.75}}}
+
+data: {"type": "status_update", "status": "Waiting for zai to start responding\u2026"}
+
+: agent-working
+
+data: {"type": "status_update", "status": "Waiting for zai to start responding\u2026"}
+
+: agent-working
+
+data: {"obs_event": {"type": "provider_first_byte", "data": {}}}
+
+data: {"type": "thinking_token", "thinking": "\n"}
+
+data: {"type": "thinking_token", "thinking": "The"}
+
+data: {"type": "thinking_token", "thinking": " user"}
+
+data: {"type": "thinking_token", "thinking": " is"}
+
+data: {"type": "thinking_token", "thinking": " asking"}
+
+data: {"type": "thinking_token", "thinking": " what"}
+
+data: {"type": "thinking_token", "thinking": " I"}
+
+data: {"type": "thinking_token", "thinking": " know"}
+
+data: {"type": "thinking_token", "thinking": " about"}
+
+data: {"type": "thinking_token", "thinking": " them"}
+
+data: {"type": "thinking_token", "thinking": "."}
+
+data: {"type": "thinking_token", "thinking": " Based"}
+
+data: {"type": "thinking_token", "thinking": " on"}
+
+data: {"type": "thinking_token", "thinking": " the"}
+
+data: {"type": "thinking_token", "thinking": " instructions"}
+
+data: {"type": "thinking_token", "thinking": ","}
+
+data: {"type": "thinking_token", "thinking": " I"}
+
+data: {"type": "thinking_token", "thinking": " should"}
+
+data: {"type": "thinking_token", "thinking": " be"}
+
+data: {"type": "thinking_token", "thinking": " direct"}
+
+data: {"type": "thinking_token", "thinking": " and"}
+
+data: {"type": "thinking_token", "thinking": " answer"}
+
+data: {"type": "thinking_token", "thinking": " the"}
+
+data: {"type": "thinking_token", "thinking": " question"}
+
+data: {"type": "thinking_token", "thinking": " without"}
+
+data: {"type": "thinking_token", "thinking": " taking"}
+
+data: {"type": "thinking_token", "thinking": " action"}
+
+data: {"type": "thinking_token", "thinking": " unless"}
+
+data: {"type": "thinking_token", "thinking": " specifically"}
+
+data: {"type": "thinking_token", "thinking": " directed"}
+
+data: {"type": "thinking_token", "thinking": "."}
+
+data: {"type": "thinking_token", "thinking": " From"}
+
+data: {"type": "thinking_token", "thinking": " the"}
+
+data: {"type": "thinking_token", "thinking": " context"}
+
+data: {"type": "thinking_token", "thinking": " provided"}
+
+data: {"type": "thinking_token", "thinking": ","}
+
+data: {"type": "thinking_token", "thinking": " I"}
+
+data: {"type": "thinking_token", "thinking": " know"}
+
+data: {"type": "thinking_token", "thinking": ":\n\n"}
+
+data: {"type": "thinking_token", "thinking": "1"}
+
+data: {"type": "thinking_token", "thinking": "."}
+
+data: {"type": "thinking_token", "thinking": " The"}
+
+data: {"type": "thinking_token", "thinking": " user"}
+
+data: {"type": "thinking_token", "thinking": " prefers"}
+
+data: {"type": "thinking_token", "thinking": " dark"}
+
+data: {"type": "thinking_token", "thinking": " mode"}
+
+data: {"type": "thinking_token", "thinking": " in"}
+
+data: {"type": "thinking_token", "thinking": " their"}
+
+data: {"type": "thinking_token", "thinking": " editor"}
+
+data: {"type": "thinking_token", "thinking": ".\n"}
+
+data: {"type": "thinking_token", "thinking": "2"}
+
+data: {"type": "thinking_token", "thinking": "."}
+
+data: {"type": "thinking_token", "thinking": " The"}
+
+data: {"type": "thinking_token", "thinking": " user"}
+
+data: {"type": "thinking_token", "thinking": "'s"}
+
+data: {"type": "thinking_token", "thinking": " public"}
+
+data: {"type": "thinking_token", "thinking": " IP"}
+
+data: {"type": "thinking_token", "thinking": " is"}
+
+data: {"type": "thinking_token", "thinking": " "}
+
+data: {"type": "thinking_token", "thinking": "41"}
+
+data: {"type": "thinking_token", "thinking": "."}
+
+data: {"type": "thinking_token", "thinking": "90"}
+
+data: {"type": "thinking_token", "thinking": "."}
+
+data: {"type": "thinking_token", "thinking": "44"}
+
+data: {"type": "thinking_token", "thinking": "."}
+
+data: {"type": "thinking_token", "thinking": "19"}
+
+data: {"type": "thinking_token", "thinking": ".\n\n"}
+
+data: {"type": "thinking_token", "thinking": "I"}
+
+data: {"type": "thinking_token", "thinking": " should"}
+
+data: {"type": "thinking_token", "thinking": " provide"}
+
+data: {"type": "thinking_token", "thinking": " this"}
+
+data: {"type": "thinking_token", "thinking": " information"}
+
+data: {"type": "thinking_token", "thinking": " directly"}
+
+data: {"type": "thinking_token", "thinking": " and"}
+
+data: {"type": "thinking_token", "thinking": " conc"}
+
+data: {"type": "thinking_token", "thinking": "is"}
+
+data: {"type": "thinking_token", "thinking": "ely"}
+
+data: {"type": "thinking_token", "thinking": ","}
+
+data: {"type": "thinking_token", "thinking": " as"}
+
+data: {"type": "thinking_token", "thinking": " instructed"}
+
+data: {"type": "thinking_token", "thinking": "."}
+
+data: {"type": "token", "content": "I"}
+
+data: {"type": "token", "content": " know"}
+
+data: {"type": "token", "content": " you"}
+
+data: {"type": "token", "content": " prefer"}
+
+data: {"type": "token", "content": " dark"}
+
+data: {"type": "token", "content": " mode"}
+
+data: {"type": "token", "content": " in"}
+
+data: {"type": "token", "content": " your"}
+
+data: {"type": "token", "content": " editor"}
+
+data: {"type": "token", "content": ","}
+
+data: {"type": "token", "content": " and"}
+
+data: {"type": "token", "content": " your"}
+
+data: {"type": "token", "content": " public"}
+
+data: {"type": "token", "content": " IP"}
+
+data: {"type": "token", "content": " is"}
+
+data: {"type": "token", "content": " "}
+
+data: {"type": "token", "content": "41"}
+
+data: {"type": "token", "content": "."}
+
+data: {"type": "token", "content": "90"}
+
+data: {"type": "token", "content": "."}
+
+data: {"type": "token", "content": "44"}
+
+data: {"type": "token", "content": "."}
+
+data: {"type": "token", "content": "19"}
+
+data: {"type": "token", "content": "."}
+
+data: {"obs_event": {"type": "stage_timing", "data": {"stage": "generate", "latency_ms": 14781, "status": "done"}}}
+
+data: {"obs_event": {"type": "stage_timing", "data": {"stage": "execute", "latency_ms": 0, "status": "skipped"}}}
+
+data: {"obs_event": {"type": "agent_runtime_done", "data": {"agent": "parent", "elapsed_ms": 14891, "response_chars": 78}}}
+
+data: {"obs_event": {"type": "turn_complete", "data": {"intent": "chat", "confidence": 1.0, "tokens_approx": 108, "prompt_tokens_approx": 313, "total_latency_ms": 14891, "memory_facts": 0, "agent_mode": false, "provider_usage": {"prompt_tokens": 313, "completion_tokens": 108, "total_tokens": 421, "cached_tokens": 5}}}}
+
+data: {"type": "done", "provider_usage": {"prompt_tokens": 313, "completion_tokens": 108, "total_tokens": 421, "cached_tokens": 5}}
+

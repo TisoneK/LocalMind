@@ -1,0 +1,70 @@
+{
+  "label": "before",
+  "session": "memory-routing-before-1789723653",
+  "turns": [
+    {
+      "turn": "turn1_what_do_you_know",
+      "message": "What do you know about me?",
+      "wall_s": 15.5,
+      "text": "I know you prefer dark mode in your editor, and your public IP is 41.90.44.19.",
+      "done_provider_usage": {
+        "prompt_tokens": 313,
+        "completion_tokens": 108,
+        "total_tokens": 421,
+        "cached_tokens": 5
+      }
+    },
+    {
+      "turn": "turn2_list",
+      "message": "list my memories",
+      "wall_s": 105.6,
+      "text": "Here's what I found (the model provider was rate-limited on my final synthesis, so this is the raw evidence):\n\n**Stored memory (2 facts):**\n- #db21e717 [user_preference | importance=0.8] The user prefers dark mode in their editor.\n- #59c90308 [general | importance=0.5] The user's public IP is 41.90.44.19.",
+      "done_provider_usage": {
+        "total_prompt_tokens": 22571,
+        "total_completion_tokens": 256,
+        "total_cached_tokens": 16590,
+        "llm_calls": 4,
+        "prompt_tokens": 5705,
+        "completion_tokens": 15,
+        "total_tokens": 5720,
+        "cached_tokens": 5494,
+        "context_breakdown": {
+          "system_prompt": 1964,
+          "turn_context": 666,
+          "tool_schemas": 2854,
+          "history": 39,
+          "current_message": 7,
+          "turn_additions": 175
+        }
+      }
+    },
+    {
+      "turn": "turn3_forget",
+      "message": "forget that I prefer dark mode",
+      "wall_s": 18.2,
+      "text": "\u26a0\ufe0f The model ran into an issue. Please try again, or switch to a larger model for this task.",
+      "done_provider_usage": {}
+    }
+  ],
+  "rows": [
+    {
+      "id": "db21e717e00d409791f59955592995e7",
+      "content": "The user prefers dark mode in their editor."
+    },
+    {
+      "id": "59c9030835534705971a6bcfaf80bb1c",
+      "content": "The user's public IP is 41.90.44.19."
+    }
+  ],
+  "checks": {
+    "seeded_facts": 2,
+    "deterministic_read_logged": false,
+    "deterministic_delete_logged": false,
+    "listing_has_ids": true,
+    "listing_names_seeded_fact": true,
+    "delete_confirmed_in_chat": false,
+    "preference_row_gone_after_forget": 1,
+    "rows_total": 2,
+    "any_turn_with_provider_usage": true
+  }
+}
