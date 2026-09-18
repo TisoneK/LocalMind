@@ -37,6 +37,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Nia | S015 | deepseek/deepseek-v4-pro | engineer — planning the configurable AI connections layer (settings-driven provider endpoints instead of product-code providers) | Working | Architecture assessment delivered to owner; design parked as P-2026-09-18-1 awaiting approval to build |
+| Zola | S016 | claude-sonnet-5 (Claude Code local) | engineer (ledger sync) — supervisor directive "pull and sync context": pull, verify/status the vendored core, check for drift | Working | Pull + verify done (core 1.2.0 OK); MAJOR update (2.0.1) available upstream, noted only per protocol |
 
 **Clock out when your session ends**: remove your row in the closing
 `chore(ledger):` commit. The board shows who is in the office *now*;
