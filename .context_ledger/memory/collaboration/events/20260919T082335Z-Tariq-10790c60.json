@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T082335Z-Tariq-10790c60",
+  "type": "claim",
+  "session": "S020",
+  "agent": "Tariq",
+  "created": "2026-09-19T08:23:35Z",
+  "issue": "B-2026-09-15-15",
+  "body": "Claiming B-2026-09-15-15 (passive context awareness - the user/env profile built from incidental conversation signals, no \"remember this\" trigger).\n\nIntended change (one surface, one commit family):\n- backend/src/core/memory_intent.py: extend the passive candidate extractor with location/identity/environment statement cues and time-boxed-ephemeral rejection; canonical_key gains an optional subject-hint so a stated location lands on the same subject:location row the boot deduction writes (restatement replaces, never accumulates).\n- backend/src/core/engine/_memory_mixin.py: fold the old inline Path 1 (the plus/minus character-window slice, which double-stored explicit remember-turns under a different key) into the unified candidate pass; every actual passive write emits one visible passive_context_stored event only when _store_fact_if_valid returned True (ADR-64 standing rule); no event on blocked/deduped/volatile-refused.\n- backend/src/core/agent_runtime.py: conversational fast-path epilog runs the same passive extraction (today it only runs on the agent-loop path, so facts stated in casual conversation are lost).\n- backend/src/api/routes/chat.py: bridge passive_context_stored to a dedicated top-level SSE type (the generic obs_event wrapper is dropped by the frontend - same precedent as reflection_lesson).\n- frontend (useLocalMind.ts, CenterPanel.tsx, WorkspaceLayout.tsx): session-scoped passiveMemories log + badge/popover next to the reflection-lesson badge, so what the agent decided to remember on its own is auditable.\n- tests: backend unit tests for extractor/gates/dedup/wiring; frontend hook + badge tests.\n\nWhy safe to take: single-agent office (roster empty at arrival), current.md was Kamau's completed -13 entry (cleared), no peer claims on the event trail. Paths above are disjoint from every released claim I can see on the trail.\n\nConstraints honored (from the row): -3 policy = durability_profile stays the only accept/refuse authority (volatile statements refused, never stored); -4 mechanics = keyed identity + read-back-confirmed mutation, reused unchanged; ADR-64 = visible, not silent.",
+  "paths": ["backend/src/core/memory_intent.py", "backend/src/core/engine/_memory_mixin.py", "backend/src/core/agent_runtime.py", "backend/src/api/routes/chat.py", "backend/src/core/engine/_reflection_mixin.py", "frontend/src/hooks/useLocalMind.ts", "frontend/src/components/layout/CenterPanel.tsx", "frontend/src/components/layout/WorkspaceLayout.tsx", "frontend/src/types/index.ts"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

@@ -34,6 +34,7 @@ from core.agent.constants import MAX_ITERATIONS
 from core.agent.tool_schemas import compact_tool_summary, render_tool_list
 from core.models import Intent
 from core.system_snapshot import get_cached_summary
+from core.user_context import get_cached_fused
 
 
 def _system_env_line() -> str:
@@ -554,11 +555,13 @@ def build_agent_system_prompt(
                 + "\n".join(f"- {fact}" for fact in memory_facts[:10])
                 + "\n"
             )
-        # The boot-cached system summary. The agent
-        # already KNOWS the machine, so it answers CPU/RAM/disk/OS questions
-        # directly instead of reflexively calling sysinfo.
+        # The boot-cached system summary + fused user context. The agent
+        # already KNOWS the machine and the user's regional setting, so it
+        # answers those questions directly instead of calling sysinfo or
+        # assuming/hedging a region on location-sensitive requests.
         _sys = _system_env_line()
-        system_section = f"\n{_sys}\n" if _sys else ""
+        _user = get_cached_fused()
+        system_section = (f"\n{_sys}\n" if _sys else "") + (_user if _user else "")
         # Derive the core/long-tail tool-name lists dynamically
         # from the tier-split constants so this prompt NEVER goes stale when
         # tools move between tiers (an earlier tier move shifted 6 tools

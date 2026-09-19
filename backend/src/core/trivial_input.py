@@ -783,8 +783,24 @@ async def _direct_chat_response(
     system_prompt: str,
 ) -> AsyncIterator[StreamChunk]:
     """Stream a single direct chat call with a minimal system prompt."""
+    # The fast path answers from the machine too: the boot-fused user
+    # context (country/time zone/language) rides this ONE system prompt so
+    # location-sensitive questions are deduced here instead of met with
+    # "I'd need access to your location" — the machine already knows.
+    try:
+        from core.user_context import get_cached_fused_inline
+
+        _user_line = get_cached_fused_inline()
+    except Exception:
+        _user_line = ""
+    _user_suffix = (
+        f"\nUser context (deduced from this machine's settings — use it instead of "
+        f"assuming or hedging): {_user_line}"
+        if _user_line
+        else ""
+    )
     messages = [
-        {"role": "system", "content": system_prompt},
+        {"role": "system", "content": system_prompt + _user_suffix},
     ]
     if history:
         # Include the last few turns for context. Assistant turns are stripped

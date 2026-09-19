@@ -64,7 +64,6 @@ file's git history.
 
 | ID | Summary |
 |----|---------|
-| B-2026-09-15-13 | Deduction engine: fuse signals already in hand (locale, timezone, ISP, files, prior turns) into ONE conclusion and act — no hedged candidate lists, no waiting to be asked. ADR-62 build order 1-2; research doc `plans/2026-09-15-self-improvement-transcript-research.md` §2 Arc A. |
 
 ### Medium Priority
 
@@ -77,6 +76,7 @@ file's git history.
 | B-2026-09-15-7 | Turn economy for verification-heavy tasks: resumable per-phase checkpoints, adaptive time/tool budgets, background continuation, tool batching, graceful completed/stopped-at/what-continues report at cap (not dying mid-sentence). Research doc §2 Arc E. |
 | B-2026-09-09-7 | Stabilise the tests/tools + acceptance-gate nondeterminism (failure set 7↔22 per run, blocks a reliable exit gate): make `verify.py:195` honor cwd injection (it stats repo-root `hello.py` residue today), hunt the cross-file state leak, THEN refresh `scripts/pytest-baseline.txt`. |
 | B-2026-09-15-19 | One-line CI fix: export `PYTHONUTF8=1` on the pytest step in `scripts/ci-check.sh` (~line 79) — five source-grepping tests UnicodeDecodeError on cp1252 Windows boxes otherwise (exit gate fails for environmental reasons). |
+| B-2026-09-19-1 | tests/tools Windows portability: raw Windows `tmp_path` backslashes are f-string-injected into JSON tool args (`Invalid \escape` on every such test) and temp-dir/disallowed-path gates fail on this box — the 13-test `test_find_path.py` cluster plus 11 others reproduce at every revision (24 full-suite failures at exit, S018 provenance-checked node-for-node against `d9751086`); blocks a clean exit gate alongside `B-2026-09-09-7`. |
 | B-2026-08-17-9 | OUTPUT tokens (partial): cut `FILE_READ_MAX_BYTES` 512KB → ~16-32KB for loop injection, add ONE per-tool cap at the `loop.py` ~2580 choke point, truncate re-injected cached obs on dedup hits. ADR-43 L4. |
 
 ### Low Priority

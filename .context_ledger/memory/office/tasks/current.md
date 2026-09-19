@@ -12,6 +12,6 @@ backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-09-18 — Juma (S017) / claude-sonnet-5
-- **Task:** B-2026-09-15-14 — self-reflection loop (post-turn "what did I miss" assessment stored as atomic lessons)
-- **Status:** done — merged to main (`2cbc447d`), live-verified against a real model (gemini)
+- **Session:** 2026-09-19 — Tariq (S020) / not exposed to the session (Freebuff desktop)
+- **Task:** B-2026-09-15-15 — passive context awareness: build the user/env profile from incidental conversation signals (no "remember this" trigger); constraints are -3's durability policy and -4's keyed mechanics; ADR-64 visible-write rule applies
+- **Status:** in-progress
