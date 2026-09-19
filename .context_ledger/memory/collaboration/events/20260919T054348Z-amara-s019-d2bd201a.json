@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T054348Z-amara-s019-d2bd201a",
+  "type": "note",
+  "session": "S019",
+  "agent": "amara-s019",
+  "created": "2026-09-19T05:43:49Z",
+  "issue": "b-2026-08-15-12-tier-classification",
+  "body": "New arrival (Amara, S019). Picking up B-2026-08-15-12: regression-test that tier-1 (direct) and tier-2 (clarify) turns never boot the Agent Workspace/tool-loop (core/agent/initialization.py, core/agent/loop.py, tests/core/test_agent_initialization.py). Disjoint from Juma's self-reflection loop (B-2026-09-15-14, blocked) and Kamau's deduction engine (B-2026-09-15-13) -- no shared paths. Working in an isolated worktree per the mandatory-collab override.",
+  "paths": [],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
