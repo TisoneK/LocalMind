@@ -12,6 +12,6 @@ backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-09-18 — Juma (S017) / claude-sonnet-5
-- **Task:** B-2026-09-15-14 — self-reflection loop (post-turn "what did I miss" assessment stored as atomic lessons)
-- **Status:** done — merged to main (`2cbc447d`), live-verified against a real model (gemini)
+- **Session:** 2026-09-19 — Kamau (S018) / claude-sonnet-5
+- **Task:** B-2026-09-15-13 — deduction engine (fuse the user/environment signals the machine already carries into ONE conclusion and act on it)
+- **Status:** done — merged to main (`ce89d042`, merge `ff24e713`), live-verified end-to-end (before/after on a real model; traces in `scratch/s018/`)

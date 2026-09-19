@@ -286,3 +286,35 @@ never makes an entry eligible.
   dispatch mock to `await asyncio.sleep(0)` immediately, the way the
   file's own pre-existing multi-tool tests already did — it costs nothing
   and matches what real I/O would provide anyway.
+
+### str_replace against CRLF files (2026-09-19, S018)
+
+- **What happened:** every ledger file in this repo is CRLF on disk while
+  git normalizes to LF. A `str_replace` oldString copied from a `git show`
+  output (LF) fails to match the file's CRLF bytes; the same string written
+  by the edit tools itself (with `\r\n`) matches fine. One wrap-up edit
+  burned a retry on this before the pattern was recognized.
+- **Fix applied:** for these files, anchor old/new strings on distinctive
+  text rather than copied line blocks, end-with-`\n` anchors, and let git's
+  LF normalization make the on-disk diff correct — `git diff` then shows
+  only real changes (verified clean for every append this session).
+- **Prevent next time:** when a str_replace "not found" error hits a file
+  you did not create this session, check `file` / `grep -c $'\r'` before
+  hand-matching line endings; on this repo assume CRLF for `.context_ledger/`
+  memory files and CHANGELOG.md.
+
+### Worktree-op cwd slip detached the main checkout (2026-09-19, S018)
+
+- **What happened:** running `git checkout <sha>` inside a command chain
+  whose `cd` had silently failed executed against the MAIN checkout instead
+  of the intended collaboration worktree, leaving main detached mid-wrap-up
+  (caught immediately by `git worktree list`, repaired with `git switch
+  main`, no harm — but a two-command recipe for exactly the kind of accident
+  the isolated-worktree rule exists to prevent).
+- **Fix applied:** repaired; re-ran the interrupted provenance check with
+  explicit `git rev-parse` HEAD assertions before AND after the pytest run
+  so the result carries its own evidence of which tree produced it.
+- **Prevent next time:** never rely on a prior `cd` in a chained command
+  for worktree-scoped git ops — use `git -C <worktree-path>` for every
+  checkout/switch, and assert the expected HEAD (`rev-parse --short HEAD`)
+  before runs whose provenance matters.

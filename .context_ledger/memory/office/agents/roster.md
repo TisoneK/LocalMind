@@ -36,7 +36,6 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Kamau | S018 | claude-sonnet-5 | Deduction engine (B-2026-09-15-13): fuse geo/locale/timezone/ISP signals into one conclusion | Working | checked in (S018 after codename collision with S017); reading protocol + research doc §2 Arc A |
 
 **Clock out when your session ends**: remove your row in the closing
 `chore(ledger):` commit. The board shows who is in the office *now*;
