@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-19T10:43:29Z_
+_Regenerated: 2026-09-19T10:47:01Z_
 
 ## Standing params
 - **Core:** 2.0.2 (locked, verified 2026-09-19)
@@ -16,7 +16,6 @@ _Regenerated: 2026-09-19T10:43:29Z_
 
 ## Office — who's in, right now
 - **Tariq** (S020) — Working — B-2026-09-15-15 — passive context awareness (user/env profile from incidental signals)
-- **Naledi** (S022) — Working — B-2026-09-15-8 — intent-aware "criteria unmet" replan gate
 - **Amara** (S023) — Working — user Q&A — is a CWD/get-cwd tool needed, and should the agent's home default be `~/` in…
 
 ## Current task
@@ -25,7 +24,7 @@ _Regenerated: 2026-09-19T10:43:29Z_
 ## Backlog — High priority (the top of the queue)
 (none)
 
-_11 medium, 7 low priority row(s) — see tasks/backlog.md_
+_10 medium, 7 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 13 entries, last added 2026-09-19
@@ -33,5 +32,5 @@ _11 medium, 7 low priority row(s) — see tasks/backlog.md_
 - plans/decisions.md (ADRs in force — respected, not relitigated): 4 entries, last added 2026-09-19
 
 ## Collaboration
-- 94 event(s) on file; most recent: `20260919T103907Z-Naledi-78e73aa6.json`
+- 95 event(s) on file; most recent: `20260919T104542Z-Naledi-be995b37.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`
