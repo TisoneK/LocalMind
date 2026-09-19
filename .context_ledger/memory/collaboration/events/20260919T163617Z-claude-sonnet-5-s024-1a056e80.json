@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T163617Z-claude-sonnet-5-s024-1a056e80",
+  "type": "claim",
+  "session": "S024",
+  "agent": "claude-sonnet-5-s024",
+  "created": "2026-09-19T16:36:17Z",
+  "issue": "sse-push-events",
+  "body": "Imani (S024): make the chat SSE bridge push obs events as they arrive instead of polling on the 5s heartbeat (evidence: review 2026-09-19-review-s024). Own worktree ../LocalMind-imani. Touches only api/routes/chat.py + a new test; not loop.py/initialization.py.",
+  "paths": ["backend/src/api/routes/chat.py", "backend/tests"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
