@@ -38,6 +38,7 @@ is your stable session tag.
 |------|----------|-------|-------|--------|---------------|
 | Tariq | S020 | not exposed to the session (Freebuff desktop) | B-2026-09-15-15 — passive context awareness (user/env profile from incidental signals) | Working | Startup read next |
 | Zola | S021 | claude-sonnet-5 (Claude Code desktop) | Scan dead code (read-only analysis) | Working | Check-in, about to orient |
+| Naledi | S022 | claude-sonnet-5 (Claude Code desktop) | Awaiting task | Working | Check-in, about to orient |
 
 **Clock out when your session ends**: remove your row in the closing
 `chore(ledger):` commit. The board shows who is in the office *now*;
