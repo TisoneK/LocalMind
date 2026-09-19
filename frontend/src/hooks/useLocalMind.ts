@@ -40,11 +40,17 @@ import type {
   AgentRun,
   AgentRunStatus,
   DiffData,
+  ReflectionLesson,
 } from '@/types';
 
 // cap the accumulated per-turn run groups in the Agent Workspace so a
 // long session doesn't grow the DOM unbounded (older turns pruned, newest kept).
 const MAX_WORKSPACE_TURNS = 10;
+
+// Visible log of the self-reflection loop's autonomous memory writes
+// (B-2026-09-15-14) — capped so a long session doesn't grow the popover
+// unbounded; oldest lessons drop off, newest kept.
+const MAX_REFLECTION_LESSONS = 20;
 
 // ─── Session stats (stats split — bottom-right corner) ────────────────────
 // Per-chat cumulative performance totals. Keyed per hook instance so they
@@ -239,6 +245,10 @@ interface ChatState {
   agentRuns: AgentRun[];
   liveObservation: ObservationData | null;
   lastMetrics: PerformanceMetrics | null;
+  /** Visible log of lessons the self-reflection loop wrote to memory on its
+   *  own this session (B-2026-09-15-14) — accumulates across turns, unlike
+   *  lastMetrics, so the user can review every autonomous write. */
+  reflectionLessons: ReflectionLesson[];
   elapsedMs: number;
   /** Cumulative per-chat totals (stats split): the bottom-
    *  right corner answers "how is this session doing overall" while each
@@ -294,6 +304,7 @@ export function useChat(
   const [agentRuns, setAgentRuns] = useState<AgentRun[]>([]);
   const [liveObservation, setLiveObservation] = useState<ObservationData | null>(null);
   const [lastMetrics, setLastMetrics] = useState<PerformanceMetrics | null>(null);
+  const [reflectionLessons, setReflectionLessons] = useState<ReflectionLesson[]>([]);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [sessionStats, setSessionStats] = useState<SessionStats>({ ..._EMPTY_SESSION_STATS });
   // Mirrors sessionStats for pure, synchronous reads (the accumulation effect
@@ -519,6 +530,9 @@ export function useChat(
           // Don't let the previous session's metrics attach
           // to a different session's messages on the next turn.
           setLastMetrics(null);
+          // The reflection-lesson log is per-session, same scoping as the
+          // memory rows it mirrors (source="reflection", keyed to session_id).
+          setReflectionLessons([]);
           // Stats split: new chat / cleared session → fresh counters.
           applySessionStats({ ..._EMPTY_SESSION_STATS });
           sessionStatsSeededForRef.current = null;
@@ -540,6 +554,7 @@ export function useChat(
         // attach-on-complete effect from stamping the OLD session's turn
         // metrics onto the newly loaded history's last message (review fix).
         setLastMetrics(null);
+        setReflectionLessons([]);
         // Stats split: switch to the other session's cumulative totals (or
         // fresh zeros if this run never chatted there).
         const cached = sessionStatsBySessionRef.current.get(sessionId);
@@ -1640,6 +1655,30 @@ export function useChat(
                 break;
               }
 
+              case 'reflection_lesson': {
+                // The self-reflection loop's autonomous memory write, made
+                // visible per the owner's decision (B-2026-09-15-14): every
+                // lesson it stores on its own shows up here, not just in the
+                // memory store. Accumulates for the session — unlike
+                // lastMetrics, this is a log, not a last-turn snapshot.
+                const lesson = parsed.lesson || {};
+                const text = String(lesson.text || '').trim();
+                if (text) {
+                  setReflectionLessons((prev) => [
+                    ...prev,
+                    {
+                      id: `${Date.now()}-${prev.length}`,
+                      text,
+                      intent: String(lesson.intent || ''),
+                      score: Number(lesson.score || 0),
+                      confidence: String(lesson.confidence || ''),
+                      ts: Date.now(),
+                    },
+                  ].slice(-MAX_REFLECTION_LESSONS));
+                }
+                break;
+              }
+
               case 'terminal_event': {
                 const termEvt = parsed.terminal_event || parsed;
                 if (onTerminalEvent && termEvt) {
@@ -1937,6 +1976,7 @@ export function useChat(
   // the backend, so its "clear stale data" branch never fires for it.
   const resetSession = useCallback(() => {
     setLastMetrics(null);
+    setReflectionLessons([]);
     setLiveObservation(null);
     setElapsedMs(0);
     setCurrentIntent(undefined);
@@ -1949,7 +1989,7 @@ export function useChat(
     sessionStatsSeededForRef.current = null;
   }, [applySessionStats]);
 
-  return { messages, fileDiffs, isStreaming, currentIntent, currentConfidence, activeToolCalls, agentRuns, liveObservation, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages, resetSession, onTerminalEvent };
+  return { messages, fileDiffs, isStreaming, currentIntent, currentConfidence, activeToolCalls, agentRuns, liveObservation, lastMetrics, reflectionLessons, elapsedMs, sessionStats, send, abort, steer, setMessages, resetSession, onTerminalEvent };
 }
 
 // ─── Prompt leak detection (FIX 1) ────────────────────────────────────

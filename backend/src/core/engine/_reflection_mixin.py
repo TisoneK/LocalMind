@@ -111,7 +111,13 @@ class _ReflectionMixin:
                         "VERDICT: OK or ISSUE\n"
                         "If ISSUE:\n"
                         "ISSUE: <brief description of what's wrong>\n"
-                        "CORRECTION: <the corrected facts>"
+                        "CORRECTION: <the corrected facts>\n"
+                        "LESSON: <one generalized, reusable sentence naming the "
+                        "PATTERN behind this mistake — abstracted away from this "
+                        "answer's specific facts, so it heads off the whole "
+                        "mistake category next time instead of just this "
+                        "instance. Omit this line entirely if the issue is a "
+                        "one-off with no generalizable pattern.>"
                         f"{_accuracy_section}"
                     ),
                 },
@@ -221,7 +227,7 @@ class _ReflectionMixin:
                 # Extract correction if provided
                 _correction = ""
                 _corr_match = re.search(
-                    r"CORRECTION:\s*(.+?)(?:\n(?:SCORE|CONFIDENCE|VERDICT|ISSUE)|$)",
+                    r"CORRECTION:\s*(.+?)(?:\n(?:SCORE|CONFIDENCE|VERDICT|ISSUE|LESSON)|$)",
                     review,
                     re.IGNORECASE | re.DOTALL,
                 )
@@ -244,6 +250,51 @@ class _ReflectionMixin:
                         session_id[:8],
                         _correction[:80],
                     )
+
+                # B-2026-09-15-14 — self-reflection loop: the PATTERN behind
+                # this mistake (not the one-off instance) is written to memory
+                # as an atomic lesson, through the same durability/dedup/keyed
+                # gate every other memory write goes through (ADR-63) — never
+                # a bespoke third write path. Unlike the correction above,
+                # this write IS surfaced: the owner's decision (2026-09-18,
+                # P-2026-09-16-36 §2) is that proactive memory writes must be
+                # visible, not silent, so a distinct obs event fires only
+                # when the fact was actually stored (not deduped/refused).
+                _lesson = ""
+                _lesson_match = re.search(
+                    r"LESSON:\s*(.+?)(?:\n(?:SCORE|CONFIDENCE|VERDICT|ISSUE|CORRECTION)|$)",
+                    review,
+                    re.IGNORECASE | re.DOTALL,
+                )
+                if _lesson_match:
+                    _lesson = _lesson_match.group(1).strip()
+
+                if _lesson and len(_lesson) > 10:
+                    try:
+                        _lesson_stored = await self._store_fact_if_valid(
+                            _lesson,
+                            session_id,
+                            obs,
+                            source="reflection",
+                            kind_override="lesson",
+                        )
+                    except Exception:
+                        logger.debug("[reflect] lesson store skipped (non-critical)", exc_info=True)
+                        _lesson_stored = False
+
+                    if _lesson_stored:
+                        logger.info(
+                            "[reflect] lesson noted (session=%s): %s",
+                            session_id[:8],
+                            _lesson[:80],
+                        )
+                        obs.emit(
+                            "reflection_lesson_stored",
+                            intent=intent.value,
+                            lesson=_lesson[:240],
+                            score=_score,
+                            confidence=_confidence,
+                        )
             else:
                 logger.debug(
                     "[reflect] answer passed self-critique (intent=%s, score=%d)",

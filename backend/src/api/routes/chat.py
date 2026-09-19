@@ -1020,6 +1020,25 @@ async def _event_stream(
                         },
                     }
                 )
+            # B-2026-09-15-14 — self-reflection loop: the loop's own
+            # autonomous memory writes must be visible, not silent (owner
+            # decision 2026-09-18, P-2026-09-16-36 §2). The generic
+            # obs_event wrapper above is never matched by the frontend for
+            # an unrecognized type (same reason context_breakdown got its
+            # own dedicated `metrics` event instead), so this fires as its
+            # own top-level SSE type only when a lesson was actually stored.
+            if evt.type == "reflection_lesson_stored":
+                yield _sse(
+                    {
+                        "type": "reflection_lesson",
+                        "lesson": {
+                            "text": evt.data.get("lesson", ""),
+                            "intent": evt.data.get("intent", ""),
+                            "score": evt.data.get("score", 0),
+                            "confidence": evt.data.get("confidence", ""),
+                        },
+                    }
+                )
 
         # the plan covers the whole turn — mark any plan todos
         # the loop didn't advance as complete, live (the finally block repeats

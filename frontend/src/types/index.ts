@@ -594,6 +594,20 @@ export interface PerformanceMetrics {
   contextBreakdown?: Record<string, number>;
 }
 
+/** A pattern-level lesson the self-reflection loop noticed and stored to
+ *  memory on its own — the visible-log surface for proactive memory writes
+ *  (owner decision 2026-09-18, B-2026-09-15-14: silent learning is
+ *  unauditable, so every autonomous lesson write shows up here). */
+export interface ReflectionLesson {
+  id: string;
+  /** The generalized pattern behind the mistake, not the one-off instance. */
+  text: string;
+  intent: string;
+  score: number;
+  confidence: string;
+  ts: number;
+}
+
 export interface ModelOption {
   id: string;
   name: string;

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { findRetryPrompt, CenterPanel } from './CenterPanel';
-import { ChatMessage as ChatMessageType, ModelOption } from '@/types';
+import { ChatMessage as ChatMessageType, ModelOption, ReflectionLesson } from '@/types';
 import { localmindClient as client } from '@/lib/localmind/client';
 
 function msg(role: 'user' | 'assistant', content: string, id: string): ChatMessageType {
@@ -110,6 +110,72 @@ describe('CenterPanel parent-degraded indicator', () => {
     const container = indicator.closest('div[title]') as HTMLElement;
     // The tooltip should still render with the generic degraded message.
     expect(container?.title).toContain('Parent kernel degraded');
+  });
+});
+
+describe('CenterPanel reflection-lesson badge (B-2026-09-15-14)', () => {
+  const lesson: ReflectionLesson = {
+    id: 'l1',
+    text: 'Check locale before assuming a region.',
+    intent: 'analyze',
+    score: 4,
+    confidence: 'medium',
+    ts: 1,
+  };
+
+  it('does NOT render the badge when no lesson has been noted', () => {
+    render(<CenterPanel {...baseProps} health={{ status: 'online' }} reflectionLessons={[]} />);
+    expect(screen.queryByTestId('reflection-lesson-badge')).not.toBeInTheDocument();
+  });
+
+  it('does NOT render the badge when reflectionLessons is omitted', () => {
+    render(<CenterPanel {...baseProps} health={{ status: 'online' }} />);
+    expect(screen.queryByTestId('reflection-lesson-badge')).not.toBeInTheDocument();
+  });
+
+  it('renders the badge with a count once a lesson is noted, closed by default', () => {
+    render(
+      <CenterPanel {...baseProps} health={{ status: 'online' }} reflectionLessons={[lesson]} />,
+    );
+    const badge = screen.getByTestId('reflection-lesson-badge');
+    expect(badge.textContent).toContain('1');
+    expect(screen.queryByTestId('reflection-lesson-panel')).not.toBeInTheDocument();
+  });
+
+  it('clicking the badge opens a panel showing the lesson text — the visible-write surface', () => {
+    render(
+      <CenterPanel {...baseProps} health={{ status: 'online' }} reflectionLessons={[lesson]} />,
+    );
+    fireEvent.click(screen.getByTestId('reflection-lesson-badge'));
+    const panel = screen.getByTestId('reflection-lesson-panel');
+    expect(panel.textContent).toContain('Check locale before assuming a region.');
+  });
+
+  it('closing the panel via the X button hides it again', () => {
+    render(
+      <CenterPanel {...baseProps} health={{ status: 'online' }} reflectionLessons={[lesson]} />,
+    );
+    fireEvent.click(screen.getByTestId('reflection-lesson-badge'));
+    fireEvent.click(screen.getByLabelText('Close reflection lessons'));
+    expect(screen.queryByTestId('reflection-lesson-panel')).not.toBeInTheDocument();
+  });
+
+  it('shows newest lessons first', () => {
+    const older: ReflectionLesson = { ...lesson, id: 'l0', text: 'Older lesson text.' };
+    const newer: ReflectionLesson = { ...lesson, id: 'l1', text: 'Newer lesson text.' };
+    render(
+      <CenterPanel
+        {...baseProps}
+        health={{ status: 'online' }}
+        reflectionLessons={[older, newer]}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('reflection-lesson-badge'));
+    const panel = screen.getByTestId('reflection-lesson-panel');
+    const olderIdx = panel.textContent!.indexOf('Older lesson text.');
+    const newerIdx = panel.textContent!.indexOf('Newer lesson text.');
+    expect(newerIdx).toBeGreaterThanOrEqual(0);
+    expect(olderIdx).toBeGreaterThan(newerIdx);
   });
 });
 
