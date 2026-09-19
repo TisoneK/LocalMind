@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T101517Z-claude-sonnet-5-021-96be4f52",
+  "type": "release",
+  "session": "S021",
+  "agent": "claude-sonnet-5-021",
+  "created": "2026-09-19T10:15:17Z",
+  "issue": "dead-code-cleanup",
+  "body": "Zola (S021): dead-code-cleanup shipped on collab/S021/scan-dead-code (79a4dc91), merging to main now. Ruff clean; affected suites + full backend suite green (3308 passed, 2 pre-existing environmental failures unrelated, matching the documented baseline).",
+  "paths": [],
+  "refs": ["79a4dc91"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
