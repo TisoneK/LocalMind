@@ -37,6 +37,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Imani | S024 | claude-sonnet-5 | Recording a user preference (design decisions must be grounded in the actual design, limits, backlog, impact) | Working | Checked in |
+| Kofi | S025 | unknown (not exposed to the session) | Finishing Tariq's (S020) B-2026-09-15-15 — clear the gate-blocking frontend eslint error peers deferred to him + push his unpushed clock-out | Working | Checked in |
 
 **Clock out when your session ends**: remove your row in the closing
 `chore(ledger):` commit. The board shows who is in the office *now*;
