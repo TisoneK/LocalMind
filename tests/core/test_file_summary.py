@@ -73,3 +73,34 @@ class TestBuildFileTaskSummary:
         summary = build_file_task_summary(calls)
         # JSON decodes \\\\ → \\; the summary shows the real single-backslash path.
         assert "- `C:\\Users\\tison\\file.md` (modified)" in summary
+
+
+class TestOnlySuccessfulWritesAreCreated:
+    """The block is evidence: it must never say "created" for a file that was not."""
+
+    def test_a_failed_write_is_reported_as_not_written(self):
+        calls = [{"name": "file_write", "status": "failed", "tool_args": "a.txt:\n\neta"}]
+        summary = build_file_task_summary(calls)
+        assert "- `a.txt` (NOT written — the write failed)" in summary
+        assert "created" not in summary
+
+    def test_a_write_that_never_finished_is_reported_as_not_written(self):
+        calls = [{"name": "file_write", "status": "started", "tool_args": "a.txt:\n\neta"}]
+        summary = build_file_task_summary(calls)
+        assert "- `a.txt` (NOT written — the write did not finish)" in summary
+
+    def test_a_retry_that_succeeds_wins_over_the_failed_first_attempt(self):
+        calls = [
+            {"name": "file_write", "status": "failed", "tool_args": "a.txt:\n\ne"},
+            {"name": "file_write", "status": "done", "tool_args": "a.txt:\n\neta"},
+        ]
+        summary = build_file_task_summary(calls)
+        assert summary.count("a.txt") == 1
+        assert "- `a.txt` (created, 3 B)" in summary
+        assert "NOT written" not in summary
+
+    def test_rows_without_a_status_are_still_trusted(self):
+        # Rows restored from older saved turns carry no status.
+        summary = build_file_task_summary([{"name": "file_write", "tool_args": "a.txt:\n\nhello"}])
+        assert "- `a.txt` (created, 5 B)" in summary
+

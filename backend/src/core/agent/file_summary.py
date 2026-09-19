@@ -54,17 +54,23 @@ def _bytes_from_call(tc: dict) -> int | None:
     return len(body[1].encode("utf-8"))
 
 
+# Statuses of a tool call that has not (yet) produced a result.
+_UNFINISHED = ("started", "running", "pending", "in_progress")
+
+
 def build_file_task_summary(tool_calls: list) -> str:
     """Build the user-facing 'Files:' block for the final answer.
 
     Returns an empty string when the turn touched no files, so the caller can
-    skip appending. Order-preserving: a path's FIRST occurrence decides its
-    status (a write-then-edit is reported as created).
+    skip appending. Order-preserving: a path's FIRST successful call decides
+    its status (a write-then-edit is reported as created). A path whose every
+    call failed or never finished is listed as NOT written — the block is
+    evidence, so it must never say "created" for a file that was not.
     """
     if not tool_calls:
         return ""
-    lines: list[str] = []
-    seen: set[str] = set()
+    # path -> [first successful call (or None), first call of any outcome]
+    by_path: dict[str, list] = {}
     for tc in tool_calls:
         if not isinstance(tc, dict):
             continue
@@ -72,15 +78,21 @@ def build_file_task_summary(tool_calls: list) -> str:
         if name not in _WRITE_TOOLS:
             continue
         path = _path_from_call(tc)
-        if not path or path in seen:
+        if not path:
             continue
-        seen.add(path)
-        if name == "file_write":
-            size = _bytes_from_call(tc)
-            if size is not None:
-                lines.append(f"- `{path}` (created, {size} B)")
-            else:
-                lines.append(f"- `{path}` (created)")
+        entry = by_path.setdefault(path, [None, tc])
+        status = str(tc.get("status") or "").lower()
+        if entry[0] is None and status != "failed" and status not in _UNFINISHED:
+            entry[0] = tc
+    lines: list[str] = []
+    for path, (ok, first) in by_path.items():
+        if ok is None:
+            status = str(first.get("status") or "").lower()
+            reason = "the write did not finish" if status in _UNFINISHED else "the write failed"
+            lines.append(f"- `{path}` (NOT written — {reason})")
+        elif str(ok.get("name") or ok.get("tool") or "") == "file_write":
+            size = _bytes_from_call(ok)
+            lines.append(f"- `{path}` (created, {size} B)" if size is not None else f"- `{path}` (created)")
         else:
             lines.append(f"- `{path}` (modified)")
     if not lines:

@@ -35,7 +35,11 @@ PROMPTS = [
     # path (not the canned greeting), so it carries real metrics/identity.
     ("how_are_you", "How are you?"),
     ("weather_simple", "What is the capital of France?"),
-    ("branch_count", "We have three branches. Actually, one branch closed last month. We opened two new branches. How many branches do we currently have?"),
+    (
+        "branch_count",
+        "We have three branches. Actually, one branch closed last month. "
+        "We opened two new branches. How many branches do we currently have?",
+    ),
     ("apple_math", "I have 10 apples. I gave 3 to my friend. How many do I have left?"),
     # Greeting-adjacent wellbeing question: it used to match the canned
     # GREETINGS list and got the verbatim "Hi! I'm LocalMind…" reply with
@@ -51,6 +55,10 @@ PROMPTS = [
     # system-prompt text. Should fast-path now.
     ("ram_storage", "Summarize the difference between RAM and storage."),
     ("tcp_udp", "Compare TCP and UDP."),
+    # A file whose requested body is shorter than 5 characters. The write
+    # guard used to reject it as a "placeholder"; the file must be created
+    # with exactly the requested content.
+    ("short_file", 'Create a file notes-short.txt containing "eta", then read it back and confirm.'),
 ]
 
 

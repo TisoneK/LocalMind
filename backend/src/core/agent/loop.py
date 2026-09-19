@@ -330,7 +330,7 @@ def _is_harness_injected(content: str) -> bool:
     return text.startswith(_HARNESS_USER_PREFIXES)
 
 
-def _user_message_text(messages: list[dict]) -> str:
+def _user_message_text(messages: list[dict], limit: Optional[int] = 200) -> str:
     """Return the latest message the USER wrote (for the TaskState objective and
     every consumer that needs "the original request").
 
@@ -349,8 +349,29 @@ def _user_message_text(messages: list[dict]) -> str:
                 continue
             if _is_harness_injected(content):
                 continue
-            return content[:200]
+            return content if limit is None else content[:limit]
     return ""
+
+
+def _content_requested_by_user(content: str, request: str) -> bool:
+    """True when `content` is a literal the user themselves asked to be written.
+
+    The file_write guard refuses very short bodies because a model sometimes
+    passes a placeholder ("read", "code", "yes") when it means a different tool.
+    A body the user spelled out — `containing "eta"` — is the opposite of a
+    placeholder, and refusing it makes the model pad it with invented text.
+    Only an explicit literal counts: the exact text in quotes, or introduced by
+    an unmistakable cue ("containing eta"). A word that merely appears somewhere
+    in the sentence ("then read it back") does not.
+    """
+    literal = (content or "").strip()
+    if not literal or not request:
+        return False
+    esc = re.escape(literal)
+    if re.search(rf"[\"'`\u201c\u2018]\s*{esc}\s*[\"'`\u201d\u2019]", request, re.IGNORECASE):
+        return True
+    cue = r"(?:containing|contains|with (?:the )?(?:text|content|line|word|value)|that says|saying)"
+    return bool(re.search(rf"\b{cue}\s+{esc}(?=[\s.,;:!?]|$)", request, re.IGNORECASE))
 
 
 # Decisions the loop hands the model at each stage. One positive instruction per
@@ -4903,7 +4924,12 @@ class AgentLoop:
                         tool_args = _normalize_write_payload(tool_args)
                         _content = tool_args.get("content", "")
                         _path = tool_args.get("path", "")
-                        if not _content or len(_content.strip()) < 5:
+                        if not _content or (
+                            len(_content.strip()) < 5
+                            and not _content_requested_by_user(
+                                _content, _user_message_text(loop_messages, limit=None)
+                            )
+                        ):
                             logger.info(
                                 f"[agent.loop] file_write called without meaningful content "
                                 f"(path={_path!r}, content={_content.strip()[:20]!r}) — rejecting"
@@ -4916,6 +4942,22 @@ class AgentLoop:
                             )
                             last_tool_failed = True
                             consecutive_failures += 1
+                            # A rejection is a failed tool call: the run tree and
+                            # the UI must see it end, not sit at "started" forever.
+                            if _obs:
+                                _obs.emit(
+                                    "tool_call",
+                                    tool=tool_name,
+                                    label=action_label,
+                                    status="failed",
+                                    output=_truncate_observation(observation),
+                                    latency_ms=round((time.monotonic() - t_tool) * 1000),
+                                    tool_args=tool_input,
+                                    iteration=iteration + 1,
+                                    todo_id=_syn_todo_id or (f"plan-{_plan_step_cursor}" if _plan_steps else None),
+                                    thought=result.raw_content or "",
+                                    reasoning=_step_reasoning(),
+                                )
                             observation_log += (
                                 f"\n[Tool: {tool_name} | Status: REJECTED (content too short)]\n{observation}\n"
                             )
