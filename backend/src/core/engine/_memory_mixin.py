@@ -236,11 +236,23 @@ class _MemoryMixin:
         obs: ObsCollector,
         source: str = "user",
         message: str = "",
-    ) -> None:
+        kind_override: str | None = None,
+    ) -> bool:
         """
         Shared fact validation + storage used by both user and response paths.
         Applies: negative learning gate → durability policy → deduplication
         gate → importance scoring → keyed store.
+
+        Returns True only when the fact was actually written — blocked,
+        volatile-refused, and deduped facts all return False. Callers that
+        surface a write to the user (e.g. a visible reflection-lesson log)
+        must check this instead of assuming success (ADR-18/63: a claim
+        about a mutation is derived from its outcome, not from intent).
+
+        `kind_override` tags the stored `memory_kind` metadata with a value
+        other than the durability profile's own classification — used by
+        the self-reflection loop to mark a row "lesson" while the volatile
+        gate still runs against the fact's actual content.
         """
         from core.memory_intent import MemoryDurability, canonical_key, durability_profile
 
@@ -260,7 +272,7 @@ class _MemoryMixin:
             if re.search(pattern, fact_lower, re.IGNORECASE):
                 logger.warning(f"[memory gate] blocked harmful fact: {fact[:80]}")
                 obs.emit("memory_blocked", reason="negative_learning_gate", preview=fact[:60])
-                return
+                return False
 
         # Durability gate — the autonomous paths need the same policy as the
         # explicit one, or a live value simply arrives by another door (the
@@ -269,7 +281,7 @@ class _MemoryMixin:
         if _durability.kind is MemoryDurability.VOLATILE:
             logger.info(f"[memory gate] refused volatile fact: {fact[:80]}")
             obs.emit("memory_blocked", reason="volatile_fact", preview=fact[:60])
-            return
+            return False
 
         # Deduplication gate: skip if a near-identical fact already exists
         existing_facts = await self._memory.search(query=fact, session_id=session_id, top_k=3)
@@ -280,7 +292,7 @@ class _MemoryMixin:
                     f"[memory dedup] skipped near-duplicate fact (sim={similarity:.2f}): {fact[:60]}"
                 )
                 obs.emit("memory_deduped", similarity=round(similarity, 2), preview=fact[:60])
-                return
+                return False
 
         importance = (
             0.8
@@ -299,13 +311,14 @@ class _MemoryMixin:
             # instead of appending another near-copy.
             key=canonical_key(fact),
             extra_metadata={
-                "memory_kind": _durability.kind.value,
+                "memory_kind": kind_override or _durability.kind.value,
                 "memory_freshness": _durability.freshness,
                 "memory_confidence": str(_durability.confidence),
             },
         )
         if stored:
             obs.emit("memory_stored", fact_preview=fact[:60], importance=importance, source=source)
+        return bool(stored)
 
     @staticmethod
     def _simple_similarity(a: str, b: str) -> float:

@@ -4,13 +4,14 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import {
   Cpu,
   Brain,
+  Lightbulb,
   Wifi,
   WifiOff,
   Shield,
   Loader2,
   X,
 } from 'lucide-react';
-import { ChatMessage as ChatMessageType, ModelOption, DiffData } from '@/types';
+import { ChatMessage as ChatMessageType, ModelOption, DiffData, ReflectionLesson } from '@/types';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { TranscriptContextMenu } from '@/components/chat/TranscriptContextMenu';
@@ -85,6 +86,10 @@ interface CenterPanelProps {
    *  meter opens a breakdown panel so the user can see WHAT fills the
    *  window — system prompt, tool schemas, history, tool results, ... */
   contextBreakdown?: Record<string, number>;
+  /** Visible log of lessons the self-reflection loop wrote to memory on its
+   *  own this session (B-2026-09-15-14) — clicking the lesson badge opens
+   *  the list so proactive writes are never silent. */
+  reflectionLessons?: ReflectionLesson[];
   /** Per-path diff hunks captured this turn (preview Diff mode). */
   fileDiffs?: Record<string, DiffData>;
   /** Current chat mode. */
@@ -107,6 +112,7 @@ export function CenterPanel({
   contextTokens,
   cachedTokens,
   contextBreakdown,
+  reflectionLessons,
   fileDiffs,
   chatMode,
   onChatModeChange,
@@ -244,6 +250,16 @@ export function CenterPanel({
     if (breakdownEntries.length > 0) setBreakdownOpen((o) => !o);
   };
 
+  // Reflection-lesson log (B-2026-09-15-14): visible surface for the
+  // self-reflection loop's autonomous memory writes. Owner decision
+  // 2026-09-18 — proactive writes must never be silent, so every lesson the
+  // loop stores shows up here, newest first.
+  const [lessonsOpen, setLessonsOpen] = useState(false);
+  const lessons = reflectionLessons ?? [];
+  const toggleLessons = () => {
+    if (lessons.length > 0) setLessonsOpen((o) => !o);
+  };
+
   // Clean up model name for display: remove internal suffixes, format nicely
   const rawModelName = selectedModel?.name || selectedModel?.id || '';
   const displayModelName = rawModelName
@@ -376,6 +392,54 @@ export function CenterPanel({
             <Brain className="h-3 w-3 text-brand-amber" />
             <span className="text-[10px] text-brand-green-muted">{memoryCount}</span>
           </div>
+          {/* Reflection-lesson badge: the visible log for the self-reflection
+              loop's own autonomous memory writes (B-2026-09-15-14). Hidden
+              when no lesson has been noted this session — nothing to click. */}
+          {lessons.length > 0 && (
+            <div className="relative">
+              <div
+                className="flex items-center gap-1.5 cursor-pointer"
+                onClick={toggleLessons}
+                data-testid="reflection-lesson-badge"
+                title={`${lessons.length} lesson${lessons.length === 1 ? '' : 's'} the agent noted about its own answers this session. Click to review what it decided to remember.`}
+              >
+                <Lightbulb className="h-3 w-3 text-brand-amber" />
+                <span className="text-[10px] text-brand-green-muted">{lessons.length}</span>
+              </div>
+              {lessonsOpen && (
+                <div
+                  className="absolute right-0 top-full mt-1.5 z-30 w-72 max-h-80 overflow-y-auto rounded-md border border-brand-border bg-brand-bg-panel p-2.5 shadow-xl"
+                  data-testid="reflection-lesson-panel"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[9px] uppercase tracking-wider text-brand-green-muted">
+                      Self-reflection lessons
+                    </span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setLessonsOpen(false); }}
+                      className="text-brand-green-muted hover:text-brand-green-soft"
+                      aria-label="Close reflection lessons"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                  {[...lessons].reverse().map((lesson) => (
+                    <div key={lesson.id} className="mb-2 last:mb-0 pb-2 last:pb-0 border-b last:border-0 border-brand-border">
+                      <div className="text-[10px] text-brand-green-soft leading-snug">{lesson.text}</div>
+                      <div className="text-[9px] text-brand-green-muted mt-0.5">
+                        {lesson.intent && `${lesson.intent} · `}score {lesson.score}/10
+                        {lesson.confidence && ` · ${lesson.confidence} confidence`}
+                      </div>
+                    </div>
+                  ))}
+                  <div className="text-[9px] leading-snug text-brand-green-muted mt-1.5 pt-1.5 border-t border-brand-border">
+                    Written to memory automatically, without being asked — this
+                    log exists so that stays visible instead of silent.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <div className="w-px h-3 bg-brand-border" />
           {/* Online/offline status */}
           <div className="flex items-center gap-1" title={isOnline ? 'Online' : 'Offline'}>

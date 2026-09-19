@@ -143,7 +143,7 @@ export function WorkspaceLayout() {
       // Non-fatal — default to new chat.
     });
   }, [sessions, sessionsLoading]);
-  const { messages, fileDiffs, isStreaming, activeToolCalls, agentRuns, liveObservation, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages, resetSession } =
+  const { messages, fileDiffs, isStreaming, activeToolCalls, agentRuns, liveObservation, lastMetrics, reflectionLessons, elapsedMs, sessionStats, send, abort, steer, setMessages, resetSession } =
     useChat(currentSessionId, handleTerminalEvent);
   const { actions: apiActions, refresh: refreshActions } = useActions(currentSessionId, isStreaming);
   const { files, refresh: refreshFiles } = useFileTree();
@@ -511,6 +511,7 @@ export function WorkspaceLayout() {
           contextTokens={meterBasisTokens}
           cachedTokens={cachedTokensForMeter}
           contextBreakdown={lastMetrics?.contextBreakdown}
+          reflectionLessons={reflectionLessons}
           fileDiffs={fileDiffs}
         />
       </div>
