@@ -24,6 +24,8 @@ export interface TurnStep {
   label: string;
   detail?: string;
   state: StepState;
+  /** `warn` = a recovery, not a failure (e.g. a replan) — shown amber, never red. */
+  tone?: 'warn';
   durationMs?: number;
   /** Set on `tool` steps — the underlying call, for the expanded detail. */
   tool?: ToolCall;
@@ -69,9 +71,13 @@ const CHECKPOINT_PHASES: ReadonlySet<AgentPhase['type']> = new Set([
 ]);
 
 const FAILED_PHASES: ReadonlySet<AgentPhase['type']> = new Set([
-  'gate_failed_replan',
   'orchestrator_replan_failed',
   'agent_loop_failure',
+]);
+
+const WARN_PHASES: ReadonlySet<AgentPhase['type']> = new Set([
+  'gate_failed_replan',
+  'orchestrator_replan_start',
 ]);
 
 // [while running, once finished] — a finished row must not read "Running…".
@@ -105,11 +111,17 @@ export function toolLabel(tool: ToolCall, state: StepState = 'running'): string 
 
 function toolStep(tool: ToolCall, settled: boolean): TurnStep {
   const state = toolState(tool.status, settled);
+  const label = toolLabel(tool, state);
+  // Backend labels often already carry the target ("Exploring (list): /path") —
+  // don't print it a second time as the detail.
+  const target = tool.input?.trim().split(/\s+/).pop();
+  const repeated = !!target && target.length >= 4 && label.includes(target);
+  const detail = tool.input && !repeated ? tool.input : undefined;
   return {
     id: `tool:${tool.id}`,
     kind: 'tool',
-    label: toolLabel(tool, state),
-    detail: tool.input || undefined,
+    label,
+    detail,
     state,
     durationMs: tool.duration,
     tool,
@@ -267,7 +279,11 @@ export function buildTurn(
       ? `${plural(running.length, 'tool')} running`
       : toolLabel(active.tool as ToolCall, 'running')
     : streaming
-      ? message.statusText || ''
+      ? // Between tools the model is reading the result; the backend's status text
+        // at that point is the previous tool's "Done — …" line, which reads as stale.
+        leaves.length > 0
+        ? 'Thinking about the result'
+        : message.statusText || ''
       : '';
 
   const parts: string[] = [];
@@ -292,5 +308,6 @@ function checkpointStep(p: AgentPhase): TurnStep {
     label: p.label,
     detail: p.detail,
     state: FAILED_PHASES.has(p.type) ? 'failed' : 'done',
+    ...(WARN_PHASES.has(p.type) ? { tone: 'warn' as const } : {}),
   };
 }

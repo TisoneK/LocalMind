@@ -85,7 +85,10 @@ describe('buildTurn', () => {
       ],
     });
     expect(t.steps.map((s) => s.kind)).toEqual(['checkpoint', 'tool', 'tool']);
-    expect(t.steps[0].state).toBe('failed');
+    // A replan is a recovery: amber, not a failed step.
+    expect(t.steps[0].state).toBe('done');
+    expect(t.steps[0].tone).toBe('warn');
+    expect(t.counts.failed).toBe(0);
   });
 
   it('uses past tense once a tool is done', () => {
@@ -110,6 +113,16 @@ describe('buildTurn', () => {
     const t = buildTurn({ statusText: 'Understanding your request…' }, { isStreaming: true });
     expect(t.state).toBe('running');
     expect(t.activeLabel).toBe('Understanding your request…');
+  });
+
+  it('does not repeat the target when the label already carries it', () => {
+    const t = buildTurn({ toolCalls: [tool('a', { label: 'Exploring (list): /tmp/x', input: 'list /tmp/x' })] });
+    expect(t.steps[0].detail).toBeUndefined();
+  });
+
+  it('says it is reading the result between tools, not the stale status line', () => {
+    const t = buildTurn({ toolCalls: [tool('a')], statusText: 'Done — Exploring' }, { isStreaming: true });
+    expect(t.activeLabel).toBe('Thinking about the result');
   });
 
   it('derives the plan and current item from todos', () => {

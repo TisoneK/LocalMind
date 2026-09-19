@@ -82,10 +82,30 @@ function StepRow({ step, depth = 0 }: { step: TurnStep; depth?: number }) {
     );
   }
 
+  if (step.kind === 'checkpoint') {
+    const warn = step.tone === 'warn';
+    const color = step.state === 'failed' ? 'text-red-300' : warn ? 'text-brand-amber' : 'text-brand-green-soft';
+    return (
+      <motion.div {...enter({ x: -4 })} className="flex items-start gap-2 px-1 py-1 text-[11.5px]">
+        {step.state === 'failed' ? (
+          <X className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-400" aria-label="failed" />
+        ) : warn ? (
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-amber" aria-label="replanning" />
+        ) : (
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-green" aria-label="verified" />
+        )}
+        <div className="min-w-0">
+          <div className={color}>{step.label}</div>
+          {step.detail && <div className="text-[10.5px] leading-snug text-brand-green-muted">{step.detail}</div>}
+        </div>
+      </motion.div>
+    );
+  }
+
   const nested = step.kind === 'agent' || step.kind === 'parallel';
   const expandable = nested || !!step.detail || !!step.tool?.output || !!step.tool?.error;
   const Icon =
-    step.kind === 'agent' ? Bot : step.kind === 'thought' ? Brain : step.kind === 'checkpoint' ? AlertTriangle : TOOL_ICONS[step.tool?.name ?? ''] ?? Terminal;
+    step.kind === 'agent' ? Bot : step.kind === 'thought' ? Brain : TOOL_ICONS[step.tool?.name ?? ''] ?? Terminal;
   // Nested groups start open while running so parallel work is visible without a click.
   const isOpen = nested ? open || step.state === 'running' : open;
 
@@ -102,9 +122,11 @@ function StepRow({ step, depth = 0 }: { step: TurnStep; depth?: number }) {
       >
         <StateIcon state={step.state} />
         <Icon className="h-3 w-3 shrink-0 text-brand-green-muted" aria-hidden />
-        <span className={`shrink-0 ${step.state === 'failed' ? 'text-red-300' : 'text-brand-green'}`}>{step.label}</span>
+        <span className={`min-w-0 truncate ${step.state === 'failed' ? 'text-red-300' : 'text-brand-green'}`} title={step.label}>
+          {step.label}
+        </span>
         {step.kind === 'tool' && step.detail && (
-          <span className="min-w-0 truncate font-mono text-[10.5px] text-brand-green-muted">{step.detail}</span>
+          <span className="min-w-0 shrink-[4] truncate font-mono text-[10.5px] text-brand-green-muted">{step.detail}</span>
         )}
         <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[10px] text-brand-green-muted">
           <RowClock step={step} />
@@ -213,11 +235,11 @@ export const TurnView = memo(function TurnView({ message, todos, isStreaming }: 
           >
             <ChevronRight className={`h-3.5 w-3.5 text-brand-green-muted transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden />
             <StateIcon state={failed ? 'failed' : turn.state} />
-            <span className="font-medium text-brand-green">{title}</span>
+            <span className="shrink-0 whitespace-nowrap font-medium text-brand-green">{title}</span>
             {sub && <span className="min-w-0 truncate text-brand-green-muted">· {sub}</span>}
-            {turn.plan && (
+            {turn.plan && turn.plan.total > 1 && (
               <span
-                className="ml-auto shrink-0 rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-brand-green-soft"
+                className="ml-auto shrink-0 whitespace-nowrap rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-brand-green-soft"
                 title={turn.plan.items[turn.plan.currentIndex]?.label}
               >
                 {turn.plan.done === turn.plan.total

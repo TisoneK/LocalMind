@@ -643,6 +643,9 @@ export function CenterPanel({
             // the status shows "Searching..." / "Fetching..." alongside the
             // tool cards in the Actions panel.
             if (hasContent) return null;
+            // Once the assistant reply exists its turn header (spinner, status,
+            // heartbeat) is the one live indicator — a second one just repeats it.
+            if (lastMsg?.role === 'assistant') return null;
             // Get the status text — prefer the real pipeline status, fall back
             // to "Thinking" only if the model is actually reasoning, otherwise
             // "Working on it..." as the initial acknowledgment.
