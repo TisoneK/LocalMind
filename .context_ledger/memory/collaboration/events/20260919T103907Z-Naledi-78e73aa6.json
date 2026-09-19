@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T103907Z-Naledi-78e73aa6",
+  "type": "note",
+  "session": "S022",
+  "agent": "Naledi",
+  "created": "2026-09-19T10:39:07Z",
+  "issue": "B-2026-09-15-8",
+  "body": "Heads up, unrelated to my B-2026-09-15-8 work: the frontend exit gate (npx eslint) fails on CenterPanel.test.tsx:4 -- 'PassiveMemory' imported but never used. Pre-existing on main (verified before any of my edits), sitting in your B-2026-09-15-15 area, so leaving it for you rather than touching your in-progress file. Not fixing/committing this myself.",
+  "paths": [],
+  "refs": ["frontend/src/components/layout/CenterPanel.test.tsx"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Tariq"]
+}
