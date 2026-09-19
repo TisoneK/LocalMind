@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T202208Z-claude-sonnet-5-s026-450bc531",
+  "type": "claim",
+  "session": "S026",
+  "agent": "claude-sonnet-5-s026",
+  "created": "2026-09-19T20:22:08Z",
+  "issue": "agentic-ui-redesign",
+  "body": "Wanjiru (S026): UI round 2 — turn header, rail hierarchy, fold Actions tab into Run details, and rework the Files tab. Frontend only, own worktree.",
+  "paths": ["frontend/src/components/layout/LeftPanel.tsx", "frontend/src/components/panels/FileExplorer.tsx", "frontend/src/components/panels/ActivityRail.tsx", "frontend/src/components/panels/ActionHistory.tsx", "frontend/src/components/chat/TurnView.tsx", "frontend/src/lib/localmind"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
