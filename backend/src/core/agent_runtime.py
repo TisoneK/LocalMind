@@ -22,7 +22,7 @@ import time
 from typing import AsyncIterator, Optional
 
 from agents.parent import ParentAgent
-from core.agent.constants import AGENT_ALLOWED_TOOLS
+from core.agent.constants import AGENT_ALLOWED_TOOLS, POST_TURN_LLM_BUDGET_S
 from core.agent.loop import AgentLoop, TerminalProviderError
 from core.agent.models import strip_worker_reports
 from core.agent_workspace import build_workspace_artifacts
@@ -183,6 +183,33 @@ def _summarize_tool_actions(collector: ObsCollector) -> str:
         if len(seen) >= 3:
             break
     return ", ".join(seen)
+
+
+async def _run_bounded_services(services, budget_s: float, collector) -> None:
+    """Run post-answer services one after another inside ONE shared time budget.
+
+    ``services`` is a list of ``(name, coroutine_factory)``. Each gets whatever
+    budget remains; a service that runs out is cancelled and reported as a
+    ``post_turn_timeout`` event (never silent), the rest are skipped the same
+    way, and the turn closes. They stay serial on purpose: two concurrent calls
+    to a single-provider quota trip its concurrency limit. A failure in one
+    service never stops the next; cancellation of the turn itself propagates.
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + budget_s
+    for name, factory in services:
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            collector.emit("post_turn_timeout", service=name, budget_s=budget_s, skipped=True)
+            logger.warning("[agent-runtime] post-turn %s skipped — %.0fs budget spent", name, budget_s)
+            continue
+        try:
+            await asyncio.wait_for(factory(), timeout=remaining)
+        except asyncio.TimeoutError:
+            collector.emit("post_turn_timeout", service=name, budget_s=budget_s, skipped=False)
+            logger.warning("[agent-runtime] post-turn %s cut off — %.0fs budget spent", name, budget_s)
+        except Exception:
+            logger.debug("[agent-runtime] post-turn %s skipped", name, exc_info=True)
 
 
 def _history_without_current_turn(history: list, message: str) -> list:
@@ -2128,14 +2155,22 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
 
         # Reflection and response-fact extraction remain post-turn services;
         # they never make routing decisions or expose child tool output.
-        try:
-            await self._maybe_store_response_facts(response_text, session_id, collector, user_message=message)
-        except Exception:
-            logger.debug("[agent-runtime] response fact extraction skipped", exc_info=True)
-        try:
-            await self._reflect_on_answer(response_text, Intent.ANALYZE, message, session_id, collector)
-        except Exception:
-            logger.debug("[agent-runtime] reflection skipped", exc_info=True)
+        await _run_bounded_services(
+            [
+                (
+                    "fact_extraction",
+                    lambda: self._maybe_store_response_facts(
+                        response_text, session_id, collector, user_message=message
+                    ),
+                ),
+                (
+                    "reflection",
+                    lambda: self._reflect_on_answer(response_text, Intent.ANALYZE, message, session_id, collector),
+                ),
+            ],
+            POST_TURN_LLM_BUDGET_S,
+            collector,
+        )
         total_ms = round((time.monotonic() - started) * 1000)
 
         # Deterministic file-task summary appended to the final

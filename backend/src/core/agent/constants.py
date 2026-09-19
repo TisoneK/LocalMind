@@ -142,6 +142,14 @@ VERIFY_CODE_EXEC: bool = True
 
 REFLECT_ENABLED: bool = True
 
+# Shared wall-clock budget for the post-answer LLM services (response-fact
+# extraction + reflection). They run after the answer is streamed but before
+# the turn closes, so an unresponsive provider call used to hold `done` for
+# minutes (adapter read timeout x retries; one live glm turn sat 9 minutes
+# after its answer was finished). A healthy reflection takes 3-31 s across
+# models, so this leaves generous room and only cuts a genuine hang.
+POST_TURN_LLM_BUDGET_S: float = float(os.environ.get("LOCALMIND_POST_TURN_BUDGET_S", "90"))
+
 REFLECT_INTENTS: frozenset = frozenset(
     {
         Intent.SHELL,
