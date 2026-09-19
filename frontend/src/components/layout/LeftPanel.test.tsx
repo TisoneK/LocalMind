@@ -19,8 +19,6 @@ function renderPanel(over: Partial<React.ComponentProps<typeof LeftPanel>> = {})
     sessions,
     actions: [],
     files: [],
-    todos: [],
-    activeToolCalls: [],
     models: [],
     selectedModel: 'm',
     onModelChange: vi.fn(),
@@ -31,8 +29,6 @@ function renderPanel(over: Partial<React.ComponentProps<typeof LeftPanel>> = {})
     onDeleteSessions: vi.fn(),
     onExportSessions: vi.fn(),
     onCopySessions: vi.fn(),
-    onToggleTodo: vi.fn(),
-    onAddTodo: vi.fn(),
     ...over,
   };
   render(<LeftPanel {...props} />);
@@ -135,9 +131,7 @@ describe('LeftPanel multi-select', () => {
       sessions,
       actions: [],
       files: [],
-      todos: [],
-      activeToolCalls: [],
-      models: [],
+          models: [],
       selectedModel: 'm',
       onModelChange: vi.fn(),
       currentSessionId: null,
@@ -147,9 +141,7 @@ describe('LeftPanel multi-select', () => {
       onDeleteSessions: vi.fn(),
       onExportSessions: vi.fn(),
       onCopySessions: vi.fn(),
-      onToggleTodo: vi.fn(),
-      onAddTodo: vi.fn(),
-    };
+        };
     // Production wiring: onChatTabShown clears the forceChatTab flag in the
     // parent (WorkspaceLayout: `onChatTabShown={() => setForceChatTab(false)}`).
     // Mirror that with a re-render so the effect consumes the flag exactly once.
@@ -178,9 +170,7 @@ describe('LeftPanel multi-select', () => {
       sessions,
       actions: [],
       files: [],
-      todos: [],
-      activeToolCalls: [],
-      models: [],
+          models: [],
       selectedModel: 'm',
       onModelChange: vi.fn(),
       currentSessionId: null,
@@ -190,9 +180,7 @@ describe('LeftPanel multi-select', () => {
       onDeleteSessions: vi.fn(),
       onExportSessions: vi.fn(),
       onCopySessions: vi.fn(),
-      onToggleTodo: vi.fn(),
-      onAddTodo: vi.fn(),
-    };
+        };
     // Production wiring: shown → flag cleared.
     let forceChatTab = true;
     const onChatTabShown = vi.fn(() => {
@@ -220,10 +208,6 @@ describe('LeftPanel multi-select', () => {
     renderPanel({
       actions: [
         { id: 'a1', type: 'shell', label: 'Run command', detail: 'ls', status: 'done', timestamp: '09:00', iteration: 1 },
-      ],
-      // A non-empty activeToolCalls used to force the compact pill branch.
-      activeToolCalls: [
-        { id: 'call_1', name: 'shell', status: 'done', input: 'ls', label: '', duration: undefined },
       ],
     });
     fireEvent.click(screen.getByText('Actions'));
@@ -255,5 +239,11 @@ describe('LeftPanel multi-select', () => {
     renderPanel();
     fireEvent.click(screen.getByTestId('session-files-toggle-a'));
     expect(await screen.findByText(/No files yet/i)).toBeInTheDocument();
+  });
+
+  it('no longer carries the task list or a running-tasks block (they live in the Activity rail)', () => {
+    renderPanel();
+    expect(screen.queryByText('Todos')).toBeNull();
+    expect(screen.queryByText(/tasks? running/)).toBeNull();
   });
 });

@@ -44,4 +44,31 @@ describe('ActivityRail', () => {
     fireEvent.click(screen.getByText('Run details'));
     expect(screen.getByTestId('run-details')).toBeInTheDocument();
   });
+
+  it('is the one place tasks are shown and edited', () => {
+    const onToggle = vi.fn();
+    const onAdd = vi.fn();
+    render(
+      <ActivityRail
+        runs={[]}
+        isStreaming={false}
+        todos={[{ id: 't1', text: 'Write the report', completed: false, order: 0 }]}
+        onToggleTodo={onToggle}
+        onAddTodo={onAdd}
+      />,
+    );
+    expect(screen.getByTestId('rail-tasks')).toBeInTheDocument();
+    expect(screen.getByText('Write the report')).toBeInTheDocument();
+    // Tasks are drawn once — no second plan list beside them.
+    expect(screen.getAllByText('Write the report')).toHaveLength(1);
+  });
+
+  it('offers Cancel only while something is running, and calls it', () => {
+    const onAbort = vi.fn();
+    const { rerender } = render(<ActivityRail runs={[]} isStreaming={false} onAbort={onAbort} />);
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+    rerender(<ActivityRail runs={[parent([tool('a', { status: 'running' })])]} isStreaming onAbort={onAbort} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onAbort).toHaveBeenCalledTimes(1);
+  });
 });

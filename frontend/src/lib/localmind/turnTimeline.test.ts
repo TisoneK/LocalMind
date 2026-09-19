@@ -101,6 +101,10 @@ describe('buildTurn', () => {
     expect(t.state).toBe('done');
     expect(t.steps[0].state).toBe('pending');
     expect(t.counts.running).toBe(0);
+    // It never reported back: say so instead of claiming it ran.
+    expect(t.steps[0].note).toBe('no result');
+    expect(t.counts.unfinished).toBe(1);
+    expect(t.summary).toBe("1 didn't finish");
   });
 
   it('summarises a finished turn', () => {

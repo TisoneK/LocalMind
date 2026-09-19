@@ -9,26 +9,37 @@
 import { useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { Bot, ChevronRight, FileText } from 'lucide-react';
-import type { AgentRun, DiffData, TodoItem } from '@/types';
+import type { ActionItem, AgentRun, DiffData, TodoItem } from '@/types';
 import { buildRail } from '@/lib/localmind/activityRail';
 import { useEnterMotion } from '@/lib/localmind/motion';
 import { StateIcon } from '@/components/chat/StateIcon';
 import { useElapsedSeconds } from '@/lib/localmind/useElapsedSeconds';
 import { AgentWorkspace } from '@/components/panels/AgentWorkspace';
+import { TodoList } from '@/components/panels/TodoList';
 
 interface ActivityRailProps {
   runs: AgentRun[];
+  /** The session's tasks — the one place the plan is shown and edited. */
   todos?: TodoItem[];
+  /** Actions per task, for the count badge and the highlighted active step. */
+  actions?: ActionItem[];
+  onToggleTodo?: (id: string, completed: boolean) => void;
+  onAddTodo?: (text: string) => void;
+  /** Cancel the running turn; the button shows while something is running. */
+  onAbort?: () => void;
   fileDiffs?: Record<string, DiffData>;
   isStreaming?: boolean;
 }
 
-function Section({ title, count, children }: { title: string; count?: string; children: ReactNode }) {
+function Section({ title, count, action, children }: { title: string; count?: string; action?: ReactNode; children: ReactNode }) {
   return (
     <section className="border-b border-white/[0.06] px-3 py-2.5">
       <div className="mb-1.5 flex items-center justify-between text-[10px] font-medium uppercase tracking-wider text-brand-green-muted">
         <span>{title}</span>
-        {count && <span className="normal-case tracking-normal">{count}</span>}
+        <span className="flex items-center gap-2 normal-case tracking-normal">
+          {count}
+          {action}
+        </span>
       </div>
       {children}
     </section>
@@ -53,10 +64,16 @@ function NowRow({ label, agent, detail }: { label: string; agent: string; detail
   );
 }
 
-export function ActivityRail({ runs, todos, fileDiffs, isStreaming }: ActivityRailProps) {
-  const rail = buildRail({ runs, todos, fileDiffs, isStreaming });
+export function ActivityRail({ runs, todos = [], actions, onToggleTodo, onAddTodo, onAbort, fileDiffs, isStreaming }: ActivityRailProps) {
+  const rail = buildRail({ runs, fileDiffs, isStreaming });
   const [details, setDetails] = useState(false);
   const live = rail.now.length > 0 || !!isStreaming;
+  // Tasks sit right under "Now" (or under the idle note) so the plan reads next to what is running.
+  const tasksSection = (
+    <section className="border-b border-white/[0.06] px-3 py-2.5" data-testid="rail-tasks">
+      <TodoList todos={todos} actions={actions} onToggle={onToggleTodo} onAdd={onAddTodo} />
+    </section>
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto" data-testid="activity-rail">
@@ -69,12 +86,30 @@ export function ActivityRail({ runs, todos, fileDiffs, isStreaming }: ActivityRa
       </div>
 
       {rail.empty && !live ? (
+        <>
         <p className="px-3 py-4 text-[11.5px] text-brand-green-muted">
           Nothing running. Agent work — what is running, the plan and the files it touches — shows up here as it happens.
         </p>
+        {tasksSection}
+        </>
       ) : (
         <>
-          <Section title="Now" count={rail.now.length > 0 ? `${rail.now.length} running` : undefined}>
+          <Section
+            title="Now"
+            count={rail.now.length > 0 ? `${rail.now.length} running` : undefined}
+            action={
+              onAbort && live ? (
+                <button
+                  type="button"
+                  onClick={onAbort}
+                  title="Cancel the running turn"
+                  className="rounded border border-red-400/30 bg-red-400/10 px-1.5 py-0.5 text-[9px] font-medium text-red-300 hover:bg-red-400/20"
+                >
+                  Cancel
+                </button>
+              ) : undefined
+            }
+          >
             {rail.now.length > 0 ? (
               <div className="space-y-1">
                 {rail.now.map((n) => (
@@ -86,38 +121,7 @@ export function ActivityRail({ runs, todos, fileDiffs, isStreaming }: ActivityRa
             )}
           </Section>
 
-          {rail.plan && (
-            <Section title="Plan" count={`${rail.plan.done}/${rail.plan.total}`}>
-              <div className="mb-2 h-1 overflow-hidden rounded-full bg-white/10" aria-hidden>
-                <div
-                  className="h-full rounded-full bg-brand-green transition-[width] duration-500"
-                  style={{ width: `${(rail.plan.done / rail.plan.total) * 100}%` }}
-                />
-              </div>
-              <ul className="space-y-1">
-                {rail.plan.items.map((i) => (
-                  <li key={i.id} className={`flex items-start gap-2 text-[11.5px] ${i.state === 'pending' ? 'text-brand-green-muted' : 'text-brand-green'}`}>
-                    <span className="mt-0.5">
-                      <StateIcon state={i.state} />
-                    </span>
-                    <div className="min-w-0">
-                      <span className={i.state === 'done' ? 'line-through decoration-white/20' : ''}>{i.label}</span>
-                      {i.children && (
-                        <ul className="mt-0.5 space-y-0.5 border-l border-white/10 pl-2.5">
-                          {i.children.map((c) => (
-                            <li key={c.id} className="flex items-center gap-1.5 text-[10.5px] text-brand-green-muted">
-                              <StateIcon state={c.state} className="h-3 w-3" />
-                              {c.label}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          )}
+          {tasksSection}
 
           {rail.agents.length > 0 && (
             <Section title="Agents" count={String(rail.agents.length)}>

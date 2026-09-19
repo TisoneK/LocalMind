@@ -1,17 +1,15 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Plus, MessageSquare, Zap, FolderTree, CheckSquare, Square, Cpu, Trash2, Loader2, Terminal, Globe, FileEdit, Brain, Download, X, ListChecks, ChevronRight, ChevronDown, File as FileIcon, Folder as FolderIcon, MoreVertical, Settings, LayoutDashboard, ClipboardCopy } from 'lucide-react';
-import { Session, ActionItem, FileNode, SessionFileEntry, TodoItem, ModelOption, ToolCall, DiffData } from '@/types';
+import { Plus, MessageSquare, Zap, FolderTree, CheckSquare, Square, Cpu, Trash2, Loader2, Terminal, Brain, Download, X, ListChecks, ChevronRight, ChevronDown, File as FileIcon, Folder as FolderIcon, MoreVertical, Settings, LayoutDashboard, ClipboardCopy } from 'lucide-react';
+import { Session, ActionItem, FileNode, SessionFileEntry, ModelOption, DiffData } from '@/types';
 import type { ExportFormat } from '@/lib/localmind/exportChats';
 import { stripMarkdownToPreview } from '@/lib/previewText';
 import { ActionHistory } from '@/components/panels/ActionHistory';
 import { FileExplorer } from '@/components/panels/FileExplorer';
-import { TodoList } from '@/components/panels/TodoList';
 // ObjectivesPanel import removed — the "Autonomous work" block
 // is retired from the normal-chat sidebar. The component file is kept in tree
 // for potential re-mount behind a flag.
-import { isActiveToolStatus } from '@/lib/localmind/progress';
 import { ModelSelector } from '@/components/shared/ModelSelector';
 import { FilePreviewDialog } from '@/components/chat/FilePreviewDialog';
 import {
@@ -26,10 +24,8 @@ interface LeftPanelProps {
   sessions: Session[];
   actions: ActionItem[];
   files: FileNode[];
-  todos: TodoItem[];
   // Objective props are retired from the sidebar. The
   // useObjectives hook still runs in WorkspaceLayout for backend sync.
-  activeToolCalls: ToolCall[];
   models: ModelOption[];
   selectedModel: string;
   onModelChange: (modelId: string) => void;
@@ -40,9 +36,6 @@ interface LeftPanelProps {
   onDeleteSessions: (sessionIds: string[]) => void | Promise<void>;
   onExportSessions: (sessionIds: string[], format: ExportFormat) => void | Promise<void>;
   onCopySessions: (sessionIds: string[], format: ExportFormat) => void | Promise<void>;
-  onToggleTodo: (id: string, completed: boolean) => void;
-  onAddTodo: (text: string) => void;
-  onAbort?: () => void;
   /** Force the Chat tab to be active (e.g. right after "New Chat"). */
   forceChatTab?: boolean;
   /** Called after the Chat tab has been shown. */
@@ -60,8 +53,6 @@ export function LeftPanel({
   sessions,
   actions,
   files,
-  todos,
-  activeToolCalls,
   models,
   selectedModel,
   onModelChange,
@@ -72,9 +63,6 @@ export function LeftPanel({
   onDeleteSessions,
   onExportSessions,
   onCopySessions,
-  onToggleTodo,
-  onAddTodo,
-  onAbort,
   forceChatTab,
   onChatTabShown,
   onFilesChanged,
@@ -642,76 +630,6 @@ export function LeftPanel({
           </div>
         )}
       </div>
-
-      {/* Running tasks indicator — compact, with cancel button */}
-      {activeToolCalls.filter(tc => isActiveToolStatus(tc.status)).length > 0 && (
-        <div className="border-t border-brand-border px-3 py-2">
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <Loader2 className="h-3 w-3 animate-spin text-brand-amber" />
-            <span className="text-[10px] text-brand-amber font-medium">
-              {activeToolCalls.filter(tc => isActiveToolStatus(tc.status)).length} task{activeToolCalls.filter(tc => isActiveToolStatus(tc.status)).length > 1 ? 's' : ''} running
-            </span>
-            {onAbort && (
-              <button
-                onClick={onAbort}
-                className="ml-auto text-[9px] px-1.5 py-0.5 rounded border border-brand-red/30 bg-brand-red/10 text-brand-red hover:bg-brand-red/20 transition-colors"
-                title="Cancel running tasks"
-              >
-                Cancel
-              </button>
-            )}
-          </div>
-          {activeToolCalls.filter(tc => isActiveToolStatus(tc.status)).map((tc) => {
-            const iconMap: Record<string, React.ReactNode> = {
-              file_write: <FileEdit className="h-3 w-3" />,
-              file_task: <FileEdit className="h-3 w-3" />,
-              shell: <Terminal className="h-3 w-3" />,
-              code_exec: <Terminal className="h-3 w-3" />,
-              web_search: <Globe className="h-3 w-3" />,
-              memory_op: <Brain className="h-3 w-3" />,
-            };
-            const displayLabel = tc.label
-              || tc.name.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
-            return (
-              <div key={tc.id} className="flex items-center gap-1.5 min-w-0 px-1 py-0.5">
-                <span className="text-brand-amber">{iconMap[tc.name] || <Terminal className="h-3 w-3" />}</span>
-                <span className="text-[10px] text-brand-green-soft font-mono truncate min-w-0 flex-1" title={displayLabel}>
-                  {displayLabel}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* The "Autonomous work" / ObjectivesPanel block is
-          removed from the normal-chat sidebar. Background objective
-          persistence/API remains intact (useObjectives hook still runs,
-          backend routes unchanged) — a separate product decision is
-          required before re-surfacing or deleting the feature. */}
-
-      {/* Todos — always show so users can add tasks even when the list is empty.
-          Previously the `todos.length > 0` condition made it impossible to
-          create the first todo via the UI (chicken-and-egg).
-          Keep an EXISTING plan visible while
-          tools run so the user watches steps check off live; only the empty
-          "add a task" state is hidden during active work to reduce clutter. */}
-      {(activeToolCalls.filter(tc => isActiveToolStatus(tc.status)).length === 0 || todos.length > 0) && (
-        <div className="border-t border-brand-border p-3">
-          <div className="flex items-center gap-1.5 mb-2">
-            <CheckSquare className="h-3 w-3 text-brand-amber" />
-            <span className="text-[10px] uppercase tracking-wider text-brand-green-muted font-medium">
-              Todos
-            </span>
-            {todos.length > 0 && (
-              <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-brand-border text-brand-green-muted font-mono">
-                {todos.filter(t => t.completed).length}/{todos.length}
-              </span>
-            )}
-          </div>
-          <TodoList todos={todos} actions={actions} onToggle={onToggleTodo} onAdd={onAddTodo} />
-        </div>
-      )}
 
       {/* File preview dialog — opened by clicking a session artifact */}
       <FilePreviewDialog path={previewPath} onClose={() => setPreviewPath(null)} diffs={fileDiffs} />

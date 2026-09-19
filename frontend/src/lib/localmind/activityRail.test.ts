@@ -8,7 +8,7 @@ const run = (id: string, tools: ToolCall[], over: Partial<AgentRun> = {}): Agent
 });
 
 describe('buildRail', () => {
-  it('is empty with no runs, plan or files', () => {
+  it('is empty with no runs or files', () => {
     expect(buildRail({ runs: [] }).empty).toBe(true);
   });
 
@@ -61,5 +61,15 @@ describe('buildRail', () => {
   it('drops a truncated path that matches nothing', () => {
     const r = buildRail({ runs: [run('p', [tool('a', { name: 'file_write', input: '/w/very/long/sess' })])] });
     expect(r.files).toEqual([]);
+  });
+
+  it('keeps a tool that never reported back unfinished, even in a completed run', () => {
+    const r = buildRail({
+      runs: [run('p', [tool('a', { status: 'started', name: 'file_write', input: '/w/a.txt:\nx' })], { status: 'completed' })],
+      isStreaming: false,
+    });
+    expect(r.agents[0]).toMatchObject({ toolsDone: 0, toolsTotal: 1 });
+    expect(r.files[0].state).toBe('pending');
+    expect(r.now).toEqual([]);
   });
 });

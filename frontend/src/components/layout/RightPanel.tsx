@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Terminal, Brain, PanelRightClose, PanelRight, Settings } from 'lucide-react';
-import { TerminalLine, MemoryFact, PerformanceMetrics as PerformanceMetricsType, CompletionSuggestion, SessionStats, AgentRun, TodoItem, DiffData } from '@/types';
+import { TerminalLine, MemoryFact, PerformanceMetrics as PerformanceMetricsType, CompletionSuggestion, SessionStats, AgentRun, TodoItem, ActionItem, DiffData } from '@/types';
 import { TerminalPanel } from '@/components/panels/TerminalPanel';
 import { ActivityRail } from '@/components/panels/ActivityRail';
 import { MemoryTab } from '@/components/panels/MemoryTab';
@@ -40,8 +40,14 @@ interface RightPanelProps {
   agentRuns?: AgentRun[];
   /** Whether the parent loop is currently streaming. */
   agentStreaming?: boolean;
-  /** The session plan, shown in the Activity rail. */
+  /** The session's tasks — shown and edited in the Activity rail. */
   todos?: TodoItem[];
+  /** Actions per task (count badge + active step highlight). */
+  actions?: ActionItem[];
+  onToggleTodo?: (id: string, completed: boolean) => void;
+  onAddTodo?: (text: string) => void;
+  /** Cancel the running turn. */
+  onAbort?: () => void;
   /** Per-path diffs captured this session, for the rail's file list. */
   fileDiffs?: Record<string, DiffData>;
   collapsed: boolean;
@@ -92,6 +98,10 @@ export function RightPanel({
   agentRuns = [],
   agentStreaming = false,
   todos,
+  actions,
+  onToggleTodo,
+  onAddTodo,
+  onAbort,
   fileDiffs,
   collapsed,
   onToggleCollapse,
@@ -297,7 +307,16 @@ export function RightPanel({
           />
         )}
         {activeTab === 'agents' && (
-          <ActivityRail runs={agentRuns} todos={todos} fileDiffs={fileDiffs} isStreaming={agentStreaming} />
+          <ActivityRail
+            runs={agentRuns}
+            todos={todos}
+            actions={actions}
+            onToggleTodo={onToggleTodo}
+            onAddTodo={onAddTodo}
+            onAbort={onAbort}
+            fileDiffs={fileDiffs}
+            isStreaming={agentStreaming}
+          />
         )}
         {activeTab === 'memory' && (
           <MemoryTab

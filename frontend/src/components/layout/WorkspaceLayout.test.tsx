@@ -225,7 +225,12 @@ describe('WorkspaceLayout', () => {
     expect(typeof left.onDeleteSession).toBe('function');
     expect(typeof left.onNewChat).toBe('function');
     expect(typeof left.onModelChange).toBe('function');
-    expect(typeof left.onToggleTodo).toBe('function');
+    // Tasks moved to the Activity rail: the sidebar no longer takes them.
+    expect(left.onToggleTodo).toBeUndefined();
+    expect(left.todos).toBeUndefined();
+    expect(typeof mockPanelProps.right.onToggleTodo).toBe('function');
+    expect(typeof mockPanelProps.right.onAddTodo).toBe('function');
+    expect(typeof mockPanelProps.right.onAbort).toBe('function');
   });
 
   it('wires messages/streaming/health/model into CenterPanel', () => {

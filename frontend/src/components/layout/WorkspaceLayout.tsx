@@ -459,8 +459,6 @@ export function WorkspaceLayout() {
           sessions={sessions}
           actions={actions}
           files={files}
-          todos={todos}
-          activeToolCalls={activeToolCalls}
           models={models}
           selectedModel={effectiveModelId}
           onModelChange={handleModelChange}
@@ -471,9 +469,6 @@ export function WorkspaceLayout() {
           onDeleteSessions={handleDeleteSessions}
           onExportSessions={handleExportSessions}
           onCopySessions={handleCopySessions}
-          onToggleTodo={toggleTodo}
-          onAddTodo={addTodo}
-          onAbort={abort}
           forceChatTab={forceChatTab}
           onChatTabShown={() => setForceChatTab(false)}
           onFilesChanged={refreshFiles}
@@ -555,6 +550,10 @@ export function WorkspaceLayout() {
           agentRuns={agentRuns}
           agentStreaming={isStreaming}
           todos={todos}
+          actions={actions}
+          onToggleTodo={toggleTodo}
+          onAddTodo={addTodo}
+          onAbort={abort}
           fileDiffs={fileDiffs}
           collapsed={rightPanelCollapsed}
           onToggleCollapse={() => setRightPanelCollapsed(!rightPanelCollapsed)}

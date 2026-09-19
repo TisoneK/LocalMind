@@ -1,12 +1,12 @@
 /**
  * Activity rail model — the "what is going on right now" panel that sits beside
- * the chat: what is running this second, the plan, which agents exist, and
+ * the chat: what is running this second, which agents exist, and
  * which files the turn touched. Derived from the same run tree, todos and diffs
  * the rest of the app already holds, so there is no second source of truth.
  */
 
-import type { AgentRun, DiffData, TodoItem, ToolCall } from '@/types';
-import { buildPlan, toolLabel, toolState, type StepState, type TurnPlan } from '@/lib/localmind/turnTimeline';
+import type { AgentRun, DiffData, ToolCall } from '@/types';
+import { toolLabel, toolState, type StepState } from '@/lib/localmind/turnTimeline';
 
 export interface RailNow {
   id: string;
@@ -37,7 +37,6 @@ export interface RailFile {
 
 export interface RailModel {
   now: RailNow[];
-  plan: TurnPlan | null;
   agents: RailAgent[];
   files: RailFile[];
   /** Nothing running and nothing to show — render the quiet empty state. */
@@ -76,7 +75,6 @@ function diffCounts(diff: DiffData | undefined): { additions: number; deletions:
 
 export function buildRail(input: {
   runs: AgentRun[];
-  todos?: TodoItem[];
   fileDiffs?: Record<string, DiffData>;
   isStreaming?: boolean;
 }): RailModel {
@@ -88,6 +86,8 @@ export function buildRail(input: {
   for (const run of input.runs) {
     let done = 0;
     for (const tool of run.tools) {
+      // A tool still "in flight" after the turn ended never reported back — it stays
+      // hollow (unfinished) rather than being shown as done.
       const state = toolState(tool.status, settled);
       if (state === 'done' || state === 'failed') done += 1;
       if (state === 'running') {
@@ -114,12 +114,10 @@ export function buildRail(input: {
     });
   }
 
-  const plan = buildPlan(input.todos);
   return {
     now,
-    plan,
     agents,
     files: [...files.values()],
-    empty: now.length === 0 && !plan && agents.length === 0 && files.size === 0,
+    empty: now.length === 0 && agents.length === 0 && files.size === 0,
   };
 }

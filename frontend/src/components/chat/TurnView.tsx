@@ -22,7 +22,7 @@ import {
   Terminal,
   X,
 } from 'lucide-react';
-import { buildTurn, isShellBlocked, type StepState, type TurnStep } from '@/lib/localmind/turnTimeline';
+import { buildTurn, isShellBlocked, type TurnStep } from '@/lib/localmind/turnTimeline';
 import { filePathOf } from '@/lib/localmind/activityRail';
 import { useEnterMotion } from '@/lib/localmind/motion';
 import { formatLatency } from '@/lib/localmind/progress';
@@ -148,7 +148,7 @@ function StepRow({ step, depth = 0 }: { step: TurnStep; depth?: number }) {
           <span className="min-w-0 shrink-[4] truncate font-mono text-[10.5px] text-brand-green-muted">{step.detail}</span>
         )}
         <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[10px] text-brand-green-muted">
-          <RowClock step={step} />
+          {step.note ?? <RowClock step={step} />}
           {expandable && (
             <ChevronRight className={`h-3 w-3 transition-transform ${isOpen ? 'rotate-90' : ''}`} aria-hidden />
           )}
@@ -202,23 +202,6 @@ function Shimmer() {
   );
 }
 
-/** One segment per plan item — done / running / pending at a glance. */
-function PlanTrack({ items }: { items: { id: string; label: string; state: StepState }[] }) {
-  const tone: Record<StepState, string> = {
-    done: 'bg-brand-green',
-    running: 'bg-brand-amber animate-pulse',
-    failed: 'bg-red-400',
-    pending: 'bg-white/10',
-  };
-  return (
-    <div className="flex gap-1 px-2.5 pb-2" role="list" aria-label="Plan progress">
-      {items.map((i) => (
-        <div key={i.id} role="listitem" title={i.label} aria-label={`${i.label}: ${i.state}`} className={`h-1 flex-1 rounded-full ${tone[i.state]}`} />
-      ))}
-    </div>
-  );
-}
-
 export const TurnView = memo(function TurnView({ message, todos, isStreaming }: TurnViewProps) {
   const turn = buildTurn(message, { todos, isStreaming });
   const running = turn.state === 'running';
@@ -237,6 +220,7 @@ export const TurnView = memo(function TurnView({ message, todos, isStreaming }: 
   const title = running ? `Working · ${elapsed}s` : turn.summary || 'Done';
   const sub = running ? turn.activeLabel : '';
   const failed = !running && turn.counts.failed > 0;
+  const unfinished = !running && turn.counts.unfinished > 0;
 
   return (
     <div data-testid="turn-view" data-state={turn.state}>
@@ -246,7 +230,7 @@ export const TurnView = memo(function TurnView({ message, todos, isStreaming }: 
       {(work.length > 0 || running) && (
         <div
           className={`my-1.5 overflow-hidden rounded-lg border bg-white/[0.02] ${
-            running ? 'border-brand-amber/25' : failed ? 'border-red-400/25' : 'border-white/10'
+            running ? 'border-brand-amber/25' : failed ? 'border-red-400/25' : unfinished ? 'border-brand-amber/30' : 'border-white/10'
           }`}
         >
           {running && <Shimmer />}
@@ -257,7 +241,11 @@ export const TurnView = memo(function TurnView({ message, todos, isStreaming }: 
             className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12px]"
           >
             <ChevronRight className={`h-3.5 w-3.5 text-brand-green-muted transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden />
-            <StateIcon state={failed ? 'failed' : turn.state} />
+            {unfinished && !failed ? (
+              <AlertTriangle className="h-3.5 w-3.5 text-brand-amber" aria-label="some steps did not finish" />
+            ) : (
+              <StateIcon state={failed ? 'failed' : turn.state} />
+            )}
             <span className="shrink-0 whitespace-nowrap font-medium text-brand-green">{title}</span>
             {sub && <span className="min-w-0 truncate text-brand-green-muted">· {sub}</span>}
             {turn.plan && turn.plan.total > 1 && (
@@ -271,7 +259,6 @@ export const TurnView = memo(function TurnView({ message, todos, isStreaming }: 
               </span>
             )}
           </button>
-          {turn.plan && turn.plan.total > 1 && <PlanTrack items={turn.plan.items} />}
           {open && (
             <div className="px-2.5 pb-2" role="list" aria-label="Agent activity">
               {work.map((s) => (

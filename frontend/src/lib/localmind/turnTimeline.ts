@@ -24,6 +24,8 @@ export interface TurnStep {
   label: string;
   detail?: string;
   state: StepState;
+  /** Small right-aligned remark on the row, e.g. "no result" for a tool that never reported back. */
+  note?: string;
   /** `warn` = a recovery, not a failure (e.g. a replan) — shown amber, never red. */
   tone?: 'warn';
   durationMs?: number;
@@ -52,7 +54,7 @@ export interface TurnPlan {
 export interface TurnModel {
   steps: TurnStep[];
   state: StepState;
-  counts: { tools: number; failed: number; running: number; agents: number };
+  counts: { tools: number; failed: number; running: number; agents: number; unfinished: number };
   /** One-line "what is it doing right now", empty when idle. */
   activeLabel: string;
   /** Collapsed-header text once finished, e.g. "Ran 7 tools · 2 agents". */
@@ -132,6 +134,8 @@ function toolStep(tool: ToolCall, settled: boolean): TurnStep {
     label,
     detail,
     state,
+    // Settled turn + tool still marked in flight = it never reported back.
+    ...(settled && state === 'pending' && isActiveToolStatus(tool.status) ? { note: 'no result' } : {}),
     durationMs: tool.duration,
     tool,
   };
@@ -307,15 +311,20 @@ export function buildTurn(
         : message.statusText || ''
       : '';
 
+  // Once the turn is over, a tool that is still not finished never reported back.
+  const unfinished = state === 'running' ? 0 : leaves.filter((s) => s.state === 'pending').length;
+  const finished = leaves.length - unfinished;
+
   const parts: string[] = [];
-  if (leaves.length > 0) parts.push(`${state === 'running' ? 'Running' : 'Ran'} ${plural(leaves.length, 'tool')}`);
+  if (finished > 0) parts.push(`${state === 'running' ? 'Running' : 'Ran'} ${plural(finished, 'tool')}`);
   if (agents > 0) parts.push(plural(agents, 'agent'));
   if (failed > 0) parts.push(`${failed} failed`);
+  if (unfinished > 0) parts.push(`${unfinished} didn't finish`);
 
   return {
     steps,
     state,
-    counts: { tools: leaves.length, failed, running: running.length, agents },
+    counts: { tools: leaves.length, failed, running: running.length, agents, unfinished },
     activeLabel,
     summary: parts.join(' · '),
     plan: buildPlan(opts.todos),
