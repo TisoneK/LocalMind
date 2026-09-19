@@ -116,3 +116,17 @@ Candidate work these support (still not decided): push-based obs delivery in the
 - **`d61d1d12` — root cause of the "empty response after reasoning" waste.** A response-stream tap showed every thinking-on glm-4.5-flash call had content = 1 char (a lone newline), tool_calls > 0 and finish_reason = tool_calls. `openai_compat` Phase 1 counted that newline as real content, decided at 15 chunks the reply was text, and Phase 2b (which does not read tool-call deltas) dropped the tool call; the loop then recorded "empty response after reasoning" and spent a ~25 s recovery call (2–3× per multi-step turn, ~75 s of a 130 s turn), where the thinking-off retry finally acted. Fix: `.strip()` on both Phase 1 content checks. Live (serial, 3 valid runs): empty-after-reasoning 0/0/0 (1–3 in every one of 10 earlier runs); act calls 5/6/6 (was 8–10). 7 adapter tests, 6 reproduce the drop.
 - Honest limits: the stage cards alone did not change call counts (the whitespace bug dominated); the compact-system-prompt A/B never produced a valid comparison (rate limits, moving HEAD, n too small) and remains unproven; the commit-message scoring in the harness is unreliable while HEAD moves.
 - New finding filed: a post-answer call hung 9 minutes (see the backlog row for B-2026-09-19-N above).
+
+### Compact structured input — the experiment (S024) and what it does and does not prove
+
+Setup: glm-4.5-flash (the only provider), fixed fixture (5 folders, a git repo whose latest commit is known, 12 `.py` files), strictly serial and interleaved A/C/D runs, real code (all fixes above), request bodies captured per call. A = current full input; C = compact strict system prompt (~4.5k vs ~11.3k chars: the loop, tool-choice hints, three examples, safety, machine facts kept); D = C plus one-sentence tool-schema descriptions (schema chars 10,973 -> 7,564). Variants C/D are emulated by rewriting the request body in the harness, not yet implemented in the product.
+
+Measured (deterministic per call): system prompt 11.3k -> 4.5k chars (-60%); tool schemas -31% (D). Measured (per run, n = 4/5/5, high variance from 5-8 calls per run): prompt tokens A 39.9k, C 27.2k (-32%), D 24.5k (-39%); permutation p = 0.07 (A~C), 0.14 (A~D) — suggestive, not conclusive.
+
+Quality: NOT proven either way. Evidence gathered (all 5 folders; the fixture repo's commit) was 100% in every variant; the count step was reached in ~40% of runs in every variant; evidence-all-correct 2/4, 2/5, 1/5 (Fisher p = 1.0 / 0.52). No sign that compact input hurts, no sign it helps.
+
+Why the quality comparison has no power: z.ai returned ~5 x 429 per run (other sessions likely share the key), so most final syntheses fell back to "the model provider was rate-limited on my final synthesis…" — only 1-2 clean final answers per variant. The harness now scores gathered evidence from the captured requests (robust to a rate-limited final step) and reports clean-final correctness separately.
+
+Also found by this work: the `git` tool ignored its `path` argument (fixed and pushed: `fix(git)`); `limit` accepted as an alias of `count`.
+
+To actually prove or refute the quality claim: rerun N >= 10 per variant when the provider is not throttling (off-peak, or a second provider), scoring clean finals only. Implementing C/D in the product means a stage-aware prompt assembler (full prompt on the cold-start act call, compact strict instruction afterwards) — not built.
