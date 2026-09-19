@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T201929Z-claude-sonnet-5-s026-18f7055b",
+  "type": "release",
+  "session": "S026",
+  "agent": "claude-sonnet-5-s026",
+  "created": "2026-09-19T20:19:29Z",
+  "issue": "file-write-guard",
+  "body": "Wanjiru (S026): shipped 706ab134 — file_write guard allows a user-requested short body, rejections emit a failed tool result, Files: block no longer says created for a failed/unfinished write. Live-verified on gemini-2.5-flash (isolated 8765): exactly 'eta' written first try vs padded before. loop.py scope free.",
+  "paths": [],
+  "refs": ["706ab134"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
