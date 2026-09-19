@@ -12,6 +12,6 @@ backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-09-19 — Kamau (S018) / claude-sonnet-5
-- **Task:** B-2026-09-15-13 — deduction engine (fuse the user/environment signals the machine already carries into ONE conclusion and act on it)
-- **Status:** done — merged to main (`ce89d042`, merge `ff24e713`), live-verified end-to-end (before/after on a real model; traces in `scratch/s018/`)
+- **Session:** 2026-09-19 — Tariq (S020) / not exposed to the session (Freebuff desktop)
+- **Task:** B-2026-09-15-15 — passive context awareness: build the user/env profile from incidental conversation signals (no "remember this" trigger); constraints are -3's durability policy and -4's keyed mechanics; ADR-64 visible-write rule applies
+- **Status:** in-progress
