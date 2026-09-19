@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-19T18:28:09Z_
+_Regenerated: 2026-09-19T18:47:22Z_
 
 ## Standing params
 - **Core:** 2.0.2 (locked, verified 2026-09-19)
@@ -16,10 +16,11 @@ _Regenerated: 2026-09-19T18:28:09Z_
 
 ## Office — who's in, right now
 - **Imani** (S024) — Working — Recording a user preference (design decisions must be grounded in the actual design, limi…
-- **Kofi** (S025) — Working — Finishing Tariq's (S020) B-2026-09-15-15 — clear the gate-blocking frontend eslint error …
+- **Wanjiru** (S026) — Working — Agentic UI redesign — event-driven turn model, live turn view, plan pill, right rail
+- **Kofi** (S025) — Working — Finishing Tariq's (S020) B-2026-09-15-15 — clear the gate-blocking frontend eslint erro…
 
 ## Current task
-- **2026-09-19 — Kofi (S025) / unknown (not exposed to the session)** — Finish Tariq's (S020) B-2026-09-15-15 closeout — clear the gate-blocking frontend eslint error (unused `PassiveMemory` import in `CenterPan… — *in-progress*
+- **2026-09-19 — Kofi (S025) / unknown (not exposed to the session)** — Finish Tariq's (S020) B-2026-09-15-15 closeout — clear the gate-blocking frontend eslint error (unused `PassiveMemory` import in `CenterP… — *in-progress*
 
 ## Backlog — High priority (the top of the queue)
 (none)
@@ -32,5 +33,5 @@ _9 medium, 7 low priority row(s) — see tasks/backlog.md_
 - plans/decisions.md (ADRs in force — respected, not relitigated): 5 entries, last added 2026-09-19
 
 ## Collaboration
-- 104 event(s) on file; most recent: `20260919T173010Z-claude-sonnet-5-s024-fe69e145.json`
+- 105 event(s) on file; most recent: `20260919T182912Z-Kofi-422b77e0.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`
