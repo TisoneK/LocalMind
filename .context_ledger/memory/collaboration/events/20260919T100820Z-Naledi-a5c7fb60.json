@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T100820Z-Naledi-a5c7fb60",
+  "type": "claim",
+  "session": "S022",
+  "agent": "Naledi",
+  "created": "2026-09-19T10:08:20Z",
+  "issue": "B-2026-09-15-8",
+  "body": "Claiming B-2026-09-15-8 (intent-aware \"criteria unmet\" replan gate): suppress the zero-tool-commitment replan gate on conversational tiers, escalate on approval tokens (\"Go ahead\"), live-verify both directions. Scope: backend/src/core/agent/loop.py ~line 7385, plus its tests. Why safe: disjoint from Tariq's (S020) B-2026-09-15-15 paths (memory_intent.py, _memory_mixin.py, agent_runtime.py, chat.py, frontend hook/components) and from Zola's (S021) read-only dead-code scan. No other live claim touches loop.py.",
+  "paths": ["backend/src/core/agent/loop.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
