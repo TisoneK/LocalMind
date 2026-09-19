@@ -57,7 +57,7 @@ import { FilePreviewDialog } from './FilePreviewDialog';
 
 interface ChatMessageProps {
   message: ChatMessageType;
-  /** Whether this message is currently being streamed (affects ThinkingBlock expansion) */
+  /** Whether this message is currently being streamed (keeps the turn view live) */
   isStreaming?: boolean;
   /** Re-send the user prompt that produced this assistant reply (regenerate).
    *  Only provided for assistant messages that have a preceding user prompt. */
@@ -467,7 +467,7 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs, todos }:
   const [previewPath, setPreviewPath] = useState<string | null>(null);
 
   // Listen for file-preview requests from code block filenames
-  // and tool step file paths (they dispatch localmind:open-file-preview).
+  // and turn-view file paths (they dispatch localmind:open-file-preview).
   React.useEffect(() => {
     const handler = (e: Event) => {
       const path = (e as CustomEvent<string>).detail;

@@ -17,7 +17,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { AgentRun, AgentRunStatus, ToolCall } from '@/types';
 import { formatLatency, isActiveToolStatus } from '@/lib/localmind/progress';
 import { useEnterMotion } from '@/lib/localmind/motion';
-import { PHASE_META } from '@/components/chat/AgentPhases';
+import { PHASE_META } from '@/lib/localmind/phaseMeta';
 import { collapseAdjacentPhases } from '@/hooks/useLocalMind';
 
 interface AgentWorkspaceProps {
@@ -48,7 +48,7 @@ function statusClass(status: AgentRunStatus): string {
 }
 
 function toolLabel(tool: ToolCall): string {
-  // Display-only aliases (kept in step with ToolSteps.tsx's toolLabels map;
+  // Display-only aliases (kept in step with the tool labels in lib/localmind/turnTimeline.ts;
   // consolidating the two copies is a separate cleanup). The model-facing
   // name stays dir_explorer — the alias is never shown to the model.
   const alias: Record<string, string> = { dir_explorer: 'Explorer' };

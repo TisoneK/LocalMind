@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { vi } from 'vitest';
 import { TurnView } from './TurnView';
 import type { ToolCall } from '@/types';
 
@@ -60,5 +61,36 @@ describe('TurnView', () => {
     expect(screen.getByText('2 tools in parallel')).toBeInTheDocument();
     expect(screen.getByText('cmd a')).toBeInTheDocument();
     expect(screen.getByText('cmd b')).toBeInTheDocument();
+  });
+
+  it('explains a blocked shell call and opens Settings from the tip', () => {
+    const onOpen = vi.fn();
+    window.addEventListener('localmind:open-settings', onOpen);
+    render(
+      <TurnView
+        message={{ toolCalls: [tool('a', { status: 'failed', output: 'Shell tool is disabled by configuration' })] }}
+      />,
+    );
+    fireEvent.click(screen.getByText('Ran 1 tool · 1 failed'));
+    expect(screen.getByTestId('shell-disabled-tip')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Open Settings' }));
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    window.removeEventListener('localmind:open-settings', onOpen);
+  });
+
+  it('opens the file preview from a written file path', () => {
+    const onPreview = vi.fn();
+    window.addEventListener('localmind:open-file-preview', onPreview);
+    render(
+      <TurnView
+        message={{ toolCalls: [tool('a', { name: 'file_write', input: '/w/out.txt:\nhi', output: 'Wrote 2 bytes' })] }}
+      />,
+    );
+    fireEvent.click(screen.getByText('Ran 1 tool'));
+    fireEvent.click(screen.getByText('Created file'));
+    fireEvent.click(screen.getByTitle('Preview /w/out.txt'));
+    expect(onPreview).toHaveBeenCalledTimes(1);
+    expect((onPreview.mock.calls[0][0] as CustomEvent).detail).toBe('/w/out.txt');
+    window.removeEventListener('localmind:open-file-preview', onPreview);
   });
 });

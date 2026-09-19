@@ -108,9 +108,9 @@ export function RightPanel({
   const [activeTab, setActiveTab] = useState<RightTab>('agents');
   const [showSettings, setShowSettings] = useState(false);
 
-  // The chat tool timeline's "Open Settings" guide button
-  // dispatches a window event (ToolSteps is deep in the chat tree, outside
-  // this panel) — open the Settings modal here when it fires.
+  // The chat turn view's "Open Settings" guide button dispatches a window
+  // event (it is deep in the chat tree, outside this panel) — open the
+  // Settings modal here when it fires.
   useEffect(() => {
     const open = () => setShowSettings(true);
     window.addEventListener('localmind:open-settings', open);

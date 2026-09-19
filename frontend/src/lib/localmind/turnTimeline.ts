@@ -106,6 +106,13 @@ export function toolState(status: ToolCall['status'], settled: boolean): StepSta
   return 'done';
 }
 
+/** A shell call the shell tool's own guard rejected (it is switched off in Settings). */
+export function isShellBlocked(tool: ToolCall): boolean {
+  if (tool.name !== 'shell' || tool.status !== 'failed') return false;
+  const hay = `${tool.output || ''} ${tool.error || ''}`.toLowerCase();
+  return hay.includes('shell tool is disabled') || hay.includes('shell tool disabled');
+}
+
 export function toolLabel(tool: ToolCall, state: StepState = 'running'): string {
   const pair = TOOL_LABELS[tool.name];
   return tool.label || (pair ? pair[state === 'done' || state === 'failed' ? 1 : 0] : tool.name);

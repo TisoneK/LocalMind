@@ -1163,7 +1163,7 @@ export function useChat(
                 // agent_initialization_understanding is intentionally NOT
                 // mirrored to the chat message here: it already reaches the
                 // user through the thinking_token channel into the message's
-                // ThinkingBlock. The run node above narrates it for
+                // thinking row of the turn view. The run node above narrates it for
                 // the Agents tab.
                 if (obs.type === 'agent_initialization_ack') {
                   const ackData = obs.data || obs;
@@ -1183,7 +1183,7 @@ export function useChat(
                 // agent_initialization_understanding is intentionally NOT
                 // mirrored to the workspace run here: it already reaches the
                 // user through the thinking_token channel into the message's
-                // ThinkingBlock (the Thinker's assessment lives
+                // thinking row (the Thinker's assessment lives
                 // on the thinking surface, not the workspace).
                 // Evidence boundary — tool results are handed to
                 // the parent model. Record as an EvidenceEntry on the parent
@@ -2356,7 +2356,7 @@ function _isPromptLeak(token: string): boolean {
 
 // ─── Tool label builder (FIX 2) ───────────────────────────────────────
 // Builds human-readable labels from tool name + args for Task Progress
-// and ToolSteps display. Falls back to a cleaned-up tool name.
+// and the turn view. Falls back to a cleaned-up tool name.
 
 const TOOL_LABELS: Record<string, string> = {
   file_write: 'Creating file',

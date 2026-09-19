@@ -207,7 +207,7 @@ describe('getSessionHistory artifacts', () => {
 
     // Thinking block + error card survive a reload.
     expect(assistant.thinking).toBe('Listing projects to answer the request.');
-    // The ThinkingBlock render is gated on `isAgent`; a restored
+    // The live stream sets `isAgent` on assistant turns; a restored
     // assistant turn must carry it or the persisted thinking never renders.
     expect(assistant.isAgent).toBe(true);
     // The opening acknowledgement survives reload too.

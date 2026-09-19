@@ -635,10 +635,9 @@ class LocalMindClient {
       // The opening acknowledgement line — shown live,
       // now restored so it survives a reload like the thinking block.
       acknowledgement: typeof m.acknowledgement === 'string' ? m.acknowledgement : undefined,
-      // The ThinkingBlock render is gated on `isAgent` (the live
-      // stream always sets it true for assistant turns). Restored messages had
-      // no isAgent, so the persisted thinking block never rendered on reload —
-      // mark every restored assistant turn as an agent turn to match live.
+      // The live stream always sets isAgent for assistant turns; restored
+      // messages carried none. Mark every restored assistant turn as an agent
+      // turn so a reload matches the live message.
       isAgent: m.role === 'assistant' ? true : undefined,
       error: m.error,
       performance: m.performance || undefined,

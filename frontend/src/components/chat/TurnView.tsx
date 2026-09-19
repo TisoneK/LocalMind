@@ -22,10 +22,11 @@ import {
   Terminal,
   X,
 } from 'lucide-react';
-import { buildTurn, type StepState, type TurnStep } from '@/lib/localmind/turnTimeline';
+import { buildTurn, isShellBlocked, type StepState, type TurnStep } from '@/lib/localmind/turnTimeline';
+import { filePathOf } from '@/lib/localmind/activityRail';
 import { useEnterMotion } from '@/lib/localmind/motion';
 import { formatLatency } from '@/lib/localmind/progress';
-import type { ChatMessage, TodoItem } from '@/types';
+import type { ChatMessage, TodoItem, ToolCall } from '@/types';
 import { MarkdownContent } from '@/components/shared/MarkdownContent';
 import { StateIcon } from './StateIcon';
 import { useElapsedSeconds } from '@/lib/localmind/useElapsedSeconds';
@@ -46,6 +47,43 @@ function RowClock({ step }: { step: TurnStep }) {
   const live = useElapsedSeconds(step.state === 'running' && !step.durationMs);
   if (step.durationMs) return <>{formatLatency(step.durationMs)}</>;
   return step.state === 'running' ? <>{live}s</> : null;
+}
+
+/** A written file's path, clickable to open the preview dialog. Only shown for a
+ *  complete-looking path — long tool inputs arrive cut off upstream. */
+function FilePreviewLink({ tool }: { tool?: ToolCall }) {
+  if (!tool || (tool.name !== 'file_write' && tool.name !== 'edit_file')) return null;
+  const path = filePathOf(tool);
+  if (!path || !/\.[A-Za-z0-9]+$/.test(path)) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => window.dispatchEvent(new CustomEvent('localmind:open-file-preview', { detail: path }))}
+      title={`Preview ${path}`}
+      className="mt-1 block max-w-full break-all rounded bg-white/[0.04] px-2 py-1 text-left font-mono text-[10.5px] text-brand-blue hover:text-brand-blue-bright"
+    >
+      {path}
+    </button>
+  );
+}
+
+/** Shown under a rejected shell call: says why, and opens Settings to switch the tool on. */
+function ShellDisabledTip() {
+  return (
+    <div
+      className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md border border-brand-amber/30 bg-brand-amber/10 px-2.5 py-1.5 text-[11px] text-brand-amber"
+      data-testid="shell-disabled-tip"
+    >
+      <span>The Shell tool is off. Open Settings → Shell tool → toggle it on to run system commands.</span>
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new Event('localmind:open-settings'))}
+        className="rounded border border-brand-amber/40 bg-brand-amber/10 px-1.5 py-0.5 text-[10px] font-medium hover:bg-brand-amber/20"
+      >
+        Open Settings
+      </button>
+    </div>
+  );
 }
 
 function StepRow({ step, depth = 0 }: { step: TurnStep; depth?: number }) {
@@ -125,9 +163,13 @@ function StepRow({ step, depth = 0 }: { step: TurnStep; depth?: number }) {
               {step.children?.map((c) => <StepRow key={c.id} step={c} depth={depth + 1} />)}
             </>
           ) : (
-            <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words py-1 font-mono text-[10.5px] text-brand-green-soft">
-              {step.tool?.error || step.tool?.output || step.detail}
-            </pre>
+            <>
+              <FilePreviewLink tool={step.tool} />
+              <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words py-1 font-mono text-[10.5px] text-brand-green-soft">
+                {step.tool?.error || step.tool?.output || step.detail}
+              </pre>
+              {step.tool && isShellBlocked(step.tool) && <ShellDisabledTip />}
+            </>
           )}
         </div>
       )}

@@ -140,9 +140,16 @@ export function ActivityRail({ runs, todos, fileDiffs, isStreaming }: ActivityRa
             <Section title="Files changed" count={String(rail.files.length)}>
               <ul className="space-y-1">
                 {rail.files.map((f) => (
-                  <li key={f.path} className="flex items-center gap-2 text-[11.5px]" title={f.path}>
+                  <li key={f.path} className="flex items-center gap-2 text-[11.5px]">
                     <FileText className="h-3 w-3 shrink-0 text-brand-green-muted" aria-hidden />
-                    <span className="min-w-0 flex-1 truncate text-brand-green">{f.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => window.dispatchEvent(new CustomEvent('localmind:open-file-preview', { detail: f.path }))}
+                      title={`Preview ${f.path}`}
+                      className="min-w-0 flex-1 truncate text-left text-brand-green hover:text-brand-blue-bright"
+                    >
+                      {f.name}
+                    </button>
                     {(f.additions > 0 || f.deletions > 0) && (
                       <span className="shrink-0 font-mono text-[10px]">
                         <span className="text-brand-green">+{f.additions}</span> <span className="text-red-400">−{f.deletions}</span>
