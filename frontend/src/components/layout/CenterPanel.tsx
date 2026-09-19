@@ -17,6 +17,7 @@ import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { TranscriptContextMenu } from '@/components/chat/TranscriptContextMenu';
 import { localmindClient } from '@/lib/localmind/client';
+import type { TodoItem } from '@/types';
 
 // The intent badge and INTENT_LABELS map are retired.
 // Intent classification is no longer a product-facing surface — the
@@ -72,6 +73,8 @@ interface CenterPanelProps {
   onAbort: () => void;
   onSteer?: (message: string) => void;
   memoryCount: number;
+  /** The session's plan; the last agent turn shows it as step progress. */
+  todos?: TodoItem[];
   sessionId?: string;
   /** The active model's max input-token budget (adapter effective context
    *  window). Renders the context-window occupancy meter in the top bar. */
@@ -112,6 +115,7 @@ export function CenterPanel({
   onAbort,
   onSteer,
   memoryCount,
+  todos,
   sessionId,
   contextWindowSize,
   contextTokens,
@@ -615,6 +619,7 @@ export function CenterPanel({
                   isStreaming={isStreaming && msg === messages[messages.length - 1] && msg.role === 'assistant'}
                   onRetry={prompt ? () => onSend(prompt) : undefined}
                   fileDiffs={fileDiffs}
+                  todos={msg === messages[messages.length - 1] ? todos : undefined}
                 />
               );
             })}

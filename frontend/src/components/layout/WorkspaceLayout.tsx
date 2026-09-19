@@ -498,6 +498,7 @@ export function WorkspaceLayout() {
           onAbort={abort}
           onSteer={steer}
           memoryCount={memoryFacts.length}
+          todos={todos}
           sessionId={currentSessionId || undefined}
           chatMode={chatMode}
           onChatModeChange={handleChatModeChange}

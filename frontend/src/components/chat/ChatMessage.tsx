@@ -46,14 +46,11 @@ SyntaxHighlighter.registerLanguage('html', html);
 SyntaxHighlighter.registerLanguage('xml', html);
 SyntaxHighlighter.registerLanguage('shell', shell);
 SyntaxHighlighter.registerLanguage('shell-session', shell);
-import { ChatMessage as ChatMessageType, FileResult, PendingWrite, DiffData } from '@/types';
+import { ChatMessage as ChatMessageType, FileResult, PendingWrite, DiffData, TodoItem } from '@/types';
 import { formatLatency, formatTokens } from '@/lib/localmind/progress';
 import { MarkdownContent } from '@/components/shared/MarkdownContent';
-import { ThinkingBlock } from './ThinkingBlock';
 import { ResponseBlockRenderer } from './ResponseBlockRenderer';
-import { ToolSteps } from './ToolSteps';
-import { TurnTimeline } from './TurnTimeline';
-import { AgentPhases } from './AgentPhases';
+import { TurnView } from './TurnView';
 import { ErrorMessage } from './ErrorMessage';
 import { DiffBlock, type DiffHunk } from '@/components/shared/DiffBlock';
 import { FilePreviewDialog } from './FilePreviewDialog';
@@ -67,6 +64,8 @@ interface ChatMessageProps {
   onRetry?: () => void;
   /** Per-path diff hunks captured this turn (preview Diff mode). */
   fileDiffs?: Record<string, DiffData>;
+  /** The session's plan, shown as step progress inside the turn. */
+  todos?: TodoItem[];
 }
 
 function FileResultChip({
@@ -460,15 +459,12 @@ function MessageActions({
   );
 }
 
-export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMessageProps) {
+export function ChatMessage({ message, isStreaming, onRetry, fileDiffs, todos }: ChatMessageProps) {
   const isUser = message.role === 'user';
 
   // Clickable file-result chips open an inline preview dialog
   // (text/code/markdown/office docs parsed server-side, images as data URLs).
   const [previewPath, setPreviewPath] = useState<string | null>(null);
-
-  // Turn Anatomy: clicking a tool segment in the timeline focuses its chip.
-  const [toolFocus, setToolFocus] = useState<{ toolId: string; at: number } | null>(null);
 
   // Listen for file-preview requests from code block filenames
   // and tool step file paths (they dispatch localmind:open-file-preview).
@@ -539,66 +535,11 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
             <span className="text-[9px] text-brand-green-muted">{message.timestamp}</span>
           </div>
 
-          {/* The Agent's opening acknowledgement — streams as the
-              first line of the reply, distinct from the final answer
-              (`content`) that follows the tool work. */}
-          {!isUser && message.acknowledgement && (
-            <div className="text-[12px] text-brand-green-soft leading-relaxed break-words mb-1.5">
-              <MarkdownContent text={message.acknowledgement} />
-            </div>
-          )}
-
-          {/* Thinking block — the model's reasoning, auto-expanded while streaming */}
-          {message.thinking && message.isAgent && (
-            <ThinkingBlock thinking={message.thinking} thinkMs={message.thinkMs} isStreaming={isStreaming} />
-          )}
-
-          {/* Frontend Phase Visibility. Agentic phase strip
-              (plan_created, gate_passed, gate_failed_replan, orchestrator_replan_*,
-              plan_node_advanced, agent_loop_failure). Renders between the
-              thinking block and the tool cards so the user sees the agent's
-              decision history — "I planned X → I verified Y → I replanned
-              because Z" — the literal difference between a chat-with-tools
-              and an agent. */}
-          {message.agentPhases && message.agentPhases.length > 0 && (
-            <AgentPhases phases={message.agentPhases} isStreaming={isStreaming} />
-          )}
-
-          {/* Live agent trace — every tool the agent ran, with verbatim input,
-              realtime status (running → done/failed), duration and collapsible
-              output. Previously the toolCalls array was populated by the SSE
-              handler but never rendered, so the user saw only a spinner and
-              then a wall of text — the agent's work was invisible. */}
-          {/* Chat shows compact tool chips only — the full
-              expandable timeline + per-step code/output cards live in the
-              Agent Workspace (the canonical live surface per B-9). This
-              removes the duplication where the chat transcript mirrored the
-              Actions panel's detailed view. */}
-          {message.toolCalls && message.toolCalls.length > 0 && (
-            <>
-              {/* Turn Anatomy — a glanceable strip of where the turn's time
-                  went (thinking vs each tool), so the timing is a picture, not
-                  mental math. Fed by thinkMs + tool durations; self-hides for
-                  trivial turns. */}
-              {message.isAgent && (
-                <TurnTimeline
-                  thinkMs={message.thinkMs}
-                  answerMs={message.answerMs}
-                  toolCalls={message.toolCalls}
-                  onFocusTool={(toolId) => setToolFocus({ toolId, at: Date.now() })}
-                />
-              )}
-              {/* Chat stays COMPACT (chips only). The full
-                  expandable per-action detail lives in the Actions tab /
-                  Agent Workspace — never duplicated here. A Turn Anatomy
-                  segment click flashes the matching chip. */}
-              <ToolSteps
-                compact
-                toolCalls={message.toolCalls}
-                isStreaming={isStreaming}
-                focusSignal={toolFocus}
-              />
-            </>
+          {/* The agent's whole turn — acknowledgement, reasoning, checkpoints,
+              tools, parallel batches and sub-agents — as one live activity
+              (see TurnView) instead of separate stacked blocks. */}
+          {!isUser && (
+            <TurnView message={message} todos={todos} isStreaming={isStreaming} />
           )}
 
           {/* Canonical error card — a failed reply renders this
