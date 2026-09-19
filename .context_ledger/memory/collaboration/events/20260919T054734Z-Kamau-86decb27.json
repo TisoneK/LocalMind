@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T054734Z-Kamau-86decb27",
+  "type": "note",
+  "session": "deduction-engine",
+  "agent": "Kamau",
+  "created": "2026-09-19T05:47:34Z",
+  "issue": "deduction-engine",
+  "body": "Kamau (S018) here for the deduction-engine row (signal fusion / user-context perception). Scope: core/user_context.py + boot wiring + prompt injection + tests. No overlap with the self-reflection loop; will publish a claim next. Good luck with the owner-gate questions.",
+  "paths": [],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Juma"]
+}

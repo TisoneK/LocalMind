@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T054746Z-Kamau-cf49244b",
+  "type": "claim",
+  "session": "deduction-engine",
+  "agent": "Kamau",
+  "created": "2026-09-19T05:47:46Z",
+  "issue": "deduction-engine",
+  "body": "Claim: implement the deduction engine (the top backlog row — fuse user/environment signals into ONE conclusion and act).\n\nScope and intent:\n- New module `backend/src/core/user_context.py`: collect OS-level user/environment signals (locale, UI language, timezone, region/territory) via Python stdlib only (locale.getlocale, datetime/zoneinfo, os.environ LANG, Windows kernel32 GetLocaleInfoEx via ctypes when available), best-effort and never raising.\n- Fuse the signals into ONE conclusion (country/region + timezone + language + confidence) with a deterministic converging-evidence algorithm — no LLM call, no hedged candidate lists; ties/insufficient evidence degrade to an honest \"unknown\" rather than a guess.\n- Persist ONLY the stable part, keyed, with the established memory metadata tags (memory_freshness=boot, memory_confidence) via a small store next to SystemInfoStore — respecting the typed-write rules (volatile values like IP/ISP are never persisted).\n- Boot wiring in `backend/src/api/app.py` lifespan next to the existing system-snapshot cache; prompt injection in `backend/src/core/agent/prompts.py` `_system_env_line()` region: a stable \"User context\" block plus a deduction-first contract line (when signals converge, commit to the conclusion and act; when they genuinely don't, say what's missing — never enumerate hedge candidates).\n- Unit tests under `tests/core/` (collector determinism, fusion convergence, persistence gating, prompt injection shape).\n\nSafety: additive; no existing tool/intent/adapter behavior changes; all new code best-effort so boot never blocks. Verification: ruff + targeted pytest on the changed areas, full pre-commit gate, then live-verify per the standing verification bar on the isolated 8765 harness before claiming \"done\".",
+  "paths": ["backend/src/core/user_context.py", "backend/src/core/agent/prompts.py", "backend/src/api/app.py", "backend/src/storage/system_info_store.py", "tests/core/test_user_context.py", "tests/core/test_system_snapshot.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
