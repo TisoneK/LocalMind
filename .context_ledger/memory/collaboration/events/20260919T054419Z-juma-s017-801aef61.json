@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T054419Z-juma-s017-801aef61",
+  "type": "claim",
+  "session": "S017",
+  "agent": "juma-s017",
+  "created": "2026-09-19T05:44:19Z",
+  "issue": "reflection-loop-b-2026-09-15-14",
+  "body": "Scope: B-2026-09-15-14 (self-reflection loop — post-turn \"what did I miss\"\nassessment stored as atomic lessons). Owner design gate resolved first\n(P-2026-09-16-36 §2): proactive/autonomous memory writes must be VISIBLE\n(log/UI), not silent — asked and confirmed 2026-09-18.\n\nPlan: extend the existing post-response self-critique in\n`core/engine/_reflection_mixin.py::_reflect_on_answer` (already runs on a\ngated intent set after substantive turns) to ask the same reflection LLM\ncall for one extra structured field — a generalized LESSON describing the\nPATTERN behind an issue, not the one-off instance — and store it via the\nexisting `_MemoryMixin._store_fact_if_valid` gate (ADR-63 durability/dedup/\nkeyed-upsert, source=\"reflection\"). Add a `kind_override` param there so the\nstored row is tagged `memory_kind: \"lesson\"`. No extra LLM call, no new\nwrite-path door — reuses ADR-63's mechanics per the research doc's own\nrecommendation.\n\nVisibility: a dedicated `reflection_lesson_stored` obs event, forwarded by\n`api/routes/chat.py`'s existing turn_complete drain loop as a new top-level\nSSE type `{\"type\": \"reflection_lesson\", ...}` (same pattern as the\ncontext-usage-breakdown feature). Frontend: new `reflectionLessons` state\nin `useLocalMind.ts::useChat`, rendered as a small clickable badge + popover\nin `CenterPanel.tsx` (mirrors the context-breakdown popover).\n\nPaths claimed (isolated worktree `../LocalMind-juma-s017`,\nbranch `collab/S017/juma-s017`):\n- backend/src/core/engine/_reflection_mixin.py\n- backend/src/core/engine/_memory_mixin.py\n- backend/src/api/routes/chat.py\n- frontend/src/types/index.ts\n- frontend/src/hooks/useLocalMind.ts\n- frontend/src/components/layout/CenterPanel.tsx\n- frontend/src/components/layout/WorkspaceLayout.tsx\n\nDisjoint from Kamau/S018 (deduction engine, B-2026-09-15-13 — signal fusion,\nlikely loop.py/agent/deduction-shaped files) and Amara/S019 (tier\nclassification regression tests, B-2026-08-15-12). No overlap expected;\nwill re-check before integrating.",
+  "paths": ["backend/src/core/engine/_reflection_mixin.py", "backend/src/core/engine/_memory_mixin.py", "backend/src/api/routes/chat.py", "frontend/src/types/index.ts", "frontend/src/hooks/useLocalMind.ts", "frontend/src/components/layout/CenterPanel.tsx", "frontend/src/components/layout/WorkspaceLayout.tsx"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
