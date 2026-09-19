@@ -624,15 +624,20 @@ hand-maintained per project:
 1. **`AGENTS.md` at the project root** (from `core/templates/AGENTS.md`,
    generated at bootstrap; optionally copied as `CLAUDE.md` and
    `.github/copilot-instructions.md` for tools that auto-load those
-   paths). **A router, not a digest** — under 20 lines: what this repo
-   uses, the one rule that can't be missed (never write under
-   `.context_ledger/core/`), and "read `.context_ledger/kickoff.md` and
-   follow it — start there, not here." It does not restate check-in,
-   roster, gate, or collaboration rules; those live in exactly one place
-   each (kickoff's phases, the edition, this schema), not a third copy
-   here. This is the floor — an agent that reads nothing else still
-   learns where memory lives, what it must never write to, and where to
-   start.
+   paths). **Mostly a router, but not only one** — under 40 lines: what
+   this repo uses, "read `.context_ledger/kickoff.md` and follow it,"
+   and the one rule that can't be missed (never write under
+   `.context_ledger/core/`). It does **not** restate the roster's
+   format, gate commands, or collaboration mechanics — those live in
+   exactly one place each (kickoff's phases, the edition, this schema).
+   **It does restate one behavior directly: check in before reading
+   further or analyzing anything.** This is the floor — the one file
+   some sessions on this repo will ever read in full — and core 2.0.0
+   learned the hard way that "go read kickoff.md" is not itself a
+   substitute for stating the single highest-cost rule where the
+   weakest reader will actually see it: a session that reads this file
+   and stops, or reads it front-to-back before acting, still checks in
+   before doing anything else.
 2. **`.context_ledger/kickoff.md`** — the front door: numbered phases that
    route by agent type, check in, point at `memory/office/STATE.md` for
    orientation, and — the routing table that keeps this tier cheap for

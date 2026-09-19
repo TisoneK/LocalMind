@@ -79,9 +79,16 @@ here. This is deliberate: a fresh session used to pay for the check-in
 ceremony, the reading order, and the gate rules being explained three
 times over (this file, `AGENTS.md`, the edition) before any real work
 started. Now each of those is written once, and this file's only job is
-routing to the right one at the right moment. Reading ahead (the full
-edition before checking in, say) is exactly how two sessions collide on a
-codename — follow the order.
+routing to the right one at the right moment.
+
+**Execute each phase before reading the next one — do not read this
+whole file front-to-back first and start acting afterward.** If you
+arrived here already having skimmed Phase 3 or later, stop: go back and
+push Phase 2's check-in now, from what you already know, before reading
+any further. Reading ahead (the full edition before checking in, the
+rest of these phases before checking in) is exactly how two sessions
+collide on a codename — the check-in is a write these phases are
+building up to, not a topic covered somewhere in the reading.
 
 ### Phase 0 — Identify
 

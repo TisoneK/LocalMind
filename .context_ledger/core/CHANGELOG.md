@@ -10,6 +10,59 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 2.0.2 — 2026-09-19
+
+**A real collision, reported directly: sessions were fighting during
+initialization because check-in-before-analysis stopped happening.**
+Core 2.0.0's token-optimization pass reduced `AGENTS.md` from a 158-line
+digest to a ~28-line pure router ("go read `kickoff.md` and follow it")
+— and in doing so dropped the one restated rule that was there on
+purpose: `AGENTS.md` is the **weak-agent floor**, the one file some
+sessions on this repo will ever read in full, and it used to state
+"check in before any analysis" directly rather than only routing to it.
+Some agents evidently don't chain reliably into a multi-file, multi-phase
+routing sequence — they read the floor, or read a whole file
+front-to-back before acting on any of it, and by the time a check-in
+happened it was too late to prevent a collision. This is the same
+failure class core 1.0.6 fixed once already (two sessions launched
+together both seeing an empty board); de-duplication treated all
+repetition as pure waste, but some repetition was a deliberate safety
+margin against exactly this.
+
+- `AGENTS.md` and `CLAUDE.md` (templates + this repo's own copies) each
+  gain back a short, standalone "check in — before reading anything
+  else, including the rest of this file" directive, placed *before* the
+  "go read `kickoff.md`" pointer rather than after. Still far shorter
+  than pre-2.0.0 (~40 and ~20 lines vs. 158 and 32) — this restores the
+  one line that mattered, not the whole restated ceremony.
+- `kickoff.md`'s Phases intro gains an explicit instruction to execute
+  each phase before reading the next, with a named recovery step: if you
+  already read ahead to Phase 3 or later, stop and push Phase 2's
+  check-in now, before reading further.
+- `ledger-schema.md`'s "Translation layer" section corrected — it had
+  described tier 1 as restating *nothing*, which was no longer accurate
+  even before this fix's own change (mostly a router now, but not
+  purely one, and deliberately so).
+- New regression test (`tests/run-tests.sh`): asserts `AGENTS.md` and
+  `CLAUDE.md` state check-in-before-analysis directly, so a future
+  token-optimization pass can't silently strip this again without a
+  test noticing. Flaw logged with the general lesson: before removing a
+  restated rule as duplication, check whether the repetition was a
+  documented safety margin, not an oversight.
+
+Tests 27 → 29.
+
+- **Migration:** `ledger-sync update` picks this up automatically — no
+  file moves. If a project customized `AGENTS.md`/`CLAUDE.md` after the
+  2.0.0 update, this update overwrites them again (they are regenerated,
+  never hand-patched, per the 2.0.0 migration note) — move any
+  project-specific text into `memory/overrides/rules.md` first if it
+  must survive. **This update is urgent** for any project mid-fleet
+  running with concurrent/multi-agent sessions: 2.0.0/2.0.1 carry the
+  regression described above.
+
+---
+
 ## 2.0.1 — 2026-09-18
 
 **A live bootstrap test of 2.0.0 (fresh scratch project, not just the unit
