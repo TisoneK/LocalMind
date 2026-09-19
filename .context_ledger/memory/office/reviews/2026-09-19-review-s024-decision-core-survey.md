@@ -64,3 +64,24 @@ The thread's diagnosis ("LocalMind has no decision layer; five decisions are slo
 ## Method / limits
 
 Read: STATE, decisions (ADR-62–65 + frozen ADR-18/37/38/46/53/57–61), overrides, preferences, backlog/parking-lot rows by keyword, `thinker/`, `initialization.py`, `pre_init_classifier.py`, `trivial_input.py`, `turn_outcome.py`, `safety_gate.py`, `tools/shell.py` blocklist, `model_router.py`, `loop.py` at Thinker/gate/todo sites, `chat.py` todo finalize. Not done: no live run, no full read of `loop.py`, no test execution, frontend not inspected (panel-event claim unchecked).
+
+## Live trace addendum (S024, same day) — where one real turn's wall-clock goes
+
+**One run, one provider, one prompt — an observation, not a benchmark.** Provider: gemini/gemini-2.5-flash (zai returned 401 "token expired"; bankofai returned `credit insufficient balance: balance=0` — neither could be traced; owner must refresh the zai key in Settings, no key was read or printed). Isolated port 8765 + scratch `LOCALMIND_HOME`, backend from source, harness kept outside the repo. Prompt: list `/Users/bao/Code`, get the latest commit message, count `.py` files under `backend/src/core` (three independent read-only asks).
+
+| Measurement | Value |
+|---|---|
+| Wall clock to `done` | 15.0 s |
+| LLM calls / prompt tokens / completion tokens | **17** / 76,523 / 3,446 for a three-tool, four-iteration turn |
+| Tool execution time (dir_explorer / git / find) | 2 ms / 44 ms / 29 ms — negligible |
+| Tool calls | 3, **emitted one per model iteration** (independent, none batched) |
+| First answer token → `agent_loop_done` | 4.95 s → 11.69 s |
+| `agent_loop_done` → `done` | 11.69 s → 15.02 s: **post-answer reflection (3.3 s, ~22% of the turn) sits on the critical path to `done`** |
+| Reflection outcome | score 8, flagged a truncated folder list and issued a correction — it earned its time |
+
+Readings (each needs finer instrumentation before it's trusted):
+1. Time is essentially all model calls, not tools; the 17-call count is the outlier and its breakdown (Thinker consults vs reflection vs synthesis vs other) is unknown — the ADR-57 "calls/turn" metric is the first thing to instrument.
+2. The model serialised three independent reads; harness-level batching/speculation of independent read-only calls has real headroom on this model (it does not emit parallel calls, matching P-2026-09-16-17).
+3. Reflection runs after the loop and `done` waits for it — confirmed blocking at `agent_runtime.py:2121`. It caught a real defect, so the candidate change is to overlap/stream it, not remove it (trust-over-speed).
+4. A ~5 s stretch between the last answer token (6.69 s) and `agent_loop_done` (11.69 s) is unexplained by the events emitted; `agent_thinker_start iteration 3` has no matching `done` before loop end. Needs a stage timer.
+5. SSE events arrive in clumps (several sequential events at the identical timestamp; a tool's `done` event trails its `terminal_output` by ~1.4 s, i.e. until the next model call) — either the bridge batches or the client read does; the panel may show tool completion late. Unverified which.
