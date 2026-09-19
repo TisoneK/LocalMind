@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-19T10:20:43Z_
+_Regenerated: 2026-09-19T10:43:29Z_
 
 ## Standing params
 - **Core:** 2.0.2 (locked, verified 2026-09-19)
@@ -17,6 +17,7 @@ _Regenerated: 2026-09-19T10:20:43Z_
 ## Office — who's in, right now
 - **Tariq** (S020) — Working — B-2026-09-15-15 — passive context awareness (user/env profile from incidental signals)
 - **Naledi** (S022) — Working — B-2026-09-15-8 — intent-aware "criteria unmet" replan gate
+- **Amara** (S023) — Working — user Q&A — is a CWD/get-cwd tool needed, and should the agent's home default be `~/` in…
 
 ## Current task
 - **2026-09-19 — Tariq (S020) / not exposed to the session (Freebuff desktop)** — B-2026-09-15-15 — passive context awareness: build the user/env profile from incidental conversation signals (no "remember this" trigger)… — *in-progress*
@@ -32,5 +33,5 @@ _11 medium, 7 low priority row(s) — see tasks/backlog.md_
 - plans/decisions.md (ADRs in force — respected, not relitigated): 4 entries, last added 2026-09-19
 
 ## Collaboration
-- 93 event(s) on file; most recent: `20260919T101517Z-claude-sonnet-5-021-96be4f52.json`
+- 94 event(s) on file; most recent: `20260919T103907Z-Naledi-78e73aa6.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`
