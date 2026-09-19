@@ -71,6 +71,26 @@ correction twice.
   weak-model phrasing; sharpens the 2026-08-15/08-17 bullets. NOTE: the standing
   directive files `system/live-testing.md`, `workflows/active.md`, and ADR-40's
   guardrail text still carry the term — sweeping those is the owner's call.)
+- **Ground every design decision in the actual system before making it.** Do
+  not decide an architecture, ADR, or feature direction from a chat discussion
+  or from first principles. First read what is really there: the current
+  design, its limitations and strengths, the backlog and parking-lot items it
+  touches, existing ADRs, and the impact of the change (what it fixes, what it
+  could break, what it displaces). Proposals from a conversation are
+  hypotheses to check against the code and ledger, not conclusions to record.
+  Present the findings with the recommendation, and mark anything not yet
+  verified as unverified. (correction, 2026-09-19 — S024 was about to draft an
+  ADR for a "Decision Core" from a pasted design thread without reading the
+  repo; the owner: "we can't just decide things out of the blue without
+  actually looking at our actual design, limitations, strengths, backlogs, the
+  impact of the change")
+- **Judge performance by trust, not speed.** LocalMind is optimized for output
+  the owner can trust; time is acceptable when it maps to real, verifiable
+  work and unacceptable when it is waste (narration theater, redundant
+  re-classification, replans from wrong decisions). Do not headline latency as
+  the justification for a design; justify by correctness, honesty and
+  inspectability. Effort should be proportional to the weight of the request.
+  (stated, 2026-09-19)
 - **Use ANY capable model.** A free/small model failing to run tools is OUR bug,
   not the model's — "use any, they are all capable." Provider/model choice is
   config, not the root of agent failures (stated, 2026-08-15)
