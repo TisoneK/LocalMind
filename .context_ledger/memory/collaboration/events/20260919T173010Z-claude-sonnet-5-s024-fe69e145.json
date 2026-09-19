@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T173010Z-claude-sonnet-5-s024-fe69e145",
+  "type": "claim",
+  "session": "S024",
+  "agent": "claude-sonnet-5-s024",
+  "created": "2026-09-19T17:30:10Z",
+  "issue": "stage-prompts",
+  "body": "Imani (S024): stage-aware prompts for the act loop (post-recovery / post-evidence stages), evidence in review 2026-09-19-review-s024. Own worktree ../LocalMind-imani.",
+  "paths": ["backend/src/core/agent/loop.py", "backend/src/core/agent/prompts.py", "tests/core"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
