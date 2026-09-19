@@ -321,3 +321,74 @@ class TestShouldStoreCandidate:
             importance=0.5,
         )
         assert should_store_candidate(c) is False
+
+
+
+
+# = Passive context awareness (B-2026-09-15-15) ==========================
+
+from core.memory_intent import canonical_key as _canonical_key
+from core.memory_intent import extract_passive_facts as _extract_passive_facts
+
+
+class TestExtractPassiveFacts:
+    def test_stated_location_is_a_passive_candidate(self):
+        candidates = _extract_passive_facts("I'm based in Nairobi, by the way.")
+        assert len(candidates) == 1
+        assert candidates[0].subject_hint == "location"
+        assert "Nairobi" in candidates[0].content
+
+    def test_lives_in_is_a_passive_candidate(self):
+        candidates = _extract_passive_facts("I live in Kitengela.")
+        assert len(candidates) == 1
+        assert candidates[0].subject_hint == "location"
+
+    def test_identity_statement_is_a_passive_candidate(self):
+        candidates = _extract_passive_facts("My name is Tisone.")
+        assert len(candidates) == 1
+        assert candidates[0].subject_hint == ""
+
+    def test_work_statement_is_a_passive_candidate(self):
+        candidates = _extract_passive_facts("I work at Acme Corp.")
+        assert len(candidates) == 1
+
+    def test_time_boxed_location_is_rejected(self):
+        assert _extract_passive_facts("I'm in Nairobi this week.") == []
+
+    def test_hypothetical_location_is_rejected(self):
+        assert _extract_passive_facts("If I move to Nairobi, commutes will be longer.") == []
+
+    def test_ephemeral_message_is_rejected(self):
+        assert _extract_passive_facts("I'm having lunch now with my team.") == []
+
+    def test_question_about_a_place_is_not_a_self_fact(self):
+        assert _extract_passive_facts("What's the weather in Nairobi?") == []
+
+    def test_casual_greeting_produces_nothing(self):
+        assert _extract_passive_facts("Hi there!") == []
+
+    def test_empty_message_produces_nothing(self):
+        assert _extract_passive_facts("") == []
+
+    def test_two_facts_max_per_message(self):
+        message = "My name is Tisone. I work at Acme Corp. I live in Kitengela. I study botany."
+        candidates = _extract_passive_facts(message)
+        assert len(candidates) == 2
+
+
+class TestSubjectHintKeys:
+    def test_casual_location_statement_lands_on_the_location_subject(self):
+        # The hint routes a casually-worded statement onto the same
+        # single-valued row an explicit "I live in X" write uses.
+        assert (
+            _canonical_key("I'm based in Nairobi", subject_hint="location")
+            == "subject:location"
+        )
+
+    def test_hint_does_not_override_an_explicit_subject(self):
+        # An explicitly-worded statement keeps its own subject - the hint
+        # only fills a gap the wording left.
+        assert _canonical_key("I live in Nairobi", subject_hint="timezone") == "subject:location"
+
+    def test_subject_without_hint_is_unchanged(self):
+        assert _canonical_key("I prefer concise answers") == _canonical_key("I prefer concise answers")

@@ -339,6 +339,44 @@ def _bridge_todo_event(evt, session_id) -> list[str]:
     return []
 
 
+def _dedicated_proactive_writes(evt) -> list[str]:
+    """Dedicated SSE for the proactive memory writes (ADR-64's visible-log
+    surface: reflection lessons + passive context).
+
+    The generic obs_event wrapper is never matched by the frontend for an
+    unrecognized type, so an event consumed by ANY drain other than the
+    final one must carry its dedicated SSE here — the same reason
+    `_bridge_todo_event` exists for the todo events."""
+    if evt.type == "reflection_lesson_stored":
+        return [
+            _sse(
+                {
+                    "type": "reflection_lesson",
+                    "lesson": {
+                        "text": evt.data.get("lesson", ""),
+                        "intent": evt.data.get("intent", ""),
+                        "score": evt.data.get("score", 0),
+                        "confidence": evt.data.get("confidence", ""),
+                    },
+                }
+            )
+        ]
+    if evt.type == "passive_context_stored":
+        return [
+            _sse(
+                {
+                    "type": "passive_memory",
+                    "memory": {
+                        "text": evt.data.get("fact_preview", ""),
+                        "memory_type": evt.data.get("memory_type", ""),
+                        "subject": evt.data.get("subject", ""),
+                    },
+                }
+            )
+        ]
+    return []
+
+
 def _drain_live_lifecycle_events(obs: ObsCollector, session_id: str = ""):
     """stream the NON-tool obs events LIVE during pending waits.
 
@@ -354,10 +392,15 @@ def _drain_live_lifecycle_events(obs: ObsCollector, session_id: str = ""):
 
     todo events ALSO get their dedicated SSE here (not just the
     generic obs_event) — otherwise they never reach the Todos panel or DB when
-    the turn produces no intermediate text chunks."""
+    the turn produces no intermediate text chunks. The proactive-write events
+    (reflection lesson, passive context) get the same treatment: this drain
+    consumes them whenever the turn ends mid-drain, and without the dedicated
+    SSE here the write would be INVISIBLE on exactly those turns."""
     for evt in obs.drain():
         yield _sse(evt.to_sse_dict())
         for extra in _bridge_todo_event(evt, session_id):
+            yield extra
+        for extra in _dedicated_proactive_writes(evt):
             yield extra
         if evt.type == "intent_classified":
             yield _sse(
@@ -825,6 +868,14 @@ async def _event_stream(
                         }
                     )
 
+                # Proactive memory writes (reflection lesson, passive context)
+                # get their dedicated SSE here too: when one lands mid-turn —
+                # before a later text chunk — THIS drain consumes the obs
+                # event and the final drain never sees it. Same reason the
+                # todo bridge is duplicated across both drains.
+                for extra in _dedicated_proactive_writes(evt):
+                    yield extra
+
             if hasattr(chunk, "metadata") and chunk.metadata:
                 obs_evt = chunk.metadata.get("obs_event")
                 if obs_evt:
@@ -1020,25 +1071,18 @@ async def _event_stream(
                         },
                     }
                 )
-            # B-2026-09-15-14 — self-reflection loop: the loop's own
-            # autonomous memory writes must be visible, not silent (owner
-            # decision 2026-09-18, P-2026-09-16-36 §2). The generic
-            # obs_event wrapper above is never matched by the frontend for
-            # an unrecognized type (same reason context_breakdown got its
-            # own dedicated `metrics` event instead), so this fires as its
-            # own top-level SSE type only when a lesson was actually stored.
-            if evt.type == "reflection_lesson_stored":
-                yield _sse(
-                    {
-                        "type": "reflection_lesson",
-                        "lesson": {
-                            "text": evt.data.get("lesson", ""),
-                            "intent": evt.data.get("intent", ""),
-                            "score": evt.data.get("score", 0),
-                            "confidence": evt.data.get("confidence", ""),
-                        },
-                    }
-                )
+            # B-2026-09-15-14 / B-2026-09-15-15 — proactive memory writes
+            # (self-reflection lesson, passive context) must be visible, not
+            # silent (owner decision 2026-09-18, P-2026-09-16-36 §2, ADR-64).
+            # The generic obs_event wrapper above is never matched by the
+            # frontend for an unrecognized type (the reason context_breakdown
+            # got its own dedicated `metrics` event), so each fires as its own
+            # top-level SSE type only when a write actually landed — blocked,
+            # refused, and deduped candidates stay silent because the store's
+            # state did not change. Shared bridge = single source of truth,
+            # identical to the lifecycle and per-chunk drains.
+            for extra in _dedicated_proactive_writes(evt):
+                yield extra
 
         # the plan covers the whole turn — mark any plan todos
         # the loop didn't advance as complete, live (the finally block repeats

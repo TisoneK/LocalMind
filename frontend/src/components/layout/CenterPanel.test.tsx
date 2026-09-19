@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { findRetryPrompt, CenterPanel } from './CenterPanel';
-import { ChatMessage as ChatMessageType, ModelOption, ReflectionLesson } from '@/types';
+import { ChatMessage as ChatMessageType, ModelOption, ReflectionLesson, PassiveMemory } from '@/types';
 import { localmindClient as client } from '@/lib/localmind/client';
 
 function msg(role: 'user' | 'assistant', content: string, id: string): ChatMessageType {

@@ -51,56 +51,63 @@ class _MemoryMixin:
         Post-response memory update: extract candidate facts from both the
         user's message and the assistant's response.
 
-        Two extraction paths:
-        1. USER-INITIATED: The user's message contains explicit fact signals
-           ("remember", "my name is", "I prefer", etc.)
-        2. RESPONSE-CONFIRMED: The assistant's response confirms a durable
+        Three extraction paths:
+        1. PASSIVE CONTEXT: durable self-facts stated incidentally — location,
+           identity, work context — with no explicit memory cue (the
+           conversation-signal half of the user profile; the boot-deduced
+           machine half lives in core/user_context.py). One pass, one visible
+           event per ACTUAL write (ADR-64: proactive memory writes are
+           visible, never silent).
+        2. RESPONSE-CONFIRMED: the assistant's response confirms a durable
            fact about the user (preferences, environment, plans).
-
-        Markers are intentionally selective: only store facts that represent
-        durable, cross-session knowledge. Conversational references like
-        "you mentioned" are excluded — they cause cross-session context leakage.
+        3. DETERMINISTIC CANDIDATES from chat evidence (corrections, stated
+           preferences, source knowledge from tool outcomes) — runs without
+           any explicit "remember" cue and without an LLM call.
         """
-        # ── Path 1: User-initiated fact extraction ───────────────────────
-        # Expanded signal set: catches more natural ways people share
-        # durable facts about themselves. Still selective — we don't
-        # want to store every conversational utterance.
-        if user_message:
-            _USER_FACT_SIGNALS = [
-                # Identity & profession
-                r"\bmy name is\b",
-                r"\bi(?:'m| am)\b.{0,5}\b(?:a |an )?(?:developer|designer|engineer|student|teacher|writer|researcher|manager|analyst|architect|consultant|devops|admin|freelancer)\b",  # noqa: E501
-                # Preferences & habits
-                r"\bi (?:prefer|like|love|hate|always|usually|never|typically|normally)\b",
-                r"\b(?:remember|note|store|keep in mind|don't forget)\b",
-                r"\bmy (?:favorite|preferred|default|usual|main|go-to|primary)\b",
-                # Work context
-                r"\bi (?:work|am working|am based|was working)\b.{0,3}\b(?:at|in|on|for|with)\b",
-                r"\bmy (?:project|repo|repository|codebase|app|website|server|team|company|org)\b",
-                # Technical environment
-                r"\bi(?:'m| am) (?:using|running|on|with|switching to|migrating to)\b.{0,15}\b(?:python|node|rust|java|go|linux|mac|windows|docker|kubernetes|aws|gcp|azure)\b",  # noqa: E501
-                r"\bmy (?:stack|setup|environment|workflow|pipeline|editor|ide|terminal|shell)\b",
-                # Life context that affects how we work together
-                r"\bi'm (?:new to|learning|studying|struggling with|stuck on)\b",
-                r"\b(?:i have|i've got)\b.{0,10}\b(?:deadline|meeting|exam|presentation|release)\b",
-                # Explicit memory commands
-                r"\b(?:save|store|remember|note)\s+(?:that|this|the fact)\b",
-            ]
-            for pattern in _USER_FACT_SIGNALS:
-                match = re.search(pattern, user_message, re.IGNORECASE)
-                if match:
-                    # Extract the full sentence containing the signal
-                    sentence_start = max(0, match.start() - 60)
-                    sentence_end = min(len(user_message), match.end() + 80)
-                    candidate = user_message[sentence_start:sentence_end].strip()
-                    # Clean up — remove leading/trailing partial words
-                    if sentence_start > 0:
-                        candidate = candidate.split(None, 1)[-1] if " " in candidate else candidate
-                    if len(candidate) > 20:
-                        await self._store_fact_if_valid(
-                            candidate, session_id, obs, source="user", message=user_message
-                        )
-                    break  # one fact per user message max
+        # ── Path 1: passive context (conversation-signal self-facts) ─────
+        # Sentences the passive pass claims, whatever the write path decides
+        # — a volatile-refused or deduped sentence must not fire a second
+        # time through the generic candidate path below (one fact, one
+        # event). Initialized outside the try so the candidate path can
+        # always read it.
+        claimed: set[str] = set()
+        try:
+            from core.memory_intent import (
+                canonical_key,
+                extract_passive_facts,
+            )
+
+            for passive in extract_passive_facts(user_message):
+                claimed.add(" ".join(passive.content.lower().split()))
+                # A subject-hinted key: a casually-worded location statement
+                # lands on the same single-valued row the boot deduction and
+                # explicit "I live in X" writes use — restatement replaces,
+                # never accumulates.
+                _passive_key = canonical_key(
+                    passive.content, subject_hint=passive.subject_hint or None
+                )
+                _stored = await self._store_fact_if_valid(
+                    passive.content,
+                    session_id,
+                    obs,
+                    source="conversation",
+                    message=user_message,
+                    key=_passive_key,
+                )
+                if _stored:
+                    # Visible, and only when the write actually landed —
+                    # blocked, volatile-refused, and deduped candidates say
+                    # nothing (the store's state did not change).
+                    obs.emit(
+                        "passive_context_stored",
+                        fact_preview=passive.content[:60],
+                        memory_type=passive.memory_type.value,
+                        subject=passive.subject_hint or "general",
+                    )
+        except Exception:
+            logger.debug(
+                "[memory] passive context extraction skipped (non-critical)", exc_info=True
+            )
 
         # ── Path 4: deterministic candidate extraction from
         # chat evidence (corrections, stated preferences, source knowledge
@@ -131,58 +138,57 @@ class _MemoryMixin:
                 tool_results=tool_results[:3],  # one source per turn max
             )
             for cand in candidates:
+                if " ".join(cand.content.lower().split()) in claimed:
+                    # Already proposed (and answered) by the passive pass —
+                    # same fact must not reach the store twice per turn.
+                    continue
                 if not should_store_candidate(cand):
                     continue
-                await self._store_fact_if_valid(
+                _wrote = await self._store_fact_if_valid(
                     cand.content,
                     session_id,
                     obs,
                     source=cand.source,
                     message=user_message,
                 )
-                obs.emit(
-                    "memory_candidate_stored",
-                    fact_preview=cand.content[:60],
-                    importance=cand.importance,
-                    memory_type=cand.memory_type.value,
-                    source=cand.source,
-                )
+                # Visible (and honest) only when the write actually landed —
+                # a blocked/deduped candidate leaves the store unchanged, so
+                # it says nothing rather than claiming a write.
+                if _wrote:
+                    obs.emit(
+                        "memory_candidate_stored",
+                        fact_preview=cand.content[:60],
+                        importance=cand.importance,
+                        memory_type=cand.memory_type.value,
+                        source=cand.source,
+                    )
         except Exception as e:
             logger.debug("[memory] candidate extraction skipped (non-critical): %s", e)
 
         # ── Path 2: Response-confirmed fact extraction ───────────────────
-        # Markers that indicate a confirmed, durable user fact.
-        # Expanded to catch more natural response patterns.
+        # Markers that indicate a CONFIRMED user fact — the assistant
+        # completing a statement ABOUT the user, in the user's own voice
+        # ("…, you prefer concise answers" — an answer echo). Deliberately
+        # NOT "you prefer"/"you like" bare: those strings are how every
+        # assistant hedges a suggestion ("If you prefer X, do Y"), so the
+        # old marker list stored the MODEL'S OWN PROSE as the user's
+        # preference — a pollution source since the file's first commit
+        # (live-caught by the passive-context harness, 2026-09-19).
         _FACT_MARKERS = [
-            "you prefer",
-            "you always",
             "your name is",
-            "you like",
-            "you hate",
-            "you work",
+            "you told me you",
+            "you mentioned you",
+            "you're using",
+            "you are using",
+            "you're building",
             "your project",
             "your codebase",
             "your setup",
-            "you're using",
-            "you are using",
-            "your environment",
-            "you mentioned you",
-            "you told me you",
-            "since you're",
-            "given you're",
-            "as a",
             "your stack",
-            "your workflow",
-            "your preferred",
-            "you normally",
-            "you typically",
-            "you usually",
+            "your environment",
             "your team",
             "your company",
-            "your org",
-            "you're learning",
-            "you're new to",
-            "you're building",
+            "you work",
         ]
         response_lower = response_text.lower()
 
@@ -193,11 +199,25 @@ class _MemoryMixin:
         if not any(marker in response_lower for marker in _FACT_MARKERS):
             return
 
+        # Suggestion shapes — the assistant offering, not completing. The
+        # second pattern is anchored on the marker ITSELF ("If you prefer…",
+        # "Whether you like…", "you can", "feel free"): the hedge sits left
+        # of the marker, so a fixed list of sentence openers cannot catch it.
+        _SUGGESTION_SHAPES = re.compile(
+            r"\b(?:if|whether|when|whenever|should|since|because|although)\s+you\b"
+            r"|\b(?:you (?:can|could|may|might|might want to|can also|could also)\b)"
+            r"|\bfeel free\b"
+            r"|\bwant me to\b",
+            re.IGNORECASE,
+        )
+
         # Extract the sentence containing the marker as a candidate fact
         sentences = re.split(r"(?<=[.!?])\s+", response_text)
         _regex_found = False
         for sentence in sentences:
             s_lower = sentence.lower()
+            if _SUGGESTION_SHAPES.search(sentence):
+                continue
             if any(marker in s_lower for marker in _FACT_MARKERS) and len(sentence) > 30:
                 await self._store_fact_if_valid(
                     sentence.strip(), session_id, obs, source="assistant"
@@ -237,9 +257,10 @@ class _MemoryMixin:
         source: str = "user",
         message: str = "",
         kind_override: str | None = None,
+        key: str | None = None,
     ) -> bool:
         """
-        Shared fact validation + storage used by both user and response paths.
+        Shared fact validation + storage used by every memory path.
         Applies: negative learning gate → durability policy → deduplication
         gate → importance scoring → keyed store.
 
@@ -253,6 +274,10 @@ class _MemoryMixin:
         other than the durability profile's own classification — used by
         the self-reflection loop to mark a row "lesson" while the volatile
         gate still runs against the fact's actual content.
+
+        `key` overrides the derived canonical identity — used by the passive
+        context path to land a casually-worded statement on the same
+        single-valued row as an explicitly-worded one.
         """
         from core.memory_intent import MemoryDurability, canonical_key, durability_profile
 
@@ -308,8 +333,9 @@ class _MemoryMixin:
             source=source,
             importance=importance,
             # The key is the fact's identity: re-stating it replaces its row
-            # instead of appending another near-copy.
-            key=canonical_key(fact),
+            # instead of appending another near-copy. A caller-provided key
+            # (the passive path's subject hint) wins over the derived one.
+            key=key or canonical_key(fact),
             extra_metadata={
                 "memory_kind": kind_override or _durability.kind.value,
                 "memory_freshness": _durability.freshness,

@@ -862,3 +862,68 @@ describe('useChat thinking timer excludes tool time', () => {
     }
   });
 });
+
+  // B-2026-09-15-15 — passive context awareness: same visible-write rule
+  // as reflection_lesson (ADR-64). A dedicated top-level SSE type, because
+  // the generic obs_event wrapper is silently dropped unless explicitly
+  // matched.
+  it('accumulates passive_memory events into passiveMemories, newest last', () => {
+    const { result, onChunk, unmount } = renderChatWithCapturedStream();
+
+    act(() => {
+      onChunk()(JSON.stringify({
+        type: 'passive_memory',
+        memory: {
+          text: 'My name is Tisone.',
+          memory_type: 'user_fact',
+          subject: 'name',
+        },
+      }));
+    });
+
+    expect(result.current.passiveMemories).toHaveLength(1);
+    expect(result.current.passiveMemories[0].text).toBe('My name is Tisone.');
+    expect(result.current.passiveMemories[0].subject).toBe('name');
+
+    act(() => {
+      onChunk()(JSON.stringify({
+        type: 'passive_memory',
+        memory: { text: 'I work at Acme Corp.', memory_type: 'user_fact', subject: 'general' },
+      }));
+    });
+
+    expect(result.current.passiveMemories).toHaveLength(2);
+    expect(result.current.passiveMemories[1].text).toBe('I work at Acme Corp.');
+
+    unmount();
+  });
+
+  it('ignores a passive_memory event with empty text', () => {
+    const { result, onChunk, unmount } = renderChatWithCapturedStream();
+
+    act(() => {
+      onChunk()(JSON.stringify({ type: 'passive_memory', memory: { text: '' } }));
+    });
+
+    expect(result.current.passiveMemories).toHaveLength(0);
+    unmount();
+  });
+
+  it('resetSession clears the passive-memory log', () => {
+    const { result, onChunk, unmount } = renderChatWithCapturedStream();
+
+    act(() => {
+      onChunk()(JSON.stringify({
+        type: 'passive_memory',
+        memory: { text: 'I am based in Nairobi.', memory_type: 'user_fact', subject: 'location' },
+      }));
+    });
+    expect(result.current.passiveMemories).toHaveLength(1);
+
+    act(() => {
+      result.current.resetSession();
+    });
+
+    expect(result.current.passiveMemories).toHaveLength(0);
+    unmount();
+  });

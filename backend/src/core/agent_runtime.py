@@ -1554,6 +1554,19 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     cached_tokens=_fast_usage.get("cached_tokens"),
                     llm_calls=_fast_usage.get("llm_calls"),
                 )
+                # Passive context extraction runs on the fast path too — a
+                # fact stated in casual conversation ("I'm based in Nairobi")
+                # must reach the store the same as one stated on an agent-loop
+                # turn. Post-reply, so it never delays the answer; the visible
+                # passive_memory event rides the drain ahead of the done chunk.
+                try:
+                    await self._maybe_store_response_facts(
+                        _response_text, session_id, collector, user_message=message
+                    )
+                except Exception:
+                    logger.debug(
+                        "[agent-runtime] fast-path fact extraction skipped", exc_info=True
+                    )
                 yield StreamChunk(text="", done=True, usage=_fast_usage)
                 return
 

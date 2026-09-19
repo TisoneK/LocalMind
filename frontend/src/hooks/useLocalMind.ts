@@ -41,6 +41,7 @@ import type {
   AgentRunStatus,
   DiffData,
   ReflectionLesson,
+  PassiveMemory,
 } from '@/types';
 
 // cap the accumulated per-turn run groups in the Agent Workspace so a
@@ -51,6 +52,10 @@ const MAX_WORKSPACE_TURNS = 10;
 // (B-2026-09-15-14) — capped so a long session doesn't grow the popover
 // unbounded; oldest lessons drop off, newest kept.
 const MAX_REFLECTION_LESSONS = 20;
+
+// Same cap for the passive-context log (B-2026-09-15-15) — facts the agent
+// picked up incidentally and stored on its own.
+const MAX_PASSIVE_MEMORIES = 20;
 
 // ─── Session stats (stats split — bottom-right corner) ────────────────────
 // Per-chat cumulative performance totals. Keyed per hook instance so they
@@ -249,6 +254,11 @@ interface ChatState {
    *  own this session (B-2026-09-15-14) — accumulates across turns, unlike
    *  lastMetrics, so the user can review every autonomous write. */
   reflectionLessons: ReflectionLesson[];
+  /** Visible log of durable self-facts the agent stored on its own from
+   *  incidental conversation signals this session (B-2026-09-15-15) —
+   *  accumulates across turns, per-session like the memory rows they
+   *  mirror. */
+  passiveMemories: PassiveMemory[];
   elapsedMs: number;
   /** Cumulative per-chat totals (stats split): the bottom-
    *  right corner answers "how is this session doing overall" while each
@@ -305,6 +315,7 @@ export function useChat(
   const [liveObservation, setLiveObservation] = useState<ObservationData | null>(null);
   const [lastMetrics, setLastMetrics] = useState<PerformanceMetrics | null>(null);
   const [reflectionLessons, setReflectionLessons] = useState<ReflectionLesson[]>([]);
+  const [passiveMemories, setPassiveMemories] = useState<PassiveMemory[]>([]);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [sessionStats, setSessionStats] = useState<SessionStats>({ ..._EMPTY_SESSION_STATS });
   // Mirrors sessionStats for pure, synchronous reads (the accumulation effect
@@ -533,6 +544,7 @@ export function useChat(
           // The reflection-lesson log is per-session, same scoping as the
           // memory rows it mirrors (source="reflection", keyed to session_id).
           setReflectionLessons([]);
+          setPassiveMemories([]);
           // Stats split: new chat / cleared session → fresh counters.
           applySessionStats({ ..._EMPTY_SESSION_STATS });
           sessionStatsSeededForRef.current = null;
@@ -555,6 +567,7 @@ export function useChat(
         // metrics onto the newly loaded history's last message (review fix).
         setLastMetrics(null);
         setReflectionLessons([]);
+        setPassiveMemories([]);
         // Stats split: switch to the other session's cumulative totals (or
         // fresh zeros if this run never chatted there).
         const cached = sessionStatsBySessionRef.current.get(sessionId);
@@ -1679,6 +1692,30 @@ export function useChat(
                 break;
               }
 
+              case 'passive_memory': {
+                // Passive context awareness (B-2026-09-15-15): the agent
+                // stored a durable fact about the user it picked up from
+                // incidental conversation — no "remember this" trigger.
+                // Same visible-write rule as reflection_lesson (ADR-64):
+                // proactive memory writes accumulate here for the session so
+                // the user can audit what the agent decided to remember.
+                const passive = parsed.memory || {};
+                const text = String(passive.text || '').trim();
+                if (text) {
+                  setPassiveMemories((prev) => [
+                    ...prev,
+                    {
+                      id: `${Date.now()}-${prev.length}`,
+                      text,
+                      memory_type: String(passive.memory_type || ''),
+                      subject: String(passive.subject || ''),
+                      ts: Date.now(),
+                    },
+                  ].slice(-MAX_PASSIVE_MEMORIES));
+                }
+                break;
+              }
+
               case 'terminal_event': {
                 const termEvt = parsed.terminal_event || parsed;
                 if (onTerminalEvent && termEvt) {
@@ -1977,6 +2014,7 @@ export function useChat(
   const resetSession = useCallback(() => {
     setLastMetrics(null);
     setReflectionLessons([]);
+    setPassiveMemories([]);
     setLiveObservation(null);
     setElapsedMs(0);
     setCurrentIntent(undefined);
@@ -1989,7 +2027,7 @@ export function useChat(
     sessionStatsSeededForRef.current = null;
   }, [applySessionStats]);
 
-  return { messages, fileDiffs, isStreaming, currentIntent, currentConfidence, activeToolCalls, agentRuns, liveObservation, lastMetrics, reflectionLessons, elapsedMs, sessionStats, send, abort, steer, setMessages, resetSession, onTerminalEvent };
+  return { messages, fileDiffs, isStreaming, currentIntent, currentConfidence, activeToolCalls, agentRuns, liveObservation, lastMetrics, reflectionLessons, passiveMemories, elapsedMs, sessionStats, send, abort, steer, setMessages, resetSession, onTerminalEvent };
 }
 
 // ─── Prompt leak detection (FIX 1) ────────────────────────────────────

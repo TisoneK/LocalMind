@@ -594,6 +594,20 @@ export interface PerformanceMetrics {
   contextBreakdown?: Record<string, number>;
 }
 
+/** A durable self-fact the agent picked up incidentally — from ordinary
+ *  conversation with no "remember this" trigger — and stored to memory on
+ *  its own (B-2026-09-15-15). Same visible-log surface and owner decision as
+ *  ReflectionLesson: silent learning is unauditable, so every autonomous
+ *  memory write shows up here. */
+export interface PassiveMemory {
+  id: string;
+  /** The stored fact (preview, as the SSE event carries it). */
+  text: string;
+  memory_type: string;
+  subject: string;
+  ts: number;
+}
+
 /** A pattern-level lesson the self-reflection loop noticed and stored to
  *  memory on its own — the visible-log surface for proactive memory writes
  *  (owner decision 2026-09-18, B-2026-09-15-14: silent learning is

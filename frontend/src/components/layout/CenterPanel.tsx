@@ -5,13 +5,14 @@ import {
   Cpu,
   Brain,
   Lightbulb,
+  UserRound,
   Wifi,
   WifiOff,
   Shield,
   Loader2,
   X,
 } from 'lucide-react';
-import { ChatMessage as ChatMessageType, ModelOption, DiffData, ReflectionLesson } from '@/types';
+import { ChatMessage as ChatMessageType, ModelOption, DiffData, ReflectionLesson, PassiveMemory } from '@/types';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { TranscriptContextMenu } from '@/components/chat/TranscriptContextMenu';
@@ -90,6 +91,10 @@ interface CenterPanelProps {
    *  own this session (B-2026-09-15-14) — clicking the lesson badge opens
    *  the list so proactive writes are never silent. */
   reflectionLessons?: ReflectionLesson[];
+  /** Visible log of durable self-facts the agent stored on its own from
+   *  incidental conversation signals (B-2026-09-15-15) — same audit surface
+   *  as the reflection lessons. */
+  passiveMemories?: PassiveMemory[];
   /** Per-path diff hunks captured this turn (preview Diff mode). */
   fileDiffs?: Record<string, DiffData>;
   /** Current chat mode. */
@@ -113,6 +118,7 @@ export function CenterPanel({
   cachedTokens,
   contextBreakdown,
   reflectionLessons,
+  passiveMemories,
   fileDiffs,
   chatMode,
   onChatModeChange,
@@ -258,6 +264,15 @@ export function CenterPanel({
   const lessons = reflectionLessons ?? [];
   const toggleLessons = () => {
     if (lessons.length > 0) setLessonsOpen((o) => !o);
+  };
+
+  // Passive-context log (B-2026-09-15-15): visible surface for durable
+  // self-facts the agent stored on its own from incidental conversation
+  // signals — no "remember this" trigger. Same audit rule as the lessons.
+  const [passiveOpen, setPassiveOpen] = useState(false);
+  const passives = passiveMemories ?? [];
+  const togglePassives = () => {
+    if (passives.length > 0) setPassiveOpen((o) => !o);
   };
 
   // Clean up model name for display: remove internal suffixes, format nicely
@@ -435,6 +450,55 @@ export function CenterPanel({
                   <div className="text-[9px] leading-snug text-brand-green-muted mt-1.5 pt-1.5 border-t border-brand-border">
                     Written to memory automatically, without being asked — this
                     log exists so that stays visible instead of silent.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {/* Passive-memory badge: the visible log for durable self-facts the
+              agent picked up from incidental conversation and stored on its
+              own (B-2026-09-15-15). Hidden until the first passive write. */}
+          {passives.length > 0 && (
+            <div className="relative">
+              <div
+                className="flex items-center gap-1.5 cursor-pointer"
+                onClick={togglePassives}
+                data-testid="passive-memory-badge"
+                title={`${passives.length} fact${passives.length === 1 ? '' : 's'} the agent picked up from this conversation and remembered on its own. Click to review what it decided to remember.`}
+              >
+                <UserRound className="h-3 w-3 text-brand-amber" />
+                <span className="text-[10px] text-brand-green-muted">{passives.length}</span>
+              </div>
+              {passiveOpen && (
+                <div
+                  className="absolute right-0 top-full mt-1.5 z-30 w-72 max-h-80 overflow-y-auto rounded-md border border-brand-border bg-brand-bg-panel p-2.5 shadow-xl"
+                  data-testid="passive-memory-panel"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[9px] uppercase tracking-wider text-brand-green-muted">
+                      Picked up from conversation
+                    </span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setPassiveOpen(false); }}
+                      className="text-brand-green-muted hover:text-brand-green-soft"
+                      aria-label="Close passive memory log"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                  {[...passives].reverse().map((item) => (
+                    <div key={item.id} className="mb-2 last:mb-0 pb-2 last:pb-0 border-b last:border-0 border-brand-border">
+                      <div className="text-[10px] text-brand-green-soft leading-snug">{item.text}</div>
+                      <div className="text-[9px] text-brand-green-muted mt-0.5">
+                        {item.subject && item.subject !== 'general' && `${item.subject} · `}
+                        remembered without being asked
+                      </div>
+                    </div>
+                  ))}
+                  <div className="text-[9px] leading-snug text-brand-green-muted mt-1.5 pt-1.5 border-t border-brand-border">
+                    Noticed in what you said — no "remember this" needed — and
+                    written to memory automatically. This log keeps those
+                    writes visible; ask me to forget any of them and I will.
                   </div>
                 </div>
               )}

@@ -407,7 +407,7 @@ _SINGLE_VALUED_SUBJECTS: tuple[tuple[re.Pattern[str], str], ...] = (
 )
 
 
-def canonical_key(content: str, max_words: int = 6) -> str:
+def canonical_key(content: str, max_words: int = 6, subject_hint: str | None = None) -> str:
     """A deterministic identity for a fact, independent of embeddings.
 
     The store dedups paraphrases by vector distance, but that only works while
@@ -418,6 +418,12 @@ def canonical_key(content: str, max_words: int = 6) -> str:
 
     Single-valued subjects (location, timezone, name, email, phone, employer)
     map to a named subject key; everything else uses its leading content words.
+
+    `subject_hint` lets the caller assert the subject when the statement's own
+    wording doesn't carry it ("I'm in Nairobi this week" says where the user
+    IS without saying "live"). The hint lands on the same single-valued row as
+    an explicitly-worded statement of that subject, so a casual restatement
+    replaces the row instead of accumulating a near-copy.
     """
     text = (content or "").strip()
     if not text:
@@ -426,6 +432,9 @@ def canonical_key(content: str, max_words: int = 6) -> str:
     for pattern, subject in _SINGLE_VALUED_SUBJECTS:
         if pattern.search(text):
             return f"subject:{subject}"
+
+    if subject_hint:
+        return f"subject:{subject_hint}"
 
     words = [w for w in re.findall(r"[a-z0-9]+", text.lower()) if w not in _KEY_STOPWORDS]
     if not words:
@@ -878,3 +887,127 @@ def should_store_candidate(candidate: MemoryCandidate) -> bool:
         return True
     # General — only if importance is high enough
     return candidate.importance >= 0.7
+
+
+# ── Passive context awareness (conversation-signal half of the user profile) ──
+#
+# The boot-deduced profile (core/user_context.py) covers what the MACHINE
+# knows: country, timezone, locale. The other half of the profile is what the
+# USER says in passing — "I work at Acme Corp", "My name is Tisone" — facts
+# that arrive inside ordinary conversation with no "remember this" trigger.
+# This pass extracts those from the user's message after the turn, so the
+# second time the user mentions their work the agent already knows.
+#
+# Policy constraints (backlog -3 / -4): the durability gate and the keyed
+# identity stay the ONLY accept/refuse authorities — extraction proposes,
+# the write path disposes. Mechanics: one candidate per fact with a subject
+# hint so the keyed write lands on the same row as an explicit statement.
+
+
+@dataclass
+class PassiveCandidate:
+    """A durable self-fact stated incidentally (no explicit memory cue).
+
+    `subject_hint` — the single-valued subject the statement is about
+    ("location"), when the extractor can tell but the WORDING doesn't say it
+    ("I'm in Nairobi" carries no "live"). Feeds canonical_key so the write
+    lands on the same row as an explicitly-worded statement.
+    """
+
+    content: str
+    memory_type: MemoryType = MemoryType.USER_FACT
+    subject_hint: str = ""
+
+
+# Where the user is / is from. Worded tightly: "I'm in Nairobi" (a statement
+# about the speaker), not "is it in Nairobi?" (a question about a thing).
+_LOCATION_CUES = [
+    r"\bi(?:'m| am)\s+(?:currently\s+)?(?:in|at|from|near)\b",
+    r"\bi\s+(?:live|lived|am\s+stationed|am\s+posted)\s+(?:in|at|near)\b",
+    r"\bi(?:'m| am)\s+(?:living|based)\s+(?:in|at|near)\b",
+    r"\bmy\s+(?:office|home|place|apartment|house|flat)\s+is\s+(?:in|at|near)\b",
+    r"\bwe(?:'re| are)\s+(?:in|at|based\s+in|moving\s+to|relocating\s+to)\b",
+]
+_LOCATION_RE = re.compile("|".join(_LOCATION_CUES), re.IGNORECASE)
+
+# Who the user is: name, occupation, field of study.
+_IDENTITY_CUES = [
+    r"\bmy\s+name\s+is\b",
+    r"\bcall\s+me\b",
+    r"\bi\s+work\s+(?:as|at|for|in|on)\b",
+    r"\bi(?:'m| am)\s+(?:a|an)\s+[a-z]",
+    r"\bi\s+study\s+[a-z]",
+    r"\bi(?:'m| am)\s+studying\s+[a-z]",
+]
+_IDENTITY_RE = re.compile("|".join(_IDENTITY_CUES), re.IGNORECASE)
+
+# Work / project context that shapes future collaboration.
+_ENVIRONMENT_CUES = [
+    r"\bmy\s+(?:team|company|employer|startup|project)\s+(?:is|is\s+called|consists)\b",
+    r"\bwe\s+(?:build|make|ship|develop)\b",
+    r"\bi\s+(?:run|own|manage)\s+(?:a|an|the)\b",
+]
+_ENVIRONMENT_RE = re.compile("|".join(_ENVIRONMENT_CUES), re.IGNORECASE)
+
+# Hypothetical / conditional framing — never a fact about the user.
+_HYPOTHETICAL_RE = re.compile(
+    r"^(?:if|when|whether|what\s+if|maybe|perhaps|suppose|imagine|should)\b",
+    re.IGNORECASE,
+)
+
+# Time-boxed framing: true of a PERIOD, not of the user. This is the single
+# most misleading thing the passive path could persist — "I'm in Nairobi this
+# week" stored as a location fact would override the boot-deduced (and every
+# later) default long after the week ended.
+_TIME_BOXED_RE = re.compile(
+    r"\b(?:this|next|last)\s+(?:week|month|year|weekend|summer|winter|spring|fall|autumn|semester|quarter|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b"
+    r"|\b(?:today|tonight|tomorrow)\b",
+    re.IGNORECASE,
+)
+
+
+_PASSIVE_CUE_SETS: tuple[tuple[re.Pattern[str], MemoryType, str], ...] = (
+    (_LOCATION_RE, MemoryType.USER_FACT, "location"),
+    (_IDENTITY_RE, MemoryType.USER_FACT, ""),
+    (_ENVIRONMENT_RE, MemoryType.USER_FACT, ""),
+)
+
+
+def extract_passive_facts(message: str) -> list[PassiveCandidate]:
+    """Extract durable self-facts stated incidentally from a user message.
+
+    One per matching sentence, capped at two per message, and NOTHING when
+    the message is ephemeral small talk ("I'm having lunch"), a hypothetical
+    ("If I move to Nairobi…"), or time-boxed ("I'm in Nairobi this week" —
+    rejected at extraction, not stored, so a period-statement can never
+    masquerade as a durable trait).
+    """
+    text = (message or "").strip()
+    if not text:
+        return []
+    if _EPHEMERAL_RE.search(text):
+        return []
+
+    candidates: list[PassiveCandidate] = []
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        sentence = sentence.strip()
+        words = sentence.split()
+        if len(words) < 3 or len(words) > 60:
+            continue
+        if _HYPOTHETICAL_RE.search(sentence):
+            continue
+        if _TIME_BOXED_RE.search(sentence):
+            continue
+        for cue_re, memory_type, subject in _PASSIVE_CUE_SETS:
+            if cue_re.search(sentence):
+                candidates.append(
+                    PassiveCandidate(
+                        content=sentence.rstrip(".,;!"),
+                        memory_type=memory_type,
+                        subject_hint=subject,
+                    )
+                )
+                break
+        if len(candidates) >= 2:
+            break
+    return candidates
