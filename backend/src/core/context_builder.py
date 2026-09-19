@@ -61,6 +61,32 @@ def _load_fragment(name: str) -> str:
     return ""
 
 
+def _tilde_display(path: str, home: str) -> str:
+    """Render `path` relative to `home` as a `~`-prefixed display string.
+
+    Cross-platform: compares against the actually-resolved home dir rather
+    than pattern-matching `/home/<user>` or `/Users/<user>`, so it works
+    for a Windows `C:\\Users\\<user>` home too. Display-only -- tools
+    already resolve `~` back to the real path via Path.expanduser(), so
+    this never changes what gets passed to a tool.
+    """
+    import os
+
+    if not path or not home:
+        return path
+    norm_path = os.path.normpath(path)
+    norm_home = os.path.normpath(home)
+    cmp_path, cmp_home = (norm_path, norm_home)
+    if os.name == "nt":
+        cmp_path, cmp_home = norm_path.lower(), norm_home.lower()
+    if cmp_path == cmp_home:
+        return "~"
+    prefix = cmp_home + os.sep
+    if cmp_path.startswith(prefix):
+        return "~" + os.sep + norm_path[len(prefix):]
+    return path
+
+
 def _intent_fragment_name(intent: Intent) -> str:
     """Map an Intent to its fragment filename (sans .md).
 
@@ -135,6 +161,8 @@ def _build_environment_context(
     # ── Paths ──
     cwd = session_cwd or os.path.expanduser("~")
     home = os.path.expanduser("~")
+    cwd_display = _tilde_display(cwd, home)
+    home_display = "~"
     hostname = platform.node()
     username = os.environ.get("USER") or os.environ.get("USERNAME") or "user"
 
@@ -244,15 +272,17 @@ def _build_environment_context(
 - Current date: {date_str}
 - Current time: {time_str}{tz_str}
 - User context: {_user_line or "not deduced"}
-- Working directory: {cwd}
-- Home: {home}
+- Working directory: {cwd_display} (already current for this turn -- do NOT
+  run pwd/Get-Location/cd just to check it)
+- Home: {home_display}
 - {shell_state_line}
 {_workspace_line}
 
 ## What You Know
 - Today is {date_str}. Use this to ground time-sensitive requests.
-- You are running on {system} {release}. The user's home is {home}; default
-  file operations are relative to there.
+- You are running on {system} {release}. The user's home is {home_display}
+  ({home}); default file operations are relative to there. `~` expands to
+  the real path automatically in any tool call.
 - {shell_guidance}"""
 
     # ── Memory facts count (if available) ──
@@ -316,8 +346,9 @@ You have access to these tools: {tool_summary}
 - Current date: {date_str}
 - Current time: {time_str}{tz_str}
 - User context: {_user_line or "not deduced"}
-- Working directory: {cwd}
-- Home: {home}
+- Working directory: {cwd_display} (already current for this turn -- do NOT
+  run pwd/Get-Location/cd just to check it)
+- Home: {home_display}
 - {shell_state_line}
 {_workspace_line}
 - CPU: {processor} ({cpu_count} cores)
@@ -329,7 +360,9 @@ You have access to these tools: {tool_summary}
 - Today is {date_str}. Use this to ground all time-sensitive queries.
 - You are running on {system} {release}. Use {shell_name}-compatible commands ONLY.
   If Windows, NEVER use mkdir -p, ls, cat, grep — use PowerShell equivalents.
-- The user's home directory is {home}. Default file operations should be relative to here.
+- The user's home directory is {home_display} ({home}). Default file
+  operations should be relative to here. `~` expands to the real path
+  automatically in any tool call.
 - {shell_guidance}
 - You have {memory_count} facts in memory about this user."""
 

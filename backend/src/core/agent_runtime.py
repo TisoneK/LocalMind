@@ -1725,8 +1725,14 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             pass
         session_cwd = self._session_ctx.get_cwd(session_id)
         try:
-            from tools.shell import set_session_cwd
-            set_session_cwd(session_cwd)
+            from tools.git_tool import set_session_cwd as _set_git_cwd
+            from tools.process_tool import set_session_cwd as _set_process_cwd
+            from tools.shell import set_session_cwd as _set_shell_cwd
+            from tools.sysinfo import set_session_cwd as _set_sysinfo_cwd
+            _set_shell_cwd(session_cwd)
+            _set_git_cwd(session_cwd)
+            _set_process_cwd(session_cwd)
+            _set_sysinfo_cwd(session_cwd)
         except Exception:
             pass
 

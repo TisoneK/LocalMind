@@ -29,11 +29,29 @@ import platform
 import socket
 import sys
 import time
+from contextvars import ContextVar
 
 from core.models import Intent, RiskLevel, ToolResult
 from tools import register_tool
 
 logger = logging.getLogger(__name__)
+
+# CWD context var (same pattern as tools/shell.py) -- set by the Engine
+# before each tool dispatch so the "environment" section reports the
+# session's tracked working directory instead of the server process's own.
+_session_cwd_var: ContextVar[str | None] = ContextVar("_session_cwd", default=None)
+
+
+def set_session_cwd(cwd: str | None) -> None:
+    """Set session CWD for sysinfo's environment report. Called by the Engine."""
+    _session_cwd_var.set(cwd)
+
+
+def _get_cwd() -> str:
+    cwd = _session_cwd_var.get(None)
+    if cwd and os.path.isdir(cwd):
+        return cwd
+    return os.getcwd()
 
 # ---------------------------------------------------------------------------
 # Optional heavy dependency
@@ -478,7 +496,7 @@ def _environment_info() -> str:
     parts = []
 
     try:
-        parts.append(f"Working directory: {os.getcwd()}")
+        parts.append(f"Working directory: {_get_cwd()}")
     except Exception:
         pass
 

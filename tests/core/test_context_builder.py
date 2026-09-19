@@ -204,9 +204,8 @@ def test_full_env_context_skips_vectorstore_in_async_context():
     """In an async runtime the memory count is unusable, so the full env
     build must NOT construct VectorStore (which would open sqlite and fire
     a synchronous HTTP probe to Ollama on the event loop)."""
-    from unittest.mock import patch
-
     import asyncio
+    from unittest.mock import patch
 
     async def _run():
         with patch(
@@ -271,3 +270,51 @@ def test_session_workspace_line_injected_when_session_id_given(tmp_path, monkeyp
     assert "Session workspace:" not in without_ws
     # The workspace folder was actually created.
     assert (tmp_path / "sessions" / "sess-ws-test").is_dir()
+
+
+# ── Home/cwd display normalization ────────────────────────────────────────
+
+
+def test_tilde_display_normalizes_home_and_nested_paths():
+    """`~`-relative display must key off the real home path, not a
+    `/home/` or `/Users/` regex, so it also covers a Windows
+    `C:\\Users\\<user>` home. A merely-prefix-matching sibling dir must
+    NOT collapse (path-separator boundary check)."""
+    from core.context_builder import _tilde_display
+
+    home = "/Users/tison"
+    assert _tilde_display(home, home) == "~"
+    assert _tilde_display("/Users/tison/Dev/LocalMind", home) == "~/Dev/LocalMind"
+    assert _tilde_display("/Users/tisonprefix/other", home) == "/Users/tisonprefix/other"
+    assert _tilde_display("/opt/other", home) == "/opt/other"
+    assert _tilde_display("", home) == ""
+
+
+def test_env_context_shows_tilde_for_home_and_nested_cwd(monkeypatch, tmp_path):
+    """Home must display as `~` (not the raw OS path) in both the compact
+    and full env blocks, and a session cwd nested under home collapses to
+    `~/<rest>` -- previously the raw OS-literal path (e.g.
+    C:\\Users\\<user>\\...) leaked straight into the system prompt."""
+    import os
+
+    home = tmp_path / "home"
+    home.mkdir()
+    project = home / "Dev" / "LocalMind"
+    project.mkdir(parents=True)
+
+    monkeypatch.setattr("os.path.expanduser", lambda p: str(home) if p == "~" else p)
+
+    expected_cwd = "~" + os.sep + os.path.join("Dev", "LocalMind")
+
+    for ctx in (
+        _build_environment_context(session_cwd=str(project)),
+        _build_environment_context(session_cwd=str(project), compact=True),
+    ):
+        assert "Home: ~" in ctx
+        assert f"Working directory: {expected_cwd}" in ctx
+        # The cwd is already given -- the model must not burn a shell call
+        # (pwd / Get-Location) re-deriving something it was just told.
+        assert "do NOT" in ctx and "Get-Location" in ctx
+        # The real path is still surfaced once, in prose, so the model can
+        # answer a direct "what's my home directory" question precisely.
+        assert str(home) in ctx
