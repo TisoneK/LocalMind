@@ -154,7 +154,7 @@ async def test_read_reextracts_current_page_without_url(mock_browser):
     result = await browser_module.browser_agent(json.dumps({"action": "read"}))
     assert result.success is True
     assert "mock browser output" in result.content
-    assert mock_browser == [["eval", "document.body? document.body.innerText : ''"]]
+    assert mock_browser == [["eval", "document.body ? document.body.innerText : ''"]]
 
 
 @pytest.mark.asyncio

@@ -926,6 +926,36 @@ def test_message_implies_tool_action_negative():
     assert message_implies_tool_action("") is False
 
 
+# ── message_is_action_approval helper (B-2026-09-15-8) ─────────────────────
+
+
+def test_message_is_action_approval_positive():
+    """Explicit approval of an already-narrated pending action."""
+    from core.trivial_input import message_is_action_approval
+
+    assert message_is_action_approval("go ahead") is True
+    assert message_is_action_approval("Go ahead.") is True
+    assert message_is_action_approval("do it") is True
+    assert message_is_action_approval("please proceed") is True
+    assert message_is_action_approval("let's do it") is True
+    assert message_is_action_approval("yes go ahead") is True
+    assert message_is_action_approval("confirmed") is True
+    assert message_is_action_approval("approved") is True
+
+
+def test_message_is_action_approval_negative():
+    """Bare yes/no/ok and unrelated messages are NOT approval tokens — too
+    ambiguous outside conversation history to force escalation."""
+    from core.trivial_input import message_is_action_approval
+
+    assert message_is_action_approval("yes") is False
+    assert message_is_action_approval("ok") is False
+    assert message_is_action_approval("What do you think about this approach?") is False
+    assert message_is_action_approval("Give me three ideas for a cyber café") is False
+    assert message_is_action_approval("proceed to the next station, sir") is False
+    assert message_is_action_approval("") is False
+
+
 # ── Fast-path for complete thoughts ending in "?" ────────────
 
 

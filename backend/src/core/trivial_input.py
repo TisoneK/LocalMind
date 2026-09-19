@@ -741,6 +741,48 @@ def message_implies_tool_action(message: str) -> bool:
     return False
 
 
+# Explicit approval of a previously narrated pending action ("Go ahead",
+# "do it", "please proceed"). Deliberately narrower than _YES_NO /
+# _ACKNOWLEDGMENTS: a bare "yes" or "ok" is too ambiguous to force escalation
+# without conversation history, but these action-directed phrases are not.
+_APPROVAL_TOKENS = [
+    r"go\s+ahead",
+    r"go\s+for\s+it",
+    r"(?:please\s+)?do\s+it(?:\s+please)?",
+    r"(?:please\s+)?do\s+that",
+    r"(?:please\s+)?proceed",
+    r"let'?s\s+do\s+it",
+    r"confirmed",
+    r"approved",
+    r"(?:yes|yeah|yep|ok|okay|sure)[,.]?\s*(?:go\s+ahead|go\s+for\s+it|do\s+it|proceed)",
+    r"sounds\s+good,?\s*(?:go\s+ahead|do\s+it|proceed)",
+]
+_APPROVAL_RE = re.compile(r"^(?:" + "|".join(_APPROVAL_TOKENS) + r")$", re.IGNORECASE)
+
+
+def message_is_action_approval(message: str) -> bool:
+    """
+    Does this message approve/confirm a previously narrated pending action?
+
+    Matches short, explicit approval phrases ("go ahead", "do it", "please
+    proceed", "confirmed") — deliberately NOT bare "yes"/"ok" alone, which
+    are too ambiguous outside conversation history to safely force
+    escalation.
+
+    Used by the action-narration detector in the parent-agent loop
+    (B-2026-09-15-8): an approval message doesn't itself mention any
+    tool/file/code keyword, so message_implies_tool_action() alone would
+    miss it and the gate would wrongly suppress as "conversational" — but
+    if the agent already narrated a pending action and the user just
+    approved it, the gate must still escalate.
+    """
+    if not message:
+        return False
+    cleaned = message.strip().rstrip(_TRIVIAL_PUNCT).strip()
+    if not cleaned or len(cleaned) > 40:
+        return False
+    return bool(_APPROVAL_RE.match(cleaned))
+
 
 # ── Direct chat response helper ──────────────────────────────────────────────
 

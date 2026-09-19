@@ -183,6 +183,26 @@ def _message_implies_tool_action(message: str) -> bool:
     return _message_implies_tool_action_fn(message)
 
 
+# Lazy wrapper for message_is_action_approval (same import-cycle reason as
+# _message_implies_tool_action above).
+_message_is_action_approval_fn = None
+
+
+def _message_is_action_approval(message: str) -> bool:
+    """Return True if the message approves a previously narrated pending action.
+
+    Wraps core.trivial_input.message_is_action_approval via lazy import.
+    Used by the replan gate (B-2026-09-15-8) to escalate on approval tokens
+    ("go ahead", "do it") that message_implies_tool_action() alone would
+    miss, since an approval doesn't itself mention any tool/file keyword.
+    """
+    global _message_is_action_approval_fn
+    if _message_is_action_approval_fn is None:
+        from core.trivial_input import message_is_action_approval as _fn
+        _message_is_action_approval_fn = _fn
+    return _message_is_action_approval_fn(message)
+
+
 # Lazy wrapper for should_skip_workspace_state.
 # Avoids circular import: pre_init_classifier imports nothing heavy.
 _should_skip_workspace_state_fn = None
@@ -7340,8 +7360,14 @@ class AgentLoop:
                     and intent != Intent.CHAT
                     # Lazy import to avoid circular dependency
                     # (core.trivial_input → core.engine._helpers → core.engine
-                    # → core.agent_runtime → core.agent.loop).
-                    and _message_implies_tool_action(reformulated_message or "")
+                    # → core.agent_runtime → core.agent.loop). An explicit
+                    # approval of an already-narrated action ("go ahead")
+                    # escalates even when the approval itself names no
+                    # tool/file (B-2026-09-15-8).
+                    and (
+                        _message_implies_tool_action(reformulated_message or "")
+                        or _message_is_action_approval(reformulated_message or "")
+                    )
                     # Don't fire the action-narration
                     # detector when the user explicitly said "do not write code
                     # yet" / "first analyze". The model's prose answer IS the
@@ -7400,11 +7426,40 @@ class AgentLoop:
                         or "error" in (getattr(s, "observation", "") or "").lower()
                         for s in getattr(trace, "steps", []) or []
                     )
+                    # Conversational-turn guard (B-2026-09-15-8): a zero-tool
+                    # turn whose user message never implied a tool action (and
+                    # wasn't an approval of one already narrated) doesn't get
+                    # judged for pending-action narration — same cyber-café
+                    # false-positive this gate's sibling block above guards
+                    # against ("11:36/12:03/12:20 pure-design discussion" in
+                    # the 2026-09-15 transcript research fired this 3 times
+                    # on turns where the prose answer WAS the correct
+                    # response). Once a tool has actually run this turn, the
+                    # turn is no longer purely conversational and the flag is
+                    # judged normally regardless of intent — EXCEPT an
+                    # explicit "don't implement yet / first analyze" request
+                    # (_should_skip_workspace_state) always suppresses: the
+                    # user asked for analysis only, so a hedge like "I would
+                    # implement X" must never be coerced into execution.
+                    _turn_expects_action = not _should_skip_workspace_state(
+                        reformulated_message or ""
+                    ) and (
+                        _tools_ran
+                        or (
+                            intent != Intent.CHAT
+                            and (
+                                _message_implies_tool_action(reformulated_message or "")
+                                or _message_is_action_approval(reformulated_message or "")
+                            )
+                        )
+                    )
                     _assessment = classify_turn_outcome(
                         has_tool_calls=False,
                         final_text=_ft,
                         tools_ran_this_turn=_tools_ran,
-                        is_pending_action_narration=narrates_pending_action(_ft),
+                        is_pending_action_narration=(
+                            _turn_expects_action and narrates_pending_action(_ft)
+                        ),
                         is_follow_through_failure=(
                             _tools_ran and answer_fails_follow_through(_ft, _had_tool_failure)
                         ),

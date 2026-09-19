@@ -1318,3 +1318,66 @@ async def test_gate_zero_tool_shapes_do_not_bypass_criteria_contract():
     )
     # The criteria contract governs: the file doesn't exist → not final.
     assert is_final is False
+
+
+# ── B-2026-09-15-8: intent-aware replan gate on the classify_turn_outcome
+# seam (the "loop.py:7385" detector the 2026-09-15 transcript research
+# caught firing 5 times in 10 turns, including on pure-design-discussion
+# turns where the model's prose answer WAS the correct response). Block 1
+# above (the ACTION NARRATION detector) already guarded on
+# message_implies_tool_action(); classify_turn_outcome's is_pending_action_
+# narration flag had NO such guard — it fired on ANY zero-tool parent turn
+# whose final text tripped narrates_pending_action(), regardless of whether
+# the user's message ever asked for an action. These pin the fix.
+
+
+@pytest.mark.asyncio
+async def test_gate_suppresses_pending_action_narration_on_conversational_zero_tool_turn():
+    """A pure discussion question ('what would you suggest?') doesn't imply
+    a tool action — even when the model's own prose narrates a hypothetical
+    future action using state-changing verbs, the gate must not force a
+    tool call. Reproduces the transcript's pure-design-discussion false
+    positive."""
+    loop = AgentLoop(adapter=MagicMock())
+    _, is_final = await _run_parent_gate(
+        loop,
+        _zero_tool_trace(
+            "I'll create a refactoring plan and remove the deprecated "
+            "modules next."
+        ),
+        message="What improvements would you suggest for this codebase?",
+    )
+    assert is_final is True
+
+
+@pytest.mark.asyncio
+async def test_gate_still_forces_tool_on_pending_action_when_message_implies_action():
+    """Regression guard: a message that DOES imply a tool action still
+    forces the tool call when the model narrates instead of executing —
+    the new conversational suppression must not swallow real narration."""
+    loop = AgentLoop(adapter=MagicMock())
+    _, is_final = await _run_parent_gate(
+        loop,
+        _zero_tool_trace("I'll delete the old log files now."),
+        message="Please delete the old log files in this folder.",
+    )
+    assert is_final is False
+
+
+@pytest.mark.asyncio
+async def test_gate_escalates_pending_action_narration_on_approval_token():
+    """An explicit approval of an already-narrated action ('Go ahead')
+    doesn't itself mention any tool/file keyword, so
+    message_implies_tool_action() alone would miss it and the turn would be
+    wrongly suppressed as conversational. The approval must still force the
+    tool call."""
+    loop = AgentLoop(adapter=MagicMock())
+    _, is_final = await _run_parent_gate(
+        loop,
+        _zero_tool_trace(
+            "I'll create a refactoring plan and remove the deprecated "
+            "modules next."
+        ),
+        message="Go ahead.",
+    )
+    assert is_final is False
