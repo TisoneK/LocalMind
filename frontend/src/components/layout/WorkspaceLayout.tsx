@@ -554,6 +554,8 @@ export function WorkspaceLayout() {
           sessionStats={sessionStats}
           agentRuns={agentRuns}
           agentStreaming={isStreaming}
+          todos={todos}
+          fileDiffs={fileDiffs}
           collapsed={rightPanelCollapsed}
           onToggleCollapse={() => setRightPanelCollapsed(!rightPanelCollapsed)}
           forceTerminalTab={forceTerminalTab}

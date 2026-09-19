@@ -16,8 +16,8 @@ import { RightPanel } from './RightPanel';
 vi.mock('@/components/panels/TerminalPanel', () => ({
   TerminalPanel: () => <div data-testid="terminal-panel" />,
 }));
-vi.mock('@/components/panels/AgentWorkspace', () => ({
-  AgentWorkspace: () => <div data-testid="agents-panel" />,
+vi.mock('@/components/panels/ActivityRail', () => ({
+  ActivityRail: () => <div data-testid="agents-panel" />,
 }));
 vi.mock('@/components/panels/MemoryTab', () => ({
   MemoryTab: () => <div data-testid="memory-panel" />,

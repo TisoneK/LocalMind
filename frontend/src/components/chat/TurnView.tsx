@@ -7,7 +7,7 @@
  * finishes it folds to a one-line summary the user can reopen.
  */
 
-import { memo, useEffect, useState } from 'react';
+import { memo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   AlertTriangle,
@@ -15,11 +15,9 @@ import {
   Brain,
   Check,
   ChevronRight,
-  Circle,
   FileEdit,
   FileSearch,
   Globe,
-  Loader2,
   Search,
   Terminal,
   X,
@@ -29,6 +27,8 @@ import { useEnterMotion } from '@/lib/localmind/motion';
 import { formatLatency } from '@/lib/localmind/progress';
 import type { ChatMessage, TodoItem } from '@/types';
 import { MarkdownContent } from '@/components/shared/MarkdownContent';
+import { StateIcon } from './StateIcon';
+import { useElapsedSeconds } from '@/lib/localmind/useElapsedSeconds';
 
 const TOOL_ICONS: Record<string, typeof Terminal> = {
   file_write: FileEdit,
@@ -40,25 +40,6 @@ const TOOL_ICONS: Record<string, typeof Terminal> = {
   web_search: Globe,
   memory_op: Brain,
 };
-
-function StateIcon({ state, className = 'h-3.5 w-3.5' }: { state: StepState; className?: string }) {
-  if (state === 'running') return <Loader2 className={`${className} animate-spin text-brand-amber`} aria-label="running" />;
-  if (state === 'failed') return <X className={`${className} text-red-400`} aria-label="failed" />;
-  if (state === 'pending') return <Circle className={`${className} text-brand-green-muted`} aria-label="pending" />;
-  return <Check className={`${className} text-brand-green`} aria-label="done" />;
-}
-
-/** Whole seconds since `active` became true; freezes when it turns false. */
-function useElapsedSeconds(active: boolean): number {
-  const [start] = useState(() => Date.now());
-  const [now, setNow] = useState(start);
-  useEffect(() => {
-    if (!active) return;
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [active]);
-  return Math.max(0, Math.round((now - start) / 1000));
-}
 
 /** A running row ticks its own seconds; a finished row shows the recorded duration. */
 function RowClock({ step }: { step: TurnStep }) {

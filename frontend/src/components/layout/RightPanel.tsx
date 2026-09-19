@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Terminal, Brain, PanelRightClose, PanelRight, Settings } from 'lucide-react';
-import { TerminalLine, MemoryFact, PerformanceMetrics as PerformanceMetricsType, CompletionSuggestion, SessionStats, AgentRun } from '@/types';
+import { TerminalLine, MemoryFact, PerformanceMetrics as PerformanceMetricsType, CompletionSuggestion, SessionStats, AgentRun, TodoItem, DiffData } from '@/types';
 import { TerminalPanel } from '@/components/panels/TerminalPanel';
-import { AgentWorkspace } from '@/components/panels/AgentWorkspace';
+import { ActivityRail } from '@/components/panels/ActivityRail';
 import { MemoryTab } from '@/components/panels/MemoryTab';
 import { PerformanceMetrics } from '@/components/panels/PerformanceMetrics';
 import { SettingsModal } from '@/components/shared/SettingsModal';
@@ -40,6 +40,10 @@ interface RightPanelProps {
   agentRuns?: AgentRun[];
   /** Whether the parent loop is currently streaming. */
   agentStreaming?: boolean;
+  /** The session plan, shown in the Activity rail. */
+  todos?: TodoItem[];
+  /** Per-path diffs captured this session, for the rail's file list. */
+  fileDiffs?: Record<string, DiffData>;
   collapsed: boolean;
   onToggleCollapse: () => void;
   /** FIX 4: Force the terminal tab to be active when agent runs shell/code_exec */
@@ -87,6 +91,8 @@ export function RightPanel({
   sessionStats,
   agentRuns = [],
   agentStreaming = false,
+  todos,
+  fileDiffs,
   collapsed,
   onToggleCollapse,
   forceTerminalTab,
@@ -290,7 +296,9 @@ export function RightPanel({
             onSessionChange={onTerminalSessionChange}
           />
         )}
-        {activeTab === 'agents' && <AgentWorkspace runs={agentRuns} isStreaming={agentStreaming} />}
+        {activeTab === 'agents' && (
+          <ActivityRail runs={agentRuns} todos={todos} fileDiffs={fileDiffs} isStreaming={agentStreaming} />
+        )}
         {activeTab === 'memory' && (
           <MemoryTab
             facts={memoryFacts}

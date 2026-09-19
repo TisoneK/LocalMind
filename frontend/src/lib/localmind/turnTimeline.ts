@@ -37,6 +37,8 @@ export interface PlanItem {
   id: string;
   label: string;
   state: StepState;
+  /** Ordered sub-steps of this goal — shown indented, never counted in the totals. */
+  children?: PlanItem[];
 }
 
 export interface TurnPlan {
@@ -96,7 +98,7 @@ const TOOL_LABELS: Record<string, [string, string]> = {
 
 /** `settled` = the turn is over: a tool still marked running never finished
  *  (aborted / dropped stream), so show it hollow instead of spinning forever. */
-function toolState(status: ToolCall['status'], settled: boolean): StepState {
+export function toolState(status: ToolCall['status'], settled: boolean): StepState {
   if (status === 'failed') return 'failed';
   if (status === 'done') return 'done';
   if (status === 'pending') return 'pending';
@@ -186,10 +188,11 @@ function agentStep(run: AgentRun, settled: boolean): TurnStep {
   };
 }
 
-function buildPlan(todos: TodoItem[] | undefined): TurnPlan | null {
-  if (!todos || todos.length === 0) return null;
-  const sorted = [...todos].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  const items: PlanItem[] = sorted.map((t) => ({
+/** Sub-goal rows (`plan-{i}-sub-{j}`) are guidance nested under their goal, not goals. */
+const isSubRow = (id: string) => /^plan-\d+-sub-\d+$/.test(id);
+
+function planItem(t: TodoItem): PlanItem {
+  return {
     id: t.id,
     label: t.title || t.text,
     state: t.completed
@@ -199,7 +202,18 @@ function buildPlan(todos: TodoItem[] | undefined): TurnPlan | null {
         : t.status && isActiveToolStatus(t.status) && t.status !== 'pending'
           ? 'running'
           : 'pending',
-  }));
+  };
+}
+
+export function buildPlan(todos: TodoItem[] | undefined): TurnPlan | null {
+  if (!todos || todos.length === 0) return null;
+  const sorted = [...todos].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const goals = sorted.filter((t) => !isSubRow(t.id));
+  if (goals.length === 0) return null;
+  const items: PlanItem[] = goals.map((g) => {
+    const subs = sorted.filter((t) => isSubRow(t.id) && t.id.startsWith(`${g.id}-`)).map(planItem);
+    return { ...planItem(g), ...(subs.length > 0 ? { children: subs } : {}) };
+  });
   const done = items.filter((i) => i.state === 'done').length;
   const running = items.findIndex((i) => i.state === 'running');
   const pending = items.findIndex((i) => i.state === 'pending');

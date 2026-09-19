@@ -135,4 +135,17 @@ describe('buildTurn', () => {
     expect(plan).toMatchObject({ done: 1, total: 3, currentIndex: 1 });
     expect(plan?.items.map((i) => i.state)).toEqual(['done', 'running', 'pending']);
   });
+
+  it('nests sub-goal rows under their goal and leaves them out of the count', () => {
+    const todos: TodoItem[] = [
+      { id: 'plan-0', text: 'Create a', completed: false, order: 0 },
+      { id: 'plan-0-sub-0', text: 'Check state', completed: false, order: 1 },
+      { id: 'plan-0-sub-1', text: 'Write it', completed: false, order: 2 },
+      { id: 'plan-1', text: 'Create b', completed: false, order: 3 },
+    ];
+    const plan = buildTurn({}, { todos }).plan;
+    expect(plan?.total).toBe(2);
+    expect(plan?.items[0].children?.map((c) => c.label)).toEqual(['Check state', 'Write it']);
+    expect(plan?.items[1].children).toBeUndefined();
+  });
 });
