@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T100148Z-claude-sonnet-5-021-3f888ff2",
+  "type": "claim",
+  "session": "S021",
+  "agent": "claude-sonnet-5-021",
+  "created": "2026-09-19T10:01:48Z",
+  "issue": "scan-dead-code",
+  "body": "Zola (S021): read-only dead-code scan across backend/ and frontend/ — no product edits planned; will report findings, may propose safe removals as a follow-up task.",
+  "paths": ["repo-wide (read-only)"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
