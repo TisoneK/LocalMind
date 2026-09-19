@@ -37,7 +37,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Tariq | S020 | not exposed to the session (Freebuff desktop) | B-2026-09-15-15 — passive context awareness (user/env profile from incidental signals) | Working | Startup read next |
-| Zola | S021 | claude-sonnet-5 (Claude Code desktop) | Scan dead code (read-only analysis) | Working | Check-in, about to orient |
+| Zola | S021 | claude-sonnet-5 (Claude Code desktop) | Scan dead code | Done | Shipped: 6 orphan Pydantic models + 3 dead params removed (`e498459b`); 2 backlog rows + 1 parking-lot row filed for what needs a human decision. Report: `office/reviews/2026-09-19-review-s021-dead-code-scan.md` |
 | Naledi | S022 | claude-sonnet-5 (Claude Code desktop) | B-2026-09-15-8 — intent-aware "criteria unmet" replan gate | Working | Reading loop.py ~7385, orienting |
 
 **Clock out when your session ends**: remove your row in the closing
