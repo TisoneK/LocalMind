@@ -12,6 +12,6 @@ backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-09-18 — Nia (S015) / deepseek-v4-pro → claude-sonnet-5 (owner directive: pull Nia's worktree, finish as her)
-- **Task:** AI Connections layer (P-2026-09-18-1) — Settings UI connection manager + /api/models fix, on top of Nia's backend
-- **Status:** done — merged to main (`106a612e`), live-verified end-to-end
+- **Session:** 2026-09-18 — Juma (S017) / claude-sonnet-5
+- **Task:** B-2026-09-15-14 — self-reflection loop (post-turn "what did I miss" assessment stored as atomic lessons)
+- **Status:** blocked (owner design decision owed per P-2026-09-16-36 §(2): visible log/UI of proactive memory writes vs silent-by-design — asking now before implementing)

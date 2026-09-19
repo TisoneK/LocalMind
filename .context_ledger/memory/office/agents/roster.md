@@ -36,6 +36,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
+| Juma | S017 | claude-sonnet-5 | B-2026-09-15-14 self-reflection loop | Working | checked in, resolving the P-2026-09-16-36 gate (visible-log vs silent) with owner before implementing |
 
 **Clock out when your session ends**: remove your row in the closing
 `chore(ledger):` commit. The board shows who is in the office *now*;
