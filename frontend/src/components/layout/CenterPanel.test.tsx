@@ -279,3 +279,20 @@ describe('CenterPanel header', () => {
     expect(screen.getByRole('heading', { name: 'New chat' })).toBeInTheDocument();
   });
 });
+
+describe('CenterPanel width', () => {
+  it('keeps replies in a readable centred column instead of stretching edge to edge', () => {
+    const messages = [msg('user', 'hi', 'u1'), msg('assistant', 'hello', 'a1')];
+    render(
+      <CenterPanel
+        {...baseProps}
+        messages={messages}
+        health={{ status: 'online', parentReady: true, parentDegradedReason: '' }}
+      />,
+    );
+    const column = screen.getByTestId('chat-column');
+    expect(column.className).toContain('max-w-3xl');
+    expect(column.className).toContain('mx-auto');
+  });
+});
+

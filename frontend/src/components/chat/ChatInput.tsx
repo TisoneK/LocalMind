@@ -87,7 +87,7 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onC
   return (
     <div className="border-t border-brand-border bg-brand-bg-base">
       {/* Input area */}
-      <div className="px-4 pt-3 pb-2">
+      <div className="mx-auto w-full max-w-3xl px-4 pt-3 pb-2" data-testid="composer-column">
         {/* Steering without aborting — while the agent
             is running, inject a message at the next step boundary instead of
             abort + re-run. The backend drains it at the next loop iteration. */}
@@ -220,7 +220,7 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onC
       </div>
 
       {/* Footer hints */}
-      <div className="flex items-center justify-between px-4 pb-2">
+      <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-4 pb-2">
         <div className="flex items-center gap-3">
           <span className="text-[9px] text-brand-green-muted">
             <kbd className="px-1 py-0.5 rounded bg-brand-border text-brand-green-muted mr-0.5">⌘</kbd>

@@ -591,7 +591,9 @@ export function CenterPanel({
             </div>
           )}
 
-          <div className="divide-y divide-brand-border/50 overflow-hidden">
+          {/* A readable column: replies, the turn group and the composer share one centred
+              width instead of stretching edge to edge on a wide window. */}
+          <div className="mx-auto w-full max-w-3xl divide-y divide-brand-border/50 overflow-hidden" data-testid="chat-column">
             {messages.map((msg, i) => {
               // Retry = regenerate the response to the user message that
               // precedes this assistant reply (re-sends that exact prompt).
@@ -635,7 +637,7 @@ export function CenterPanel({
             // "Working on it..." as the initial acknowledgment.
             const statusText = lastMsg?.statusText || (hasThinking ? 'Thinking' : 'Working on it...');
             return (
-              <div className="px-4 py-3">
+              <div className="mx-auto w-full max-w-3xl px-4 py-3">
                 <div className="flex items-center gap-2">
                   <Loader2 className="h-3 w-3 text-brand-green animate-spin" />
                   <span className="text-[10px] text-brand-green-muted">{statusText}</span>

@@ -78,3 +78,11 @@ describe('ChatInput', () => {
     expect(onSteer).toHaveBeenCalledWith('please focus on the tests');
   });
 });
+
+describe('ChatInput width', () => {
+  it('shares the chat column width so it lines up with the replies above it', () => {
+    render(<ChatInput onSend={() => {}} onAbort={() => {}} isStreaming={false} />);
+    expect(screen.getByTestId('composer-column').className).toContain('max-w-3xl');
+  });
+});
+
