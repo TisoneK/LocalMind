@@ -104,30 +104,6 @@ from core.agent.initialization import (
 )
 from core.agent.models import AgentStep, AgentTrace, strip_worker_reports, strip_worker_reports_from_history
 from core.agent.prompts import build_agent_intent_tail, build_agent_system_prompt, build_planning_prompt
-from core.agent.turn_outcome import Recovery, TurnOutcome, classify_turn_outcome
-
-# Loop-discipline re-architecture: the four stacked recovery nudges
-# ([PENDING ACTION] / [FOLLOW-THROUGH] / [HEDGE] / [POST-EVIDENCE NARRATION])
-# collapse to TWO, one per Recovery. Same instructions, one place.
-_FORCE_TOOL_NUDGE = (
-    "\n[FORCE-TOOL] You said you would perform an action (delete/create/move/run, "
-    "or 'try the next source') but you did NOT emit the tool_call — it has not "
-    "happened. Emit the tool_call NOW to actually do it: shell for filesystem/"
-    "system changes, file_write to write files, web_fetch/web_research for web "
-    "(if a prior fetch failed, e.g. 403, call the NEXT url/source now). If you "
-    "have genuinely completed it already, report the concrete result instead. Do "
-    "NOT narrate the action again without executing it, and do NOT ask the user "
-    "to confirm an action they already requested.\n"
-)
-_SYNTHESIZE_NUDGE = (
-    "\n[SYNTHESIZE] Tools already ran this turn and you have the evidence. Your "
-    "response must now be the FINAL SYNTHESIZED answer — present the actual "
-    "results/data/findings to the user. Do NOT describe what you would do next, "
-    "do NOT say 'let me...' or 'I'll...', and do NOT ask the user to choose or "
-    "confirm ('Would you like me to...?', 'Which source would you prefer?'). The "
-    "action phase is over — give the answer now. If one specific detail is "
-    "genuinely missing, fetch ONE more page; otherwise answer from what you have.\n"
-)
 from core.agent.synthesizer import AnswerSynthesizer
 from core.agent.task_state import TaskState
 from core.agent.text_tools import (
@@ -151,6 +127,7 @@ from core.agent.text_tools import (
 )
 from core.agent.tool_dispatch import dispatch_with_retry
 from core.agent.tool_schemas import TOOL_DEFINITIONS, tool_defs_for_call
+from core.agent.turn_outcome import Recovery, TurnOutcome, classify_turn_outcome
 from core.context_builder import _build_environment_context
 from core.context_compactor import simplify_tool_results
 from core.models import AgentAbortedError, Intent, StreamChunk, ToolResult
@@ -374,6 +351,56 @@ def _user_message_text(messages: list[dict]) -> str:
                 continue
             return content[:200]
     return ""
+
+
+# Decisions the loop hands the model at each stage. One positive instruction per
+# stage, in a fixed structure — the goal, what has been done, what to do next —
+# instead of a paragraph of "do NOT" rules appended to the full prompt. Live
+# capture: the negative reminder was re-sent on every call and glm still
+# narrated; one recovery even named a tool (`file_read`) that does not exist.
+_DECISION_CONTINUE = (
+    "Decision: compare the tool results above with every part of the goal. If every "
+    "part is answered, write the final answer now from those results. If a part is "
+    "still missing, your next message is the tool call that gets it."
+)
+_DECISION_ACT = (
+    "Decision: your next message is the tool call itself, with its arguments, and "
+    "nothing written before it."
+)
+_DECISION_ACT_ZERO = (
+    "Decision: this goal needs a tool result and none has been produced, so your next "
+    "message is a tool call. If the tool you need is on-demand, load it first with "
+    "describe_tool."
+)
+_DECISION_FORCE_TOOL = (
+    "Decision: you said you would act, but no tool was called, so nothing has happened "
+    "yet. Your next message is the tool call (after a failed fetch, the next source). "
+    "If the work is already complete, report its concrete result instead."
+)
+_DECISION_ANSWER = (
+    "Decision: write the final answer now, presenting the actual results above. If one "
+    "specific detail is truly missing, call one tool for it; otherwise answer from what "
+    "you have."
+)
+
+
+def _stage_card(tag: str, stage: str, decision: str, loop_messages: list, trace) -> str:
+    """A structured stage instruction: goal, what ran so far, one decision.
+
+    Keeps the leading ``\n[TAG]`` shape every loop-injected block has, so
+    `_is_harness_injected` and the already-nudged checks recognise it."""
+    goal = _user_message_text(loop_messages)
+    ran = [
+        f"{getattr(st, 'tool_name', '')} ({'failed' if getattr(st, 'tool_failed', False) else 'ok'})"
+        for st in (getattr(trace, "steps", None) or [])
+        if getattr(st, "tool_name", "")
+    ]
+    lines = [f"\n[{tag}] Stage: {stage}."]
+    if goal:
+        lines.append(f"Goal: {goal}")
+    lines.append("Done so far: " + (", ".join(ran) if ran else "nothing yet") + ".")
+    lines.append(decision)
+    return "\n".join(lines) + "\n"
 
 
 def _merge_call_usage(accum: dict[str, int], call: dict) -> None:
@@ -3845,15 +3872,8 @@ class AgentLoop:
                 and iteration >= 1
                 and not observation_log  # no failed tools to retry
             ):
-                _synth_hint = (
-                    "\nSYNTHESIS REMINDER: You have already gathered tool evidence "
-                    "in this conversation (see the tool results above). Do NOT narrate "
-                    "more planning ('let me run…', 'I'll check…') — narrating a next step "
-                    "without doing it wastes the turn. If the evidence you have FULLY "
-                    "answers the request, present it now. But if a distinct part of the "
-                    "request is still unanswered and a tool can get it, call that tool "
-                    "directly (don't announce it) — a partial answer plus a punt is not "
-                    "done.\n"
+                _synth_hint = _stage_card(
+                    "STAGE: CONTINUE", "continue", _DECISION_CONTINUE, loop_messages, trace
                 )
                 iteration_messages.append({"role": "user", "content": _synth_hint})
 
@@ -7365,13 +7385,8 @@ class AgentLoop:
                             loop_messages.append(
                                 {
                                     "role": "user",
-                                    "content": (
-                                        "\n[TOOL COMMITMENT] You wrote that you would use a "
-                                        "tool (e.g. describe_tool, shell), but you did not "
-                                        "actually emit the tool_call — you only described "
-                                        "what you intend to do. Emit the tool_call now with "
-                                        "the correct arguments, or proceed with the action. "
-                                        "Do not describe the call; make it.\n"
+                                    "content": _stage_card(
+                                        "TOOL COMMITMENT", "act", _DECISION_ACT, loop_messages, trace
                                     ),
                                 }
                             )
@@ -7436,13 +7451,8 @@ class AgentLoop:
                         loop_messages.append(
                             {
                                 "role": "user",
-                                "content": (
-                                    "\n[ACTION NARRATION] You described what you would do "
-                                    "(e.g. 'I'll start by exploring...') but did not "
-                                    "actually call any tool. Your task requires tool execution. "
-                                    "You MUST emit a tool_call NOW — use shell to run commands, "
-                                    "file_read to read files, web_search to search, etc. "
-                                    "Do NOT just describe your plan; execute it via a tool call.\n"
+                                "content": _stage_card(
+                                    "ACTION NARRATION", "act", _DECISION_ACT, loop_messages, trace
                                 ),
                             }
                         )
@@ -7547,9 +7557,9 @@ class AgentLoop:
                                 {
                                     "role": "user",
                                     "content": (
-                                        _FORCE_TOOL_NUDGE
+                                        _stage_card("FORCE-TOOL", "act", _DECISION_FORCE_TOOL, loop_messages, trace)
                                         if _assessment.recovery is Recovery.FORCE_TOOL
-                                        else _SYNTHESIZE_NUDGE
+                                        else _stage_card("SYNTHESIZE", "answer", _DECISION_ANSWER, loop_messages, trace)
                                     ),
                                 }
                             )
@@ -7626,13 +7636,8 @@ class AgentLoop:
                 loop_messages.append(
                     {
                         "role": "user",
-                        "content": (
-                            "\n[ZERO-TOOL] You have written text but made ZERO tool calls. "
-                            "Your task requires actual tool execution (creating files, "
-                            "running commands, etc.). Narration does NOT create files.\n\n"
-                            "STOP planning. STOP narrating. You MUST call a tool NOW "
-                            "via the function-calling API. If describe_tool is your only "
-                            "available tool, call describe_tool(\"shell\") to load it.\n"
+                        "content": _stage_card(
+                            "ZERO-TOOL", "act", _DECISION_ACT_ZERO, loop_messages, trace
                         ),
                     }
                 )

@@ -11,9 +11,10 @@ REQUEST = "List the folders in /Users/bao/Code and count the .py files."
 
 # The real injected texts, taken from the loop's own constants and call sites.
 INJECTED = [
-    L._FORCE_TOOL_NUDGE,
-    L._SYNTHESIZE_NUDGE,
     L._EVIDENCE_ANSWER_DIRECTIVE,
+    L._stage_card("FORCE-TOOL", "act", L._DECISION_FORCE_TOOL, [], None),
+    L._stage_card("SYNTHESIZE", "answer", L._DECISION_ANSWER, [], None),
+    L._stage_card("STAGE: CONTINUE", "continue", L._DECISION_CONTINUE, [], None),
     "\n[ACTION NARRATION] You described what you would do but did not call any tool.\n",
     "\n[TOOL COMMITMENT] You wrote that you would use a tool.",
     "\n[COMPLETION FLOOR] You reported done, but your last action failed.",
