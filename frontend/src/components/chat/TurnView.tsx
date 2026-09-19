@@ -22,13 +22,14 @@ import {
   Terminal,
   X,
 } from 'lucide-react';
-import { buildTurn, isShellBlocked, type TurnStep } from '@/lib/localmind/turnTimeline';
+import { buildTurn, isShellBlocked, isTerminalTool, type TurnStep } from '@/lib/localmind/turnTimeline';
 import { filePathOf } from '@/lib/localmind/activityRail';
 import { useEnterMotion } from '@/lib/localmind/motion';
 import { formatLatency } from '@/lib/localmind/progress';
 import type { ChatMessage, TodoItem, ToolCall } from '@/types';
 import { MarkdownContent } from '@/components/shared/MarkdownContent';
 import { StateIcon } from './StateIcon';
+import { TerminalBlock } from './TerminalBlock';
 import { useElapsedSeconds } from '@/lib/localmind/useElapsedSeconds';
 
 const TOOL_ICONS: Record<string, typeof Terminal> = {
@@ -165,9 +166,13 @@ function StepRow({ step, depth = 0 }: { step: TurnStep; depth?: number }) {
           ) : (
             <>
               <FilePreviewLink tool={step.tool} />
-              <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words py-1 font-mono text-[10.5px] text-brand-green-soft">
-                {step.tool?.error || step.tool?.output || step.detail}
-              </pre>
+              {step.tool && isTerminalTool(step.tool) ? (
+                <TerminalBlock tool={step.tool} />
+              ) : (
+                <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words py-1 font-mono text-[10.5px] text-brand-green-soft">
+                  {step.tool?.error || step.tool?.output || step.detail}
+                </pre>
+              )}
               {step.tool && isShellBlocked(step.tool) && <ShellDisabledTip />}
             </>
           )}
@@ -238,26 +243,33 @@ export const TurnView = memo(function TurnView({ message, todos, isStreaming }: 
             type="button"
             onClick={() => setPinned(!open)}
             aria-expanded={open}
-            className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12px]"
+            className="flex w-full items-start gap-2 px-2.5 py-1.5 text-left text-[12px]"
           >
-            <ChevronRight className={`h-3.5 w-3.5 text-brand-green-muted transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden />
-            {unfinished && !failed ? (
-              <AlertTriangle className="h-3.5 w-3.5 text-brand-amber" aria-label="some steps did not finish" />
-            ) : (
-              <StateIcon state={failed ? 'failed' : turn.state} />
-            )}
-            <span className="shrink-0 whitespace-nowrap font-medium text-brand-green">{title}</span>
-            {sub && <span className="min-w-0 truncate text-brand-green-muted">· {sub}</span>}
-            {turn.plan && turn.plan.total > 1 && (
-              <span
-                className="ml-auto shrink-0 whitespace-nowrap rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-brand-green-soft"
-                title={turn.plan.items[turn.plan.currentIndex]?.label}
-              >
-                {turn.plan.done === turn.plan.total
-                  ? `${turn.plan.total}/${turn.plan.total} steps`
-                  : `Step ${turn.plan.currentIndex + 1}/${turn.plan.total}`}
+            <ChevronRight className={`mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-green-muted transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden />
+            <span className="mt-0.5 shrink-0">
+              {unfinished && !failed ? (
+                <AlertTriangle className="h-3.5 w-3.5 text-brand-amber" aria-label="some steps did not finish" />
+              ) : (
+                <StateIcon state={failed ? 'failed' : turn.state} />
+              )}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-2">
+                <span className="min-w-0 truncate font-medium text-brand-green">{title}</span>
+                {turn.plan && turn.plan.total > 1 && (
+                  <span
+                    className="ml-auto shrink-0 whitespace-nowrap rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-brand-green-soft"
+                    title={turn.plan.items[turn.plan.currentIndex]?.label}
+                  >
+                    {turn.plan.done === turn.plan.total
+                      ? `${turn.plan.total}/${turn.plan.total} steps`
+                      : `Step ${turn.plan.currentIndex + 1}/${turn.plan.total}`}
+                  </span>
+                )}
               </span>
-            )}
+              {/* What it is doing right now gets its own line, so it never fights the title for room. */}
+              {sub && <span className="mt-0.5 block truncate text-[11px] text-brand-green-muted">{sub}</span>}
+            </span>
           </button>
           {open && (
             <div className="px-2.5 pb-2" role="list" aria-label="Agent activity">

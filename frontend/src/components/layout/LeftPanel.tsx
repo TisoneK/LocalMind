@@ -1,11 +1,10 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Plus, MessageSquare, Zap, FolderTree, CheckSquare, Square, Cpu, Trash2, Loader2, Terminal, Brain, Download, X, ListChecks, ChevronRight, ChevronDown, File as FileIcon, Folder as FolderIcon, MoreVertical, Settings, LayoutDashboard, ClipboardCopy } from 'lucide-react';
-import { Session, ActionItem, FileNode, SessionFileEntry, ModelOption, DiffData } from '@/types';
+import { Plus, MessageSquare, FolderTree, CheckSquare, Square, Trash2, Loader2, Terminal, Brain, Download, X, ListChecks, ChevronRight, ChevronDown, File as FileIcon, Folder as FolderIcon, MoreVertical, Settings, LayoutDashboard, ClipboardCopy } from 'lucide-react';
+import { Session, FileNode, SessionFileEntry, ModelOption, DiffData } from '@/types';
 import type { ExportFormat } from '@/lib/localmind/exportChats';
 import { stripMarkdownToPreview } from '@/lib/previewText';
-import { ActionHistory } from '@/components/panels/ActionHistory';
 import { FilesPanel } from '@/components/panels/FilesPanel';
 // ObjectivesPanel import removed — the "Autonomous work" block
 // is retired from the normal-chat sidebar. The component file is kept in tree
@@ -22,7 +21,6 @@ import {
 
 interface LeftPanelProps {
   sessions: Session[];
-  actions: ActionItem[];
   files: FileNode[];
   // Objective props are retired from the sidebar. The
   // useObjectives hook still runs in WorkspaceLayout for backend sync.
@@ -49,11 +47,10 @@ interface LeftPanelProps {
   isStreaming?: boolean;
 }
 
-type LeftTab = 'chat' | 'actions' | 'files';
+type LeftTab = 'chat' | 'files';
 
 export function LeftPanel({
   sessions,
-  actions,
   files,
   models,
   selectedModel,
@@ -167,17 +164,9 @@ export function LeftPanel({
     }
   };
 
-  // Tool progress belongs in Actions, not in the chat transcript. The chat
-  // hook emits this event as soon as the backend announces a tool call.
-  useEffect(() => {
-    const showActions = () => setActiveTab('actions');
-    window.addEventListener('localmind:tool-call-started', showActions);
-    return () => window.removeEventListener('localmind:tool-call-started', showActions);
-  }, []);
-
   // "New Chat" returns the sidebar to the Chat tab so the fresh conversation
   // (and its session list) is immediately visible instead of leaving the user
-  // stranded on Actions/Files from the previous chat.
+  // stranded on Files from the previous chat.
   // ALWAYS consume the flag — even when already on Chat. The
   // old guard `activeTab !== 'chat'` left forceChatTab=true after a New Chat
   // while on Chat, so the FIRST tool event switched to Actions and this
@@ -235,7 +224,6 @@ export function LeftPanel({
   const iconSize = 'h-3 w-3';
   const tabs: { id: LeftTab; label: string; icon: React.ReactNode }[] = [
     { id: 'chat', label: 'Chat', icon: <MessageSquare className={iconSize} /> },
-    { id: 'actions', label: 'Actions', icon: <Zap className={iconSize} /> },
     { id: 'files', label: 'Files', icon: <FolderTree className={iconSize} /> },
   ];
 
@@ -243,15 +231,6 @@ export function LeftPanel({
     <div className="h-full flex flex-col bg-brand-bg-app border-r border-brand-border">
       {/* Header */}
       <div className="px-3 py-3 border-b border-brand-border">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-6 h-6 rounded bg-brand-green/10 flex items-center justify-center">
-            <Cpu className="h-3.5 w-3.5 text-brand-green" />
-          </div>
-          <span className="text-sm font-bold text-brand-green-soft tracking-tight">LocalMind</span>
-          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-brand-green/10 text-brand-green font-mono">
-            v0.5
-          </span>
-        </div>
         <ModelSelector
           selectedModel={selectedModel}
           onModelChange={onModelChange}
@@ -276,6 +255,8 @@ export function LeftPanel({
         {tabs.map((tab) => (
           <button
             key={tab.id}
+            role="tab"
+            aria-selected={activeTab === tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center ${isCompact ? 'p-2.5' : 'gap-1.5 px-2.5 py-1.5'} text-[10px] font-medium transition-colors border-b-2 -mb-px ${
               activeTab === tab.id
@@ -602,22 +583,6 @@ export function LeftPanel({
               );
             })}
             </div>
-          </div>
-        )}
-
-        {activeTab === 'actions' && (
-          <div className="p-2">
-            {/* Live + persisted actions share one expandable-card list. The
-                ActionHistory already renders a running state (spinner + pulse),
-                so active/just-finished actions are full cards — not the old
-                compact pills — matching the post-session history. */}
-            {actions.length > 0 ? (
-              <ActionHistory actions={actions} />
-            ) : (
-              <div className="px-2.5 py-4 text-center text-[10px] text-brand-green-muted">
-                Actions will appear here during execution.
-              </div>
-            )}
           </div>
         )}
 

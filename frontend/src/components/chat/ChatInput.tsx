@@ -24,8 +24,6 @@ interface ChatInputProps {
   onAbort: () => void;
   onSteer?: (message: string) => void;
   isStreaming: boolean;
-  modelName?: string;
-  modelProvider?: string;
   /** Retained for the call site; no longer used since the per-message tool
    *  selector was removed. */
   sessionId?: string;
@@ -35,7 +33,7 @@ interface ChatInputProps {
   onChatModeChange?: (mode: 'auto' | 'agent' | 'direct') => void;
 }
 
-export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, modelProvider, chatMode, onChatModeChange }: ChatInputProps) {
+export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onChatModeChange }: ChatInputProps) {
   const [input, setInput] = useState('');
   const [steerInput, setSteerInput] = useState('');
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
@@ -235,9 +233,6 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, mo
             {' '}new line
           </span>
         </div>
-        <span className="text-[9px] text-brand-green-muted">
-          {modelName || 'Loading…'} · {modelProvider || '—'}
-        </span>
       </div>
     </div>
   );

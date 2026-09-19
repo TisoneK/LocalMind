@@ -156,7 +156,7 @@ export function WorkspaceLayout() {
   // useCapabilities() was retired — the Capability Catalog was
   // only rendered in the Observe tab, which is now removed.
   const { metrics: polledMetrics } = useMetrics(isStreaming);
-  const { models, current: currentModelId, provider: modelProvider, selectModel, refresh: refreshModels } = useModels();
+  const { models, current: currentModelId, selectModel, refresh: refreshModels } = useModels();
   const { facts: memoryFacts, deleteFact, storeFact, editFact, refresh: refreshMemory } = useMemory();
 
   // Sync selectedModel from the backend's /api/models "current" field.
@@ -457,7 +457,6 @@ export function WorkspaceLayout() {
       <div style={{ width: leftPanelWidth }} className="shrink-0 relative">
         <LeftPanel
           sessions={sessions}
-          actions={actions}
           files={files}
           models={models}
           selectedModel={effectiveModelId}
@@ -487,7 +486,7 @@ export function WorkspaceLayout() {
       <div className="flex-1 min-w-0 min-h-0">
         <CenterPanel
           messages={messages}
-          selectedModel={currentModel || { id: effectiveModelId, name: effectiveModelId, provider: modelProvider || '' }}
+          title={sessions.find((x) => x.id === currentSessionId)?.title}
           isStreaming={isStreaming}
           health={health}
           onSend={handleSend}

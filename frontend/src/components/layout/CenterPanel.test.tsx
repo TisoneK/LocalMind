@@ -1,18 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { findRetryPrompt, CenterPanel } from './CenterPanel';
-import { ChatMessage as ChatMessageType, ModelOption, ReflectionLesson } from '@/types';
+import { ChatMessage as ChatMessageType, ReflectionLesson } from '@/types';
 import { localmindClient as client } from '@/lib/localmind/client';
 
 function msg(role: 'user' | 'assistant', content: string, id: string): ChatMessageType {
   return { id, role, content, timestamp: '12:00' } as ChatMessageType;
 }
 
-const baseModel: ModelOption = { id: 'test-model', name: 'Test Model', provider: 'test' };
 
 const baseProps = {
   messages: [],
-  selectedModel: baseModel,
   isStreaming: false,
   onSend: () => {},
   onAbort: () => {},
@@ -266,5 +264,18 @@ describe('CenterPanel embed-model guide', () => {
     fireEvent.click(await screen.findByTestId('embed-guide-dismiss'));
     expect(screen.queryByTestId('embed-guide')).not.toBeInTheDocument();
     expect(sessionStorage.getItem('localmind:embed-guide-dismissed')).toBe('1');
+  });
+});
+
+describe('CenterPanel header', () => {
+  it("shows the chat's own title and does not repeat the app name or the model", () => {
+    render(<CenterPanel {...baseProps} health={{ status: 'online', parentReady: true, parentDegradedReason: '' }} title="Plan the release" />);
+    expect(screen.getByRole('heading', { name: 'Plan the release' })).toBeInTheDocument();
+    expect(screen.queryByText('LocalMind Assistant')).toBeNull();
+  });
+
+  it('falls back to a neutral title before a chat exists', () => {
+    render(<CenterPanel {...baseProps} health={{ status: 'online', parentReady: true, parentDegradedReason: '' }} />);
+    expect(screen.getByRole('heading', { name: 'New chat' })).toBeInTheDocument();
   });
 });

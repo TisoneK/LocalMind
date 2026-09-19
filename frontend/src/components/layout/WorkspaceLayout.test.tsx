@@ -239,8 +239,8 @@ describe('WorkspaceLayout', () => {
     expect(center.messages).toEqual([]);
     expect(center.isStreaming).toBe(false);
     expect(center.health).toMatchObject({ status: 'online', version: '0.5.16' });
-    // currentModel fallback resolves to the backend-reported model.
-    expect(center.selectedModel).toMatchObject({ id: 'm1', name: 'Model One', provider: 'zen' });
+    // The model is shown once, in the sidebar selector — not passed to the chat header.
+    expect(center.selectedModel).toBeUndefined();
     // The intent badge is retired — currentIntent is no longer
     // a CenterPanel prop. The context-window occupancy meter fills the slot.
     expect(center.currentIntent).toBeUndefined();
@@ -410,12 +410,10 @@ describe('WorkspaceLayout', () => {
       provider: '',
       persistedSettings: { model: 'm2' },
     });
-    // effectiveModelId = persisted 'm2' (backend reports none); models is
-    // empty so currentModel is undefined and CenterPanel gets the fallback.
+    // effectiveModelId = persisted 'm2' (backend reports none); the sidebar
+    // selector is the one place the model is shown.
     const left = mockPanelProps.left;
     expect(left.selectedModel).toBe('m2');
-    const center = mockPanelProps.center;
-    expect(center.selectedModel).toMatchObject({ id: 'm2', name: 'm2', provider: '' });
   });
 
   // Addendum (user-reported false 100%): the meter basis is the LAST

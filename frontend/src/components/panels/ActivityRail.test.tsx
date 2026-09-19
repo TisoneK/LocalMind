@@ -34,7 +34,6 @@ describe('ActivityRail', () => {
     expect(screen.getByText('Running command')).toBeInTheDocument();
     expect(screen.getByText('Write output')).toBeInTheDocument();
     expect(screen.getByText('Check state')).toBeInTheDocument();
-    expect(screen.getByText('1/2 tools')).toBeInTheDocument();
     expect(screen.getByText('out.txt')).toBeInTheDocument();
   });
 
@@ -43,6 +42,21 @@ describe('ActivityRail', () => {
     expect(screen.queryByTestId('run-details')).toBeNull();
     fireEvent.click(screen.getByText('Run details'));
     expect(screen.getByTestId('run-details')).toBeInTheDocument();
+  });
+
+  it('shows "Now" only while something is live', () => {
+    const { rerender } = render(<ActivityRail runs={[parent([tool('a')])]} isStreaming={false} />);
+    expect(screen.queryByText('Now')).toBeNull();
+    rerender(<ActivityRail runs={[parent([tool('a', { status: 'running' })])]} isStreaming />);
+    expect(screen.getByText('Now')).toBeInTheDocument();
+  });
+
+  it('lists agents only when there is more than one', () => {
+    const child: AgentRun = { id: 'c', name: 'explorer', role: 'child', status: 'running', depth: 1, startedAt: 0, tools: [] };
+    const { rerender } = render(<ActivityRail runs={[parent([tool('a')])]} isStreaming={false} />);
+    expect(screen.queryByText('Agents')).toBeNull();
+    rerender(<ActivityRail runs={[parent([tool('a')]), child]} isStreaming />);
+    expect(screen.getByText('Agents')).toBeInTheDocument();
   });
 
   it('is the one place tasks are shown and edited', () => {

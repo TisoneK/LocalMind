@@ -12,7 +12,7 @@ import {
   Loader2,
   X,
 } from 'lucide-react';
-import { ChatMessage as ChatMessageType, ModelOption, DiffData, ReflectionLesson, PassiveMemory } from '@/types';
+import { ChatMessage as ChatMessageType, DiffData, ReflectionLesson, PassiveMemory } from '@/types';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { TranscriptContextMenu } from '@/components/chat/TranscriptContextMenu';
@@ -66,7 +66,8 @@ export function findRetryPrompt(messages: ChatMessageType[], index: number): str
 
 interface CenterPanelProps {
   messages: ChatMessageType[];
-  selectedModel: ModelOption;
+  /** The open chat's title, shown in the header. */
+  title?: string;
   isStreaming: boolean;
   health: HealthState;
   onSend: (message: string, tool?: string) => void;
@@ -108,7 +109,7 @@ interface CenterPanelProps {
 
 export function CenterPanel({
   messages,
-  selectedModel,
+  title,
   isStreaming,
   health,
   onSend,
@@ -279,33 +280,16 @@ export function CenterPanel({
     if (passives.length > 0) setPassiveOpen((o) => !o);
   };
 
-  // Clean up model name for display: remove internal suffixes, format nicely
-  const rawModelName = selectedModel?.name || selectedModel?.id || '';
-  const displayModelName = rawModelName
-    ? rawModelName
-        .replace(/\s*-\s*zen$/i, '')
-        .replace(/\s*-\s*local$/i, '')
-        .replace(/^ollama[:/]/, '')
-        .replace(/_/g, ' ')
-        .replace(/^\w/, c => c.toUpperCase())
-        .trim()
-    : 'Connecting…';
-
   return (
     <div className="h-full min-h-0 flex flex-col bg-brand-bg-app">
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-brand-border bg-brand-bg-app">
-        <div className="flex items-center gap-3">
-          <h1 className="text-[12px] font-medium text-brand-green-soft">
-            LocalMind Assistant
+        <div className="flex min-w-0 items-center gap-3">
+          {/* The chat's own title — the app name lives in the window title bar and the
+              model in the sidebar selector, so neither is repeated here. */}
+          <h1 className="min-w-0 truncate text-[12px] font-medium text-brand-green-soft" title={title || undefined}>
+            {title || 'New chat'}
           </h1>
-          {/* Model badge — green pill showing the active model */}
-          <span
-            className="text-[9px] px-2 py-0.5 rounded-full bg-brand-green/15 text-brand-green border border-brand-green/20 font-mono truncate max-w-[180px]"
-            title={`Model: ${selectedModel?.name || selectedModel?.id}`}
-          >
-            {displayModelName}
-          </span>
         </div>
 
         <div className="flex items-center gap-3">
@@ -679,8 +663,6 @@ export function CenterPanel({
         onAbort={onAbort}
         onSteer={onSteer}
         isStreaming={isStreaming}
-        modelName={selectedModel.name}
-        modelProvider={selectedModel.provider}
         sessionId={sessionId}
         chatMode={chatMode}
         onChatModeChange={onChatModeChange}

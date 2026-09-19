@@ -17,7 +17,6 @@ const sessions: Session[] = [
 function renderPanel(over: Partial<React.ComponentProps<typeof LeftPanel>> = {}) {
   const props = {
     sessions,
-    actions: [],
     files: [],
     models: [],
     selectedModel: 'm',
@@ -129,8 +128,7 @@ describe('LeftPanel multi-select', () => {
   it('switches back to the Chat tab when forceChatTab is set (New Chat)', () => {
     const baseProps = {
       sessions,
-      actions: [],
-      files: [],
+        files: [],
           models: [],
       selectedModel: 'm',
       onModelChange: vi.fn(),
@@ -147,8 +145,8 @@ describe('LeftPanel multi-select', () => {
     // Mirror that with a re-render so the effect consumes the flag exactly once.
     const { rerender } = render(<LeftPanel {...baseProps} />);
     // Leave the Chat tab first so the switch is observable.
-    fireEvent.click(screen.getByText('Actions'));
-    expect(screen.getByText('Actions will appear here during execution.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
+    expect(screen.getByText(/Start a chat/)).toBeInTheDocument();
 
     const onChatTabShown = vi.fn();
     const show = (f: boolean) =>
@@ -164,12 +162,11 @@ describe('LeftPanel multi-select', () => {
   it('consuming forceChatTab on Chat does not fight the first tool event', () => {
     // The reported bug: New Chat while ALREADY on the Chat tab left
     // forceChatTab=true (the old guard `activeTab !== 'chat'` never fired).
-    // The FIRST tool event then switched to Actions, and the still-set flag
+    // The FIRST tab switch then landed on another tab, and the still-set flag
     // yanked the tab straight back — only the SECOND action stuck.
     const baseProps = {
       sessions,
-      actions: [],
-      files: [],
+        files: [],
           models: [],
       selectedModel: 'm',
       onModelChange: vi.fn(),
@@ -195,26 +192,20 @@ describe('LeftPanel multi-select', () => {
     // The flag must be consumed even though no switch was needed.
     expect(onChatTabShown).toHaveBeenCalledTimes(1);
 
-    // First tool event → switch to Actions.
+    // User moves to Files.
     rerender(<LeftPanel {...baseProps} forceChatTab={forceChatTab} onChatTabShown={onChatTabShown} />);
-    fireEvent.click(screen.getByText('Actions'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
     // Simulate the tab being yanked back: with the flag consumed, no.
-    expect(screen.getByText('Actions will appear here during execution.')).toBeInTheDocument();
+    expect(screen.getByText(/Start a chat/)).toBeInTheDocument();
     // onChatTabShown was NOT called again — the flag is gone, no fight.
     expect(onChatTabShown).toHaveBeenCalledTimes(1);
   });
 
-  it('shows live/active actions as expandable cards, not pills', () => {
-    renderPanel({
-      actions: [
-        { id: 'a1', type: 'shell', label: 'Run command', detail: 'ls', status: 'done', timestamp: '09:00', iteration: 1 },
-      ],
-    });
-    fireEvent.click(screen.getByText('Actions'));
-    // The ActionHistory card renders the real action label + chain header;
-    // the old pill path showed the raw tool name ('Shell') instead.
-    expect(screen.getByText('Run command')).toBeInTheDocument();
-    expect(screen.getByText('1 step')).toBeInTheDocument();
+  it('has no Actions tab and never switches tabs on its own when a tool starts', () => {
+    renderPanel();
+    expect(screen.queryByText('Actions')).toBeNull();
+    window.dispatchEvent(new CustomEvent('localmind:tool-call-started', { detail: { tool: 'shell' } }));
+    expect(screen.getAllByTestId('session-row').length).toBeGreaterThan(0); // still on Chat
   });
 
   it('expands a chat to list its workspace artifacts', async () => {

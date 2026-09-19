@@ -108,6 +108,11 @@ export function toolState(status: ToolCall['status'], settled: boolean): StepSta
   return 'done';
 }
 
+/** Shell and code steps are shown as a terminal (command + output) rather than a plain text dump. */
+export function isTerminalTool(tool?: ToolCall): boolean {
+  return !!tool && (tool.name === 'shell' || tool.name === 'code_exec');
+}
+
 /** A shell call the shell tool's own guard rejected (it is switched off in Settings). */
 export function isShellBlocked(tool: ToolCall): boolean {
   if (tool.name !== 'shell' || tool.status !== 'failed') return false;

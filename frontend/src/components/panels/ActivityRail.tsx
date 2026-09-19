@@ -31,10 +31,27 @@ interface ActivityRailProps {
   isStreaming?: boolean;
 }
 
-function Section({ title, count, action, children }: { title: string; count?: string; action?: ReactNode; children: ReactNode }) {
+function Section({
+  title,
+  count,
+  action,
+  live,
+  children,
+}: {
+  title: string;
+  count?: string;
+  action?: ReactNode;
+  /** The section is showing something happening right now — give it visual priority. */
+  live?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <section className="border-b border-white/[0.06] px-3 py-2.5">
-      <div className="mb-1.5 flex items-center justify-between text-[10px] font-medium uppercase tracking-wider text-brand-green-muted">
+    <section className={`border-b border-white/[0.06] px-3 py-2.5 ${live ? 'bg-brand-amber/[0.04]' : ''}`}>
+      <div
+        className={`mb-1.5 flex items-center justify-between text-[10px] font-medium uppercase tracking-wider ${
+          live ? 'text-brand-amber' : 'text-brand-green-muted'
+        }`}
+      >
         <span>{title}</span>
         <span className="flex items-center gap-2 normal-case tracking-normal">
           {count}
@@ -94,7 +111,9 @@ export function ActivityRail({ runs, todos = [], actions, onToggleTodo, onAddTod
         </>
       ) : (
         <>
+          {live && (
           <Section
+            live
             title="Now"
             count={rail.now.length > 0 ? `${rail.now.length} running` : undefined}
             action={
@@ -117,13 +136,15 @@ export function ActivityRail({ runs, todos = [], actions, onToggleTodo, onAddTod
                 ))}
               </div>
             ) : (
-              <p className="text-[11px] text-brand-green-muted">{live ? 'Deciding the next step…' : 'Nothing running.'}</p>
+              <p className="text-[11px] text-brand-green-muted">Deciding the next step…</p>
             )}
           </Section>
+          )}
 
           {tasksSection}
 
-          {rail.agents.length > 0 && (
+          {/* One agent adds nothing the turn view doesn't already say; show the roster only when there are several. */}
+          {rail.agents.length > 1 && (
             <Section title="Agents" count={String(rail.agents.length)}>
               <ul className="space-y-1">
                 {rail.agents.map((a) => (

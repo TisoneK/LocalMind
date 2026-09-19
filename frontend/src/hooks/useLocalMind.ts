@@ -882,13 +882,7 @@ export function useChat(
 
               case 'tool_call': {
                 const tc = parsed.tool_call || parsed;
-                // Focus the left Actions tab only when a tool actually starts.
-                // Completed events should update the existing row without
-                // stealing focus back from the user's current panel.
                 if (isActiveToolStatus(tc.status) || tc.status === 'pending' || tc.status === 'in_progress' || tc.status === 'started') {
-                  window.dispatchEvent(new CustomEvent('localmind:tool-call-started', {
-                    detail: { tool: tc.name || tc.tool || 'unknown' },
-                  }));
                   // A tool is running now — pause the thinking
                   // timer so its duration is not double-counted against the turn.
                   thinkPause();

@@ -33,7 +33,8 @@ describe('TurnView', () => {
     const view = screen.getByTestId('turn-view');
     expect(view).toHaveAttribute('data-state', 'running');
     expect(screen.getByText(/Working · 0s/)).toBeInTheDocument();
-    expect(screen.getByText('Running command', { selector: 'span.text-brand-green-muted, span' })).toBeInTheDocument();
+    // The live status line and the running step both name it.
+    expect(screen.getAllByText('Running command').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('Step 2/2')).toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Agent activity' })).toBeInTheDocument();
   });
