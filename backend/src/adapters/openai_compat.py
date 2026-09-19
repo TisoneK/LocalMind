@@ -1925,11 +1925,14 @@ class OpenAICompatAdapter(BaseAdapter):
                         logger.info(
                             "[adapter] MiniMax tool_call prefix detected in Phase 1 — continuing to read for full pattern"  # noqa: E501
                         )
-                    elif _full_text_so_far and chunks_read >= 15:
+                    elif _full_text_so_far.strip() and chunks_read >= 15:
                         # We've seen actual CONTENT (not just reasoning) and no
                         # tool call sign — this is a text response. Break.
+                        # `.strip()`: reasoning-mode GLM streams a lone "\n"
+                        # content delta before its tool call; whitespace is not
+                        # content, and treating it as such dropped the tool call.
                         break
-                    elif not _full_text_so_far and chunks_read >= 500:
+                    elif not _full_text_so_far.strip() and chunks_read >= 500:
                         # Reasoning-only for 500 chunks with no content or
                         # tool_calls — model is stuck thinking. Break to avoid
                         # infinite loop. Flag the break so
