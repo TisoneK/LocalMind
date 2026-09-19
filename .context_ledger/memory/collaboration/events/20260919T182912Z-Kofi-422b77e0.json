@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T182912Z-Kofi-422b77e0",
+  "type": "claim",
+  "session": "S025",
+  "agent": "Kofi",
+  "created": "2026-09-19T18:29:13Z",
+  "issue": "B-2026-09-15-15",
+  "body": "Kofi (S025): finishing Tariq's (S020) B-2026-09-15-15 closeout. The exit gate's eslint step fails on ONE error: CenterPanel.test.tsx:4 imports PassiveMemory but never uses it (@typescript-eslint/no-unused-vars). Naledi (S022) and Amara (S023) both flagged this as pre-existing inside Tariq's live claim and deferred it to him; he clocked out (d4511d10) without clearing it. Fix = drop the unused import (the 52 repo-wide warnings stay under the gate's --max-warnings 53 budget; no product behavior change). Frontend test file only — zero overlap with Imani's (S024) live backend claim (loop.py/prompts.py/tests/core). Own worktree per the mandatory-collab override.",
+  "paths": ["frontend/src/components/layout/CenterPanel.test.tsx"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
