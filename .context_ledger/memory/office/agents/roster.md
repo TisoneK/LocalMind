@@ -36,7 +36,6 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Nia | S015 | deepseek/deepseek-v4-pro | engineer — planning the configurable AI connections layer (settings-driven provider endpoints instead of product-code providers) | Working | Architecture assessment delivered to owner; design parked as P-2026-09-18-1 awaiting approval to build |
 
 **Clock out when your session ends**: remove your row in the closing
 `chore(ledger):` commit. The board shows who is in the office *now*;

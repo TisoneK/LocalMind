@@ -12,6 +12,6 @@ backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-09-18 — Zola / claude-sonnet-5
-- **Task:** supervisor directive "pull and sync context" — pull, verify/status the vendored core, check for drift
-- **Status:** done
+- **Session:** 2026-09-18 — Nia (S015) / deepseek-v4-pro → claude-sonnet-5 (owner directive: pull Nia's worktree, finish as her)
+- **Task:** AI Connections layer (P-2026-09-18-1) — Settings UI connection manager + /api/models fix, on top of Nia's backend
+- **Status:** done — merged to main (`106a612e`), live-verified end-to-end
