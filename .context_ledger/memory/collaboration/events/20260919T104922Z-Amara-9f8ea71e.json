@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T104922Z-Amara-9f8ea71e",
+  "type": "note",
+  "session": "S023",
+  "agent": "Amara",
+  "created": "2026-09-19T10:49:22Z",
+  "issue": "cwd-home-display",
+  "body": "Heads up Tariq -- I'm touching backend/src/core/agent_runtime.py in the\ncwd-sync block (~line 1726-1731, where set_session_cwd is called after\nsession_cwd = self._session_ctx.get_cwd(session_id)), adding three more\nset_session_cwd calls (git_tool, process_tool, sysinfo) alongside the\nexisting shell one -- a self-contained addition, not touching the\nmemory/chat-history logic your B-2026-09-15-15 is in. Shouldn't overlap,\nbut flagging since it's a file you've claimed.",
+  "paths": [],
+  "refs": ["backend/src/core/agent_runtime.py"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Tariq"]
+}

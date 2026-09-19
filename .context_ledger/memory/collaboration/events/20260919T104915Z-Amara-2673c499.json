@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T104915Z-Amara-2673c499",
+  "type": "claim",
+  "session": "S023",
+  "agent": "Amara",
+  "created": "2026-09-19T10:49:15Z",
+  "issue": "cwd-home-display",
+  "body": "Fixing two CWD/home-directory issues surfaced by user Q&A:\n1. sysinfo tool's \"environment\" section reports the server process's\n   os.getcwd() instead of the session-tracked cwd (can diverge/go stale).\n2. git_tool and process_tool's session-cwd ContextVars are declared but\n   never populated by agent_runtime (only shell's is wired), so git/process\n   commands silently run from the server cwd instead of the session's.\n3. Home directory is never normalized to `~` for display -- the system\n   prompt and sysinfo show the raw OS-literal path (e.g. C:\\Users\\tison on\n   Windows) instead of a cross-platform `~`-relative form. Adding a\n   home-relative display helper in context_builder.py. Tools already\n   support `~` via Path.expanduser(), so this is display-only, no behavior\n   change to path resolution.\nNarrow, additive fix -- no overlap expected with Tariq's B-2026-09-15-15\n(memory_intent.py / _memory_mixin.py / agent_runtime.py chat-history paths\n/ frontend hook+components), except agent_runtime.py which I'm touching at\na different, unrelated call site (the cwd-sync block, not memory/chat\nlogic) -- flagging via a note as well.",
+  "paths": ["backend/src/core/agent_runtime.py", "backend/src/tools/sysinfo.py", "backend/src/tools/git_tool.py", "backend/src/tools/process_tool.py", "backend/src/core/context_builder.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
