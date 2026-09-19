@@ -11,3 +11,7 @@ backlog before starting.
 - **Task:** <what is being worked on right now>
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
+
+- **Session:** 2026-09-19 — Kofi (S025) / unknown (not exposed to the session)
+- **Task:** Finish Tariq's (S020) B-2026-09-15-15 closeout — clear the gate-blocking frontend eslint error (unused `PassiveMemory` import in `CenterPanel.test.tsx`) that Naledi (S022) and Amara (S023) deferred to his live claim, and push his unpushed clock-out commit `d4511d10`
+- **Status:** in-progress

@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-19T15:45:44Z_
+_Regenerated: 2026-09-19T18:28:09Z_
 
 ## Standing params
 - **Core:** 2.0.2 (locked, verified 2026-09-19)
@@ -15,22 +15,22 @@ _Regenerated: 2026-09-19T15:45:44Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-- **Tariq** (S020) — Working — B-2026-09-15-15 — passive context awareness (user/env profile from incidental signals)
 - **Imani** (S024) — Working — Recording a user preference (design decisions must be grounded in the actual design, limi…
+- **Kofi** (S025) — Working — Finishing Tariq's (S020) B-2026-09-15-15 — clear the gate-blocking frontend eslint error …
 
 ## Current task
-- **2026-09-19 — Tariq (S020) / not exposed to the session (Freebuff desktop)** — B-2026-09-15-15 — passive context awareness: build the user/env profile from incidental conversation signals (no "remember this" trigger)… — *in-progress*
+- **2026-09-19 — Kofi (S025) / unknown (not exposed to the session)** — Finish Tariq's (S020) B-2026-09-15-15 closeout — clear the gate-blocking frontend eslint error (unused `PassiveMemory` import in `CenterPan… — *in-progress*
 
 ## Backlog — High priority (the top of the queue)
 (none)
 
-_10 medium, 7 low priority row(s) — see tasks/backlog.md_
+_9 medium, 7 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 13 entries, last added 2026-09-19
 - inefficiencies/log.md (project code/env friction): 15 entries, last added 2026-09-19
-- plans/decisions.md (ADRs in force — respected, not relitigated): 4 entries, last added 2026-09-19
+- plans/decisions.md (ADRs in force — respected, not relitigated): 5 entries, last added 2026-09-19
 
 ## Collaboration
-- 99 event(s) on file; most recent: `20260919T110309Z-Amara-76473065.json`
+- 104 event(s) on file; most recent: `20260919T173010Z-claude-sonnet-5-s024-fe69e145.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`
