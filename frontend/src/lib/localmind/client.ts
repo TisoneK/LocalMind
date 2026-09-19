@@ -228,6 +228,46 @@ interface PersistedSettings {
   ollamaUrl?: string;
 }
 
+// A connection is one model endpoint — a preset provider or a user-defined
+// OpenAI-compatible service. Mirrors backend/src/core/connections.py.
+export interface ConnectionCapabilities {
+  streaming: boolean;
+  context_window: number;
+  vision: boolean;
+  tool_calling: boolean;
+  structured_output: boolean;
+}
+
+export interface ConnectionRecord {
+  id: string;
+  name: string;
+  kind: 'openai-compat' | 'ollama';
+  base_url: string;
+  model: string;
+  protocol: string;
+  capabilities: ConnectionCapabilities;
+  enabled: boolean;
+  fallback_to: string;
+  preset: boolean;
+  api_key_set: boolean;
+}
+
+export interface ConnectionTestResult {
+  connection: string;
+  model: string;
+  ok: boolean;
+  reachable: boolean;
+  auth_ok: boolean;
+  chat_ok: boolean;
+  streaming_ok: boolean | null;
+  tools: 'accepted' | 'rejected' | 'unknown' | null;
+  models_count: number | null;
+  context_window: number | null;
+  latency_ms: number | null;
+  error: string | null;
+  stored: Partial<ConnectionCapabilities> | null;
+}
+
 function asString(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
@@ -1229,6 +1269,7 @@ class LocalMindClient {
     num_ctx?: number;
     shell_enabled?: boolean;
     providers: Record<string, unknown>;
+    connections: ConnectionRecord[];
     thinking: string;
     reasoning_timeout: number;
     reasoning_plan_timeout: number;
@@ -1371,6 +1412,37 @@ class LocalMindClient {
     await this.request('/api/settings/provider-key', {
       method: 'DELETE',
       body: JSON.stringify({ provider }),
+    });
+  }
+
+  // ── AI Connections (preset providers + user-defined endpoints) ──────
+
+  async saveConnection(record: {
+    id?: string;
+    name?: string;
+    kind?: string;
+    base_url?: string;
+    model?: string;
+    protocol?: string;
+    capabilities?: Partial<ConnectionCapabilities>;
+    enabled?: boolean;
+    fallback_to?: string;
+  }): Promise<{ connection: ConnectionRecord; message: string }> {
+    return this.request('/api/settings/connections', {
+      method: 'POST',
+      body: JSON.stringify(record),
+    });
+  }
+
+  async deleteConnection(connectionId: string): Promise<{ connection: string; deleted: boolean; adapter: string; message: string }> {
+    return this.request(`/api/settings/connections/${encodeURIComponent(connectionId)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async testConnection(connectionId: string): Promise<ConnectionTestResult> {
+    return this.request(`/api/settings/connections/${encodeURIComponent(connectionId)}/test`, {
+      method: 'POST',
     });
   }
 

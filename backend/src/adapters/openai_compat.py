@@ -874,50 +874,77 @@ class OpenAICompatAdapter(BaseAdapter):
 
     def __init__(
         self,
-        provider: str = "openai",
+        provider: str | None = None,
         model_override: str = "",
+        connection=None,
     ):
         from core.config import settings
+        from core.connections import get_connection_registry
 
-        cfg = PROVIDER_CONFIGS.get(provider)
-        if not cfg:
-            raise ValueError(f"Unknown provider: {provider}. Available: {list(PROVIDER_CONFIGS.keys())}")
+        # `provider` names a connection id (preset or custom). An explicit
+        # `connection` record (from the registry) skips the lookup.
+        if connection is None:
+            connection = get_connection_registry().get(provider)
+            if connection is None:
+                raise ValueError(
+                    f"Unknown provider: {provider}. "
+                    f"Available: {sorted(get_connection_registry().ids())}"
+                )
 
-        # Resolve the API key LIVE: runtime settings (Settings UI) -> env
-        # var at construction time -> provider baked default (LiteLLM's
-        # "dummy" placeholder). Never rely on cfg.api_key's import-time
-        # value: freezing the env var into the config at import meant a
-        # module imported while a key was set (e.g. tests/api collection
-        # importing openai_compat) kept using the stale key even after the
-        # env var was removed — defeating runtime key changes and making
-        # env manipulation in tests ineffective.
-        api_key = (
-            settings.get_api_key(provider)
-            or os.getenv(cfg.key_env, "")
-            or cfg.api_key
-        )
-        if not api_key:
-            raise ValueError(f"API key not set for provider '{provider}'. Set it in settings or .env.")
+        # The preset registry entry (None for a user-defined connection) keeps
+        # the historical defaults: env var names, baked default model/key, and
+        # provider-specific headers.
+        cfg = PROVIDER_CONFIGS.get(connection.id)
 
-        self._provider_name = cfg.name
-        self._provider_key = provider  # raw key like "gemini", "cerebras", etc.
-        self._base_url = cfg.base_url.rstrip("/")
+        self._provider_name = connection.name
+        self._provider_key = connection.id  # raw key like "gemini", "cerebras", or a custom slug
+        self._base_url = (connection.base_url or (cfg.base_url if cfg else "")).rstrip("/")
+        if not self._base_url:
+            raise ValueError(
+                f"Connection '{connection.id}' has no base URL — set one in the AI Connections settings."
+            )
+
+        # Resolve the API key LIVE: runtime storage (settings.json / env via
+        # the connection id) -> the preset's env var at construction time ->
+        # the preset's baked default (LiteLLM's "dummy"). Never rely on
+        # cfg.api_key's import-time value: freezing the env var into the
+        # config at import meant a module imported while a key was set kept
+        # using the stale key even after the env var was removed. Custom
+        # connections allow an empty key (local gateways may need none);
+        # presets keep the historical fail-fast so a missing key is never a
+        # silent misconfiguration.
+        api_key = settings.get_api_key(connection.id)
+        if cfg is not None:
+            api_key = api_key or os.getenv(cfg.key_env, "") or cfg.api_key
+            if not api_key:
+                raise ValueError(f"API key not set for provider '{connection.id}'. Set it in settings or .env.")
+        self._api_key = api_key
+
         # Context window discovered at runtime from provider metadata (see
         # probe_context_window) — None until a probe succeeds; context_window
-        # prefers it over the registry so fetched values win.
+        # prefers it over the connection's declared capability so fetched
+        # values win.
         self._probed_context_window: int | None = None
-        # Read the model from settings (set by select_model or settings.json),
-        # falling back to the provider default. Previously this only used
-        # cfg.default_model (a static value evaluated at import time), so
-        # model selection via the UI had NO EFFECT on which model the
-        # adapter actually used for chat requests.
-        settings_model_attr = f"{provider.replace('-', '')}_model"
-        settings_model = getattr(settings, settings_model_attr, "") or ""
-        self._model = model_override or settings_model or cfg.default_model
-        self._headers = {
-            "Authorization": f"Bearer {api_key}",
-            **(cfg.headers or {}),
-        }
+        # What the connection declares it supports — assumed defaults,
+        # tightened by a connection test or a user edit.
+        self._capabilities = connection.capabilities
+
+        # Read the model from the connection (set by the AI Connections UI or
+        # settings.json), falling back to the preset's Settings field, then
+        # the provider default. A user-defined connection must declare a model.
+        settings_model = getattr(settings, cfg.settings_field, "") if cfg else ""
+        declared_model = connection.model or settings_model or (cfg.default_model if cfg else "")
+        self._model = model_override or declared_model
+        if not self._model:
+            raise ValueError(
+                f"Connection '{connection.id}' has no model — set one in the AI Connections settings."
+            )
+
+        self._headers = {}
+        if api_key:
+            self._headers["Authorization"] = f"Bearer {api_key}"
+        if cfg is not None and cfg.headers:
+            self._headers.update(cfg.headers)
         # Update headers with runtime key if needed
         if "x-api-key" in self._headers:
             self._headers["x-api-key"] = api_key
@@ -1411,16 +1438,22 @@ class OpenAICompatAdapter(BaseAdapter):
         probed = self._probed_context_window
         if probed:
             return probed
+        declared = getattr(self._capabilities, "context_window", 0) or 0
+        if declared:
+            return declared
         return MODEL_CONTEXT_WINDOWS.get(self._model, MODEL_CONTEXT_WINDOWS["default"])
 
     @property
     def window_source(self) -> str:
-        """Where the context_window number came from: "table" (registry hit)
-        or "default" (model unknown — a conservative guess, NOT the model's
-        real capacity). probe_context_window() may upgrade "default" →
-        "fetched" when the provider's /models metadata carries the value."""
+        """Where the context_window number came from: "fetched" (probe hit),
+        "connection" (the connection record declares it), "table" (registry
+        hit) or "default" (model unknown — a conservative guess, NOT the
+        model's real capacity). probe_context_window() may upgrade "default"
+        → "fetched" when the provider's /models metadata carries the value."""
         if self._probed_context_window:
             return "fetched"
+        if getattr(self._capabilities, "context_window", 0):
+            return "connection"
         if self._model in MODEL_CONTEXT_WINDOWS:
             return "table"
         return "default"
@@ -1435,7 +1468,7 @@ class OpenAICompatAdapter(BaseAdapter):
         the discovered value is remembered for the adapter instance's
         lifetime and window_source upgrades to "fetched".
         """
-        if self._provider_name == "anthropic":
+        if self._provider_key == "anthropic":
             return None
         key = self._provider_key
         entries = _MODELS_RAW_CACHE.get(key)
@@ -1492,8 +1525,22 @@ class OpenAICompatAdapter(BaseAdapter):
 
         timeout = self._timeouts.get(intent, 120)
 
+        # A connection declared non-streaming cannot be served by the
+        # streaming paths below — say so instead of sending a request the
+        # endpoint will reject or hang on.
+        if not getattr(self._capabilities, "streaming", True):
+            yield StreamChunk(
+                text="",
+                done=True,
+                error=(
+                    f"Connection '{self._provider_key}' is marked non-streaming, "
+                    "and LocalMind currently requires a streaming endpoint."
+                ),
+            )
+            return
+
         # Build payload based on provider
-        if self._provider_name == "anthropic":
+        if self._provider_key == "anthropic":
             async for chunk in self._chat_anthropic(messages, temperature, timeout):
                 yield chunk
         else:
@@ -1559,13 +1606,25 @@ class OpenAICompatAdapter(BaseAdapter):
         """
         # Anthropic has a different tool calling format — fall back to plain chat
         # TODO: implement Anthropic native tool calling
-        if self._provider_name == "anthropic":
+        if self._provider_key == "anthropic":
 
             async def _anthropic_fallback() -> AsyncIterator[StreamChunk]:
                 async for chunk in self.chat(messages, temperature, intent):
                     yield chunk
 
             return _anthropic_fallback()
+
+        # A connection declared without tool support streams plain chat,
+        # exactly like the Anthropic fallback: the endpoint never receives a
+        # tools schema (some gateways 400 on the `tools` parameter), and a
+        # non-streaming connection surfaces its honest error from chat().
+        if not getattr(self._capabilities, "tool_calling", True):
+
+            async def _no_tools_fallback() -> AsyncIterator[StreamChunk]:
+                async for chunk in self.chat(messages, temperature, intent):
+                    yield chunk
+
+            return _no_tools_fallback()
 
         # OpenAI-style providers: send tools and parse tool_call responses
         timeout = self._timeouts.get(intent, 120)
@@ -2531,7 +2590,7 @@ class OpenAICompatAdapter(BaseAdapter):
     async def health_check(self) -> bool:
         """Return True if the provider endpoint is reachable."""
         try:
-            if self._provider_name == "anthropic":
+            if self._provider_key == "anthropic":
                 # Anthropic doesn't have a simple /models endpoint,
                 # use a minimal message to check connectivity
                 response = await self._client.post(
@@ -2557,7 +2616,7 @@ class OpenAICompatAdapter(BaseAdapter):
         """Return list of available models for this provider."""
         # _fetch_models_cached() never raises (it catches and returns None),
         # so no try/except is needed here.
-        if self._provider_name == "anthropic":
+        if self._provider_key == "anthropic":
             # Anthropic returns models in a different format
             # Use a simple approach: return the configured model + known variants
             return [

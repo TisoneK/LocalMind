@@ -60,6 +60,7 @@ async def _list_models_for_provider(provider: str) -> dict:
     provider's /models endpoint is unreachable or no API key is saved.
     """
     from adapters.openai_compat import PROVIDER_CONFIGS
+    from core.connections import get_connection_registry
 
     # Validate the provider ID
     if provider == "ollama":
@@ -67,11 +68,16 @@ async def _list_models_for_provider(provider: str) -> dict:
         # key-based provider. Return empty so the frontend hides the dropdown.
         return {"models": [], "current": "", "provider": "ollama"}
 
-    cfg = PROVIDER_CONFIGS.get(provider)
-    if not cfg:
+    connection = get_connection_registry().get(provider)
+    if connection is None:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
+    cfg = PROVIDER_CONFIGS.get(provider)
 
-    current_model = getattr(settings, _model_setting_attr(provider) or "", "") or ""
+    # The connection's declared model wins; presets fall back to the
+    # historical Settings field and the registry default.
+    current_model = connection.model or getattr(settings, _model_setting_attr(provider) or "", "") or ""
+    if not current_model and cfg is not None:
+        current_model = cfg.default_model
     model_options: list[dict] = []
 
     # Always include BOTH the provider's default model AND the currently
@@ -80,7 +86,7 @@ async def _list_models_for_provider(provider: str) -> dict:
     # (e.g. glm-4.5-flash, the free one) was never shown. This meant users
     # couldn't switch back to the free default from the dropdown.
     seen_ids: set[str] = set()
-    for model_id in (cfg.default_model, current_model):
+    for model_id in ((cfg.default_model if cfg else ""), current_model):
         if model_id and model_id not in seen_ids:
             model_options.append(
                 {"id": model_id, "name": model_id, "provider": provider, "size": "Cloud"}
@@ -113,7 +119,7 @@ async def _list_models_for_provider(provider: str) -> dict:
 
     return {
         "models": model_options,
-        "current": current_model or cfg.default_model,
+        "current": current_model or (cfg.default_model if cfg else ""),
         "provider": provider,
     }
 
@@ -245,26 +251,34 @@ async def list_models(provider: str | None = None):
                 model_options.append({"id": name, "name": name, "provider": "ollama", "size": "Unknown"})
         current_model = settings.ollama_model
     else:
-        # Cloud providers: show configured model (can't list, can only configure)
+        # Cloud providers (and custom AI connections): show configured model.
 
         # Get model from settings or use adapter default
         model_setting_map = _build_model_setting_map()
         current_model = model_setting_map.get(adapter_name, "")
 
-        # Always include the provider's default model in the dropdown — even
+        from adapters.openai_compat import PROVIDER_CONFIGS
+        from core.connections import get_connection_registry
+
+        cfg = PROVIDER_CONFIGS.get(adapter_name)
+        connection = get_connection_registry().get(adapter_name)
+        # A connection's own declared model wins (covers custom connections,
+        # which have no PROVIDER_CONFIGS/settings-field entry at all).
+        if connection is not None and connection.model:
+            current_model = connection.model
+
+        # Always include the resolved default model in the dropdown — even
         # when a different model is currently selected. Some providers' /models
         # endpoints don't include the default (e.g. Z.ai doesn't list
         # glm-4.5-flash, which is the free model). Without this, users can't
         # switch back to the default from the dropdown.
-        from adapters.openai_compat import PROVIDER_CONFIGS
-
-        cfg = PROVIDER_CONFIGS.get(adapter_name)
         seen_ids: set[str] = set()
-        if cfg and cfg.default_model:
+        default_model = (connection.model if connection else "") or (cfg.default_model if cfg else "")
+        if default_model:
             model_options.append(
-                {"id": cfg.default_model, "name": cfg.default_model, "provider": adapter_name, "size": "Cloud"}
+                {"id": default_model, "name": default_model, "provider": adapter_name, "size": "Cloud"}
             )
-            seen_ids.add(cfg.default_model)
+            seen_ids.add(default_model)
 
         # Providers that expose a working OpenAI-compatible /models endpoint
         # can be queried live so the model selector shows the full current list.
@@ -275,7 +289,12 @@ async def list_models(provider: str | None = None):
         # Z.ai: api.z.ai/api/paas/v4/models (GLM-5.2, GLM-4.5-Flash, etc.)
         # OmniRoute: localhost:20128/v1/models (self-hosted gateway, 500+
         # models across 290+ upstreams — live-listing is its headline feature).
-        if adapter_name in ("zen", "cerebras", "gemini", "chutes", "zai", "bankofai", "omniroute"):
+        # Any user-defined connection (never preset) gets the same live-listing
+        # treatment — that's the whole point of a custom OpenAI-compatible
+        # endpoint: no product-code change needed to discover its models.
+        is_custom_connection = connection is not None and not connection.preset
+        live_listable = ("zen", "cerebras", "gemini", "chutes", "zai", "bankofai", "omniroute")
+        if adapter_name in live_listable or is_custom_connection:
             try:
                 available = await adapter.list_models()
                 for m in available:

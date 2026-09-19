@@ -107,6 +107,9 @@ class Settings(BaseSettings):
     # Runtime API keys (loaded from settings.json, not env)
     _runtime_api_keys: dict = {}
 
+    # AI-connection records (loaded from settings.json; overlay the preset seeds)
+    _runtime_connections: list = []
+
     # Ollama
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = ""  # Empty = auto-detect first available model on startup
@@ -503,6 +506,15 @@ class Settings(BaseSettings):
             if "api_keys" in data:
                 self._runtime_api_keys = data["api_keys"]
                 logger.info(f"[config] Loaded {len(data['api_keys'])} runtime API keys")
+            # AI-connection records (overlay the seeded presets; see
+            # core/connections.py). Each record carries at least an id.
+            if isinstance(data.get("connections"), list):
+                self._runtime_connections = [
+                    c
+                    for c in data["connections"]
+                    if isinstance(c, dict) and isinstance(c.get("id"), str) and c["id"]
+                ]
+                logger.info(f"[config] Loaded {len(self._runtime_connections)} connection records")
         except Exception as e:
             logger.warning(f"[config] Failed to load runtime settings: {e}")
 
@@ -609,6 +621,35 @@ class Settings(BaseSettings):
         # Update runtime cache
         self._runtime_api_keys.pop(provider, None)
         return True
+
+    def save_connection_record(self, record: dict) -> None:
+        """Upsert one AI-connection record into settings.json + runtime cache."""
+        path = self._runtime_settings_path()
+        existing = self._load_json_file(path)
+        stored = [
+            c
+            for c in existing.get("connections", [])
+            if isinstance(c, dict) and c.get("id") != record.get("id")
+        ]
+        stored.append(record)
+        existing["connections"] = stored
+        self._secure_write_json(path, existing)
+        self._runtime_connections = stored
+
+    def delete_connection_record(self, connection_id: str) -> bool:
+        """Remove a connection record; returns True when one was present."""
+        path = self._runtime_settings_path()
+        existing = self._load_json_file(path)
+        stored = [
+            c
+            for c in existing.get("connections", [])
+            if isinstance(c, dict) and c.get("id") != connection_id
+        ]
+        removed = len(stored) != len(existing.get("connections", []))
+        existing["connections"] = stored
+        self._secure_write_json(path, existing)
+        self._runtime_connections = stored
+        return removed
 
     def get_api_key(self, provider: str) -> str | None:
         """Get API key for a provider. Checks runtime storage first, then env vars."""

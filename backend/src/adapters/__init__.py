@@ -13,24 +13,29 @@ _adapter_cache: dict[tuple, "BaseAdapter"] = {}
 def get_adapter(name: str, model_override: str = "") -> BaseAdapter:
     cache_key = (name, model_override)
     if cache_key not in _adapter_cache:
-        if name == "ollama":
+        # Names resolve through the AI-connection registry: the ollama preset,
+        # every seeded provider preset, and any user-defined connection.
+        # Preset ids are the historical adapter names, so nothing that
+        # already works changes; custom connections work without a code edit.
+        from core.connections import get_connection_registry
+
+        registry = get_connection_registry()
+        connection = registry.get(name)
+        if name == "ollama" or (connection is not None and connection.kind == "ollama"):
             from adapters.ollama import OllamaAdapter
 
             _adapter_cache[cache_key] = OllamaAdapter(model_override=model_override)
+        elif connection is not None:
+            from adapters.openai_compat import OpenAICompatAdapter
+
+            _adapter_cache[cache_key] = OpenAICompatAdapter(
+                provider=name, connection=connection, model_override=model_override
+            )
         else:
-            # All non-ollama adapters are OpenAI-compatible. The valid names
-            # are derived from PROVIDER_CONFIGS — no hardcoded list to drift.
-            from adapters.openai_compat import CLOUD_PROVIDER_NAMES
-
-            if name in CLOUD_PROVIDER_NAMES:
-                from adapters.openai_compat import OpenAICompatAdapter
-
-                _adapter_cache[cache_key] = OpenAICompatAdapter(provider=name, model_override=model_override)
-            else:
-                raise ValueError(
-                    f"Unknown adapter: '{name}'. Available: ollama, "
-                    + ", ".join(CLOUD_PROVIDER_NAMES)
-                )
+            raise ValueError(
+                f"Unknown adapter: '{name}'. Available: ollama, "
+                + ", ".join(registry.ids())
+            )
     return _adapter_cache[cache_key]
 
 
