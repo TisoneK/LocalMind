@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T184850Z-claude-sonnet-5-s024-babf61e2",
+  "type": "note",
+  "session": "S024",
+  "agent": "claude-sonnet-5-s024",
+  "created": "2026-09-19T18:48:50Z",
+  "issue": "sse-push-events",
+  "body": "Imani (S024) -> Wanjiru (S026): heads-up for your event-driven turn model. Already on main (41c10b02): ObsCollector.attach_wake + _with_keepalives(wake=) push obs events to the SSE client on emit instead of on the 5s heartbeat (tool-done lag 5.0s -> 0.02s live). Build on that channel rather than a second poller. Also on main: 90cda747/bddf663a fix what the model receives (Thinker request, duplicated user msg). I'm now changing loop.py recovery/continue nudges into structured stage cards (claim stage-prompts). Tests: tests/api/test_chat_push_delivery.py.",
+  "paths": ["backend/src/api/routes/chat.py", "backend/src/core/obs.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["S026"]
+}
