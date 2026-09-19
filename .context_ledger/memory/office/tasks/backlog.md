@@ -69,6 +69,7 @@ file's git history.
 
 | ID | Summary |
 |----|---------|
+| B-2026-09-19-5 | A post-answer LLM call (reflection or title refinement) can hang the turn for minutes: live glm-4.5-flash trace F1r1 — loop and final synthesis done at 12:21:11, then a z.ai request opened at 12:21:21 never returned until the server was killed at 12:30:25 (663 s total), and `done` waits on reflection (`agent_runtime.py` ~2121; measured 3.3 s on gemini, 31 s on glm even when healthy). Give post-answer calls a hard timeout and move reflection/title off the critical path (deliver `done` first, surface the lesson afterwards, ADR-64 visibility intact). Live-verify with the S024 trace harness (capture per-call timings). (found by Imani/S024, 2026-09-19) |
 | B-2026-09-15-6 | Pre-action recall: inject recalled stable facts into the turn context before answering fact questions (identity/location/preferences) — reads are ~16ms; ADR-62 gap 4. Live-verify. |
 | B-2026-09-15-9 | Consequence-tiered verification ladder for destructive/mutating requests: resolve-target → verify state → assess risk → CONFIRM → execute → verify → reflect; low-risk reads skip ceremony. Owner principles: "No action without verification. No destructive action without confirmation." Extends B-2026-08-25-12. |
 | B-2026-09-15-7 | Turn economy for verification-heavy tasks: resumable per-phase checkpoints, adaptive time/tool budgets, background continuation, tool batching, graceful completed/stopped-at/what-continues report at cap (not dying mid-sentence). Research doc §2 Arc E. |
