@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 from core.agent.thinker import (
     Evidence,
     Thinker,
@@ -219,3 +220,69 @@ async def test_consult_survives_provider_error():
     # No crash; a safe (empty) analysis is still produced.
     assert final is not None
     assert thinker.last_analysis is not None
+
+
+# ── the Thinker's reasoning about its own output format never reaches the user ──
+
+CONTRACT_META = (
+    "Now I need to format my response as JSON with:\n"
+    "- facts: What I know for certain\n"
+    "- ambiguities: Any uncertainties\n"
+    "- next_step: What I should do next\n"
+    "- confidence: A confidence score between 0.0 and 1.0"
+)
+
+
+def test_contract_paragraphs_are_recognised():
+    from core.agent.thinker.thinker import _is_contract_meta
+
+    assert _is_contract_meta(CONTRACT_META)
+    assert _is_contract_meta("Facts:\n- User is asking for current weather in Kitengela")
+    assert _is_contract_meta("Ambiguities:\n- I don't know the exact conditions")
+    assert _is_contract_meta("I'll write the answer as JSON with a next_step field.")
+
+
+def test_ordinary_reasoning_is_not_mistaken_for_contract():
+    from core.agent.thinker.thinker import _is_contract_meta
+
+    assert not _is_contract_meta("The user wants the weather right now, so I should search the web.")
+    assert not _is_contract_meta("The facts are clear: the tool returned 0 matches for 'disk'.")
+    assert not _is_contract_meta("Kitengela is in Kenya, based on my knowledge.")
+
+
+def test_gate_streams_whole_paragraphs_and_drops_contract_ones():
+    from core.agent.thinker.thinker import _ProseGate
+
+    gate = _ProseGate()
+    out: list[str] = []
+    # Arrives in awkward fragments, as a token stream does.
+    for piece in ("The user wants the wea", "ther now.\n\nNow I need to format my resp",
+                  "onse as JSON with:\n- facts: x\n- next_step: y\n\nSo I should search the web."):
+        out += gate.feed(piece)
+    out += gate.flush()
+    text = "".join(out)
+    assert "The user wants the weather now." in text
+    assert "So I should search the web." in text
+    assert "JSON" not in text and "next_step" not in text
+
+
+@pytest.mark.asyncio
+async def test_consult_surfaces_only_the_real_reasoning():
+    prose = (
+        "The user asks about disk space, which the system line already carries.\n\n"
+        f"{CONTRACT_META}\n\n"
+        "Facts:\n- disk has 16.1 GB free\n\n"
+    )
+    json_block = '{"facts": ["16.1 GB free"], "ambiguities": [], "next_step": "answer", "confidence": 0.9}'
+
+    class FakeAdapter:
+        async def chat(self, messages, temperature=0.4, **kwargs):
+            yield StreamChunk(text=prose + json_block, done=False)
+            yield StreamChunk(text="", done=True)
+
+    surfaced = ""
+    evidence = Evidence(user_message="how much free disk space do I have?", observations="none")
+    async for chunk in Thinker().consult(evidence, FakeAdapter()):
+        surfaced += chunk.thinking or ""
+    assert "system line already carries" in surfaced
+    assert "JSON" not in surfaced and "Facts:" not in surfaced and "next_step" not in surfaced

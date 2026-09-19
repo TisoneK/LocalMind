@@ -11,7 +11,8 @@ that isn't needed (loading the sysinfo schema on "what day is it today?"),
 and the turn lands at 2-3x the latency of the same answer accepted on the
 first iteration.
 
-Two criterion classes are valid zero-tool success shapes:
+Two criterion classes are valid zero-tool success shapes (GROUNDED covers the
+clock AND the machine facts on the injected `System:` line):
 
   GROUNDED   — the user's request is answerable from context the loop itself
                injects (current date/time, environment, memory facts, the
@@ -71,6 +72,29 @@ _GROUNDED_REQUEST_RE = re.compile(
     r"|current\s+year\b"
     r"|what\s+month\b"
     r"|current\s+(?:date|month)\b"
+    r")",
+    re.IGNORECASE,
+)
+
+# ── GROUNDED (machine facts): OS / CPU / RAM / disk / hostname ───────────────
+#
+# The system prompt injects a `System:` line ("Windows 11, AMD64, 8 CPUs, 254.8 GB
+# disk (16.1 GB free), host …") and tells the model to answer these questions from
+# it instead of calling a tool. The gate must agree: a model that does exactly that
+# is following the prompt, not narrating an action. Live trace: "whts the size of my
+# disk that is empty" -> the model answered "16.1 GB free" from the line, the gate
+# called it "narrated an action plan, zero tool calls", forced a tool, and the model
+# grabbed the nearest one (a file search for the word "disk") before answering
+# anyway.
+
+_SYSTEM_FACT_REQUEST_RE = re.compile(
+    r"\b(?:"
+    r"(?:disk|storage|drive|hard\s*drive|ssd)\b.{0,30}\b(?:space|size|free|empty|left|available|capacity|remaining)"
+    r"|(?:free|empty|available|remaining|left)\b.{0,20}\b(?:disk|storage|space)"
+    r"|how\s+much\b.{0,25}\b(?:ram|memory)"
+    r"|(?:ram|memory)\b.{0,20}\b(?:do\s+i\s+have|size|total|installed)"
+    r"|how\s+many\s+(?:cpus?|cores?|processors?)"
+    r"|what\b.{0,25}\b(?:os|operating\s+system|cpu|processor|hostname|computer\s+name)"
     r")",
     re.IGNORECASE,
 )
@@ -145,6 +169,41 @@ def request_matches_grounded_class(message: str) -> bool:
     if _TASK_SHAPED_RE.search(message):
         return False
     return bool(_GROUNDED_REQUEST_RE.search(message))
+
+
+def request_matches_system_fact_class(message: str) -> bool:
+    """True when the request asks a machine fact the `System:` line carries."""
+    if not message:
+        return False
+    if _TASK_SHAPED_RE.search(message):
+        return False
+    return bool(_SYSTEM_FACT_REQUEST_RE.search(message))
+
+
+def _answer_states_system_fact(answer: str, summary: str) -> bool:
+    """True when the answer states a value that really is on the `System:` line.
+
+    Checked against the injected line itself: a GB figure it carries, the CPU count, the
+    OS name, or the host. A number the line does not carry is not grounding — the class
+    must not cover a made-up figure.
+    """
+    text = (answer or "").strip()
+    line = (summary or "").strip()
+    if not text or not line:
+        return False
+    lower = text.lower()
+    for value in re.findall(r"(\d+(?:\.\d+)?)\s*GB", line, re.IGNORECASE):
+        if re.search(rf"(?<![\d.]){re.escape(value)}(?![\d])", text):
+            return True
+    cpus = re.search(r"(\d+)\s*CPUs?", line, re.IGNORECASE)
+    if cpus and re.search(rf"\b{cpus.group(1)}\s*[- ]?(?:cpus?|cores?|logical|processors?)", lower):
+        return True
+    body = re.sub(r"^\s*System:\s*", "", line)
+    parts = [p.strip() for p in body.split(",")]
+    if parts and parts[0] and parts[0].lower() in lower:  # the OS name, e.g. "windows 11"
+        return True
+    host = re.search(r"host\s+(\S+)", line, re.IGNORECASE)
+    return bool(host and host.group(1).lower() in lower)
 
 
 def request_matches_decline_class(message: str) -> bool:
@@ -227,6 +286,7 @@ def answer_grounded_in_injected_context(
     request: str,
     answer: str,
     now: datetime.datetime | None = None,
+    system_summary: str | None = None,
 ) -> bool:
     """GROUNDED class verdict: the request asks an injected-context question
     AND the answer actually states the grounded fact.
@@ -237,11 +297,17 @@ def answer_grounded_in_injected_context(
     matches the shape but an answer that does NOT contain the fact stays
     outside the class — the gate then behaves exactly as before.
     """
-    if not request_matches_grounded_class(request):
-        return False
-    return _answer_states_current_date(answer, now) or _answer_states_current_time(
-        answer, now
-    )
+    if request_matches_grounded_class(request):
+        return _answer_states_current_date(answer, now) or _answer_states_current_time(
+            answer, now
+        )
+    if request_matches_system_fact_class(request):
+        if system_summary is None:
+            from core.system_snapshot import get_cached_summary
+
+            system_summary = get_cached_summary()
+        return _answer_states_system_fact(answer, system_summary or "")
+    return False
 
 
 def answer_is_policy_decline(request: str, answer: str) -> bool:

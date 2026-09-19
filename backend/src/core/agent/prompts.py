@@ -45,8 +45,9 @@ def _system_env_line() -> str:
         return ""
     return (
         f"{summary}\n(You already know the machine above — answer OS/CPU/RAM/disk/"
-        "hostname questions directly from it; only call sysinfo for details not "
-        "listed, e.g. processes, network, or a live re-read.)"
+        "hostname questions directly from it — free disk/RAM are as of startup, so "
+        "say so; only call sysinfo for details not listed, e.g. processes, network, "
+        "or a live re-read.)"
     )
 
 

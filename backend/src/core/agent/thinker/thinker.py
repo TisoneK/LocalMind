@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import AsyncIterator, Optional
 
 from core.models import StreamChunk
@@ -77,6 +78,46 @@ def _unterminated_json_start(text: str) -> int:
     return -1
 
 
+# The Thinker's prompt makes it answer in a JSON object, so its reasoning often turns to
+# that contract ("Now I need to format my response as JSON with: facts, ambiguities,
+# next_step, confidence") and then drafts each field in prose. That is scaffolding about the
+# output format, not thought about the user's request — it must never reach the screen.
+_SCHEMA_KEYS = ("facts", "ambiguities", "next_step", "confidence")
+_SCHEMA_HEADER = re.compile(r"^\s*(?:[-*]\s*)?(?:facts|ambiguities|next[_ ]step|confidence)\s*:", re.IGNORECASE)
+
+
+def _is_contract_meta(paragraph: str) -> bool:
+    """True when a paragraph is about the JSON output contract rather than the task."""
+    lower = paragraph.lower()
+    if _SCHEMA_HEADER.match(lower):
+        return True
+    keys = sum(1 for k in _SCHEMA_KEYS if re.search(rf"\b{k}\b", lower))
+    return keys >= 3 or ("json" in lower and keys >= 1)
+
+
+class _ProseGate:
+    """Pass the Thinker's prose through one whole paragraph at a time, dropping any paragraph
+    that is about the output contract. Paragraph granularity keeps the reasoning streaming
+    while making a phrase-level judgement possible (a token stream cannot be judged token by
+    token)."""
+
+    def __init__(self) -> None:
+        self._buf = ""
+
+    def _clean(self, paragraphs: list[str]) -> list[str]:
+        return [p + "\n\n" for p in paragraphs if p.strip() and not _is_contract_meta(p)]
+
+    def feed(self, text: str) -> list[str]:
+        self._buf += text
+        parts = re.split(r"\n\s*\n", self._buf)
+        self._buf = parts.pop()  # the last piece may still be growing
+        return self._clean(parts)
+
+    def flush(self) -> list[str]:
+        rest, self._buf = self._buf, ""
+        return self._clean([rest]) if rest.strip() else []
+
+
 class Thinker:
     """Reason on gathered evidence and produce a structured analysis.
 
@@ -111,6 +152,7 @@ class Thinker:
 
         joined = ""
         surfaced = 0
+        gate = _ProseGate()
         try:
             stream = adapter.chat(messages, temperature=temperature, intent="analyze")
             async for chunk in _with_timeout(stream, self._timeout):
@@ -124,7 +166,8 @@ class Thinker:
                 marker = _earliest_json_marker(joined)
                 limit = marker if marker >= 0 else len(joined)
                 if limit > surfaced:
-                    yield StreamChunk(text="", thinking=joined[surfaced:limit], done=False)
+                    for para in gate.feed(joined[surfaced:limit]):
+                        yield StreamChunk(text="", thinking=para, done=False)
                     surfaced = limit
         except asyncio.TimeoutError:
             logger.warning("[thinker] consult timed out after %.0fs — proceeding without analysis", self._timeout)
@@ -140,8 +183,11 @@ class Thinker:
         if limit < 0:
             limit = len(joined)
         if limit > surfaced:
-            yield StreamChunk(text="", thinking=joined[surfaced:limit], done=False)
+            for para in gate.feed(joined[surfaced:limit]):
+                yield StreamChunk(text="", thinking=para, done=False)
             surfaced = limit
+        for para in gate.flush():
+            yield StreamChunk(text="", thinking=para, done=False)
 
         analysis = parse_thinker_analysis(joined)
         self.last_analysis = analysis

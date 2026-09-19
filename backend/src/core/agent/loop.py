@@ -100,6 +100,7 @@ from core.agent.init_stream import (
 from core.agent.initialization import (
     InitializationDecision,
     build_initialization_prompt,
+    ensure_upfront_plan,
     parse_initialization,
 )
 from core.agent.models import AgentStep, AgentTrace, strip_worker_reports, strip_worker_reports_from_history
@@ -2739,7 +2740,7 @@ class AgentLoop:
             # live Todos panel so the user sees the plan the agent will follow;
             # `_advance_plan_on_narration` (below) checks each step off as the
             # agent works, and the agent may reorder/skip as evidence changes.
-            _plan_steps = list(initialization.plan_steps or [])
+            _plan_steps = ensure_upfront_plan(list(initialization.plan_steps or []), intent)
             if _plan_steps and _obs:
                 _obs.emit("todo_cleared")
                 for i, step in enumerate(_plan_steps):

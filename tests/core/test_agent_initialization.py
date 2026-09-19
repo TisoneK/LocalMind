@@ -478,3 +478,50 @@ async def test_execute_mode_does_boot_the_workspace_or_loop():
     workspace_events = _workspace_or_loop_event_types(obs)
     assert workspace_events, "execute mode should boot the workspace/loop"
     assert "tool_call" in workspace_events
+
+
+# ── the plan is whole before the first action runs ─────────────────────────
+
+
+def test_prompt_asks_for_every_action_up_front_without_naming_tools():
+    prompt = " ".join(build_initialization_prompt("What is the weather?", env_context="").split())
+    assert "EVERY action" in prompt
+    assert "Read the best source" in prompt
+    assert "web_search" not in prompt and "shell" not in prompt
+
+
+class TestEnsureUpfrontPlan:
+    def test_a_real_plan_is_trusted(self):
+        from core.agent.initialization import ensure_upfront_plan
+        from core.models import Intent
+
+        assert ensure_upfront_plan(["Find it", "Read it"], Intent.WEB_SEARCH) == ["Find it", "Read it"]
+
+    def test_an_empty_plan_for_a_web_lookup_gets_the_lookup_steps(self):
+        from core.agent.initialization import ensure_upfront_plan
+        from core.models import Intent
+
+        assert ensure_upfront_plan([], Intent.WEB_SEARCH) == [
+            "Search the web", "Read the best source", "Answer from what I found",
+        ]
+
+    def test_a_lone_step_is_kept_as_the_first_of_the_lookup(self):
+        from core.agent.initialization import ensure_upfront_plan
+        from core.models import Intent
+
+        assert ensure_upfront_plan(["Fetch weather"], Intent.WEB_FETCH) == [
+            "Fetch weather", "Read the best source", "Answer from what I found",
+        ]
+
+    def test_other_work_is_left_alone(self):
+        from core.agent.initialization import ensure_upfront_plan
+        from core.models import Intent
+
+        assert ensure_upfront_plan([], Intent.FILE_WRITE) == []
+        assert ensure_upfront_plan(["Read the file"], Intent.FILE_TASK) == ["Read the file"]
+
+    def test_blank_steps_are_dropped_and_the_plan_is_capped(self):
+        from core.agent.initialization import ensure_upfront_plan
+
+        many = [f"step {i}" for i in range(9)]
+        assert ensure_upfront_plan(["", "  ", *many], "chat") == many[:6]

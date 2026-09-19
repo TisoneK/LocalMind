@@ -118,10 +118,10 @@ Modes (choose the tier):
 - clarify: a material detail is missing that NO search or inspection could
   resolve; put one question in clarifying_question.
 - execute: anything needing current info, files, code, browser, memory, or
-  multi-step work. For a multi-step task, list the concrete ordered steps you
-  will take in `plan` (2-6 short imperative steps, each a real action toward the
-  goal — e.g. "Search the web for X", "Read the top result", "Summarize the
-  answer"). Use a single-item `plan` (or omit it) for a genuinely one-step task.
+  multi-step work. List EVERY action in `plan` up front, in order (2-6 short
+  imperative steps), ending with the one that answers the user. Current info
+  takes three: "Search the web for X", "Read the best source", "Answer from what
+  I found". One step only for a single action on one named thing.
 
 {env_context}{history_block}
 
@@ -162,8 +162,8 @@ Rules:
   Only choose execute if the conversation history makes the referent obvious.
 - For an execute task, `plan` is the ordered checklist the agent will follow to
   reach the objective — the user sees it as a live task list. Keep steps
-  concrete and few; the agent may reorder, add, or skip steps as real evidence
-  changes. Leave `plan` empty for direct/clarify.
+  concrete and complete; the agent may reorder, add, or skip steps as real
+  evidence changes. Leave `plan` empty for direct/clarify.
 - acknowledgement <=180 chars, response <=1200 chars, objective <=200 chars.
 - title names what this turn DOES as a 2-4 word Title-Case verb phrase, always
   provided — e.g. "Greet User", "Fetch Weather", "Generate Spreadsheet".
@@ -265,6 +265,30 @@ def _salvage_response(raw: str) -> str:
     if not raw.lstrip().startswith("{"):
         return raw.strip()[:1200]
     return ""
+
+
+# The steps of a lookup, in order. Used only when the model returned no real plan for a
+# web-lookup task, so the checklist is whole before the first action runs.
+_LOOKUP_PLAN = ("Search the web", "Read the best source", "Answer from what I found")
+_LOOKUP_INTENTS = frozenset({"web_search", "web_fetch"})
+
+
+def ensure_upfront_plan(steps: list[str], intent) -> list[str]:
+    """Make sure an execute turn starts with its whole plan, not one step that grows.
+
+    A model may skip `plan` or give a lone step ("Fetch weather") for a task that is really
+    search -> read -> answer; the panel then fills in one task per tool as each starts. A
+    plan of two or more steps is trusted as given. For a web lookup with fewer, supply the
+    standard lookup steps (keeping the model's own first step when it gave one). Any other
+    turn is left alone: guessing steps for work whose shape is unknown would be noise.
+    """
+    clean = [s.strip() for s in steps if isinstance(s, str) and s.strip()]
+    if len(clean) >= 2:
+        return clean[:6]
+    if str(getattr(intent, "value", intent)) in _LOOKUP_INTENTS:
+        first = clean[0] if clean else _LOOKUP_PLAN[0]
+        return [first, _LOOKUP_PLAN[1], _LOOKUP_PLAN[2]]
+    return clean
 
 
 def parse_initialization(text: str) -> InitializationDecision:

@@ -12,6 +12,7 @@ from __future__ import annotations
 import datetime
 
 import pytest
+
 from core.agent.injected_context_gate import (
     answer_grounded_in_injected_context as _answer_grounded,
 )
@@ -259,3 +260,70 @@ class TestAggregator:
             )
             is False
         )
+
+
+# ── GROUNDED (machine facts): answered from the injected `System:` line ─────
+
+SYSTEM_LINE = (
+    "System: Windows 11, AMD64, 8 CPUs, 254.8 GB RAM (9.1 GB free), "
+    "254.8 GB disk (16.1 GB free), host tison-pc"
+)
+
+
+class TestSystemFactClass:
+    def test_the_live_trace_request_matches(self):
+        from core.agent.injected_context_gate import request_matches_system_fact_class
+
+        for q in (
+            "whts the size of my disk that is empty",
+            "how much free disk space do I have?",
+            "how much RAM do I have",
+            "how many cores does this machine have",
+            "what OS am I on",
+            "what's my hostname",
+        ):
+            assert request_matches_system_fact_class(q), q
+
+    def test_tasks_and_unrelated_questions_do_not_match(self):
+        from core.agent.injected_context_gate import request_matches_system_fact_class
+
+        for q in (
+            "delete the files on my disk",
+            "search my disk for invoices",
+            "create a file with my disk size in it",
+            "what is the weather",
+            "hello",
+            "",
+        ):
+            assert not request_matches_system_fact_class(q), q
+
+    def test_an_answer_stating_the_injected_figure_is_grounded(self):
+        assert _answer_grounded(
+            "whts the size of my disk that is empty",
+            "Based on the system information, your disk has 16.1 GB of free space available.",
+            system_summary=SYSTEM_LINE,
+        )
+
+    def test_a_figure_the_line_does_not_carry_is_not_grounded(self):
+        assert not _answer_grounded(
+            "whts the size of my disk that is empty",
+            "You have about 42.0 GB free.",
+            system_summary=SYSTEM_LINE,
+        )
+
+    def test_an_answer_naming_the_os_or_cpu_count_is_grounded(self):
+        assert _answer_grounded("what OS am I on", "You are on Windows 11.", system_summary=SYSTEM_LINE)
+        assert _answer_grounded("how many cores do I have", "It has 8 CPUs.", system_summary=SYSTEM_LINE)
+        assert not _answer_grounded("how many cores do I have", "It has 64 cores.", system_summary=SYSTEM_LINE)
+
+    def test_no_injected_line_means_no_grounding(self):
+        assert not _answer_grounded("how much free disk space do I have?", "16.1 GB", system_summary="")
+
+    def test_it_is_a_valid_zero_tool_turn_when_the_cached_line_carries_the_fact(self, monkeypatch):
+        import core.system_snapshot as snap
+
+        monkeypatch.setattr(snap, "_CACHED_SUMMARY", SYSTEM_LINE)
+        assert zero_tool_turn_is_valid("how much free disk space do I have?", "You have 16.1 GB free.")
+
+    def test_the_time_class_still_works_unchanged(self):
+        assert _answer_grounded("what day is it", _grounded_date_answer(WEDNESDAY), now=WEDNESDAY)
