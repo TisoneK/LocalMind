@@ -197,3 +197,9 @@ stays here as a live trap.
 ## 2026-09-18 — Zola / claude-sonnet-5 (Session 16)
 
 - **Status:** none this session — no protocol/`.context_ledger` friction. One-line clean entry per the 2026-09-14 bookkeeping-watermark reconciliation.
+
+---
+
+## 2026-09-18 — Juma / claude-sonnet-5 (Session 17)
+
+- **Status:** none this session — no protocol/`.context_ledger` friction (checked in before the deep read, moved to an isolated worktree the moment a peer's roster row appeared, additive-only roster edits both check-in and clock-out). The session's own friction was environment/tooling, not protocol — logged in `inefficiencies/log.md`.
