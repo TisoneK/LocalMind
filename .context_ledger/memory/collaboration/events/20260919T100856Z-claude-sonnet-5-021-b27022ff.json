@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T100856Z-claude-sonnet-5-021-b27022ff",
+  "type": "claim",
+  "session": "S021",
+  "agent": "claude-sonnet-5-021",
+  "created": "2026-09-19T10:08:56Z",
+  "issue": "dead-code-cleanup",
+  "body": "Zola (S021): scan complete. Removing 6 verified-orphan Pydantic response/request models (zero references anywhere: FileListRequest, MetricsResponse, ModelInfo, SessionListItem, ChatRequest, ChatResponse) and 3 dead function params never read in their bodies and never passed by any caller (decision_mode in init_stream.render_understanding, current_id in flywheel._detect_rephrase, freshness_required in web_acquisition.web_research/tools.web_research). No overlap with Tariq's (S020) or Naledi's (S022) claimed paths. NOT touching filters.py's is_code_output (looks like a real bug -- flag) or terminal.py's TerminalSessionBridge / frontend ObjectivesPanel.tsx (both intentionally-kept scaffolding per code comments) -- reporting those instead.",
+  "paths": ["backend/src/api/routes/filesystem.py", "backend/src/api/routes/metrics.py", "backend/src/api/routes/models.py", "backend/src/api/routes/sessions.py", "backend/src/core/models.py", "backend/src/core/agent/init_stream.py", "backend/src/core/flywheel.py", "backend/src/core/web_acquisition.py", "backend/src/tools/web_research.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
