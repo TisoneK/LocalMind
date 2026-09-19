@@ -322,16 +322,55 @@ def _per_call_timeout_for(active_adapter) -> float:
     return PER_CALL_TIMEOUT_SECS
 
 
-def _user_message_text(messages: list[dict]) -> str:
-    """Return the latest user-role message text (for the TaskState objective).
+# Sentences the loop writes into user-role messages itself (nudges, recovery,
+# replan prompts). Bracket-tagged blocks ("\n[ACTION NARRATION] ...") are
+# recognised by shape instead — see `_is_harness_injected`.
+_HARNESS_USER_PREFIXES = (
+    "SYNTHESIS REMINDER",
+    "You reasoned about this task but returned no answer",
+    "You described wanting to use a tool but did not call it",
+    "This request requires a tool call, but you did not call one",
+    "You returned an empty response. This request requires",
+    "You tried to call tool",
+    "Your tool call for",
+    "CRITICAL: You just output time-sensitive data",
+    "[PROGRESS CHECK]",
+    "[DIVERGENT STOP]",
+    "[Tool result]:",
+)
 
-    Skips injected acceptance-gate blocks so repeated replans keep the
-    ORIGINAL task framing instead of degrading to a previous gate message.
+
+def _is_harness_injected(content: str) -> bool:
+    """True for a user-role message the LOOP wrote (a nudge, a recovery, a gate
+    or replan block), not something the user typed.
+
+    Every bracket-tagged harness block opens with a newline then ``[TAG]``; a
+    real user message that happens to start with ``[URGENT]`` has no leading
+    newline, so it is never mistaken for one."""
+    if content.startswith("\n["):
+        return True
+    text = content.lstrip()
+    return text.startswith(_HARNESS_USER_PREFIXES)
+
+
+def _user_message_text(messages: list[dict]) -> str:
+    """Return the latest message the USER wrote (for the TaskState objective and
+    every consumer that needs "the original request").
+
+    Skips everything the loop itself injected as a user-role message — the
+    acceptance-gate/Thinker blocks and also the recovery nudges — so repeated
+    recoveries keep the ORIGINAL task framing instead of degrading to the last
+    nudge. A live trace showed the Thinker being handed "[ACTION NARRATION] You
+    described what you would do…" as the user's request, and then a nudge
+    quoting a nudge, so its reasoning and next step were about the recovery
+    text and not the task.
     """
     for msg in reversed(messages):
         if isinstance(msg, dict) and msg.get("role") == "user":
             content = str(msg.get("content", ""))
             if "[ACCEPTANCE GATE]" in content or "[THINKER ANALYSIS]" in content:
+                continue
+            if _is_harness_injected(content):
                 continue
             return content[:200]
     return ""
