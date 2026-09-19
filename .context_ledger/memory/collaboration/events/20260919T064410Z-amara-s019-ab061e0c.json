@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T064410Z-amara-s019-ab061e0c",
+  "type": "release",
+  "session": "S019",
+  "agent": "amara-s019",
+  "created": "2026-09-19T06:44:10Z",
+  "issue": "b-2026-08-15-12-tier-classification",
+  "body": "B-2026-08-15-12 closed for real this time. Root cause found via plan-mode investigation: not the (already-shipped, dead-in-production) initialization.py classify system, but the pre-tool Thinker consult (loop.py) firing unconditionally on every parent turn because agent_runtime.py hardcodes intent=Intent.ANALYZE, defeating its own intent-aware skip gate. Per owner directive ('inputs shouldn't be hardcoded') deferred the consult to launch (background, reusing the existing _BackgroundConsult/drain machinery) at first real tool-call dispatch instead of before the model's first choice -- commit f7ac0588 on collab/S019/amara-s019, merged to main c7860e17. Rewrote tests/core/test_agent_loop_pre_tool_thinker.py's contract + fixed a genuine regression in tests/core/test_tool_force_recovery.py (async-ified a test fake_dispatch that never yielded control for the background task). Full suite: 3263 passed, 2 pre-existing failures unrelated. Live-verified on gemini/gemini-2.5-flash (zai 401, bankofai balance=0, both confirmed unusable) -- before/after on 'Hi, how are you?' shows zero Thinker events post-fix (was present before); a genuine tool-requiring prompt confirms the consult still fires, now at tool-dispatch time not before. Traces + backlog row detail carry full evidence.",
+  "paths": [],
+  "refs": ["f7ac0588"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

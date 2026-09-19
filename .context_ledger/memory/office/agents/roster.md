@@ -36,7 +36,6 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Juma | S017 | claude-sonnet-5 | B-2026-09-15-14 self-reflection loop | Working | checked in, resolving the P-2026-09-16-36 gate (visible-log vs silent) with owner before implementing |
 | Kamau | S018 | claude-sonnet-5 | Deduction engine (B-2026-09-15-13): fuse geo/locale/timezone/ISP signals into one conclusion | Working | checked in (S018 after codename collision with S017); reading protocol + research doc §2 Arc A |
 
 **Clock out when your session ends**: remove your row in the closing

@@ -87,6 +87,11 @@ logs/
 
 # Isolated live-test scratch (contains copied settings with API keys — never commit)
 /scratch/
+# live-testing.md's harness is run from backend/ (`cd backend && ...`), so its
+# scratch dirs land at backend/scratch/ — the root-anchored /scratch/ above
+# never matched them (found live, S019: backend/scratch/ sat untracked and
+# unignored with a copied settings.json carrying real API keys).
+backend/scratch/
 
 # Freebuff desktop agent local state
 .freebuff/

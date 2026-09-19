@@ -323,3 +323,158 @@ def test_initialization_prompt_is_classify_only():
     assert 'mode": "direct|clarify|execute"' in prompt
     assert "intent classifier determined" not in prompt.lower()
     assert "Current date: 2026-08-14" in prompt
+
+
+# ── B-2026-08-15-12 (c): only tier 3 (execute) may boot the workspace/loop ──
+#
+# direct and clarify (tiers 1-2) return immediately after the classify call
+# (see loop.py's is_direct/is_clarification branches) — this pins that
+# boundary as an obs-event regression so a future change can't silently let
+# tiers 1-2 start paying for tool-loop work. `_LIFECYCLE_EVENT_TYPES` is the
+# narration every turn emits regardless of tier; anything else means the
+# tool loop actually ran.
+_LIFECYCLE_EVENT_TYPES = frozenset({
+    "agent_loop_start",
+    "agent_initialization_start",
+    "agent_initialization_ack",
+    "agent_initialization_understanding",
+    "agent_initialization_done",
+    "stage_timing",
+    "agent_loop_done",
+})
+
+
+def _workspace_or_loop_event_types(obs: ObsCollector) -> list[str]:
+    return [e.type for e in obs.history() if e.type not in _LIFECYCLE_EVENT_TYPES]
+
+
+@pytest.mark.asyncio
+async def test_direct_mode_never_boots_the_workspace_or_loop():
+    """Tier 1 (direct) must emit zero workspace/loop events — only the
+    classify lifecycle narration."""
+
+    class Adapter:
+        async def chat(self, messages, temperature=0.1, intent="chat"):
+            yield StreamChunk(text='{"mode":"direct","response":"Hi there!"}')
+
+        async def chat_with_tools(self, *args, **kwargs):
+            raise AssertionError("direct mode must never reach the tool loop")
+
+    adapter = Adapter()
+    config = ParentAgent(adapter=None).config()
+    obs = ObsCollector()
+    chunks = [
+        chunk
+        async for chunk in AgentLoop(adapter=adapter).run(
+            messages=[{"role": "user", "content": "hi"}],
+            intent=Intent.ANALYZE,
+            initial_tool_result=None,
+            available_tools=[],
+            adapter=adapter,
+            agent_config=config,
+            allowed_tool_names=frozenset(),
+            obs=obs,
+        )
+    ]
+
+    assert "Hi there!" in "".join(chunk.text for chunk in chunks)
+    assert _workspace_or_loop_event_types(obs) == []
+
+
+@pytest.mark.asyncio
+async def test_clarify_mode_never_boots_the_workspace_or_loop():
+    """Tier 2 (clarify) must emit zero workspace/loop events — only the
+    classify lifecycle narration."""
+
+    class Adapter:
+        async def chat(self, messages, temperature=0.1, intent="chat"):
+            yield StreamChunk(
+                text=(
+                    '{"mode":"clarify","clarifying_question":'
+                    '"Which file do you mean?"}'
+                )
+            )
+
+        async def chat_with_tools(self, *args, **kwargs):
+            raise AssertionError("clarify mode must never reach the tool loop")
+
+    adapter = Adapter()
+    config = ParentAgent(adapter=None).config()
+    obs = ObsCollector()
+    chunks = [
+        chunk
+        async for chunk in AgentLoop(adapter=adapter).run(
+            # A non-bare-verb message, so this exercises the classify LLM
+            # call (via the mock adapter above) rather than the separate
+            # deterministic pre-init pronoun/bare-verb clarify shortcut
+            # (classify_pre_init) that a message like "fix it" would hit.
+            messages=[{"role": "user", "content": "Should I use approach A or approach B here?"}],
+            intent=Intent.ANALYZE,
+            initial_tool_result=None,
+            available_tools=[],
+            adapter=adapter,
+            agent_config=config,
+            allowed_tool_names=frozenset(),
+            obs=obs,
+        )
+    ]
+
+    assert "Which file do you mean?" in "".join(chunk.text for chunk in chunks)
+    assert _workspace_or_loop_event_types(obs) == []
+
+
+@pytest.mark.asyncio
+async def test_execute_mode_does_boot_the_workspace_or_loop():
+    """Positive control for the two tests above: tier 3 (execute) is the
+    only tier allowed to emit workspace/loop events — proves the zero-event
+    assertion above actually distinguishes tiers rather than being
+    vacuously true (e.g. because ObsCollector never records anything)."""
+
+    class Adapter:
+        def __init__(self):
+            self.execution_calls = 0
+
+        async def chat(self, messages, temperature=0.1, intent="chat"):
+            if temperature == 0.1:
+                yield StreamChunk(
+                    text='{"mode":"execute","objective":"Run the requested command"}'
+                )
+                return
+            yield StreamChunk(text="The command completed.")
+            yield StreamChunk(text="", done=True)
+
+        async def chat_with_tools(self, *args, **kwargs):
+            self.execution_calls += 1
+            if self.execution_calls == 1:
+                return ToolCallResult(tool_name="shell", tool_args={"command": "pwd"})
+
+            async def _answer():
+                yield StreamChunk(text="The command completed.")
+                yield StreamChunk(text="", done=True)
+
+            return _answer()
+
+    adapter = Adapter()
+    config = ParentAgent(adapter=None).config()
+    obs = ObsCollector()
+    with patch(
+        "core.agent.loop.dispatch_with_retry",
+        return_value=(ToolResult(content="/workspace", source="shell"), False, 0),
+    ):
+        [
+            chunk
+            async for chunk in AgentLoop(adapter=adapter).run(
+                messages=[{"role": "user", "content": "run pwd"}],
+                intent=Intent.ANALYZE,
+                initial_tool_result=None,
+                available_tools=[{"intent": "shell", "description": "Run a command"}],
+                adapter=adapter,
+                agent_config=config,
+                allowed_tool_names=frozenset({"shell"}),
+                obs=obs,
+            )
+        ]
+
+    workspace_events = _workspace_or_loop_event_types(obs)
+    assert workspace_events, "execute mode should boot the workspace/loop"
+    assert "tool_call" in workspace_events

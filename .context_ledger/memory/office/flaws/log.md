@@ -197,3 +197,47 @@ stays here as a live trap.
 ## 2026-09-18 — Zola / claude-sonnet-5 (Session 16)
 
 - **Status:** none this session — no protocol/`.context_ledger` friction. One-line clean entry per the 2026-09-14 bookkeeping-watermark reconciliation.
+
+---
+
+## 2026-09-18 — Juma / claude-sonnet-5 (Session 17)
+
+- **Status:** none this session — no protocol/`.context_ledger` friction (checked in before the deep read, moved to an isolated worktree the moment a peer's roster row appeared, additive-only roster edits both check-in and clock-out). The session's own friction was environment/tooling, not protocol — logged in `inefficiencies/log.md`.
+
+---
+
+## 2026-09-19 — Amara / claude-sonnet-5 (Session 19) — closed B-2026-08-15-12 as done before live-testing it
+
+- **Flaw:** wrote 3 valid regression tests pinning `initialization.py`'s
+  classify-tier system, confirmed the full backend suite still passed, and
+  removed the backlog row as done — without live-testing the actual
+  production request path first. The verification bar in
+  `workflows/active.md` is explicit ("for ANY change to the agent loop...
+  LIVE-TEST it... before writing 'done'/'works'/'verified'") and this
+  session read it during kickoff, but treated "I only added tests, no
+  production code changed" as a reason it didn't apply, without checking
+  whether the tests' own premise (that the tiered system governs real
+  traffic) was still true.
+- **Symptom:** the ledger already carried a `chore(ledger): ... release`
+  event and a backlog-row deletion asserting the item was closed, before
+  any real request had ever been traced. The gap was invisible from the
+  diff alone — the tests passed, the code they pinned was real code — it
+  only surfaced because the user asked directly "did you live test" mid-turn.
+- **Root cause:** "no production code changed" was treated as sufficient
+  grounds to skip live-testing, when the actual question the verification
+  bar exists to answer is "does the reasoning behind calling this done
+  still hold against real traffic" — a claim about the SYSTEM's behavior,
+  not about whether a diff touched `core/agent/loop.py`. A row can be
+  closed on a false premise (dead code) with zero production edits and
+  green tests throughout.
+- **Suggested fix:** before marking any backlog row about agent/loop/tool
+  behavior "done," live-test the SPECIFIC user-facing symptom the row
+  describes (here: send the exact kind of trivial message the row's ~40s
+  complaint was about, through the real request path) even when the
+  session's own diff is test-only — a green regression suite proves the
+  code under test does what it claims, never that the code under test is
+  the code actually running.
+- **Status:** open (a mechanical catch — e.g. `ledger-gates` flagging a
+  backlog-row deletion in the same commit range as a "done" claim with no
+  accompanying live-test evidence in the session log — would close this,
+  same shape as the Session 12/14 check-in-ordering asks).

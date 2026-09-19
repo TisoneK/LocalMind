@@ -14,4 +14,4 @@ backlog before starting.
 
 - **Session:** 2026-09-18 — Juma (S017) / claude-sonnet-5
 - **Task:** B-2026-09-15-14 — self-reflection loop (post-turn "what did I miss" assessment stored as atomic lessons)
-- **Status:** blocked (owner design decision owed per P-2026-09-16-36 §(2): visible log/UI of proactive memory writes vs silent-by-design — asking now before implementing)
+- **Status:** done — merged to main (`2cbc447d`), live-verified against a real model (gemini)

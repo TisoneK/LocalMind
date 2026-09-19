@@ -150,6 +150,16 @@ REFLECT_INTENTS: frozenset = frozenset(
         Intent.CODE_EXEC,
         Intent.WEB_SEARCH,
         Intent.WEB_FETCH,
+        # The unified Parent agent loop (agent_runtime.py::_process_unlocked,
+        # ADR-53) no longer classifies a single per-turn intent from this set
+        # — it calls _reflect_on_answer with Intent.ANALYZE as the generic
+        # "ran the full agent loop" marker (same placeholder
+        # _failure_source_intent falls back to). Without it here, every
+        # agent-loop turn — SHELL/FILE_TASK/CODE_EXEC/etc. included, since
+        # they now all funnel through one loop — silently skipped
+        # self-critique, and B-2026-09-15-14's reflection lesson never had a
+        # turn to hang off of.
+        Intent.ANALYZE,
     }
 )
 

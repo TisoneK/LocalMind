@@ -240,3 +240,49 @@ never makes an entry eligible.
 ## 2026-09-18 — Zola / claude-sonnet-5 (S016)
 
 - **Problem:** none this session — a clean sync-only session (pull + verify/status, no core update since the available bump is MAJOR).
+
+---
+## 2026-09-18 — Juma / claude-sonnet-5 (S017) — a self-inflicted key exposure, plus two environment-provisioning traps on this Mac
+
+- **Problem:** (1) A diagnostic one-liner meant to check whether `scratch/tracehome/settings.json` had a usable adapter configured piped the file through a Python filter that excluded top-level `apiKey`/`api_key` keys — but the real secrets live one level down, under a nested `api_keys` dict, so the filter missed them entirely and the raw provider keys (gemini/cerebras/zen/chutes/bankofai) printed straight into this session's tool output. (2) `frontend/node_modules` on this checkout was essentially empty (no `.bin`, no `typescript`) — this repo is an npm WORKSPACE rooted one level up (`LocalMind/package.json` with `workspaces: [frontend, electron]`), so `npm install` hoists everything to the REPO ROOT's `node_modules`, not `frontend/node_modules`; a naive `cd frontend && npx tsc` or a `frontend/node_modules` symlink finds nothing. (3) The frontend live-test harness scripts (`scripts/live_test_cybercafe.py`) resolve `VENV_PY`/deps relative to the backend/frontend dirs, which don't exist in a fresh `git worktree` (no `.venv`, no `node_modules` — worktrees only get tracked files).
+- **Cost:** (1) unrecoverable exposure into this session's own transcript (local file, local session, not sent externally — flagged to the owner immediately, no repeat); ~2 minutes lost narrowing down the real key location for (2); ~5 minutes on (3) before finding the S010-precedent fix.
+- **Cause:** (1) writing an ad hoc exclusion filter instead of just not printing settings.json at all — the standing rule ("never cat it, never print keys") has no mechanical enforcement, only discipline. (2)/(3) worktrees are correctly isolated from install artifacts by design, but the collaboration override's "own worktree" mandate doesn't mention that a fresh worktree needs its own `npm install`/`.venv` (or a symlink) before any dependency-requiring gate can run in it.
+- **Workaround / fix:** (1) never build a bespoke secret filter again — if you need to know whether a settings file has A key, check for the KEY NAME's presence (`"bankofai" in d.get("api_keys", {})`) or just note the `adapter`/`model` fields, never load-and-print-with-exclusions. (2) `ln -s <repo-root>/node_modules <worktree-root>/node_modules` (the workspace hoists there, not into `frontend/`) then run `../node_modules/.bin/tsc`/`eslint`/`vitest` from `frontend/`. (3) `ln -s <main-checkout>/backend/.venv <worktree>/backend/.venv` — same "venv junction" pattern S010 logged, confirmed still the right move; remove both symlinks before handing the worktree off (they're gitignored/untracked either way, but tidy).
+- **Prevent next time:** treat "does this settings file have a usable key" as a presence check, never a print-with-redaction; and add the `node_modules`/`.venv` symlink step to the standard "first thing you do in a fresh product worktree" checklist rather than rediscovering the workspace-hoisting shape each time.
+- **Upstream:** candidate — the collaboration README's "Required workspace topology" section should state that a fresh worktree needs its own dependency provisioning (symlink or install) before any gate that isn't pure ledger-surface can run in it; this is the third session (Neema/S6, Jabari/S010, now S017) to hit some version of "the worktree has no deps."
+
+---
+## 2026-09-19 — Amara / claude-sonnet-5 (S019) — background-task tests need a genuine event-loop yield, not just an `await`
+
+- **Problem:** rewriting tests to exercise `_BackgroundConsult` (`loop.py`) —
+  an `asyncio.create_task` launched, then drained at the next iteration
+  boundary — several tests asserted `agent_thinker_done` never fired even
+  though the (fast, synchronous-shaped) fake Thinker had nothing real to
+  wait on. Root cause: `await some_coroutine()` only yields control back to
+  the event loop's scheduler if something INSIDE that coroutine genuinely
+  suspends (a real `await asyncio.sleep(...)`, real I/O, etc.) — a mock
+  `async def` that returns a value with no internal await runs to
+  completion synchronously and never lets a `create_task`-launched
+  background task get its first tick. With only one drain opportunity in a
+  short 2-call test (launch during call 1's tool dispatch, drain at call
+  2's top), the background task simply never got scheduled before the only
+  drain point checked it.
+- **Cost:** ~20 minutes across two test files re-diagnosing what looked
+  like a real launch-site bug (was in `loop.py`) before recognizing it was
+  a test-harness timing gap; also broke one PRE-EXISTING, unrelated test
+  (`test_tool_force_recovery.py::TestThinkerStreamSilent`) whose
+  synchronous `_fake_dispatch` had the same gap, invisible before because
+  the (now-deleted) pre-tool consult used to run fully blocking/inline.
+- **Fix applied:** any test mock standing in for tool dispatch
+  (`dispatch_with_retry` / `chat_with_tools` side effects) that needs a
+  background consult to have completed by the time the test asserts on it
+  must include a genuine `await asyncio.sleep(0)` somewhere in its own
+  body — not just be declared `async def`. A plain-value-returning `async
+  def` mock is NOT equivalent to a real I/O-bound dispatch for this
+  purpose.
+- **Prevent next time:** when writing/extending a test around
+  `_BackgroundConsult`, `_consult_inflight`, or any other
+  create-task-then-drain-later pattern in `loop.py`, default every tool
+  dispatch mock to `await asyncio.sleep(0)` immediately, the way the
+  file's own pre-existing multi-tool tests already did — it costs nothing
+  and matches what real I/O would provide anyway.

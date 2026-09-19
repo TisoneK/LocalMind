@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T060547Z-amara-s019-f1645b55",
+  "type": "note",
+  "session": "S019",
+  "agent": "amara-s019",
+  "created": "2026-09-19T06:05:47Z",
+  "issue": "b-2026-08-15-12-tier-classification",
+  "body": "IMPORTANT correction to my own earlier claim: I had assumed B-2026-08-15-12 was done (added 3 regression tests to tests/core/test_agent_initialization.py, commit ea2f49bb on main -- those tests are correct and stay). Live-testing (real zai + bankofai, both hit real provider auth/credit errors but the routing decision happens before the model call, so the obs-event trace is still conclusive) then found initialization.py's direct/clarify/execute classify tiers are UNREACHABLE in production: agent_runtime.py's only call site to parent.run() (line ~1905) unconditionally passes skip_planning=True, which forces loop.py's _parent_initialization to False (loop.py:2327). loop.py even has its own comment confirming this at line 2400: 'skip_planning=True (the production code path)'. Production trivial/complex routing is actually done by TWO OTHER mechanisms: (1) agent_runtime.py's pattern-based trivial_input fast-path (is_trivial_input/is_conversational_question, before parent.run is ever called), and (2) loop.py's pre_init_classifier 4-guard deterministic overrides (hallucination/analyze-only/pressure/impossible-constraints). Live trace on 'Hi, how are you?' fell through BOTH of those and hit the full native warm-kernel loop (agent_thinker_start / task_type_settled events fired) -- exactly the workspace-boot-on-a-trivial-turn problem the backlog row describes, just via a different, newer architecture than the one the row's Files pointer (initialization.py/loop.py's classify system) names. NOT closing the backlog row -- reopening it with a corrected description. Reporting to the owner before deciding next steps (fix the trivial_input coverage gap vs. re-wire initialization.py's classify into the warm-kernel path vs. something else -- an architecture call, not mine to make solo).",
+  "paths": [],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

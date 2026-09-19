@@ -3183,37 +3183,56 @@ class AgentLoop:
         # Captured now, before any per-turn injection lands in loop_messages.
         _turn_msg_boundary = len(loop_messages)
 
-        # ── Pre-tool Thinker consult ─────────────────────────────────────
-        # Before this, the Thinker ran ONLY (a) on the conversational
-        # fast-path (agent_runtime) and (b) in the loop AFTER a
-        # tool produced an observation. A parent-agent turn with zero tools
-        # and no fast-path match ("Fix my project.", "Improve the system.")
-        # therefore had NO structured understanding pass — the model
-        # free-associated "I'll start by exploring…" (narration-without-
-        # action, CONV-05/06) or fabricated under "just guess" pressure
-        # (CONV-11). This consult runs ONCE per turn, BEFORE any tool call,
-        # on the user's intent + recent conversation history, and injects
-        # the analysis into the FIRST model call so the Thinker's
-        # "respond / act / clarify" guidance reaches the agent. Gates match
-        # the fast-path consult (thinking_enabled) plus: no tool has run
-        # yet, no deterministic pre-init override decided the turn (direct/
-        # clarify already returned above), tool-capable intent.
-        if (
-            not initial_tool_result
-            and not _pre_init_override.mode
-            and intent in AGENT_INTENTS
-            # Value-gate the pre-tool consult.
-            # On direct-retrieval intents (WEB_*, find_path, bounded compute,
-            # git, memory) the action is obvious and the model acts on the
-            # first call — the consult is a wasted serial round-trip before
-            # the first tool. Keep it only for open-ended objectives (ANALYZE/
-            # DEBUG/REVIEW/file/code) where narration-without-action is the
-            # risk it was added to prevent (CONV-05/06/11).
-            and intent not in DIRECT_RETRIEVAL_INTENTS
-            and getattr(active_adapter, "thinking_enabled", False)
-        ):
+        # ── Seed observation log with initial tool result ──────────────
+        observation_log = ""
+        last_tool_failed = False
+        consecutive_failures = 0
+        fabrication_risk = 0  # Incremented on tool errors and fabrication-prone patterns
+        # The Thinker consults on real evidence ONLY — the first consult now
+        # fires at the moment the model requests its FIRST tool call (see the
+        # MultiToolCallResult/ToolCallResult dispatch sites below), not before
+        # it. A turn that never calls a tool (the model answers directly,
+        # `_force_tool_choice` never forces native parent turns — see
+        # `_parent_native_turn` above) never launches a consult at all: zero
+        # extra LLM calls for a trivial turn, decided purely by the model's
+        # own free choice, not a pre-classification step. Every consult after
+        # the first (this one included) runs CONCURRENTLY with the next
+        # model call — at most one in flight, capped per turn; each completed
+        # analysis is injected into loop_messages at the next iteration head
+        # (before the model call), so the reasoning shapes the next action
+        # without ever having blocked one. A tool FAILURE keeps the blocking
+        # path (recovery advice must shape the very next call) — see the
+        # post-tool consult site below.
+        _consult_inflight = None
+        _consults_fired = 0
+
+        def _maybe_launch_first_tool_consult(tool_names) -> None:
+            """Launch a background Thinker consult the moment the model
+            requests its FIRST tool call this turn (`trace.steps` still
+            empty) — never before. Called from the MultiToolCallResult and
+            ToolCallResult dispatch sites below. Mirrors the post-tool
+            background-consult contract (`_BackgroundConsult` + the generic
+            drain at the next iteration head) so this costs zero wall-clock:
+            it overlaps the tool's own dispatch/execution instead of adding a
+            separate serial round-trip before any work starts. Same gate the
+            old pre-tool block used (open-ended intents only — direct-
+            retrieval intents skip it, the action is already obvious), plus
+            the throttling the post-tool site already applies.
+            """
+            nonlocal _consult_inflight, _consults_fired
+            if not (
+                not trace.steps
+                and not initial_tool_result
+                and not _pre_init_override.mode
+                and intent in AGENT_INTENTS
+                and intent not in DIRECT_RETRIEVAL_INTENTS
+                and getattr(active_adapter, "thinking_enabled", False)
+                and _consults_fired < _THINKER_CONSULT_CAP
+                and any(name not in _THINKER_TOOL_SKIP for name in tool_names)
+            ):
+                return
             try:
-                from core.agent.thinker import Evidence, Thinker
+                from core.agent.thinker import Evidence
 
                 _pre_hist_text = "\n".join(
                     f"{h.get('role', '?')}: {str(h.get('content', ''))[:200]}"
@@ -3230,53 +3249,14 @@ class AgentLoop:
                 if _ev.has_evidence:
                     if _obs:
                         _obs.emit("agent_thinker_start", iteration=0)
-                    _pre_thinker = Thinker(
-                        timeout_secs=_reasoning_setting(
-                            "localmind_reasoning_plan_timeout_secs",
-                            REASONING_PLAN_TIMEOUT_SECS,
-                        )
+                    _consult_timeout = _reasoning_setting(
+                        "localmind_reasoning_plan_timeout_secs", REASONING_PLAN_TIMEOUT_SECS
                     )
-                    # "No call runs silent": forward the
-                    # consult's prose reasoning to the ThinkingBlock instead of
-                    # draining it. The Thinker itself stops surfacing at the
-                    # JSON marker, so the structure leak it previously caused can't
-                    # reappear; _filter_system_leaks stays the second layer.
-                    async for _tc in _pre_thinker.consult(_ev, active_adapter):
-                        if isinstance(getattr(_tc, "thinking", None), str) and _tc.thinking:
-                            yield StreamChunk(text="", thinking=_filter_system_leaks(_tc.thinking), done=False)
-                    _pre_analysis = _pre_thinker.last_analysis
-                    if _pre_analysis and not _pre_analysis.is_empty:
-                        loop_messages.append(
-                            {
-                                "role": "user",
-                                "content": _thinker_context_block(_pre_analysis),
-                            }
-                        )
-                        trace.thinker_analysis = _thinker_user_summary(_pre_analysis)
-                        if _obs:
-                            _obs.emit(
-                                "agent_thinker_done",
-                                iteration=0,
-                                next_step=_pre_analysis.next_step[:200],
-                                facts=len(_pre_analysis.facts),
-                                ambiguities=len(_pre_analysis.ambiguities),
-                            )
+                    _consults_fired += 1
+                    _consult_inflight = _BackgroundConsult(_ev, active_adapter, _consult_timeout)
+                    _consult_inflight.start()
             except Exception as _thx:  # never let the Thinker break a turn
-                logger.warning("[agent.loop] pre-tool Thinker consult skipped: %s", _thx)
-
-        # ── Seed observation log with initial tool result ──────────────
-        observation_log = ""
-        last_tool_failed = False
-        consecutive_failures = 0
-        fabrication_risk = 0  # Incremented on tool errors and fabrication-prone patterns
-        # The Thinker consults ONCE, on the first real evidence.
-        # Post-tool consults run CONCURRENTLY with the next
-        # model call — at most one in flight, capped per turn; each completed
-        # analysis is injected into loop_messages at the next iteration head
-        # (before the model call), so the reasoning shapes the next action
-        # without ever having blocked one. Failures keep the blocking path.
-        _consult_inflight = None
-        _consults_fired = 0
+                logger.warning("[agent.loop] first-tool Thinker consult skipped: %s", _thx)
 
         if initial_tool_result:
             safe_initial = _filter_tool_injection(initial_tool_result.content)
@@ -4056,6 +4036,8 @@ class AgentLoop:
                     observation_log += "\n[All parallel tool calls rejected]\n"
                     continue
 
+                _maybe_launch_first_tool_consult([c.tool_name for c, _ in valid_calls])
+
                 # Dispatch all valid calls concurrently
                 async def _dispatch_single(tc_name: str, tc_input: str, tc_args: dict):
                     """Dispatch a single tool and return (name, observation, failed, latency_ms, provider)."""
@@ -4442,6 +4424,8 @@ class AgentLoop:
                         }
                     )
                     continue
+
+                _maybe_launch_first_tool_consult([tool_name])
 
                 # ── Validate required args before dispatch ──────────────────
                 # Reject tool calls missing required parameters (e.g. file_write

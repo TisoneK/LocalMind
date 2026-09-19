@@ -49,7 +49,15 @@ async def _run(loop, adapter, intent=Intent.SHELL, message="list files"):
     return chunks
 
 
-def _fake_dispatch(intent, raw_input, **kwargs):
+async def _fake_dispatch(intent, raw_input, **kwargs):
+    # A real dispatch involves genuine I/O and yields control at least
+    # once — this matters for TestThinkerStreamSilent below, whose
+    # background Thinker consult (launched right before this dispatch)
+    # needs a real event-loop tick to make progress before the loop's next
+    # iteration drains it.
+    import asyncio
+
+    await asyncio.sleep(0)
     return (
         ToolResult(
             content="file1.txt\nfile2.txt",

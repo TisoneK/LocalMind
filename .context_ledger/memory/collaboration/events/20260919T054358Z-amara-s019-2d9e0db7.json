@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T054358Z-amara-s019-2d9e0db7",
+  "type": "claim",
+  "session": "S019",
+  "agent": "amara-s019",
+  "created": "2026-09-19T05:43:58Z",
+  "issue": "b-2026-08-15-12-tier-classification",
+  "body": "Claiming B-2026-08-15-12. Hypothesis: the classify-only init rebuild (initialization.py) + loop.py's early-return branches for is_direct/is_clarification already satisfy the backlog's (a) prompt-tune tier-2->direct and (b) proportionate direct-mode reasoning -- confirming by reading loop.py in full before assuming. The unfinished piece per the 2026-09-15 research doc is (c): a regression test proving direct/clarify turns never emit workspace/loop events (mark_turn_start, todo_*, tool_call obs) while execute turns do. Plan: read loop.py's branch structure fully, then add regression coverage (likely a new test module alongside tests/core/test_agent_initialization.py) asserting on the obs-event stream per mode. Will only touch initialization.py/loop.py if the read surfaces a real gap, not just to add tests.",
+  "paths": ["backend/src/core/agent/initialization.py", "backend/src/core/agent/loop.py", "tests/core/test_agent_initialization.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

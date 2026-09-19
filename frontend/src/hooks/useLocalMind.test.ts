@@ -488,6 +488,56 @@ describe('useChat SSE obs_event routing', () => {
     unmount();
   });
 
+  // B-2026-09-15-14 — self-reflection loop: the owner's decision (2026-09-18,
+  // P-2026-09-16-36 §2) is that the loop's own autonomous memory writes must
+  // be visible, not silent. Same reasoning as context_breakdown above: a
+  // dedicated top-level SSE type, because the generic obs_event wrapper is
+  // silently dropped unless explicitly matched (see the file header note).
+  it('accumulates reflection_lesson events into reflectionLessons, newest last', () => {
+    const { result, onChunk, unmount } = renderChatWithCapturedStream();
+
+    act(() => {
+      onChunk()(JSON.stringify({
+        type: 'reflection_lesson',
+        lesson: {
+          text: 'Check locale before assuming a region.',
+          intent: 'analyze',
+          score: 4,
+          confidence: 'medium',
+        },
+      }));
+    });
+
+    expect(result.current.reflectionLessons).toHaveLength(1);
+    expect(result.current.reflectionLessons[0].text).toBe(
+      'Check locale before assuming a region.'
+    );
+    expect(result.current.reflectionLessons[0].score).toBe(4);
+
+    act(() => {
+      onChunk()(JSON.stringify({
+        type: 'reflection_lesson',
+        lesson: { text: 'A second, unrelated lesson.', intent: 'analyze', score: 5, confidence: 'high' },
+      }));
+    });
+
+    expect(result.current.reflectionLessons).toHaveLength(2);
+    expect(result.current.reflectionLessons[1].text).toBe('A second, unrelated lesson.');
+
+    unmount();
+  });
+
+  it('ignores a reflection_lesson event with empty lesson text', () => {
+    const { result, onChunk, unmount } = renderChatWithCapturedStream();
+
+    act(() => {
+      onChunk()(JSON.stringify({ type: 'reflection_lesson', lesson: { text: '' } }));
+    });
+
+    expect(result.current.reflectionLessons).toHaveLength(0);
+    unmount();
+  });
+
   it('resetSession returns the context counter and stats to a clean slate', () => {
     const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
 
