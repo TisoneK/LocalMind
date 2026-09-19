@@ -10,6 +10,7 @@ The Engine receives an optional ObsSubscription at process() call time.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 
 
@@ -35,6 +36,29 @@ class ObsCollector:
         # ``drain()`` must remain destructive for SSE flushing, while
         # structured observation snapshots need events already forwarded.
         self._history: list[ObsEvent] = []
+        # Optional (loop, event) pair the SSE transport registers so an emit
+        # wakes it at once instead of waiting for its next poll tick.
+        self._wake: tuple[asyncio.AbstractEventLoop, asyncio.Event] | None = None
+
+    def attach_wake(self, loop: asyncio.AbstractEventLoop, event: asyncio.Event) -> None:
+        """Have every `emit` set ``event`` on ``loop`` (thread-safe).
+
+        The transport used to discover new events only when the engine yielded
+        a text chunk or its heartbeat timer fired, so during a slow model call
+        a finished tool showed up to a full heartbeat late. Waking it on emit
+        makes delivery push-based."""
+        self._wake = (loop, event)
+
+    def _signal_wake(self) -> None:
+        wake = self._wake
+        if wake is None:
+            return
+        loop, event = wake
+        try:
+            loop.call_soon_threadsafe(event.set)
+        except RuntimeError:
+            # The transport's loop already closed — nobody is waiting.
+            self._wake = None
 
     def emit(self, event_type: str, **data):
         # FIX: Use JSON-safe serialization instead of str() to avoid
@@ -59,6 +83,7 @@ class ObsCollector:
         event = ObsEvent(type=event_type, data=safe_data)
         self._events.append(event)
         self._history.append(event)
+        self._signal_wake()
 
     def drain(self) -> list[ObsEvent]:
         events, self._events = self._events, []

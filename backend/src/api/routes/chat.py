@@ -518,30 +518,63 @@ def _sse_comment(comment: str = "keepalive") -> str:
     return f": {comment}\n\n"
 
 
-async def _with_keepalives(source, interval_s: float):
+# Yielded by `_with_keepalives` when new obs events arrived while the engine is
+# still pending: the transport should flush them now. Distinct from the `None`
+# heartbeat, which also emits the "still working" status text.
+_LIVE_FLUSH = object()
+
+
+async def _with_keepalives(source, interval_s: float, wake: asyncio.Event | None = None):
     """Yield engine chunks while retaining a pending tool/model operation.
 
     ``wait_for(anext(source))`` would cancel the engine when the timeout fires,
-    which aborts the very tool call the heartbeat is meant to cover. A shielded
-    pending task lets this transport emit progress while AgentLoop continues
-    interacting with the tool, then delivers the real chunk when it arrives.
-    ``None`` is the transport-only heartbeat sentinel and is never sent as an
-    engine chunk.
+    which aborts the very tool call the heartbeat is meant to cover. Here the
+    pending ``__anext__`` task is never cancelled by a wait: this transport
+    emits progress while AgentLoop continues interacting with the tool, then
+    delivers the real chunk when it arrives. ``None`` is the transport-only
+    heartbeat sentinel and is never sent as an engine chunk.
+
+    When ``wake`` is given, setting it (an obs event was emitted) yields
+    `_LIVE_FLUSH` immediately, so tool/lifecycle progress reaches the client as
+    it happens instead of on the next heartbeat tick. The heartbeat cadence
+    itself is unchanged.
     """
     iterator = source.__aiter__()
     pending = None
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + interval_s
     try:
         while True:
             if pending is None:
                 pending = asyncio.create_task(iterator.__anext__())
+            waiting: set = {pending}
+            wake_task = None
+            if wake is not None:
+                wake_task = asyncio.ensure_future(wake.wait())
+                waiting.add(wake_task)
             try:
-                yield await asyncio.wait_for(asyncio.shield(pending), timeout=interval_s)
-            except asyncio.TimeoutError:
-                yield None
-            except StopAsyncIteration:
-                return
+                done, _ = await asyncio.wait(
+                    waiting,
+                    timeout=max(0.0, deadline - loop.time()),
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+            finally:
+                if wake_task is not None and not wake_task.done():
+                    wake_task.cancel()
+            if pending in done:
+                task, pending = pending, None
+                try:
+                    chunk = task.result()
+                except StopAsyncIteration:
+                    return
+                deadline = loop.time() + interval_s
+                yield chunk
+            elif wake_task is not None and wake_task in done:
+                wake.clear()
+                yield _LIVE_FLUSH
             else:
-                pending = None
+                deadline = loop.time() + interval_s
+                yield None
     finally:
         if pending is not None and not pending.done():
             pending.cancel()
@@ -623,6 +656,10 @@ async def _event_stream(
         except Exception as exc:
             logger.warning(f"[title] placeholder write failed: {exc}")
 
+    # Push-based delivery: an obs emit wakes the bridge so tool/lifecycle events
+    # reach the client as they happen, not on the next heartbeat tick.
+    _obs_wake = asyncio.Event()
+    obs.attach_wake(asyncio.get_running_loop(), _obs_wake)
     try:
         async for chunk in _with_keepalives(
             _engine.process(
@@ -637,7 +674,19 @@ async def _event_stream(
                 client_confidence=client_confidence,
             ),
             LIVE_PROGRESS_INTERVAL_S,
+            wake=_obs_wake,
         ):
+            if chunk is _LIVE_FLUSH:
+                # New obs events while the engine is still pending: flush the
+                # same live sets the heartbeat does, without the status text.
+                async for live_event in _drain_live_tool_events(obs, session_id):
+                    yield live_event
+                    _last_sent_time = time.monotonic()
+                for live_event in _drain_live_lifecycle_events(obs, session_id):
+                    yield live_event
+                    _last_sent_time = time.monotonic()
+                continue
+
             if chunk is None:
                 # The parent agent and tool continue running in the shielded
                 # pending task. Keep the user informed instead of showing a
