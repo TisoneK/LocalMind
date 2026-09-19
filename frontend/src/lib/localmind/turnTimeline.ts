@@ -13,7 +13,7 @@
  */
 
 import type { AgentPhase, AgentRun, ChatMessage, TodoItem, ToolCall } from '@/types';
-import { isActiveToolStatus } from '@/lib/localmind/progress';
+import { formatLatency, isActiveToolStatus } from '@/lib/localmind/progress';
 
 export type StepState = 'running' | 'done' | 'failed' | 'pending';
 export type StepKind = 'narration' | 'thought' | 'checkpoint' | 'tool' | 'agent' | 'parallel';
@@ -320,6 +320,11 @@ export function buildTurn(
   if (agents > 0) parts.push(plural(agents, 'agent'));
   if (failed > 0) parts.push(`${failed} failed`);
   if (unfinished > 0) parts.push(`${unfinished} didn't finish`);
+  // A plain reply whose only step was reasoning: name that, not a bare "Done".
+  if (parts.length === 0) {
+    const thought = steps.find((s) => s.kind === 'thought');
+    if (thought) parts.push(thought.durationMs ? `Thought for ${formatLatency(thought.durationMs)}` : 'Thought');
+  }
 
   return {
     steps,

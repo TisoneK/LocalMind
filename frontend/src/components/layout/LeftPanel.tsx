@@ -6,7 +6,7 @@ import { Session, ActionItem, FileNode, SessionFileEntry, ModelOption, DiffData 
 import type { ExportFormat } from '@/lib/localmind/exportChats';
 import { stripMarkdownToPreview } from '@/lib/previewText';
 import { ActionHistory } from '@/components/panels/ActionHistory';
-import { FileExplorer } from '@/components/panels/FileExplorer';
+import { FilesPanel } from '@/components/panels/FilesPanel';
 // ObjectivesPanel import removed — the "Autonomous work" block
 // is retired from the normal-chat sidebar. The component file is kept in tree
 // for potential re-mount behind a flag.
@@ -45,6 +45,8 @@ interface LeftPanelProps {
   width?: number;
   /** Per-path diff hunks captured this turn (preview Diff mode). */
   fileDiffs?: Record<string, DiffData>;
+  /** While the agent is working, the Files tab refreshes on its own. */
+  isStreaming?: boolean;
 }
 
 type LeftTab = 'chat' | 'actions' | 'files';
@@ -68,6 +70,7 @@ export function LeftPanel({
   onFilesChanged,
   width = 280,
   fileDiffs,
+  isStreaming,
 }: LeftPanelProps) {
   const [activeTab, setActiveTab] = useState<LeftTab>('chat');
   // Per-session workspace artifact listings: expanded session
@@ -619,15 +622,15 @@ export function LeftPanel({
         )}
 
         {activeTab === 'files' && (
-          <div className="p-2">
-            {files.length === 0 ? (
-              <div className="px-2.5 py-4 text-center text-[10px] text-brand-green-muted">
-                Loading file tree...
-              </div>
-            ) : (
-              <FileExplorer files={files} onFilesChanged={onFilesChanged} />
-            )}
-          </div>
+          <FilesPanel
+            key={currentSessionId ?? 'none'}
+            sessionId={currentSessionId}
+            files={files}
+            fileDiffs={fileDiffs}
+            onOpen={setPreviewPath}
+            onFilesChanged={onFilesChanged}
+            isStreaming={isStreaming}
+          />
         )}
       </div>
 

@@ -4,12 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ChevronRight,
   ChevronDown,
-  File,
   Folder,
   FolderOpen,
-  FileCode,
-  FileText,
-  FileJson,
   Search,
   X,
   Download,
@@ -23,6 +19,8 @@ import {
 } from 'lucide-react';
 import { FileNode, SessionFileEntry } from '@/types';
 import { localmindClient } from '@/lib/localmind/client';
+import { formatModified, formatSize } from '@/lib/localmind/fileFormat';
+import { FileIcon } from './FileIcon';
 
 interface FileExplorerProps {
   /** Root-level tree nodes (one level deep) to seed the browser. */
@@ -32,32 +30,7 @@ interface FileExplorerProps {
   onFilesChanged?: () => void;
 }
 
-function getFileIcon(name: string) {
-  const ext = name.split('.').pop() || '';
-  if (['ts', 'tsx', 'js', 'jsx'].includes(ext)) return <FileCode className="h-3.5 w-3.5 text-brand-green" />;
-  if (['json'].includes(ext)) return <FileJson className="h-3.5 w-3.5 text-brand-amber" />;
-  if (['md', 'txt'].includes(ext)) return <FileText className="h-3.5 w-3.5 text-brand-green-muted" />;
-  if (['env', 'example'].includes(ext)) return <File className="h-3.5 w-3.5 text-brand-amber" />;
-  return <File className="h-3.5 w-3.5 text-brand-green-muted" />;
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatModified(iso: string | undefined): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const diff = Date.now() - d.getTime();
-  if (diff < 60_000) return 'just now';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d ago`;
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
+const isHiddenName = (name: string) => name.startsWith('.');
 
 interface TreeNodeState {
   children: FileNode[] | null; // null = not loaded yet
@@ -74,9 +47,10 @@ interface FileTreeNodeProps {
   onToggle: (node: FileNode) => void;
   onOpen: (path: string) => void;
   onAction: (action: FileAction, path: string, isFolder: boolean) => void;
+  showHidden: boolean;
 }
 
-function FileTreeNode({ node, depth, nodes, onToggle, onOpen, onAction }: FileTreeNodeProps) {
+function FileTreeNode({ node, depth, nodes, onToggle, onOpen, onAction, showHidden }: FileTreeNodeProps) {
   const [expanded, setExpanded] = useState(node.expanded ?? false);
   const [copied, setCopied] = useState(false);
   const isFolder = node.type === 'folder';
@@ -157,7 +131,7 @@ function FileTreeNode({ node, depth, nodes, onToggle, onOpen, onAction }: FileTr
                 Empty
               </div>
             ) : children !== null ? (
-              children.map((child) => (
+              children.filter((c) => showHidden || !isHiddenName(c.name)).map((child) => (
                 <FileTreeNode
                   key={child.path}
                   node={child}
@@ -166,6 +140,7 @@ function FileTreeNode({ node, depth, nodes, onToggle, onOpen, onAction }: FileTr
                   onToggle={onToggle}
                   onOpen={onOpen}
                   onAction={onAction}
+                  showHidden={showHidden}
                 />
               ))
             ) : null}
@@ -183,7 +158,7 @@ function FileTreeNode({ node, depth, nodes, onToggle, onOpen, onAction }: FileTr
       title={node.path}
       data-testid={`file-row-${node.name}`}
     >
-      {getFileIcon(node.name)}
+      <FileIcon name={node.name} />
       <span className="text-[11px] text-brand-green-soft truncate group-hover:text-brand-green transition-colors flex-1 min-w-0">
         {node.name}
       </span>
@@ -266,6 +241,8 @@ export function FileExplorer({ files, onFileOpen, onFilesChanged }: FileExplorer
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // Dot-folders (.cache, .config, …) are noise for almost everyone; opt in to see them.
+  const [showHidden, setShowHidden] = useState(false);
   const [recent, setRecent] = useState<SessionFileEntry[]>([]);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -400,6 +377,17 @@ export function FileExplorer({ files, onFileOpen, onFilesChanged }: FileExplorer
           )}
         </div>
         <button
+          onClick={() => setShowHidden((v) => !v)}
+          className={`rounded px-1.5 py-1 text-[9px] transition-colors hover:bg-brand-border/60 ${
+            showHidden ? 'text-brand-green' : 'text-brand-green-muted hover:text-brand-green'
+          }`}
+          title={showHidden ? 'Hide dot-files' : 'Show dot-files'}
+          aria-pressed={showHidden}
+          data-testid="file-toggle-hidden"
+        >
+          .*
+        </button>
+        <button
           onClick={handleRefresh}
           className="p-1 rounded text-brand-green-muted hover:text-brand-green hover:bg-brand-border/60 transition-colors"
           title="Refresh"
@@ -426,7 +414,7 @@ export function FileExplorer({ files, onFileOpen, onFilesChanged }: FileExplorer
                   title={entry.path}
                   data-testid={`recent-${entry.name}`}
                 >
-                  {getFileIcon(entry.name)}
+                  <FileIcon name={entry.name} />
                   <span className="text-[11px] text-brand-green-soft truncate flex-1 min-w-0 group-hover:text-brand-green transition-colors">
                     {entry.name}
                   </span>
@@ -473,7 +461,7 @@ export function FileExplorer({ files, onFileOpen, onFilesChanged }: FileExplorer
                   title={entry.path}
                   data-testid={`search-result-${entry.name}`}
                 >
-                  {getFileIcon(entry.name)}
+                  <FileIcon name={entry.name} />
                   <span className="text-[11px] text-brand-green-soft truncate flex-1 min-w-0 group-hover:text-brand-green transition-colors">
                     {entry.name}
                   </span>
@@ -496,7 +484,7 @@ export function FileExplorer({ files, onFileOpen, onFilesChanged }: FileExplorer
         )
       ) : (
         <div className="space-y-0.5" data-testid="file-tree">
-          {files.map((node) => (
+          {files.filter((n) => showHidden || !isHiddenName(n.name)).map((node) => (
             <FileTreeNode
               key={node.path}
               node={node}
@@ -505,6 +493,7 @@ export function FileExplorer({ files, onFileOpen, onFilesChanged }: FileExplorer
               onToggle={loadChildren}
               onOpen={(path) => onFileOpen?.(path)}
               onAction={handleAction}
+              showHidden={showHidden}
             />
           ))}
         </div>

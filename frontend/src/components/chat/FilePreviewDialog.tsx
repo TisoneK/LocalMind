@@ -58,11 +58,9 @@ export function FilePreviewDialog({ path, onClose, diffs }: FilePreviewDialogPro
   const [activeSheet, setActiveSheet] = useState(0);
 
   useEffect(() => {
-    if (!path) {
-      setContent(null);
-      setError(null);
-      return;
-    }
+    // Closing (path → null): keep the last file on screen so the fade-out doesn't
+    // flash an empty body. The next open resets everything below.
+    if (!path) return;
     let cancelled = false;
     setLoading(true);
     setError(null);

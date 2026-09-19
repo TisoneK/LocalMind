@@ -152,4 +152,10 @@ describe('buildTurn', () => {
     expect(plan?.items[0].children?.map((c) => c.label)).toEqual(['Check state', 'Write it']);
     expect(plan?.items[1].children).toBeUndefined();
   });
+
+  it('names a reasoning-only reply instead of a bare "Done"', () => {
+    const t = buildTurn({ thinking: 'hmm', thinkMs: 15800 });
+    expect(t.summary).toBe('Thought for 15.8s');
+    expect(buildTurn({ thinking: 'hmm' }).summary).toBe('Thought');
+  });
 });

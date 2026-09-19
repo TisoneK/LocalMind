@@ -474,6 +474,7 @@ export function WorkspaceLayout() {
           onFilesChanged={refreshFiles}
           width={leftPanelWidth}
           fileDiffs={fileDiffs}
+          isStreaming={isStreaming}
         />
         {/* Left resize handle */}
         <div
