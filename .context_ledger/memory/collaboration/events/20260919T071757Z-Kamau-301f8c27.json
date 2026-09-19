@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T071757Z-Kamau-301f8c27",
+  "type": "release",
+  "session": "deduction-engine",
+  "agent": "Kamau",
+  "created": "2026-09-19T07:17:57Z",
+  "issue": "deduction-engine",
+  "body": "Deduction engine shipped and merged to main (merge ff24e713, product commit ce89d042). Unit: 26 new tests + 192-test combined regression green at the merged state; ruff clean; pre-commit gate green. Live before/after on the isolated 8765 harness (zai/glm-4.5-flash): baseline 'Do not use tools. What is my country?' -> 'I cannot determine your country without using tools' (0 tools); after the fix the same turn -> 'Your country is Kenya (KE).' (0 tools, no candidate list). Boot log: 'user context deduced: KE (region; high confidence)' + 'user location persisted to memory (keyed)'; trace DB holds exactly one keyed row (subject:location, freshness=boot). Region-implicit weather turn targeted accuweather.com/en/ke/nairobi/ directly. Verified vs unit-tested vs assumed: deduced-context answers + boot deduce/persist legs live-verified; remaining prompts (trending) provider-limited this run — recorded, not claimed. Scratching the claim-body file; worktree/branch teardown next.",
+  "paths": ["backend/src/core/user_context.py", "backend/src/core/agent/prompts.py", "backend/src/core/context_builder.py", "backend/src/core/trivial_input.py", "backend/src/api/app.py", "tests/core/test_user_context.py", "tests/core/test_user_context_prompts.py"],
+  "refs": ["20260919T054746Z-Kamau-cf49244b", "ce89d042"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
