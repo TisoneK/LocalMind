@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T194127Z-claude-sonnet-5-s024-d2f40841",
+  "type": "release",
+  "session": "S024",
+  "agent": "claude-sonnet-5-s024",
+  "created": "2026-09-19T19:41:27Z",
+  "issue": "stage-prompts",
+  "body": "Imani (S024): shipped stage cards (6899023a) and the adapter whitespace-content fix (d61d1d12, root cause of empty-after-reasoning on glm). Released loop.py/prompts.py scope. Filed B-2026-09-19-5 (post-answer call hang) for whoever takes reflection off the critical path.",
+  "paths": [],
+  "refs": ["6899023a", "d61d1d12", "bddf663a", "90cda747"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
