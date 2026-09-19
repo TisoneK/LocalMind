@@ -460,3 +460,61 @@ def test_git_not_in_direct_agent():
     """DirectAgent should still have no tools (git is coding-only)."""
     from agents.direct.tools import DIRECT_TOOLS
     assert "git" not in DIRECT_TOOLS
+
+
+# ── path: the repo to run in (was silently ignored) ────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_path_selects_the_repo_not_the_session_cwd(git_repo, tmp_path):
+    """A request about a specific repo must answer from THAT repo. Live: the
+    model passed `path` for a fixture repo and got the session folder's
+    commits back as if they were the answer."""
+    from tools.git_tool import git_dispatch, set_session_cwd
+
+    other = tmp_path / "other"
+    other.mkdir()
+    subprocess.run(["git", "init"], cwd=str(other), capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=str(other), capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.name", "T"], cwd=str(other), capture_output=True, check=True)
+    (other / "f").write_text("x")
+    subprocess.run(["git", "add", "-A"], cwd=str(other), capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "the other repo's only commit"], cwd=str(other), capture_output=True, check=True)
+    set_session_cwd(str(git_repo))
+    try:
+        res = await git_dispatch(json.dumps({"operation": "log", "path": str(other)}))
+        assert res.success and "the other repo's only commit" in res.content
+        assert "Initial commit" not in res.content
+    finally:
+        set_session_cwd(None)
+
+
+@pytest.mark.asyncio
+async def test_a_file_path_resolves_to_its_folder(git_repo):
+    from tools.git_tool import git_dispatch
+
+    res = await git_dispatch(json.dumps({"operation": "log", "path": str(git_repo / "README.md")}))
+    assert res.success and "Initial commit" in res.content
+
+
+@pytest.mark.asyncio
+async def test_missing_path_is_an_error_not_a_silent_fallback(git_repo):
+    from tools.git_tool import git_dispatch, set_session_cwd
+
+    set_session_cwd(str(git_repo))
+    try:
+        res = await git_dispatch(json.dumps({"operation": "log", "path": "/no/such/folder"}))
+    finally:
+        set_session_cwd(None)
+    assert not res.success and "not found" in res.content.lower()
+
+
+@pytest.mark.asyncio
+async def test_limit_is_accepted_as_an_alias_for_count(git_repo):
+    from tools.git_tool import git_dispatch
+
+    (git_repo / "b.txt").write_text("b")
+    subprocess.run(["git", "add", "-A"], cwd=str(git_repo), capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "second"], cwd=str(git_repo), capture_output=True, check=True)
+    res = await git_dispatch(json.dumps({"operation": "log", "path": str(git_repo), "limit": 1}))
+    assert "second" in res.content and "Initial commit" not in res.content

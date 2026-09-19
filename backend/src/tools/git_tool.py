@@ -455,6 +455,22 @@ def _git_reset(cwd: str, mode: str = "--mixed", ref: str = "HEAD") -> ToolResult
 # ── Main dispatch ──────────────────────────────────────────────────────────────
 
 
+def _resolve_repo_dir(path) -> tuple[str, str]:
+    """Return ``(directory, error)`` for the repo a git call should run in.
+
+    No/blank ``path`` -> the session's working folder. A file path resolves to
+    its parent folder; a missing path is an error, never a silent fallback."""
+    raw = str(path or "").strip()
+    if not raw:
+        return _get_cwd(), ""
+    target = Path(raw).expanduser()
+    if target.is_file():
+        target = target.parent
+    if not target.is_dir():
+        return "", f"Git path not found or not a folder: {raw}"
+    return str(target), ""
+
+
 async def git_dispatch(message: str) -> ToolResult:
     """Route to the correct git operation based on parsed args.
 
@@ -493,7 +509,18 @@ async def git_dispatch(message: str) -> ToolResult:
         )
 
     operation = args.get("operation", "").strip().lower()
-    cwd = _get_cwd()
+    # `path` names the repository to operate on. It used to be ignored, so a
+    # request about a specific repo silently ran in the session's working
+    # folder and returned another repo's commits as if they were the answer.
+    cwd, path_error = _resolve_repo_dir(args.get("path"))
+    if path_error:
+        return ToolResult(
+            content=path_error,
+            risk=RiskLevel.LOW,
+            source="git",
+            success=False,
+            error_type="invalid_input",
+        )
 
     # Check if we're in a git repo
     if not _is_git_repo(cwd):
@@ -516,7 +543,7 @@ async def git_dispatch(message: str) -> ToolResult:
             staged = args.get("staged", False)
             return _git_diff(cwd, staged=staged)
         elif operation == "log":
-            count = args.get("count", 10)
+            count = args.get("count", args.get("limit", 10))
             try:
                 count = int(count)
             except (ValueError, TypeError):

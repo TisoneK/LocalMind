@@ -788,7 +788,8 @@ TOOL_DEFINITIONS: list[dict] = [
                         "enum": ["status", "diff", "log", "branch", "checkout", "commit", "merge", "stash", "reset"],  # noqa: E501
                     },
                     "staged": {"type": "boolean", "description": "For 'diff': show staged changes (default: unstaged)"},
-                    "count": {"type": "integer"},
+                    "path": {"type": "string", "description": "Repository folder to run in; default: the current working folder"},  # noqa: E501
+                    "count": {"type": "integer", "description": "For 'log': how many commits (default 10)"},
                     "name": {"type": "string"},
                     "branch": {"type": "string"},
                     "message": {"type": "string"},
