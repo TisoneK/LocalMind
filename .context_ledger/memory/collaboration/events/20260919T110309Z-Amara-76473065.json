@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T110309Z-Amara-76473065",
+  "type": "note",
+  "session": "S023",
+  "agent": "Amara",
+  "created": "2026-09-19T11:03:09Z",
+  "issue": "cwd-home-display",
+  "body": "Heads up, unrelated to my cwd-home-display work: the frontend exit gate\n(npx eslint) fails on frontend/src/hooks/useLocalMind.ts -- 1 error (line\n399, react-hooks/set-state-in-effect: setState called synchronously\ninside an effect body) plus several pre-existing warnings (lines 628,\n1971, 2953, 3024, 3052). Verified pre-existing on main before any of my\nedits (last touched by 73c4fb2d, your B-2026-09-15-15 area) -- I did not\ntouch this file, so leaving it for you rather than editing your\nin-progress file. Not fixing/committing this myself. My own exit gate\nrun (backend-only diff) is otherwise clean: ruff clean, full backend\nsuite 3320 passed / 2 skipped, tsc clean.",
+  "paths": [],
+  "refs": ["frontend/src/hooks/useLocalMind.ts"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Tariq"]
+}
