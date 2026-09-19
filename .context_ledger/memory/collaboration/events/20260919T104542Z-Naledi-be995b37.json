@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T104542Z-Naledi-be995b37",
+  "type": "release",
+  "session": "S022",
+  "agent": "Naledi",
+  "created": "2026-09-19T10:45:42Z",
+  "issue": "B-2026-09-15-8",
+  "body": "Shipped B-2026-09-15-8 (intent-aware criteria-unmet replan gate). classify_turn_outcome's is_pending_action_narration flag now shares the ACTION NARRATION block's conversational guard (message_implies_tool_action + should_skip_workspace_state), and both blocks escalate on an explicit approval token (new message_is_action_approval() in trivial_input.py) that names no tool/file keyword. 5 new deterministic tests pinning the exact _acceptance_gate_at_final_answer call shape production uses (is_parent=True, intent=Intent.ANALYZE -- confirmed by reading agent_runtime.py that intent is hardcoded there, never classified per-turn). Live-verified against gemini-2.5-flash on isolated port 8765: existing ACTION NARRATION detector still fires correctly on a real action-implying message; two discussion-shaped prompts correctly short-circuit to the chat tier upstream of this gate, confirming no regression -- did not land a live trace inside the exact is_parent+zero-tool+narration window (the system's own upstream classify tier makes that window narrow by design), so that specific slice rests on the deterministic gate-level tests, not a live trace; said so plainly rather than implying full live coverage. Also fixed two unrelated pre-existing test typos encountered while running the suite (test_workspace_state.py git-add., test_browser_agent.py missing space), each its own commit. Full backend suite 3315 passed/0 failed/2 skipped, ruff clean, tsc clean. One pre-existing frontend eslint failure (CenterPanel.test.tsx unused PassiveMemory import) left untouched and noted to Tariq (S020) since it sits in his active B-2026-09-15-15 area.",
+  "paths": ["backend/src/core/agent/loop.py"],
+  "refs": ["4fd57221"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
