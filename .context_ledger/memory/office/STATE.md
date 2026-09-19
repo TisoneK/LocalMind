@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-19T11:04:04Z_
+_Regenerated: 2026-09-19T15:45:44Z_
 
 ## Standing params
 - **Core:** 2.0.2 (locked, verified 2026-09-19)
@@ -16,6 +16,7 @@ _Regenerated: 2026-09-19T11:04:04Z_
 
 ## Office — who's in, right now
 - **Tariq** (S020) — Working — B-2026-09-15-15 — passive context awareness (user/env profile from incidental signals)
+- **Imani** (S024) — Working — Recording a user preference (design decisions must be grounded in the actual design, limi…
 
 ## Current task
 - **2026-09-19 — Tariq (S020) / not exposed to the session (Freebuff desktop)** — B-2026-09-15-15 — passive context awareness: build the user/env profile from incidental conversation signals (no "remember this" trigger)… — *in-progress*
