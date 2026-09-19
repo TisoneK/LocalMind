@@ -185,6 +185,21 @@ def _summarize_tool_actions(collector: ObsCollector) -> str:
     return ", ".join(seen)
 
 
+def _history_without_current_turn(history: list, message: str) -> list:
+    """Drop this turn's own user message from the stored history.
+
+    The user message is written to the store before the reply, so the history
+    read for prompt assembly already ends with it; the assembler then appends
+    ``message`` again, and the model saw the request twice, back to back, as if
+    the user were repeating themselves. Only a TRAILING user message with the
+    same text is dropped, so a genuine repeat from an earlier turn (an
+    assistant reply sits between the two) is kept.
+    """
+    if history and history[-1].role == Role.USER and history[-1].content.strip() == (message or "").strip():
+        return list(history[:-1])
+    return list(history)
+
+
 class _ParentAdapterCompat:
     """Give simple chat-only adapters the parent loop's tool-call seam.
 
@@ -1787,7 +1802,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         prompt_messages: list[dict] = []
         if summary_section:
             prompt_messages.append({"role": "system", "content": summary_section})
-        for item in history[-8:]:
+        for item in _history_without_current_turn(history, message)[-8:]:
             if item.role not in (Role.USER, Role.ASSISTANT) or not item.content.strip():
                 continue
             _content = item.content[-4000:]
