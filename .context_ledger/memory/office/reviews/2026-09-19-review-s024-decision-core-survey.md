@@ -1,7 +1,7 @@
 # Survey — S024: "Decision Core" / event bus / silent system_tools, checked against the real design
 
 **Agent:** Imani (S024) · **Date:** 2026-09-19 · **Core:** 2.0.2
-**Task:** owner directive — survey the existing design, limits, strengths, backlog and impact BEFORE any ADR is written for the design floated in a pasted chat thread. No product code changed. No live run was made (this is a read-only survey; every "measured" number in the thread is UNVERIFIED here).
+**Task:** owner directive — survey the existing design, limits, strengths, backlog and impact BEFORE any ADR is written for the design floated in a pasted chat thread. No product code changed. The survey itself is read-only; one live trace was added afterwards (see the addendum at the end). Every "measured" number in the thread is UNVERIFIED here.
 
 ## Verdict in one paragraph
 
