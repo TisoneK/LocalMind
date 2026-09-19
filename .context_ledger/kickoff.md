@@ -20,7 +20,7 @@ Generation rules for the bootstrapping agent:
    memory/workflows/active.md (single source of truth). This file only
    points at them.
 3. Do NOT put secrets, PATs, or tokens anywhere in this file. Ever.
-4. Delete nothing else — the Entry Steps below are pre-written and
+4. Delete nothing else — the Phases below are pre-written and
    correct for every post-bootstrap session. Fill their fact
    placeholders (rule 1) but change no step logic.
 5. Keep facts current in later sessions: if a fact changes (repo renamed,
@@ -71,9 +71,19 @@ once, or record `unknown`.
 
 ---
 
-## Entry Steps (every session after bootstrap)
+## Phases (every session after bootstrap)
 
-### Step 0 — Identify your agent type, get the project on disk
+Six phases, in order. **Each names exactly what to read or run** — the
+how and why live in exactly one place each (the file named), not restated
+here. This is deliberate: a fresh session used to pay for the check-in
+ceremony, the reading order, and the gate rules being explained three
+times over (this file, `AGENTS.md`, the edition) before any real work
+started. Now each of those is written once, and this file's only job is
+routing to the right one at the right moment. Reading ahead (the full
+edition before checking in, say) is exactly how two sessions collide on a
+codename — follow the order.
+
+### Phase 0 — Identify
 
 - **Local agent** — you are already inside the repo. Confirm:
   `git remote get-url origin` matches the Project repository URL.
@@ -94,7 +104,7 @@ once, or record `unknown`.
 There is **no package repo to find, clone, or authenticate against** —
 the protocol travels inside this repo at `.context_ledger/core/`.
 
-### Step 1 — Sync the project, check the core
+### Phase 1 — Sync
 
 ```bash
 git pull --ff-only
@@ -132,184 +142,121 @@ the `.ps1` port with `-ExecutionPolicy Bypass` (same commands, same output):
 - A **MAJOR** bump, or no update source reachable → note it in your
   session entry and move on with the core you have.
 
-### Step 2 — Sign in at the door, then read `.context_ledger/`
+### Phase 2 — Check in
 
-**Check in FIRST — before the deep read, before analysis, before product work.** Signing needs only two files: `memory/office/agents/roster.md` (the board) and the last entry of `memory/office/agents/sessions.md` (the next free session number). Read just those two, pick a real name you like (unique in the office), add your row — name, codename `S<NNN>`, model, one line on what you're on, and your starting Status `Working` with a status detail naming the stage you've reached — commit, and push it now: `chore(ledger): <name> (<codename>) checks in — <task>`. The push claims your codename: whoever's check-in commit is already on origin keeps the number, and if a concurrent check-in surfaces on your rebase the earlier commit wins — renumber **your own row only** to the next free codename, never a peer's. Keep your row's Status cells current as the work moves (`Done` + what shipped, or `Blocked` + the blocker) — the next live worker coordinates with you off that board at a glance. A worker who reads protocol and product code before signing checks in late: two workers launched together then both see an empty board, both take the same codename, and meet mid-session as strangers arguing over the main tree. Everything below comes AFTER your row is pushed. (Full check-in, identity, and mode rules follow the read list.)
-
-**Full office? Close it at the door, before the deep read.** The
-registry entry you just read tells you the office's age: if
-`agents/sessions.md` already holds more than `office_size` sessions
-(default 20 — the codename you'd claim is past S020), run the close as
-part of check-in: `sh .context_ledger/core/bin/ledger-history close`
-(dry run prints the checklist; re-run with `--confirm`; Windows: the
-`.cmd` launcher). Fill in the permanent record `history/office-<NNN>.md`
-and re-seed the open threads that still matter into the fresh office's
-`backlog.md` / `decisions.md` / logs — backlog rows only when they have
-an active owner or a clear next step (the rest is knowledge, not work:
-record it in the permanent record, don't re-seed it) — re-seeded entries
-describe the work in plain words and **never cite the closed office's
-session numbers or codenames** ("as fixed in S014"), which point into
-the frozen copy the new office never reads. Then sign the NEW roster:
-same name, codename
-`S001` — numbering restarts in a new office, and old-office numbers never
-carry over. (Schema: "The door trigger — a full office closes at
-check-in".)
-
-Then read, in order:
-
-`README.md` (the zone map) → then the **live office**, under `memory/office/`:
-`agents/sessions.md` (last 3–5 entries —
-if the active entry points to `sessions/<date>-N/notes.md`, skim it
-for the current state) → `agents/roster.md` (the board by the door:
-who is in the office right now — a live row you didn't write means a
-peer is here) → the durable files at the memory root:
-`workflows/active.md` → `collaboration/README.md` and relevant
-`collaboration/events/` when collaboration is enabled → `workflows/gates.conf` →
-then back into the office: `office/tasks/current.md` → `office/tasks/backlog.md` →
-`office/inefficiencies/log.md` → `office/flaws/log.md` → `office/plans/decisions.md` →
-`overrides/rules.md` → `system/` → `user/` → note what's in
-`secrets/` (never print values). The office is everything session-produced
-(roster, registry, tasks, plans, logs, reviews); `history/` and `archive/`
-hold closed offices and are never read at session start.
-
-**Roster edits are additive — your row only.** A live row you didn't
-write is a colleague's check-in, not sample text: never adopt a peer's
-name, and never let an edit's `old_string` span a peer's row (the edit
-tool replaces blocks — anchoring on the table body erases whoever is on
-it); after a roster edit the diff must show exactly your own row
-(`+1` on check-in) — review `git diff` before committing. If the push
-forces a rebase, a peer checked in concurrently — re-read the board
-after the rebase: your codename is claimed by your push, and the
-earlier commit keeps a colliding number.
-**Claim an identity; never infer one.** A live row whose model string
-matches yours is a peer, not you — model IDs and harness markers are
-fingerprints shared by every session on that harness or model, and a
-fresh context can never prove it is a prior session. Register as a new
-arrival (fresh name, codename `S<NNN>`); "that row is mine" is
-justified only by continuity in your own session (the re-check-in rule
-below) or the user's word.
-Clock-out (Step 15) is *leaving the office*, not finishing a task — and
-the session is not over until the user says so. If you clocked out and
-the supervisor brings more work, **check back in before touching
-anything**: re-add your row under the same name and codename `S<N>`, and
-extend your existing session entry rather than opening a second one.
-
-**Decide the mode from evidence, not from an empty board.** You are
-solo only if no collaboration `session` + `issue` was declared AND the
-roster shows no live row you didn't write AND `memory/office/tasks/current.md`
-is idle. A live roster row you didn't write means a peer is in the
-office: do not run a solo protocol — fetch and check for a
-`collab/<session-id>/coordination` branch and join its event trail; if
-none exists, declare a shared session/issue (mind the peer's "Doing"
-scope), take your own isolated worktree/branch, and emit a `note` +
-`claim` before editing. If `office/tasks/current.md` shows a live session but
-the roster is empty (an old-core or crashed session), follow the
-stale-entry guidance on `current.md`; when it is genuinely live,
-**do not start** — one agent per project repo at a time. If collaboration
-was declared, do not use `office/tasks/current.md` as a lock: create or join the
-shared session/issue event trail, use a separate worktree/branch, publish
-a claim, and inspect peer events before editing. Two sessions that both
-signed as solo and discover each other afterwards: the board now shows
-both — resolve the main tree by conversation, not by racing. Whoever has
-product work already in flight keeps the main tree; the other takes an
-isolated branch/worktree off origin/main, and both declare the shared
-session/issue before further edits.
-
-Peers are one team, not rivals. The everyday move is a `note` — the office
-channel. Then `claim → work → release`. Reach for the
-`proposal → assessment → agreement` ceremony only for a genuine conflict.
+**Before the deep read, before analysis, before product work.** Needs
+only two files: `memory/office/agents/roster.md` (the board) and the last
+entry of `memory/office/agents/sessions.md` (the next free session
+number). Pick a real name (not your own model/product name — see the
+roster's own header), add your row, commit and push it now:
+`chore(ledger): <name> (<codename>) checks in — <task>`. Then regenerate
+the session digest for Phase 3:
 
 ```bash
-# say what you're on (informal, never gates the check):
-sh .context_ledger/core/bin/ledger-collab emit note --session <SESSION_ID> \
-  --agent <AGENT_ID> --issue <ISSUE_ID> --to <PEER_ID> --re <path> \
-  --body "Taking the web side; leaving the loop to you."
-# claim scope, then release it citing the commit:
-sh .context_ledger/core/bin/ledger-collab emit claim --session <SESSION_ID> \
-  --agent <AGENT_ID> --issue <ISSUE_ID> --paths <path1,path2> \
-  --body-file <claim-notes-file>
-sh .context_ledger/core/bin/ledger-collab status --session <SESSION_ID> --issue <ISSUE_ID>
-sh .context_ledger/core/bin/ledger-collab check --session <SESSION_ID> --issue <ISSUE_ID>
+sh .context_ledger/core/bin/ledger-state generate
+git add .context_ledger/memory/office/STATE.md
+git commit -m "chore(ledger): regenerate STATE.md at check-in" && git push
 ```
 
-`status` opens with a **Recent chatter** feed of notes — read it first. A
-`release`/`handoff` closes a claim by citing its event ID or by sharing its
-session+issue and overlapping paths, so citing only the commit SHA is fine.
-On Windows use `.context_ledger/core/bin/ledger-collab.cmd` with the
-same `emit`, `status`, and `check` arguments.
+Full rules for names, codenames, roster-edit etiquette, and identity
+(never infer one from a model-string match) live in `ledger-schema.md` →
+"The live office" table and "Office lifecycle" — this file only tells you
+*when*, not *how*; don't re-derive the how here.
 
-Publish coordination events on the shared event-only branch
-`collab/<SESSION_ID>/coordination`; keep product changes on each agent's
-isolated `collab/<SESSION_ID>/<AGENT_ID>` branch/worktree. Overlapping
-claims are resolved by peer assessment and an agreement that selects the
-best-supported option and one implementation owner. There is no timestamp
-or agent-ID winner. A correction similarly records evidence, root cause,
-candidate repairs, and a suggested owner; peers agree on the repair and
-owner before it is applied.
+**Office past `office_size` sessions (default 20)?** It's full — close it
+now, as part of check-in, before the deep read:
+`sh .context_ledger/core/bin/ledger-history close` (dry run, then
+`--confirm`). Full re-seed rules: `ledger-schema.md` → "Office lifecycle,"
+"The door trigger."
 
-**Tear down what you set up.** After your final `release` and the
-integration of your product branch, remove your worktree from a clean
-tree (`git status` first — unexplained changes stop you, not `--force`)
-and delete your branch (`git branch -d` refuses an unmerged branch; push
-`--delete` too if you pushed it). The coordination *branch* is the
-session's event trail — later agents fetch it to continue — so it stays;
-the coordination *worktree* may be removed by the last agent out and
-re-added in one command next time. `git worktree list` should be clean
-of your rows before you go.
+### Phase 3 — Orient
 
-### Gate commands (every session)
+Read **`memory/office/STATE.md`** — one digest standing in for the eight
+files it summarizes (standing params, roster, current task, backlog High
+rows, flaws/inefficiencies/decisions counts). Open the file behind a line
+only when your task needs more than the summary gives it; full reading
+order and "when does this file earn a closer look": `ledger-schema.md` →
+"Reading order (session start)".
 
-The project-owned registry is `.context_ledger/memory/workflows/gates.conf`.
-If it is missing, initialize it with:
+Always still read in full, regardless of `STATE.md`: `memory/overrides/rules.md`,
+`memory/workflows/gates.conf`, `memory/collaboration/README.md` (+ active
+events, if collaboration is enabled), `memory/system/`, `memory/user/`.
+Note what's in `memory/secrets/` — never print values.
 
-```bash
-sh .context_ledger/core/bin/ledger-gates init
-```
+**Decide the mode from evidence.** Solo only if: no shared collaboration
+`session`+`issue` was declared, the roster shows no live row you didn't
+write, and `office/tasks/current.md` is idle. Otherwise coordinate — join
+or declare a `collab/<session-id>/coordination` branch, isolated
+worktree/branch, `note` + `claim` before editing. Full rules (a peer's
+live row, overlapping claims, the event commands, tear-down):
+`ledger-schema.md` → "Peer collaboration" and `memory/collaboration/README.md`.
 
-Before the next agent action/turn, run the checkpoint:
+### Phase 4 — Load the protocol, scaled to the task
+
+Pick the edition by **your agent type** (Phase 0) — never by what memory
+says:
+
+- **Local agent** → `.context_ledger/core/rules/ai-engineering-protocol-local.md`
+- **Cloud/sandbox agent** → `.context_ledger/core/rules/ai-engineering-protocol.md`
+
+Read its always-relevant core (Binding Rules, Two Surfaces, Peer
+Collaboration, Gate Protocol, Git Workflow, Quality Gates, and the
+Playbooks index) — a short, fixed read regardless of task size. Then load
+only the playbooks your task's shape actually calls for:
+
+| Your task… | Also read |
+|---|---|
+| Touches only product code, no `.context_ledger/core/` changes | (nothing more) |
+| Is a UI/UX change | `core/rules/playbooks/ux-review.md` |
+| Touches security-sensitive code | `core/rules/playbooks/security-review.md` |
+| Is a new feature or a substantial review | `code-review.md` + `functional-testing.md` |
+| Touches performance-sensitive code | `performance-review.md` |
+| Touches `.context_ledger/core/` itself, or spans multiple sessions | every playbook — read the edition in full |
+| Hit a snag partway through | `pitfalls.md` (Common Pitfalls) |
+
+Also read any role overlay from `.context_ledger/core/roles/` and the
+project's `memory/overrides/rules.md` (overrides beat the edition, except
+secret-handling and append-only rules).
+
+### Phase 5 — Execute
+
+Follow your edition's own phases in order — don't skip its Setup/Review/
+Fix/Report sequence because the task seems small. Before each next
+action, checkpoint; before commits, integration, and exit, run the
+matching gate:
 
 ```bash
 sh .context_ledger/core/bin/ledger-gates checkpoint [--session <SESSION_ID> --issue <ISSUE_ID>]
-```
-
-Run the lifecycle gates at their boundaries:
-
-```bash
 sh .context_ledger/core/bin/ledger-gates run pre-commit
 sh .context_ledger/core/bin/ledger-gates run integration --session <SESSION_ID> --issue <ISSUE_ID>
 sh .context_ledger/core/bin/ledger-gates run exit
 ```
 
-On Windows use `.context_ledger/core/bin/ledger-gates.cmd` with the
-same commands. A failing gate blocks the next lifecycle transition; record
-the exact failing command and output in the session notes or event trail.
+(Windows: the `.cmd` launchers, same commands.) A failing gate blocks the
+next lifecycle transition; record the exact failing command and output in
+the session notes or event trail. Registry missing? `ledger-gates init`.
 
-### Step 3 — Load the protocol
+### Phase 6 — Exit
 
-Pick the edition by **YOUR agent type** (identified in Step 0), from
-the vendored core:
+Not done until:
 
-- **Local agent** → `.context_ledger/core/rules/ai-engineering-protocol-local.md`
-- **Cloud/sandbox agent** → `.context_ledger/core/rules/ai-engineering-protocol.md`
+1. Everything is committed **and pushed**.
+2. The session is logged in `memory/office/agents/sessions.md`.
+3. `memory/office/tasks/current.md` is cleared (single-agent mode).
+4. `sh .context_ledger/core/bin/ledger-mem prune` has been run — a
+   report-only nudge; archive anything it flags eligible
+   (`ledger-mem prune --apply` does the move for you).
+5. `sh .context_ledger/core/bin/ledger-state generate` has been run once
+   more — the digest should reflect this session's outcome for whoever
+   reads it next.
+6. You clock out: remove your row from `memory/office/agents/roster.md`
+   in the closing commit — but only when actually leaving. The session
+   isn't over until the user says so; if more work arrives after
+   clock-out, check back in first (same name and codename) and extend
+   your existing `sessions.md` entry, never open a second one.
 
-`memory/workflows/active.md` gives you the standing parameters and any
-role overlay — it does **not** choose your edition. If it names a
-single edition, that's whichever agent type wrote it last; ignore that
-and follow your own type (a local agent must never run the cloud
-edition's PAT/clone steps, whatever the memory says). Also read any
-role overlay from `.context_ledger/core/roles/`, and the project's overrides
-in `memory/overrides/rules.md` (overrides beat the edition, except
-secret-handling and append-only rules). Read your edition in full; it
-is the instruction set for this session.
-
-### Step 4 — Follow the protocol
-
-All steps, all phases, in order. Don't skip Phase 1 because the task
-seems small. In collaboration mode, follow the collaboration event
-lifecycle in addition to the normal phases. Don't forget the Exit
-checklist: everything committed and pushed, session logged,
-`memory/office/tasks/current.md` cleared when you own single-agent mode, roster
-row removed (clocked out), chat summary delivered.
+If the user has to remind you to commit or push, that is a protocol
+failure — log it in `memory/office/flaws/log.md`.
 
 ---
 

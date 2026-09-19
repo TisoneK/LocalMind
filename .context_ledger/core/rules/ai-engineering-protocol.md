@@ -624,82 +624,18 @@ rm -f .context_ledger/memory/secrets/github-pat   # if you stored it there in St
 > (`README`, `docs/`) describe the *product*; `.context_ledger/` describes the
 > *process*.
 
-### Structure — two zones
-
-```text
-.context_ledger/
-├── README.md            # the zone map — refreshed from core/templates on core updates
-├── kickoff.md           # front door — generated at bootstrap, entry point for every future session
-├── core/                # ZONE 1 — the vendored protocol package: READ-ONLY, version-stamped
-│   ├── VERSION          # core semver in force in this repo
-│   ├── CHANGELOG.md     # what changed between core versions (+ migration notes)
-│   ├── MANIFEST.sha256  # checksums — `ledger-sync verify` checks core against this
-│   ├── bin/ledger-sync # status / verify / update / rollback (+ package-mode: manifest, bootstrap)
-│   ├── rules/           # this file and its sibling edition
-│   ├── roles/           # mission overlays (reviewer, security-auditor, docs-agent, feature-engineer)
-│   ├── schemas/         # ledger-schema.md — the single source of truth on every file below
-│   └── templates/       # what memory files + kickoff.md + AGENTS.md are generated from
-├── memory/              # ZONE 2 — this project's living memory: project-owned, writable
-│   ├── office/              # THE live office — everything session-produced, one at a time,
-│   │   │                    #   unnumbered; frozen verbatim into history/ when it fills up
-│   │   ├── agents/
-│   │   │   ├── sessions.md  # append-only log — one entry per agent session
-│   │   │   └── roster.md    # the board by the door — who is in the office right now
-│   │   ├── sessions/        # per-session detailed notes (optional, deletable)
-│   │   │   ├── SUMMARY.md     # compressed history — entries are removable
-│   │   │   └── YYYY-MM-DD-N/
-│   │   │       └── notes.md   # session-scoped detail — research, dead ends, reasoning
-│   │   ├── tasks/
-│   │   │   ├── current.md     # the task being worked on right now (one at a time, overwrite; the session lock)
-│   │   │   ├── backlog.md     # capped work QUEUE — actionable items only, priority-grouped tables; delete the row when done or stale; overflow to parking-lot.md
-│   │   │   └── parking-lot.md # knowledge BASE — findings, questions, deferred, someday; grouped by kind, uncapped; promote to backlog when actionable
-│   │   ├── plans/
-│   │   │   └── decisions.md   # append-only ADR-style architectural decisions
-│   │   ├── inefficiencies/
-│   │   │   └── log.md         # append-only project-level friction (code, env, deps)
-│   │   ├── flaws/
-│   │   │   ├── README.md      # what goes here vs inefficiencies/ — the two-surfaces rule
-│   │   │   └── log.md         # append-only workflow/protocol friction — flows to the package repo
-│   │   └── reviews/
-│   │       └── YYYY-MM-DD-review.md  # session review reports
-│   ├── system/              # durable — never rotates
-│   │   ├── environments.md  # machines/sandboxes agents have run on (machine-scoped — "Identify by")
-│   │   └── ai-models.md     # registry: which agents + models have worked on this repo
-│   ├── user/                # durable — never rotates
-│   │   ├── identity.md      # who the user is (name, git identity, role on the project)
-│   │   └── preferences.md   # how the user likes things done (commit style, tone, review depth)
-│   ├── workflows/           # durable — never rotates
-│   │   ├── active.md        # workflow currently in force (protocol by agent type, scope, push policy)
-│   │   ├── gates.conf       # explicit lifecycle gate commands + hybrid discovery mode
-│   │   └── history.conf     # office rotation knobs (office_size, history_keep, archive_keep)
-│   ├── collaboration/       # durable — never rotates
-│   │   ├── README.md        # peer workflow + immutable event contract
-│   │   └── events/           # one immutable file per claim/proposal/agreement/etc.
-│   ├── overrides/
-│   │   └── rules.md         # project-local protocol adjustments — beat this edition (except secrets/append-only)
-│   ├── core.lock            # last-known-good core version — written by ledger-sync, never by hand
-│   └── secrets/             # LOCAL-ONLY — self-gitignored, never tracked, never travels
-│       ├── .gitignore       # ignores everything here except itself + the README
-│       └── <slug>           # one secret per file: line 1 = value, lines 2+ = notes
-├── history/             # closed offices — NOT read at session start
-│   ├── office-001.md        # permanent accomplishments record — written at close, NEVER deleted
-│   └── office-001/          # the frozen office, verbatim (roster, registry, notes, logs) —
-│                            #   kept readable for history_keep offices, then zipped into archive/
-└── archive/             # cold storage of closed offices — NOT read at session start
-    └── office-001.tar.gz    # the zipped frozen office; its permanent record stays in history/
-```
-
 **The zone rule is absolute: never write under `.context_ledger/core/`.** It is
 a checksummed copy of the protocol package, replaced only as a whole
 tree by `ledger-sync update`. A protocol improvement belongs in
 `memory/office/flaws/log.md` (it flows to the package and comes back in a core
 release) — never patched into the vendored copy.
 
-Every `memory/` file agents write to carries its entry template in an
-HTML comment — at the top of the file itself, or in its directory's
-README (`reviews/`, `secrets/`). Follow it, don't invent formats. The
-authoritative spec for every file (mode, scope, ownership) is
-`.context_ledger/core/schemas/ledger-schema.md`.
+Full directory structure (both zones, plus the `history/`/`archive/`
+zones behind them), the write mode and scope of every file, and every
+file's entry template: `.context_ledger/core/schemas/ledger-schema.md` —
+the single source of truth. Every `memory/` file also carries its own
+template in an HTML comment at its top; read that before writing, don't
+invent formats.
 
 ### What goes where (quick reference)
 
@@ -723,61 +659,13 @@ authoritative spec for every file (mode, scope, ownership) is
 | A project-local exception to this protocol | `.context_ledger/memory/overrides/rules.md` | update |
 | A learning about this protocol itself | `.context_ledger/memory/office/flaws/log.md` — never edit `core/` | append (flows to the package) |
 
-### Rules
-
-1. **Append-only logs are append-only.** `sessions.md`, `inefficiencies/log.md`, and `decisions.md` never lose entries to edits. If a past entry was wrong, append a correction referencing it — don't erase history. The sanctioned exception is compaction (Step 17): closed entries move verbatim into the log's `archive.md`, and 3+ repeats roll up into one `Recurring` entry — every moved line survives in the archive. (`backlog.md` is the one work queue: delete a row when its item is finished or stale, and past its cap the lowest-value row gets pruned — to `parking-lot.md` if it still carries knowledge, not into a 21st row.)
-2. **No secrets in tracked files.** `.context_ledger/` is committed to git. Record env var *names* and where secrets live in shared files — never values. Values the agent needs live only in `.context_ledger/memory/secrets/`, whose own `.gitignore` keeps them out of the repo (rules in its README). No PATs, API keys, or connection strings anywhere else.
-3. **`chore(ledger):` commit prefix.** Context updates are not features or fixes. Keep them out of the changelog. One exception: review reports in `.context_ledger/memory/office/reviews/` commit as `docs(review):` (Step 13) — they're a deliverable, not bookkeeping.
-4. **Friction logging is mandatory — and split by surface.** Project friction goes in `inefficiencies/log.md`; workflow/protocol friction goes in `flaws/log.md` (see `flaws/README.md` for the split, and how flaws flow back to the package repo). Both honest, every session. Wasted time you don't log is time the next agent wastes again.
-5. **Verify before trusting.** `.context_ledger/` reflects what was true when written. If it contradicts the codebase, the codebase wins — fix the `.context_ledger/` entry (append a correction).
-6. **Small and current beats big and stale.** Session entries are ~10 lines, not transcripts. Reports carry the detail.
-7. **Session data is disposable.** Detailed session notes (`memory/office/sessions/`) may be deleted when no longer useful. The compact summary in `memory/office/sessions/SUMMARY.md` is prunable; the formal registry in `agents/sessions.md` is the permanent record. Before deleting any session data, promote durable facts to their persistent domain — **permanent context must never depend exclusively on an individual session.**
-
-### Entry templates
-
-**`.context_ledger/memory/office/agents/sessions.md`** (append one per session):
-```markdown
----
-## 2026-07-11 — Session N
-- **Agent:** <agent name> | **Model:** <model id> | **Platform:** <sandbox/OS> | **Role:** <engineer, or overlay from .context_ledger/core/roles/> | **Core:** <version from .context_ledger/core/VERSION>
-- **Task:** <what this session set out to do>
-- **Commits:** <count> (<first-sha>..<last-sha>)
-- **Outcome:** <done / partial / blocked — one line>
-- **Open items:** <pointers into tasks/backlog.md (actionable) or tasks/parking-lot.md (findings/questions), or "none">
-- **Report:** .context_ledger/memory/office/reviews/2026-07-11-review.md
-```
-
-**`.context_ledger/memory/office/inefficiencies/log.md`** (append a block for every session that hit friction — a clean session appends nothing):
-```markdown
----
-## 2026-07-11 — <agent name> / <model>
-- **Problem:** <what went wrong or was slower than it should be>
-- **Cost:** <rough time/effort wasted>
-- **Cause:** <root cause if known>
-- **Workaround / fix:** <what worked, or "unresolved">
-- **Prevent next time:** <protocol/context change that would have avoided it>
-```
-
-**`.context_ledger/memory/office/flaws/log.md`** (append when the protocol/`.context_ledger` system itself caused friction):
-```markdown
----
-## 2026-07-11 — <agent name> / <model> (Session N)
-- **Flaw:** <what in the protocol or .context_ledger/ system didn't work>
-- **Symptom:** <what happened to the agent — the observable friction>
-- **Root cause:** <why the protocol/.context_ledger/ let this happen>
-- **Suggested fix:** <concrete change to the package — a step, a pitfall, a template, a rule>
-- **Status:** open | fixed in package <commit-sha or date>
-```
-
-**`.context_ledger/memory/office/plans/decisions.md`** (append one per decision, ADR-style):
-```markdown
----
-## ADR-N: <short title> (2026-07-11)
-- **Status:** accepted | superseded by ADR-M
-- **Context:** <what forced the decision>
-- **Decision:** <what was decided>
-- **Consequences:** <trade-offs accepted; what future agents must respect>
-```
+The binding rules on append-only logs, secrets, commit prefixes, friction
+logging, and session-data disposability are already stated once each — the
+Ten Binding Rules above, `.context_ledger/core/schemas/ledger-schema.md`'s
+`bindingRules`, and this document's own Common Pitfalls; find them there
+rather than a fourth restatement here. Every writable memory file's exact
+entry template lives in an HTML comment at that file's own top — read it
+before writing, never invent a format.
 
 ### Bootstrap (first session in a repo without `.context_ledger/`)
 
@@ -936,87 +824,24 @@ Treat this as a production project. Think like an owner, not a contractor.
 
 ---
 
-## Code Review Checklist
+## Playbooks
 
-Evaluate:
-- Architecture, Maintainability, Readability, Modularity
-- Code duplication, SOLID principles, Design patterns
-- Error handling, Logging, Testing coverage
-- Configuration management, Input validation
-- Authorization checks (every mutation checks ownership; every admin route is gated)
-- Race conditions (especially on counters)
-- Pagination hardening (guard against negative/NaN/huge values)
-- Technical debt
+> Task-shaped guidance, loaded only when kickoff.md's Phase 4 table says
+> your task calls for it — not part of the always-relevant core above.
+> Common Pitfalls (below) stays inline: it's cross-referenced by number
+> from the Ten Binding Rules and is itself frequently the answer when
+> something goes wrong, so it earns its place in the always-read core.
 
-**Deep-scan methodology:** when you find a bug, grep for the same pattern across the whole codebase. Fix all instances in one commit.
+| Playbook | Read it when… |
+|---|---|
+| `playbooks/code-review.md` | the task is a new feature or a substantial review |
+| `playbooks/functional-testing.md` | same — has a Cloud/sandbox-agent subsection for you |
+| `playbooks/ux-review.md` | the task is a UI/UX change |
+| `playbooks/performance-review.md` | the task touches performance-sensitive code |
+| `playbooks/security-review.md` | the task touches security-sensitive code |
 
----
-
-## Functional Testing
-
-> Only if a live app is available (check the "Live Application" field — if "N/A", skip and note it in the report).
-
-Test normal workflows and edge cases. Think like: end user, admin, developer, QA, power user, first-time visitor. Verify existing functionality before modifying it. Reproduce bugs before fixing them.
-
----
-
-## UX / UI Review
-
-### Reference-driven design
-When the user provides screenshots, use vision analysis to compare precisely — measure layout, column counts, card widths, spacing.
-
-### Evaluate:
-- Navigation, Discoverability, Visual hierarchy
-- Accessibility (keyboard nav, focus indicators, ARIA labels, color contrast)
-- Typography, Spacing, Color consistency
-- Responsiveness (360px, 768px, 1280px)
-- Empty states, Loading states, Error messages
-- Mobile-specific issues (iOS Safari quirks, touch targets, safe-area insets)
-
-### Dark mode / theme completeness (ONLY if the project supports multiple themes)
-
-> **First, determine if the project supports theming.** Check:
-> 1. Does `globals.css` define both light (`:root`) and dark (`.dark`) variables?
-> 2. Is `.dark` ever applied to `<html>` (toggle, `prefers-color-scheme`, hardcoded)?
-> 3. Do components use `dark:` variants or theme-aware CSS variables?
->
-> **If single-theme** (dark-only, light-only): skip this section. Note "single-theme" in the report. **If the project has light + dark variables but never applies `.dark`**: that's a finding (theming infrastructure exists but is inactive) — flag it, don't try to "fix" every component.
-
-**If multi-theme:** Every light-mode color class needs a `dark:` variant (except intentional theme-agnostic surfaces). Scan all components, fix every instance, document false positives.
-
----
-
-## Performance Review
-
-Look for:
-- Slow rendering, Expensive computations
-- N+1 queries, Missing indexes, Unbounded result sets
-- Excessive API calls, No caching
-- Large bundle sizes
-- Unnecessary re-renders (missing `useMemo`/`useCallback`, wrong deps)
-- Memory leaks (event listeners not cleaned up, intervals not cleared)
-- Image optimization, Lazy loading, CDN caching
-- Algorithmic complexity (e.g., `Array.find()` inside a sort → use Map)
-
-Implement safe optimizations. Always typecheck before committing.
-
----
-
-## Security Review
-
-Evaluate:
-- Authentication, Authorization (every route checks auth; every mutation checks ownership)
-- Input validation (length limits, type checks, format validation)
-- Output encoding (never `dangerouslySetInnerHTML` without sanitization)
-- Sensitive data exposure (never serialize password hashes; never leak internals in errors)
-- API security (rate limiting on auth, upload, mutation routes)
-- File uploads (content-type allowlist, max size, URL protocol validation)
-- **SSRF protection** (if the project fetches URLs: check for redirect-following bypass, private IP filtering, metadata endpoint blocking)
-- Secrets management (PAT in env var only; `.env*` in `.gitignore`; API keys stored with `0600` perms; **no secret values in tracked `.context_ledger/` files — values only in `.context_ledger/memory/secrets/`**)
-- Session handling
-- Dependency vulnerabilities (check audit tools — verify against actual installed versions)
-
-**Critical:** never put security vulnerability mechanics in a public changelog — only in the internal report.
+All five, full playbook: touching `.context_ledger/core/` itself, or a
+session spanning multiple sign-ins.
 
 ---
 

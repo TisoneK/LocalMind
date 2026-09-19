@@ -48,20 +48,25 @@ usage() {
   say "          roster row with no Status cell (the at-a-glance column), a"
   say "          roster row whose Session N is already in agents/sessions.md"
   say "          means the session never clocked out, and a duplicated"
-  say "          Session N means a resumed session re-logged; plus a"
-  say "          warn-only backlog-cap check (rows past backlog_cap in"
-  say "          workflows/history.conf — prune to parking-lot.md)"
+  say "          Session N means a resumed session re-logged; plus warn-only"
+  say "          cap checks — backlog.md past backlog_cap (prune to"
+  say "          parking-lot.md), flaws/log.md and inefficiencies/log.md past"
+  say "          flaws_cap/inefficiencies_cap (run 'prune'/'prune --apply') —"
+  say "          all three keys in workflows/history.conf"
   say "  lint    .context_ledger vocabulary (ADR-N, bug IDs, .context_ledger/ paths) leaking"
   say "          into product artifacts — the staged diff by default; --tree"
   say "          sweeps every tracked product file (strip leaks old sessions left)"
-  say "  prune   advise log compaction: each append-only durable log's size"
+  say "  prune   report log compaction: each append-only durable log's size"
   say "          (flaws, inefficiencies, decisions), which entries carry a"
   say "          closed marker on their own Status line (resolved/"
   say "          superseded/fixed — move them verbatim to the"
   say "          log's archive.md), and which logs hold 3+ entries hitting"
   say "          the same recurring thing (roll up into one Recurring entry,"
-  say "          instances archived verbatim); --list names them. Never"
-  say "          moves or deletes — reports only."
+  say "          instances archived verbatim); --list names them. Report"
+  say "          mode never moves or deletes; --apply performs the closed-"
+  say "          entry moves mechanically (creates archive.md if needed) —"
+  say "          it does NOT do the Recurring roll-up, which needs an"
+  say "          agent to compose the consolidated entry."
   say "  closeout delete finished backlog items (- [x] tombstones) from the"
   say "          tasks/backlog.md work queue — open work stays. Dry run by"
   say "          default (lists the tombstones); --confirm deletes. Every"
@@ -167,6 +172,28 @@ check_roster() {
   ' "$_f"
 }
 
+# warn-only cap check for an append-only durable log (flaws/inefficiencies):
+# counts real entries (## YYYY-MM-DD headers outside <!-- --> blocks, the
+# same scoping prune() and ledger-state use) against a history.conf key.
+# Unlike the backlog, going over does not mean "stop adding" — it means
+# "run ledger-mem prune" (report) / "prune --apply" (moves closed entries).
+check_log_cap() {
+  _rel=$1; _key=$2; _default=$3
+  _f=$OFFICE_DIR/$_rel
+  [ -f "$_f" ] || return 0
+  _cap=$(conf "$_key" "$_default")
+  _n=$(awk '
+    /^<!--/ { intpl = ($0 ~ /-->/) ? 0 : 1; next }
+    intpl { if ($0 ~ /-->/) intpl = 0; next }
+    /^## [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/ { n++ }
+    END { print n + 0 }
+  ' "$_f")
+  if [ "$_n" -gt "$_cap" ]; then
+    say "WARN $_rel: $_n entries past the cap of $_cap ($_key in workflows/history.conf) — run 'ledger-mem prune' to see what's archive-eligible, 'prune --apply' to move the closed ones"
+  fi
+  return 0
+}
+
 check() {
   [ $# -eq 0 ] || { case "$1" in -h|--help) usage ;; *) die "unknown argument '$1'" ;; esac; }
   [ -d "$MEMORY_DIR" ] || { say "ledger-mem: no memory dir (nothing to check)"; return 0; }
@@ -178,6 +205,8 @@ check() {
   check_dup_sessions
   check_backlog_tombstones
   check_backlog_cap
+  check_log_cap flaws/log.md flaws_cap 15
+  check_log_cap inefficiencies/log.md inefficiencies_cap 15
   if [ "$_rc" -eq 0 ]; then
     say "memory check passed: no duplicate keys in the update-in-place registries"
   else
@@ -233,15 +262,87 @@ check_dup_sessions() {
   return 0
 }
 
-# prune — advise log compaction out of the append-only durable logs so
-# startup stops re-reading cold, closed entries and repeated friction. It
-# NEVER moves or deletes anything (that stays a human/agent edit); it
-# reports, per log (flaws, inefficiencies, decisions): the log's size, the
-# entries whose own Status line carries a closed marker
-# (resolved/superseded/fixed/no longer — move those verbatim to a
+# archive title per log, used only when --apply creates a fresh archive.md
+_archive_title() {
+  case "$1" in
+    flaws/log.md) printf 'Flaws Log' ;;
+    inefficiencies/log.md) printf 'Inefficiencies Log' ;;
+    plans/decisions.md) printf 'Architectural Decisions' ;;
+  esac
+}
+
+# prune_apply_one — the mechanical half of compaction: cut every entry
+# whose OWN Status/Fixed-in-package line carries a closed marker
+# (resolved/superseded/fixed/no longer) out of the log, verbatim, into the
+# log's companion archive.md (created with a header if it doesn't exist
+# yet). Never touches an entry without an explicit closed marker — age
+# alone is never eligible. Deliberately does NOT perform the 3+-repeat
+# roll-up: composing the one consolidated Recurring entry needs judgment
+# a script shouldn't fabricate, so that move stays an agent's manual edit
+# (still reported by the advisory pass below).
+prune_apply_one() {
+  _rel=$1
+  _f=$OFFICE_DIR/$_rel
+  [ -f "$_f" ] || return 0
+  _dir=$_rel; _dir=${_dir%/*}
+  _archive=$OFFICE_DIR/$_dir/archive.md
+  _tmp_main=$OFFICE_DIR/$_dir/.prune-main.$$.tmp
+  _tmp_arch=$OFFICE_DIR/$_dir/.prune-arch.$$.tmp
+  : > "$_tmp_main"
+  : > "$_tmp_arch"
+  _moved=$(awk -v tmpmain="$_tmp_main" -v tmparch="$_tmp_arch" '
+    function flush() {
+      if (!inseg) return
+      dest = closed ? tmparch : tmpmain
+      for (i = 1; i <= n; i++) print buf[i] >> dest
+      if (closed) moved++
+    }
+    !inseg && /^<!--/ { print >> tmpmain; intpl = ($0 ~ /-->/) ? 0 : 1; next }
+    !inseg && intpl { print >> tmpmain; if ($0 ~ /-->/) intpl = 0; next }
+    /^## / {
+      flush(); inseg = 1; closed = 0; n = 0; n++; buf[n] = $0; next
+    }
+    inseg {
+      n++; buf[n] = $0
+      if ($0 ~ /^[[:space:]]*[-*]?[[:space:]]*\*\*Status:\*\*/ &&
+          $0 ~ /RESOLVED|[Ss]uperseded|[Ff]ixed in package|no longer (a )?(flaw|issue)/) closed = 1
+      if ($0 ~ /^[[:space:]]*[-*]?[[:space:]]*\*\*Fixed in package:\*\*/) closed = 1
+      next
+    }
+    !inseg { print >> tmpmain }
+    END { flush(); print moved + 0 }
+  ' "$_f")
+  if [ "${_moved:-0}" -gt 0 ] 2>/dev/null; then
+    if [ ! -f "$_archive" ]; then
+      {
+        printf '# %s — archive (verbatim moves from log.md)\n\n' "$(_archive_title "$_rel")"
+        printf 'Entries below were explicitly marked `RESOLVED` / `superseded` / fixed in\n'
+        printf 'the live log and moved here verbatim (no edits), per the log'"'"'s pruning\n'
+        printf 'rule (`ledger-mem prune --apply`). Startup reads only the live log; this\n'
+        printf 'archive stays in git, grep-able.\n'
+      } > "$_archive"
+    fi
+    printf '\n' >> "$_archive"
+    cat "$_tmp_arch" >> "$_archive"
+    mv "$_tmp_main" "$_f"
+    say "$_rel: moved $_moved entr$( [ "$_moved" -eq 1 ] && printf y || printf ies ) to $_dir/archive.md"
+  else
+    rm -f "$_tmp_main"
+    say "$_rel: nothing marked resolved/superseded — nothing moved"
+  fi
+  rm -f "$_tmp_arch"
+}
+
+# prune — compact the append-only durable logs so startup stops re-reading
+# cold, closed entries and repeated friction. Report mode (default) NEVER
+# moves or deletes anything; --apply performs the mechanical half (see
+# prune_apply_one). Reports, per log (flaws, inefficiencies, decisions):
+# the log's size, the entries whose own Status line carries a closed
+# marker (resolved/superseded/fixed/no longer — move those verbatim to a
 # companion archive.md, still grep-able), and logs holding 3+ entries
 # with the same normalized Problem/Flaw line (roll them up into one
-# Recurring entry, instances archived verbatim). Age alone is never a
+# Recurring entry, instances archived verbatim — --apply does not do
+# this; it needs an agent's judgment to compose). Age alone is never a
 # reason to archive — only an explicit closed marker is. Prose elsewhere
 # in an entry is never the marker (an ADR describing the compaction rule
 # mentions those words without being closed), and `<!-- -->` template
@@ -249,14 +350,27 @@ check_dup_sessions() {
 # words literally.
 prune() {
   _list=0
+  _apply=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --list) _list=1; shift ;;
+      --apply) _apply=1; shift ;;
       -h|--help) usage ;;
       *) die "unknown argument '$1'" ;;
     esac
   done
   [ -d "$MEMORY_DIR" ] || { say "ledger-mem: no memory dir (nothing to prune)"; return 0; }
+  if [ "$_apply" -eq 1 ]; then
+    for _rel in flaws/log.md inefficiencies/log.md plans/decisions.md; do
+      prune_apply_one "$_rel"
+    done
+    say ""
+    say "memory prune --apply: closed entries moved verbatim to their archive.md;"
+    say "every moved line survives unchanged there and in git history. Recurring"
+    say "roll-ups (3+ entries on the same thing) are still a manual edit — re-run"
+    say "without --apply to see if any are eligible."
+    return 0
+  fi
   _eligible=0
   for _rel in flaws/log.md inefficiencies/log.md plans/decisions.md; do
     _f=$OFFICE_DIR/$_rel

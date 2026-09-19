@@ -1,158 +1,28 @@
 # Agent Instructions — <PROJECT_NAME>
 
 <!-- Generated at bootstrap from .context_ledger/core/templates/AGENTS.md.
-Refreshed on core updates (fill <PROJECT_NAME> again). This is the canonical
-entrypoint digest. Bootstrap also installs a CLAUDE.md pointer so Claude
-Code (which auto-loads CLAUDE.md, not this file) is routed here. If the
-project uses other agent tools, add a one-line "read AGENTS.md first"
-pointer to their entrypoint too — Copilot: .github/copilot-instructions.md,
-Cursor: .cursor/rules, Gemini: GEMINI.md, Codex/others: this AGENTS.md. -->
+Refreshed on core updates (fill <PROJECT_NAME> again). ROUTER ONLY — the
+actual rules live in kickoff.md's phases and the vendored core, not here;
+this file used to restate them and drifted into a third copy of the same
+ceremony (core 2.0.0 stopped that — see CHANGELOG). Bootstrap also
+installs a CLAUDE.md pointer so Claude Code (which auto-loads CLAUDE.md,
+not this file) reaches this same front door. If the project uses other
+agent tools, add a one-line "read AGENTS.md first" pointer to their
+entrypoint too — Copilot: .github/copilot-instructions.md, Cursor:
+.cursor/rules, Gemini: GEMINI.md, Codex/others: this AGENTS.md. -->
 
-This repo uses the `.context_ledger/` protocol: persistent agent memory plus a
-vendored copy of the full workflow, committed to git. **Before doing any
-work, read `.context_ledger/kickoff.md` and follow it.** It routes you — local
-IDE agent or cloud/sandbox agent — to the right instruction set in
-`.context_ledger/core/rules/`.
+This repo uses the `.context_ledger/` protocol: persistent agent memory
+plus a vendored copy of the full workflow, committed to git.
 
-If you read nothing else, obey these rules:
+**Before doing any work, read [`.context_ledger/kickoff.md`](.context_ledger/kickoff.md)
+and follow it, in order.** It checks you in, points you at the session
+digest (`memory/office/STATE.md`), and routes you — local or cloud/sandbox
+agent, task scaled to size — to the right instruction set.
 
-1. **Start at `.context_ledger/kickoff.md`.** Do not treat "start the context
-   workflow" as running this project's app, and do not grep the codebase
-   for "context" — the protocol lives in the `.context_ledger/` directory.
-2. **Never write under `.context_ledger/core/`** — it is a read-only, versioned
-   copy of the protocol. All project memory you write lives under
-   `.context_ledger/memory/` — the live office in `memory/office/`, the
-   durable files (workflows, collaboration, system, user, overrides,
-   secrets) at the memory root.
-3. **Pick your instruction set by YOUR agent type**, never by what a
-   previous session recorded: local IDE agent →
-   `.context_ledger/core/rules/ai-engineering-protocol-local.md`; cloud/sandbox
-   agent → `.context_ledger/core/rules/ai-engineering-protocol.md`. Local
-   agents never use PATs or clone this repo; cloud steps are not yours.
-4. **Read memory before working** — but sign the roster first (rule 5):
-   at minimum
-   `.context_ledger/memory/workflows/active.md`,
-   `.context_ledger/memory/office/agents/sessions.md` (last entries),
-   `.context_ledger/memory/office/agents/roster.md` (the "who's in the office" board —
-   a live row you didn't write means a peer is here),
-   `.context_ledger/memory/collaboration/README.md` and relevant event files
-   when collaboration is enabled, `.context_ledger/memory/workflows/gates.conf`,
-   `.context_ledger/memory/office/tasks/current.md`, and
-   `.context_ledger/memory/office/inefficiencies/log.md` (known traps). If the
-   active session has detailed notes at
-   `.context_ledger/memory/office/sessions/`, skim them for current state.
-5. **Check in first — at the entrance, before any analysis.** Every session
-   (solo or collaboration) adds or updates its row in
-   `memory/office/agents/roster.md` — real name you pick (unique per office),
-   codename `S<NNN>`, model, one line on what you're on, and a Status
-   (`Working` at sign-in, then `Done` or `Blocked`) with a one-line
-   status detail (the stage reached, what shipped — "Shipped: …", or the
-   blocker) — and pushes it
-   BEFORE reading protocol or product code: the startup read comes after
-   your row is on the board, because two workers who read first both see
-   an empty office, both take the same codename, and meet mid-session
-   fighting over the main tree. Keep your row's Status cells current as
-   the work moves — the next live worker reads them to coordinate with
-   you at a glance. The push claims the codename — whoever's
-   check-in commit lands first keeps it; on a collision fix your row to
-   the next free number, never drop a peer's row. And if the session registry you read at the door is already
-   past `office_size` sessions (default 20 — your codename would be
-   past S020), the office is full: close it before working
-   (`ledger-history close`, dry run then `--confirm`), fill the
-   permanent record, re-seed open threads into the fresh office —
-   backlog rows only with an active owner or a clear next step (the
-   rest is knowledge, not work: record it in the permanent record) —
-   re-seeded entries describe the work in plain words and never cite
-   old session numbers or codenames — then sign the new board;
-   codenames restart at `S001`. Then choose the mode
-   from evidence. Roster edits are additive — your row only: a live
-   row you didn't write is a colleague's check-in, not sample text — never
-   adopt a peer's name, never let an edit span a peer's row, review the
-   `git diff` (exactly your row, `+1` on check-in) before committing.
-   Claim an identity; never infer one: a row whose model string matches
-   yours is a peer, not you — model IDs and harness markers are shared by
-   every session on that harness or model, and a fresh context can never
-   prove it is a prior session. "That row is mine" only with continuity in
-   your own session (the re-check-in rule) or the user's word.
-   You
-   are solo only when there is no shared
-   collaboration `session` + `issue`, no live roster row you didn't
-   write, and `office/tasks/current.md` is idle; otherwise coordinate (join or
-   declare a session, isolated worktree/branch, `note` + `claim`) — a
-   peer in the office is a teammate, not a rival, and the human is your
-   supervisor: do not block teammates on `office/tasks/current.md`. Present
-   yourself by your name — "John (S427)", never "peer". The everyday move
-   is a
-   `note` (the office channel — say what you're on, flag a coworker, review a
-   diff); then `claim → work → release`. Save the `proposal → assessment → agreement`
-   ceremony for a genuine conflict (same paths, incompatible changes).
-   Tear down what you set up: at clock-out remove your product worktree
-   and delete your branch (`-d` refuses unmerged) — the coordination
-   branch is the session's event trail and stays.
-   Before each next action run `ledger-gates checkpoint`; before commits,
-   integration, and exit run the matching gate. On Windows, use the `.cmd`
-   launchers (they run the `.ps1` ports; no execution-policy setup).
-6. **Know which kind of file you're in.** *Append-only* logs
-   (`office/agents/sessions.md`, `office/plans/decisions.md`,
-   `office/flaws/log.md`, `office/inefficiencies/log.md`) grow at the bottom — never edit
-   or delete past entries. They also never grow without bound — compact
-   them: a clean session appends nothing to the friction logs; entries
-   explicitly marked `RESOLVED`/`superseded`/fixed move verbatim into the
-   log's `archive.md`; 3+ entries hitting the same recurring thing roll up
-   into one `Recurring` entry (instances archived verbatim);
-   `ledger-mem prune` reports all three. `office/tasks/backlog.md` is a
-   capped work queue of ACTIONABLE items (default ~20 rows): add a row
-   to its priority table only when an agent can start on it and finish
-   it (`ID | Summary`, one line, context lives where it's pointed);
-   delete the row when its item is finished or stale (the completion
-   record is the session entry + commit, not a tombstone); past the
-   cap, prune the lowest-value row to the parking lot first. Findings,
-   open questions, deferred and someday items are not queue rows — they
-   go to `office/tasks/parking-lot.md` (grouped by kind, uncapped),
-   which promotes into the backlog when an item turns actionable.
-   `ledger-mem check` warns past the cap; `ledger-mem closeout` sweeps
-   checked-off tombstones from legacy checkbox-format backlogs.
-   *Update-in-place* registries
-   (`system/ai-models.md`, `system/environments.md`) have one entry per key:
-   correct them by **editing** the entry, never by appending a duplicate
-   (its old value is in git history). `ledger-mem check` flags a dup key.
-   Collaboration event files are stronger still: immutable, one event per
-   file; emit a correction instead of editing one. Office files are
-   office-scoped: when the office fills up, `ledger-history close` freezes
-   the whole directory verbatim into `history/` and the next office starts
-   from empty skeletons — open threads are re-seeded explicitly.
-7. **No secrets in tracked files, ever.** Values go only in
-   `.context_ledger/memory/secrets/` (self-gitignored). Never echo a secret or
-   token in chat, logs, or commit messages.
-8. **Two surfaces, two prefixes:** editing product code = normal commit
-   prefixes; editing `.context_ledger/` = `chore(ledger):` (reports:
-   `docs(review):`). Never mix both surfaces in one commit. Collaboration
-   events are separate immutable context commits. And keep the surfaces
-   apart in *content* too — strictly: never cite `.context_ledger`
-   vocabulary (an ADR number, a bug ID, a `.context_ledger/` path) in a
-   product docstring or comment; it's a dangling pointer for anyone
-   reading only the product repo. `ledger-mem lint` flags it in your
-   staged diff; `ledger-mem lint --tree` sweeps the whole product tree.
-   **A leak found from an earlier session is stripped on sight** — drop
-   the reference (state the reason in plain words if one was being
-   pointed at), commit the strip as a normal product fix, and continue
-   the session; never leave a known leak in place or defer it to a
-   backlog.
-9. **The session is not done until everything is committed AND pushed**,
-   the session is logged in `.context_ledger/memory/office/agents/sessions.md`, and
-   `.context_ledger/memory/office/tasks/current.md` is cleared. Clock out too: remove
-   your row from `.context_ledger/memory/office/agents/roster.md` in the closing
-   memory commit, so the board shows who is in the office now — but only
-   when you are actually leaving. The session is not over until the user
-   says so; if you clocked out and the supervisor brings more work, check
-   back in first (re-add your row, same name and codename `S<N>`) and
-   extend your existing `sessions.md` entry — never a second `Session N`.
-   If the user has to remind you to commit or push, that is a protocol
-   failure — log it in `.context_ledger/memory/office/flaws/log.md`.
-10. **Don't ask permission for the default next step.** Do it and
-    report. Ask only on genuine ambiguity or destructive/irreversible
-    actions.
-
-Formats and file rules: `.context_ledger/core/schemas/ledger-schema.md` is
-the single source of truth. Project-specific rule adjustments:
-`.context_ledger/memory/overrides/rules.md` (they win over the edition).
+The one rule that can't wait for that read: **never write under
+`.context_ledger/core/`** — it is a read-only, versioned copy of the
+protocol, replaced only as a whole tree by `ledger-sync`. Check-in,
+reading order, gates, secrets, collaboration, and commit prefixes are
+`kickoff.md`'s job to route you to — this file's only job is getting you
+there. Full spec if something here and there ever disagrees:
+`.context_ledger/core/schemas/ledger-schema.md`.

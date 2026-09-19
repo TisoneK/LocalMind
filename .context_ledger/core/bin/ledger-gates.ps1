@@ -243,6 +243,11 @@ function Run-Gate { param([string]$RequestedGate, [string[]]$GateArgs)
     if ($script:ChildExit -ne 0) { $failed = $true }
     if (-not (Run-One 'exit (universal)' 'git diff --check')) { $failed = $true }
     if (-not (Run-ProjectCommands 'exit')) { $failed = $true }
+    # advisory nudge (never blocks the gate): surface archive-eligible
+    # entries at the natural moment instead of only when someone thinks
+    # to run it by hand
+    $memScript = Join-Path $coreDir 'bin/ledger-mem.ps1'
+    if (Test-Path -LiteralPath $memScript) { Invoke-ChildScript $memScript @('prune') }
   }
   if ($failed) { Die "$RequestedGate gate failed" }
   Say "GATE PASSED: $RequestedGate"

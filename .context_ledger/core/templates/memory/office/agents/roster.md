@@ -14,7 +14,10 @@ is claimed by your push: the earlier commit keeps a colliding number —
 fix your own row to the next free codename, never drop a peer's row.
 
 **Pick a real name you like when you start** — any human name (John, Ada,
-Kwame, Mei, …) — and add your row. Present yourself by that name from then
+Kwame, Mei, …) — and add your row. **Not your own model or product name,
+literally** ("Claude", "Gemini", "Buffy") — that is not choosing a persona,
+it is skipping the choice, and it collides the moment two sessions on the
+same agent/model both do it. Present yourself by that name from then
 on: in collaboration events, in your session log, when you report to the
 supervisor. "John (S427)", never "peer" or a bare ID.
 

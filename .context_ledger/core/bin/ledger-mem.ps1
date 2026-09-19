@@ -49,20 +49,25 @@ function Usage {
     '          roster row with no Status cell (the at-a-glance column), a',
     '          roster row whose Session N is already in agents/sessions.md',
     '          means the session never clocked out, and a duplicated',
-    '          Session N means a resumed session re-logged; plus a',
-    '          warn-only backlog-cap check (rows past backlog_cap in',
-    '          workflows/history.conf - prune to parking-lot.md)',
+    '          Session N means a resumed session re-logged; plus warn-only',
+    '          cap checks - backlog.md past backlog_cap (prune to',
+    '          parking-lot.md), flaws/log.md and inefficiencies/log.md past',
+    "          flaws_cap/inefficiencies_cap (run 'prune'/'prune --apply') -",
+    '          all three keys in workflows/history.conf',
     '  lint    .context_ledger vocabulary (ADR-N, bug IDs, .context_ledger/ paths) leaking',
     '          into product artifacts - the staged diff by default; --tree',
     '          sweeps every tracked product file (strip leaks old sessions left)',
-    '  prune   advise log compaction: each append-only durable log''s size',
+    '  prune   report log compaction: each append-only durable log''s size',
     '          (flaws, inefficiencies, decisions), which entries carry a',
     '          closed marker on their own Status line (resolved/',
     '          superseded/fixed - move them verbatim to the',
     "          log's archive.md), and which logs hold 3+ entries hitting",
     '          the same recurring thing (roll up into one Recurring entry,',
-    "          instances archived verbatim); --list names them. Never",
-    '          moves or deletes - reports only.',
+    "          instances archived verbatim); --list names them. Report",
+    '          mode never moves or deletes; --apply performs the closed-',
+    '          entry moves mechanically (creates archive.md if needed) -',
+    '          it does NOT do the Recurring roll-up, which needs an',
+    '          agent to compose the consolidated entry.',
     '  closeout delete finished backlog items (- [x] tombstones) from the',
     '          tasks/backlog.md work queue - open work stays. Dry run by',
     '          default (lists the tombstones); --confirm deletes. Every',
@@ -222,6 +227,27 @@ function Check-BacklogTombstones {
   }
 }
 
+function Check-LogCap {
+  # Warn-only cap check for an append-only durable log (flaws/inefficiencies):
+  # counts real entries (## YYYY-MM-DD headers outside <!-- --> blocks, the
+  # same scoping Invoke-Prune/ledger-state use) against a history.conf key.
+  # Going over does not mean "stop adding" - it means "run ledger-mem prune".
+  param([string]$Rel, [string]$Key, [int]$Default)
+  $f = Join-Path $officeDir $Rel
+  if (-not (Test-Path -LiteralPath $f)) { return }
+  $cap = Get-Conf $Key $Default
+  $n = 0; $intpl = $false
+  foreach ($raw in Get-Content -Encoding UTF8 -LiteralPath $f) {
+    $line = $raw.TrimEnd("`r")
+    if (-not $intpl -and $line -match '^<!--') { if ($line -notmatch '-->') { $intpl = $true }; continue }
+    if ($intpl) { if ($line -match '-->') { $intpl = $false }; continue }
+    if ($line -match '^## \d{4}-\d{2}-\d{2}') { $n++ }
+  }
+  if ($n -gt $cap) {
+    Say ("WARN {0}: {1} entries past the cap of {2} ({3} in workflows/history.conf) - run 'ledger-mem prune' to see what's archive-eligible, 'prune --apply' to move the closed ones" -f $Rel, $n, $cap, $Key)
+  }
+}
+
 function Check-BacklogCap {
   # The backlog is a capped WORK QUEUE (core 1.2.0) - actionable items only,
   # default ~20 rows (backlog_cap in workflows/history.conf). Past the cap the
@@ -322,6 +348,94 @@ function Invoke-Lint {
   return $false
 }
 
+function Get-ArchiveTitle { param([string]$Rel)
+  switch ($Rel) {
+    'flaws/log.md' { return 'Flaws Log' }
+    'inefficiencies/log.md' { return 'Inefficiencies Log' }
+    'plans/decisions.md' { return 'Architectural Decisions' }
+    default { return 'Log' }
+  }
+}
+
+# Invoke-PruneApply mirrors ledger-mem's prune_apply_one: cut every entry
+# whose OWN Status/Fixed-in-package line carries a closed marker
+# (resolved/superseded/fixed/no longer) out of the log, verbatim, into the
+# log's companion archive.md (created with a header if missing). Does NOT
+# perform the 3+-repeat roll-up -- that still needs an agent's judgment
+# to compose the consolidated entry (report mode below still flags it).
+function Invoke-PruneApply {
+  foreach ($rel in @('flaws/log.md', 'inefficiencies/log.md', 'plans/decisions.md')) {
+    $f = Join-Path $officeDir $rel
+    if (-not (Test-Path -LiteralPath $f)) { continue }
+    $dir = ($rel -split '/')[0]
+    $archive = Join-Path $officeDir "$dir/archive.md"
+    $preamble = New-Object System.Collections.Generic.List[string]
+    $segments = New-Object System.Collections.Generic.List[object]
+    $inseg = $false; $intpl = $false; $curClosed = $false
+    $curBuf = New-Object System.Collections.Generic.List[string]
+    foreach ($raw in Get-Content -Encoding UTF8 -LiteralPath $f) {
+      $line = $raw.TrimEnd("`r")
+      if (-not $inseg -and $line -match '^<!--') {
+        $preamble.Add($line)
+        if ($line -notmatch '-->') { $intpl = $true }
+        continue
+      }
+      if ($intpl) { $preamble.Add($line); if ($line -match '-->') { $intpl = $false }; continue }
+      if ($line -match '^## ') {
+        if ($inseg) { $segments.Add([pscustomobject]@{ Lines = $curBuf; Closed = $curClosed }) }
+        $inseg = $true; $curClosed = $false; $curBuf = New-Object System.Collections.Generic.List[string]
+        $curBuf.Add($line)
+        continue
+      }
+      if ($inseg) {
+        $curBuf.Add($line)
+        if ($line -match '^\s*[-*]?\s*\*\*Status:\*\*' -and $line -match 'RESOLVED|[Ss]uperseded|[Ff]ixed in package|no longer (a )?(flaw|issue)') { $curClosed = $true }
+        if ($line -match '^\s*[-*]?\s*\*\*Fixed in package:\*\*') { $curClosed = $true }
+        continue
+      }
+      $preamble.Add($line)
+    }
+    if ($inseg) { $segments.Add([pscustomobject]@{ Lines = $curBuf; Closed = $curClosed }) }
+
+    $kept = New-Object System.Collections.Generic.List[string]
+    $moved = New-Object System.Collections.Generic.List[string]
+    $kept.AddRange($preamble)
+    $movedCount = 0
+    foreach ($seg in $segments) {
+      if ($seg.Closed) { $moved.AddRange($seg.Lines); $movedCount++ }
+      else { $kept.AddRange($seg.Lines) }
+    }
+    if ($movedCount -gt 0) {
+      if (-not (Test-Path -LiteralPath $archive)) {
+        $title = Get-ArchiveTitle $rel
+        $header = @(
+          "# $title — archive (verbatim moves from log.md)",
+          '',
+          'Entries below were explicitly marked `RESOLVED` / `superseded` / fixed in',
+          "the live log and moved here verbatim (no edits), per the log's pruning",
+          'rule (`ledger-mem prune --apply`). Startup reads only the live log; this',
+          'archive stays in git, grep-able.'
+        )
+        $utf8 = New-Object System.Text.UTF8Encoding($false)
+        [IO.File]::WriteAllText($archive, ($header -join "`n") + "`n", $utf8)
+      }
+      $utf8 = New-Object System.Text.UTF8Encoding($false)
+      $existing = [IO.File]::ReadAllText($archive)
+      [IO.File]::WriteAllText($archive, $existing + "`n" + ($moved -join "`n") + "`n", $utf8)
+      [IO.File]::WriteAllText($f, ($kept -join "`n") + "`n", $utf8)
+      $plural = if ($movedCount -eq 1) { 'entry' } else { 'entries' }
+      Say "${rel}: moved $movedCount $plural to $dir/archive.md"
+    } else {
+      Say "${rel}: nothing marked resolved/superseded - nothing moved"
+    }
+  }
+  Say ''
+  Say 'memory prune --apply: closed entries moved verbatim to their archive.md;'
+  Say 'every moved line survives unchanged there and in git history. Recurring'
+  Say 'roll-ups (3+ entries on the same thing) are still a manual edit - re-run'
+  Say 'without --apply to see if any are eligible.'
+}
+
 function Invoke-Prune {
   param([bool]$List)
   if (-not (Test-Path -LiteralPath $memoryDir)) { Say 'ledger-mem: no memory dir (nothing to prune)'; return }
@@ -394,6 +508,8 @@ switch ($Command) {
     Check-DupSessions
     Check-BacklogTombstones
     Check-BacklogCap
+    Check-LogCap 'flaws/log.md' 'flaws_cap' 15
+    Check-LogCap 'inefficiencies/log.md' 'inefficiencies_cap' 15
     if ($ok1 -and $ok2 -and $ok3) { Say 'memory check passed: no duplicate keys in the update-in-place registries'; exit 0 }
     ErrLine 'memory check failed: a registry has more than one entry for a key - correct in place (edit the entry), do not append a duplicate'
     exit 1
@@ -406,7 +522,7 @@ switch ($Command) {
     if (Invoke-Lint -Tree:($RestArgs -contains '--tree')) { exit 0 } else { exit 1 }
   }
   'prune' {
-    Invoke-Prune -List:($RestArgs -contains '--list')
+    if ($RestArgs -contains '--apply') { Invoke-PruneApply } else { Invoke-Prune -List:($RestArgs -contains '--list') }
     exit 0
   }
   'closeout' {

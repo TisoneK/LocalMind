@@ -266,6 +266,10 @@ run_gate() {
       sh "$CORE_DIR/bin/ledger-sync" verify || _failed=$((_failed + 1))
       run_one 'exit (universal)' 'git diff --check' || _failed=$((_failed + 1))
       run_project_commands exit || _failed=$((_failed + 1))
+      # advisory nudge (never blocks the gate): surface archive-eligible
+      # entries at the natural moment instead of only when someone thinks
+      # to run it by hand
+      [ -x "$CORE_DIR/bin/ledger-mem" ] && sh "$CORE_DIR/bin/ledger-mem" prune
       ;;
   esac
   [ "$_failed" -eq 0 ] || { err "$_gate gate failed ($_failed check(s))"; return 1; }

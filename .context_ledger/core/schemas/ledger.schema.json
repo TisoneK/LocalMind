@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$comment": "Machine-readable mirror of ledger-schema.md (the authoritative document). Update both in the same commit. Consumers: ledger-sync, future check tooling, agents that prefer structured data.",
   "title": ".context_ledger/ directory schema",
-  "coreVersion": "1.0.0",
+  "coreVersion": "2.0.0",
   "zones": {
     "core": {
       "path": ".context_ledger/core/",
@@ -53,6 +53,7 @@
   },
   "officeFiles": {
     "$comment": "The live office — memory/office/… — everything session-produced; frozen verbatim into history/office-<NNN>/ at close, next office starts from empty skeletons",
+    "STATE.md":                { "mode": "generated",        "scope": "project", "writer": "ledger-state generate", "note": "single at-a-glance session digest — standing params, core version/drift, condensed roster, current task, backlog High rows, log entry counts, collaboration summary; regenerated at check-in and at exit; never hand-edited; read FIRST at session start in place of opening the individual files it summarizes" },
     "agents/sessions.md":      { "mode": "append-only",      "scope": "project", "note": "current office's registry; frozen verbatim with the office at close" },
     "agents/roster.md":        { "mode": "update-in-place",  "scope": "project", "note": "team roster for the current office; one row per person (Name, codename S<NNN>, model, doing, Status Working/Done/Blocked, Status detail — stage reached / shipped outcome / blocker); edit your own row in place as the work moves; Name and codename each unique; ledger-mem check enforces and warns on an empty Status cell; never reset or trimmed — the office is frozen verbatim at close with every shift intact; identity is claimed at check-in (fresh name + codename), never inferred from a model/harness-string match — model strings are shared across sessions, so duplicate model values are normal" },
     "tasks/current.md":        { "mode": "overwrite",        "scope": "project", "note": "single-agent lock only; collaboration mode uses event claims" },
@@ -74,7 +75,7 @@
     "collaboration/events/<event-id>.json": { "mode": "immutable-new-file", "scope": "project", "note": "one file per peer event; never edit an event; legacy pre-0.22.0 <event-id>.md frontmatter files stay readable, never rewritten" },
     "workflows/active.md":     { "mode": "overwrite",        "scope": "project", "note": "protocol field is recorded 'by agent type', naming BOTH editions — never a single edition" },
     "workflows/gates.conf":     { "mode": "update-in-place",  "scope": "project", "note": "explicit lifecycle commands; hybrid mode may discover conventional commands" },
-    "workflows/history.conf":   { "mode": "update-in-place",  "scope": "project", "note": "office rotation knobs: office_size (legacy key group_size still read), history_keep, archive_keep; backlog_cap (default 20) sizes the live work queue" },
+    "workflows/history.conf":   { "mode": "update-in-place",  "scope": "project", "note": "office rotation knobs: office_size (legacy key group_size still read), history_keep, archive_keep; backlog_cap (default 20) sizes the live work queue; flaws_cap/inefficiencies_cap (default 15 each) are hygiene nudges for ledger-mem check, not hard limits" },
     "system/environments.md":  { "mode": "update-in-place",  "scope": "machine", "keyedBy": "Identify by" },
     "system/ai-models.md":     { "mode": "update-in-place",  "scope": "agent-model" },
     "user/identity.md":        { "mode": "update-in-place",  "scope": "user" },
@@ -98,7 +99,7 @@
     "editionSelection": "function of the running agent's type at session start; never read from memory",
     "machineBlocks": "apply only where the block's 'Identify by' matches",
     "credentialFlows": "agent-type facts; PAT steps exist only in the cloud edition",
-    "appendOnly": "corrections are appended, never edited in; compaction is the sanctioned exception — byte-identical duplicates may be removed with a note, closed entries move verbatim into the log's archive.md, and 3+ entries hitting the same recurring thing roll up into one Recurring entry (instances archived verbatim); every moved line survives in the archive and in git history; ledger-mem prune reports sizes, eligible entries, and roll-up candidates",
+    "appendOnly": "corrections are appended, never edited in; compaction is the sanctioned exception — byte-identical duplicates may be removed with a note, closed entries move verbatim into the log's archive.md, and 3+ entries hitting the same recurring thing roll up into one Recurring entry (instances archived verbatim); every moved line survives in the archive and in git history; ledger-mem prune reports sizes, eligible entries, and roll-up candidates; ledger-mem prune --apply performs the closed-entry moves mechanically (never the roll-up, which needs an agent's judgment); flaws_cap/inefficiencies_cap in history.conf (default 15) nudge ledger-mem check before a log grows unbounded",
     "updateInPlace": "one entry per key (ai-models.md keyed by Agent+Model, environments.md by its Identify-by line); correct an entry by editing it in place, never by appending a duplicate — the prior value survives in git history; ledger-mem check flags a duplicated key",
     "officeLifecycle": "one live office (memory/office/, unnumbered); ledger-history close freezes it verbatim — no condensing, no resetting — numbers it at that moment (derived from the records, no state file), writes the permanent accomplishments record, and opens a fresh empty office; the door trigger: a worker whose check-in read finds agents/sessions.md past office_size (default 20 — the codename they would claim is past S020) runs the close right after their check-in push, before the deep read — not skippable to 'finish this task first'; no implicit carryover — the closing session re-seeds open threads explicitly, re-seeded entries describe the work in plain words and never cite the closed office's session numbers or codenames (the permanent record bridges), and the new office's numbering starts clean (codenames from S001, entries from Session 1, ADRs and backlog IDs from 1); durable files at the memory root never rotate",
     "oneWayLinkage": "memory may reference product code; product code must never reference memory — no ADR number, bug ID, or .context_ledger/ path in a product docstring/comment/doc, which would be a dangling pointer for anyone reading only the product repo; ledger-mem lint flags it in the staged product diff and ledger-mem lint --tree sweeps every tracked product file; a leak found from an earlier session is stripped on sight (drop the reference, state any reason in plain words) as a safe fix, then the session continues — never tolerated, never backlogged",
