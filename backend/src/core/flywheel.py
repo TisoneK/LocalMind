@@ -282,7 +282,7 @@ class FlywheelLogger:
 
                 # Rephrase detection — compare against recent events in the same session.
                 rephrase = self._detect_rephrase(
-                    conn, event_id, ts, session_id, query, final_intent
+                    ts, session_id, query, final_intent
                 )
                 if rephrase:
                     prev_id, similarity, delta = rephrase
@@ -401,8 +401,6 @@ class FlywheelLogger:
 
     def _detect_rephrase(
         self,
-        conn: sqlite3.Connection,
-        current_id: str,
         current_ts: float,
         session_id: str,
         query: str,

@@ -13,7 +13,7 @@ Canonical types defined here:
   - Role / Intent — foundational enums
   - Capability — composable capability descriptors
   - RiskLevel — tool risk classification
-  - Message / FileAttachment / ChatRequest / ChatResponse — chat shapes
+  - Message / FileAttachment — chat shapes
   - StreamChunk — SSE transport chunk
   - ToolResult — tool execution result
   - AgentAbortedError — user-abort signal
@@ -198,19 +198,6 @@ class FileAttachment(BaseModel):
     content_type: str
     size_bytes: int
     chunks: list[str] = Field(default_factory=list)
-
-
-class ChatRequest(BaseModel):
-    message: str
-    session_id: str
-
-
-class ChatResponse(BaseModel):
-    text: str
-    session_id: str
-    intent: Intent
-    tool_used: Optional[str] = None
-    sources: list[str] = Field(default_factory=list)
 
 
 class StreamChunk(BaseModel):

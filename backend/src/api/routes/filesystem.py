@@ -53,10 +53,6 @@ class ConfirmWriteRequest(BaseModel):
     sheets: list[dict] | None = None
 
 
-class FileListRequest(BaseModel):
-    path: str = "."
-
-
 @router.post("/open-file")
 async def open_file(req: OpenFileRequest):
     """Open a file using the OS default application."""

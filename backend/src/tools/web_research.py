@@ -65,7 +65,6 @@ async def web_research_tool(query: str, **kwargs: Any) -> ToolResult:
         result = await web_research(
             query=query,
             max_sources=3,
-            freshness_required=False,
         )
 
         content = result.to_tool_result_content()

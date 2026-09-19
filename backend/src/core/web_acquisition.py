@@ -834,7 +834,6 @@ def _news_feed_url(query: str) -> Optional[str]:
 async def web_research(
     query: str,
     max_sources: int = 3,
-    freshness_required: bool = False,
 ) -> WebResult:
     """High-level web research operation.
 

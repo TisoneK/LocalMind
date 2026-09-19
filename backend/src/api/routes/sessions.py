@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
 from core.config import settings
 from core.error_normalizer import normalize_error
@@ -17,14 +16,6 @@ router = APIRouter()
 # Previously this created its own SessionStore() which ran migrations
 # independently, causing duplicate migration logs on every import.
 _store = get_shared_store(settings.localmind_db_path)
-
-
-class SessionListItem(BaseModel):
-    id: str
-    created_at: float
-    message_count: int
-    last_active: float | None
-    title: str | None
 
 
 def _agent_written_paths(tool_calls) -> list[str]:

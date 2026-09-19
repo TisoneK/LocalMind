@@ -95,7 +95,7 @@ def extract_preview(buffer: str) -> InitializationPreview:
     return preview
 
 
-def render_understanding(preview: InitializationPreview, decision_mode: str = "") -> str:
+def render_understanding(preview: InitializationPreview) -> str:
     """Render a bounded, human-readable 'thinker' line from a preview.
 
     The thinker must be visible and fast, and it must show the model's

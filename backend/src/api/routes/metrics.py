@@ -5,20 +5,10 @@ from __future__ import annotations
 import time
 
 from fastapi import APIRouter
-from pydantic import BaseModel
 
 from api.routes.health import _SERVER_START
 
 router = APIRouter()
-
-
-class MetricsResponse(BaseModel):
-    tokensPerSecond: float
-    latency: float
-    totalTokens: int
-    promptTokens: int = 0
-    completionTokens: int = 0
-    uptime: float
 
 
 def _get_engine():

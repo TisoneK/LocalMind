@@ -155,15 +155,6 @@ OLLAMA_MODEL_PROFILES = {
 }
 
 
-class ModelInfo(BaseModel):
-    name: str
-    label: str
-    best_for: str
-    min_ram_gb: int
-    available: bool
-    active: bool
-
-
 class SelectModelRequest(BaseModel):
     model: str
 
