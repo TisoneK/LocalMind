@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T110008Z-Amara-91f59a64",
+  "type": "release",
+  "session": "S023",
+  "agent": "Amara",
+  "created": "2026-09-19T11:00:08Z",
+  "issue": "cwd-home-display",
+  "body": "Shipped (8b892284, fast-forward-merged to main): normalized home/cwd\ndisplay to ~ in the system prompt (context_builder.py, keyed off the\nreal resolved home path so it covers Windows C:\\Users\\<user> too, not\njust Unix regexes), added a \"do NOT run pwd/Get-Location\" guard next to\nthe Working directory line, fixed sysinfo's environment section reading\nthe server's own os.getcwd() instead of the session-tracked cwd, and\nfixed agent_runtime only ever wiring shell's session-cwd ContextVar --\ngit_tool and process_tool declared the same pattern but were never\npopulated, so their commands silently ran from the server's cwd. 5 new\ntests (test_context_builder.py, new test_sysinfo_session_cwd.py). Full\nbackend suite 3320 passed / 2 skipped (pre-existing environmental\nskips), ruff clean.",
+  "paths": [],
+  "refs": ["8b892284"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
