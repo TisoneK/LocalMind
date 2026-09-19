@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T184741Z-claude-sonnet-5-s026-bb565d44",
+  "type": "claim",
+  "session": "S026",
+  "agent": "claude-sonnet-5-s026",
+  "created": "2026-09-19T18:47:41Z",
+  "issue": "agentic-ui-redesign",
+  "body": "New turn event model + store + live turn view in frontend. Read-only on backend; will not touch useLocalMind.ts beyond a bridge.",
+  "paths": ["frontend/src/lib/localmind/turn*", "frontend/src/components/turn/**", "frontend/src/store/**"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
