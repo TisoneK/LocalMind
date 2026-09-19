@@ -85,3 +85,23 @@ Readings (each needs finer instrumentation before it's trusted):
 3. Reflection runs after the loop and `done` waits for it — confirmed blocking at `agent_runtime.py:2121`. It caught a real defect, so the candidate change is to overlap/stream it, not remove it (trust-over-speed).
 4. A ~5 s stretch between the last answer token (6.69 s) and `agent_loop_done` (11.69 s) is unexplained by the events emitted; `agent_thinker_start iteration 3` has no matching `done` before loop end. Needs a stage timer.
 5. SSE events arrive in clumps (several sequential events at the identical timestamp; a tool's `done` event trails its `terminal_output` by ~1.4 s, i.e. until the next model call) — either the bridge batches or the client read does; the panel may show tool completion late. Unverified which.
+
+### Second trace — zai/glm-4.5-flash (the only provider now; same prompt, same harness, key refreshed)
+
+One run, an observation, not a benchmark. Artifacts: scratchpad `trace-out/events-zai3.json`.
+
+| Measurement | Value |
+|---|---|
+| Wall clock to `done` | **225.6 s** (the app's own `anomaly` flagged "Turn stalled": 226 s → 101 output tokens) |
+| LLM calls / iterations / prompt tokens (cached) / completion tokens | 11 / 8 / 72,025 (59,818 cached) / 1,613 |
+| Tool execution (dir / git / system_search) | 2 ms / 52 ms / 3 ms — negligible again |
+| Start → first tool call | **61.5 s**: first model call (42 s) narrated a plan with zero tool calls → gate `agent_loop_gate_failed_replan` (47.5 s) → second call (14 s) → first tool |
+| Model round trips between tools | ~25–50 s each; the three independent reads again ran one per iteration |
+| `agent_loop_done` → `done` | 194.5 s → 225.6 s: **reflection = 31 s (14% of the turn) on the critical path; this run it found no issue** (score 8, has_issue false) |
+| Thinker iteration 4 `next_step` | "Respond conversationally to acknowledge the feedback about action narration vs execution" — the Thinker was steering off the gate's injected recovery text, not the user's request (one sample; needs a second to trust) |
+
+New finding, code-confirmed, model-agnostic: **the SSE bridge polls instead of pushing.** In `api/routes/chat.py` the loop around `_with_keepalives` (~line 627) drains buffered obs events only (a) when the engine yields a text chunk or (b) on a heartbeat tick (`LIVE_PROGRESS_INTERVAL_S`). While the model call is in flight there are no chunks, so tool-done / thinker-done / lifecycle events are delivered only on the next tick. The trace shows exactly that: `tool_call done` trails its tool output by 5.0 s, 5.06 s, 5.0 s (61.5→66.5, 111.5→116.6, …), and the same clumping appeared on gemini (1.4 s lag there because the model chunk arrived sooner than a tick). Effect: the panel understates real progress by up to one tick and thinking prose arrives in bursts (106 thinking tokens at one millisecond). The heartbeat text ("Agent is working with tools — the latest result is shown above") is printed while the loop is actually waiting on the model.
+
+Readings that hold across both traces (so are not model-specific): (1) all wall-clock is model round trips; (2) independent read-only calls are serialised one per iteration; (3) post-answer reflection blocks `done` (3.3 s gemini, 31 s glm — it scales with the model); (4) the bridge lags obs events by up to a heartbeat; (5) the gate's zero-tool-call replan can cost a full extra model round trip before the first tool (glm: ~14 s + the 42 s wasted call).
+
+Candidate work these support (still not decided): push-based obs delivery in the bridge (queue + drain on arrival); overlap reflection with the final answer's delivery; a per-stage/per-call timer so the "17 / 11 calls" can be attributed; harness-level batching of independent read-only calls; investigate why the first glm call narrates instead of calling a tool (ADR-46/61 territory).
