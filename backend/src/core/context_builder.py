@@ -217,6 +217,18 @@ def _build_environment_context(
         except Exception:
             _workspace_line = ""
 
+    # ── User context (one-liner) ──
+    # The boot-fused user context rides the turn-context env block so the
+    # model sees its deduced user picture on EVERY iteration, not just the
+    # bootstrap call (which carries the full block). One line, so the
+    # per-turn env stays cheap; machine facts above stay untouched.
+    try:
+        from core.user_context import get_cached_fused_inline
+
+        _user_line = get_cached_fused_inline()
+    except Exception:
+        _user_line = ""
+
     # ── Available tools summary ──
     # List the tools the model has access to so it doesn't need to guess
     from tools import available_tools
@@ -231,6 +243,7 @@ def _build_environment_context(
 - {os_info}
 - Current date: {date_str}
 - Current time: {time_str}{tz_str}
+- User context: {_user_line or "not deduced"}
 - Working directory: {cwd}
 - Home: {home}
 - {shell_state_line}
@@ -302,6 +315,7 @@ You have access to these tools: {tool_summary}
 - User: {username}
 - Current date: {date_str}
 - Current time: {time_str}{tz_str}
+- User context: {_user_line or "not deduced"}
 - Working directory: {cwd}
 - Home: {home}
 - {shell_state_line}

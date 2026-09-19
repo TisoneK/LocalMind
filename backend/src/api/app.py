@@ -143,6 +143,69 @@ async def lifespan(app: FastAPI):
     except Exception as _sysinfo_exc:  # pragma: no cover - defensive
         logger.warning("[startup] system-info cache refresh skipped: %s", _sysinfo_exc)
 
+    # Fuse the user-context signals (OS country setting, time zone, locale)
+    # ONCE at boot so every turn starts with the deduction already made — the
+    # agent never has to guess the user's region from scratch. Stable facts
+    # only; nothing volatile is collected, and the recompute-each-boot model
+    # means the conclusion can never go stale. Best-effort — never blocks boot.
+    try:
+        from core.user_context import (
+            collect_user_signals,
+            fuse_user_signals,
+            set_cached_fused,
+        )
+
+        _fused = fuse_user_signals(collect_user_signals())
+        set_cached_fused(_fused)
+        if _fused.get("country"):
+            logger.info(
+                "[startup] user context deduced: %s (%s; %s confidence)",
+                _fused["country"],
+                ", ".join(_fused.get("sources", [])) or "no corroboration",
+                _fused.get("confidence"),
+            )
+            # Persist the stable conclusion as ONE keyed fact so it survives
+            # across sessions and rides passive memory retrieval: canonical
+            # key `subject:location` makes re-deductions replace the row
+            # instead of accumulating copies, and the durability tags mark it
+            # a boot-derived refreshable cache (never a claim of permanence).
+            # Re-deduced every boot, so the row self-heals if the user moves.
+            async def _persist_user_location():
+                try:
+                    from core.memory import MemoryComposer
+
+                    await MemoryComposer().store(
+                        # "My country: …" wording on purpose: the write-path
+                        # classifier already tags that shape as a refreshable
+                        # stable fact (freshness=boot) and keys it to the
+                        # single-valued location subject, so re-deductions
+                        # replace the row instead of accumulating copies.
+                        fact=f"My country: {_fused['country']} (deduced from machine settings at boot)",
+                        session_id="boot",
+                        memory_type="semantic",
+                        source="system",
+                        importance=0.6,
+                        level="long_term",
+                        extra_metadata={
+                            "memory_kind": "STABLE_FACT",
+                            "memory_freshness": "boot",
+                            "memory_confidence": {"high": "0.9", "medium": "0.7", "low": "0.5"}.get(
+                                _fused.get("confidence"), "0.6"
+                            ),
+                        },
+                    )
+                    logger.info("[startup] user location persisted to memory (keyed)")
+                except Exception as persist_exc:
+                    logger.warning("[startup] user-location memory write skipped: %s", persist_exc)
+
+            asyncio.create_task(_persist_user_location())
+        else:
+            logger.info(
+                "[startup] user context: no converging region signals — omitted from prompts"
+            )
+    except Exception as _uc_exc:  # pragma: no cover - defensive
+        logger.warning("[startup] user-context cache skipped: %s", _uc_exc)
+
     if settings.localmind_adapter != "ollama":
         logger.info(
             "[startup] Cloud adapter '%s' active — skipping Ollama warmup entirely.",
