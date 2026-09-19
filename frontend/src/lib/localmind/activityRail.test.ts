@@ -72,4 +72,28 @@ describe('buildRail', () => {
     expect(r.files[0].state).toBe('pending');
     expect(r.now).toEqual([]);
   });
+
+  it('lists only the current turn\'s agents, not one "parent" per past turn', () => {
+    const r = buildRail({
+      runs: [
+        run('p1', [tool('a')], { status: 'completed' }),
+        run('p2', [tool('b')], { status: 'completed' }),
+        run('p3', [tool('c', { status: 'running' })]),
+        run('c3', [], { role: 'child', title: 'Explorer' }),
+      ],
+      isStreaming: true,
+    });
+    expect(r.agents.map((a) => a.id)).toEqual(['p3', 'c3']);
+  });
+
+  it('still reports files and running tools from earlier turns of the chat', () => {
+    const r = buildRail({
+      runs: [
+        run('p1', [tool('a', { name: 'file_write', input: '/w/a.txt:\nx' })], { status: 'completed' }),
+        run('p2', [tool('b')]),
+      ],
+      isStreaming: false,
+    });
+    expect(r.files.map((f) => f.name)).toEqual(['a.txt']);
+  });
 });

@@ -51,6 +51,7 @@ import { formatLatency, formatTokens } from '@/lib/localmind/progress';
 import { MarkdownContent } from '@/components/shared/MarkdownContent';
 import { ResponseBlockRenderer } from './ResponseBlockRenderer';
 import { TurnView } from './TurnView';
+import { stripFallbackErrorText } from '@/lib/localmind/errorText';
 import { ErrorMessage } from './ErrorMessage';
 import { DiffBlock, type DiffHunk } from '@/components/shared/DiffBlock';
 import { FilePreviewDialog } from './FilePreviewDialog';
@@ -498,6 +499,9 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs, todos }:
   const [diffAccepted, setDiffAccepted] = useState(!!message.timestampEpoch);
   const [diffReopen, setDiffReopen] = useState(false);
 
+  // The error card already says the reply failed; drop the fallback line that repeats it.
+  const shownContent = !isUser && message.error ? stripFallbackErrorText(message.content) : message.content;
+
   const diffStats = useMemo(() => {
     let additions = 0;
     let deletions = 0;
@@ -551,13 +555,13 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs, todos }:
           )}
 
           {/* Content — rendered as Markdown for assistant, plain for user */}
-          {message.content && (
+          {shownContent && (
             isUser ? (
               <div className="text-[12px] text-brand-amber-soft leading-relaxed whitespace-pre-wrap break-words overflow-wrap-anywhere">
-                {message.content}
+                {shownContent}
               </div>
             ) : (
-              <MarkdownContent text={message.content} />
+              <MarkdownContent text={shownContent} />
             )
           )}
 

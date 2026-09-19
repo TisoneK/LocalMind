@@ -30,6 +30,8 @@ import type { ChatMessage, TodoItem, ToolCall } from '@/types';
 import { MarkdownContent } from '@/components/shared/MarkdownContent';
 import { StateIcon } from './StateIcon';
 import { TerminalBlock } from './TerminalBlock';
+import { ToolOutput } from './ToolOutput';
+import { ThoughtText } from './ThoughtText';
 import { useElapsedSeconds } from '@/lib/localmind/useElapsedSeconds';
 
 const TOOL_ICONS: Record<string, typeof Terminal> = {
@@ -166,11 +168,19 @@ function StepRow({ step, depth = 0 }: { step: TurnStep; depth?: number }) {
           ) : (
             <>
               <FilePreviewLink tool={step.tool} />
-              {step.tool && isTerminalTool(step.tool) ? (
+              {step.kind === 'thought' ? (
+                <ThoughtText text={step.detail ?? ''} />
+              ) : step.tool && isTerminalTool(step.tool) ? (
                 <TerminalBlock tool={step.tool} />
+              ) : step.tool?.error ? (
+                <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words py-1 font-mono text-[10.5px] text-red-300">
+                  {step.tool.error}
+                </pre>
+              ) : step.tool?.output ? (
+                <ToolOutput tool={step.tool} />
               ) : (
                 <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words py-1 font-mono text-[10.5px] text-brand-green-soft">
-                  {step.tool?.error || step.tool?.output || step.detail}
+                  {step.detail}
                 </pre>
               )}
               {step.tool && isShellBlocked(step.tool) && <ShellDisabledTip />}
@@ -273,9 +283,13 @@ export const TurnView = memo(function TurnView({ message, todos, isStreaming }: 
           </button>
           {open && (
             <div className="px-2.5 pb-2" role="list" aria-label="Agent activity">
-              {work.map((s) => (
-                <StepRow key={s.id} step={s} />
-              ))}
+              {/* A reply whose only step is its reasoning has nothing to list: the header already
+                  says "Thought for 2.2s", so show the reasoning itself, not a second "Thought" row. */}
+              {work.length === 1 && work[0].kind === 'thought' ? (
+                <ThoughtText text={work[0].detail ?? ''} />
+              ) : (
+                work.map((s) => <StepRow key={s.id} step={s} />)
+              )}
             </div>
           )}
         </div>

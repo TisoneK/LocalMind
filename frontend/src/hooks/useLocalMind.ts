@@ -2537,16 +2537,27 @@ export function useObjectives(sessionId: string | null) {
 export function useTodos(sessionId: string | null) {
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [loading, setLoading] = useState(true);
+  // Set once a live plan event has been applied for this chat. A new chat gets its id when
+  // the first message is sent, so the saved-tasks fetch below can return (empty) AFTER the
+  // plan's live events — it must not wipe them. The end-of-turn refetch reconciles later.
+  const liveEventSeen = useRef(false);
 
   useEffect(() => {
     let mounted = true;
+    liveEventSeen.current = false;
     const loadTodos = async () => {
       if (!sessionId) {
         queueMicrotask(() => { if (mounted) { setTodos([]); setLoading(false); } });
         return;
       }
-      const data = await localmindClient.getTodos(sessionId);
-      if (mounted) { setTodos(data); setLoading(false); }
+      try {
+        const data = await localmindClient.getTodos(sessionId);
+        if (mounted && !liveEventSeen.current) setTodos(data);
+      } catch {
+        // Best-effort: keep whatever is showing; the end-of-turn refetch tries again.
+      } finally {
+        if (mounted) setLoading(false);
+      }
     };
     loadTodos();
     return () => { mounted = false; };
@@ -2558,6 +2569,7 @@ export function useTodos(sessionId: string | null) {
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
+      liveEventSeen.current = true;
       setTodos((prev) => applyTodoCreated(prev, detail || {}));
     };
     window.addEventListener('localmind:todo-created', handler);
@@ -2569,6 +2581,7 @@ export function useTodos(sessionId: string | null) {
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
+      liveEventSeen.current = true;
       setTodos((prev) => applyTodoUpdated(prev, detail || {}));
     };
     window.addEventListener('localmind:todo-updated', handler);

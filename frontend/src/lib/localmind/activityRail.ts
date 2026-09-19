@@ -83,6 +83,14 @@ export function buildRail(input: {
   const files = new Map<string, RailFile>();
   const agents: RailAgent[] = [];
 
+  // Runs accumulate across the chat's turns (one "parent" per turn). The roster is about the
+  // turn in front of the user: the latest parent and whatever it delegated to.
+  let lastParent = -1;
+  input.runs.forEach((r, i) => {
+    if (r.role === 'parent') lastParent = i;
+  });
+  const currentTurn = lastParent >= 0 ? input.runs.slice(lastParent) : input.runs;
+
   for (const run of input.runs) {
     let done = 0;
     for (const tool of run.tools) {
@@ -102,6 +110,7 @@ export function buildRail(input: {
         }
       }
     }
+    if (!currentTurn.includes(run)) continue;
     agents.push({
       id: run.id,
       name: run.title || run.name,

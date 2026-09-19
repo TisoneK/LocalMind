@@ -173,3 +173,25 @@ describe('ChatMessage diff accept flow', () => {
     expect(screen.queryByRole('button', { name: /apply these changes/i })).toBeNull();
   });
 });
+
+describe('ChatMessage failed reply', () => {
+  const error = { status: 'error' as const, source: 'model_provider' as const, code: 'rate_limit', message: 'The model provider has temporarily reached its usage limit.', retryable: true };
+
+  it('shows the error card once, without repeating it as answer text', () => {
+    render(
+      <ChatMessage
+        message={makeMessage({
+          error,
+          content: '⚠️ The model ran into an issue. Please try again, or switch to a larger model for this task.',
+        })}
+      />,
+    );
+    expect(screen.getByText(/usage limit/)).toBeInTheDocument();
+    expect(screen.queryByText(/ran into an issue/)).toBeNull();
+  });
+
+  it('keeps a real partial answer beside the card', () => {
+    render(<ChatMessage message={makeMessage({ error, content: 'The file has 3 rows.' })} />);
+    expect(screen.getByText('The file has 3 rows.')).toBeInTheDocument();
+  });
+});
