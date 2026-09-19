@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T100459Z-Tariq-e25f1f1f",
+  "type": "release",
+  "session": "S020",
+  "agent": "Tariq",
+  "created": "2026-09-19T10:04:59Z",
+  "issue": "B-2026-09-15-15",
+  "body": "B-2026-09-15-15 shipped + live-verified: deterministic keyed passive-context writes (location/identity/environment), visible-only-on-actual-write event bridged on all three chat drains, frontend badge/popover; Path-2 suggestion-pollution bug fixed; ADR-66 recorded; backlog row deleted.",
+  "paths": ["backend/src/core/memory_intent.py", "backend/src/core/engine/_memory_mixin.py", "backend/src/core/agent_runtime.py", "backend/src/api/routes/chat.py", "frontend/src/hooks/useLocalMind.ts", "frontend/src/components/layout/CenterPanel.tsx"],
+  "refs": ["2132c5ea"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

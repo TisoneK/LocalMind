@@ -11,7 +11,3 @@ backlog before starting.
 - **Task:** <what is being worked on right now>
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
-
-- **Session:** 2026-09-19 — Tariq (S020) / not exposed to the session (Freebuff desktop)
-- **Task:** B-2026-09-15-15 — passive context awareness: build the user/env profile from incidental conversation signals (no "remember this" trigger); constraints are -3's durability policy and -4's keyed mechanics; ADR-64 visible-write rule applies
-- **Status:** in-progress

@@ -69,7 +69,6 @@ file's git history.
 
 | ID | Summary |
 |----|---------|
-| B-2026-09-15-15 | Passive context awareness: build the user/environment profile from incidental interaction signals without an explicit "remember this" trigger; the profile is -13's reasoning input. Constraints: -3 policy, -4 mechanics. Research doc §6.2. |
 | B-2026-09-15-6 | Pre-action recall: inject recalled stable facts into the turn context before answering fact questions (identity/location/preferences) — reads are ~16ms; ADR-62 gap 4. Live-verify. |
 | B-2026-09-15-9 | Consequence-tiered verification ladder for destructive/mutating requests: resolve-target → verify state → assess risk → CONFIRM → execute → verify → reflect; low-risk reads skip ceremony. Owner principles: "No action without verification. No destructive action without confirmation." Extends B-2026-08-25-12. |
 | B-2026-09-15-7 | Turn economy for verification-heavy tasks: resumable per-phase checkpoints, adaptive time/tool budgets, background continuation, tool batching, graceful completed/stopped-at/what-continues report at cap (not dying mid-sentence). Research doc §2 Arc E. |
