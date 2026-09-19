@@ -241,3 +241,30 @@ stays here as a live trap.
   backlog-row deletion in the same commit range as a "done" claim with no
   accompanying live-test evidence in the session log — would close this,
   same shape as the Session 12/14 check-in-ordering asks).
+
+---
+## 2026-09-19 — Kofi / unknown (S025) — a peer-deferred gate-blocking item is orphaned when the claimant clocks out without clearing it
+
+- **Flaw:** Tariq's (S020) B-2026-09-15-15 shipped `73c4fb2d` with an unused
+  `PassiveMemory` import in `frontend/src/components/layout/CenterPanel.test.tsx`
+  — a hard eslint ERROR, so the exit gate's `eslint . --max-warnings 53` step is
+  red on it (the 52 warnings stay under budget; the single error is what fails).
+  Naledi (S022) and Amara (S023) each hit it at their own exit gate, correctly
+  declined to edit a peer's live claimed surface, and emitted `note` events
+  deferring it to Tariq. Tariq then clocked out (`d4511d10`: release event,
+  backlog row deleted, "shipped + live-verified") without clearing the deferred
+  item — and that clock-out commit was never even pushed. The deferral-to-claimant
+  pattern has no fallback: when the claimant leaves, the item is orphaned until a
+  later session trips over it (this one did, and finished it).
+- **Corroborates:** the S008 open flaw (the gates' `sh` commands have no teeth on
+  a bare Windows PATH). Tariq's session ran on a Windows desktop client, so a
+  `ledger-gates run exit` there would not have hard-blocked the red eslint step
+  even if it had been run; the clock-out proceeded regardless.
+- **Suggested fix:** a `release`/clock-out that deletes a backlog row should be
+  gated on the exit gate passing for the released scope on the *integrating*
+  machine (not the claimant's possibly-toothless local runner); or `ledger-collab
+  check` should surface unresolved `note`-deferrals against a claim's own paths
+  before the release closes it, so a deferred item can't be silently dropped at
+  clock-out.
+- **Status:** open (immediate symptom fixed this session — `b5548de5` removes the
+  unused import; eslint back to 0 errors / 52 warnings, under the gate budget).

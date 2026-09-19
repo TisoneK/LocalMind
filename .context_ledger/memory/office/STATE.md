@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-19T18:47:22Z_
+_Regenerated: 2026-09-19T19:14:18Z_
 
 ## Standing params
 - **Core:** 2.0.2 (locked, verified 2026-09-19)
@@ -17,21 +17,20 @@ _Regenerated: 2026-09-19T18:47:22Z_
 ## Office — who's in, right now
 - **Imani** (S024) — Working — Recording a user preference (design decisions must be grounded in the actual design, limi…
 - **Wanjiru** (S026) — Working — Agentic UI redesign — event-driven turn model, live turn view, plan pill, right rail
-- **Kofi** (S025) — Working — Finishing Tariq's (S020) B-2026-09-15-15 — clear the gate-blocking frontend eslint erro…
 
 ## Current task
-- **2026-09-19 — Kofi (S025) / unknown (not exposed to the session)** — Finish Tariq's (S020) B-2026-09-15-15 closeout — clear the gate-blocking frontend eslint error (unused `PassiveMemory` import in `CenterP… — *in-progress*
+(idle — no task recorded)
 
 ## Backlog — High priority (the top of the queue)
 (none)
 
-_9 medium, 7 low priority row(s) — see tasks/backlog.md_
+_10 medium, 7 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
-- flaws/log.md (protocol/.context_ledger friction): 13 entries, last added 2026-09-19
-- inefficiencies/log.md (project code/env friction): 15 entries, last added 2026-09-19
+- flaws/log.md (protocol/.context_ledger friction): 14 entries, last added 2026-09-19
+- inefficiencies/log.md (project code/env friction): 16 entries, last added 2026-09-19
 - plans/decisions.md (ADRs in force — respected, not relitigated): 5 entries, last added 2026-09-19
 
 ## Collaboration
-- 105 event(s) on file; most recent: `20260919T182912Z-Kofi-422b77e0.json`
+- 110 event(s) on file; most recent: `20260919T190240Z-Kofi-e58f3adf.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`

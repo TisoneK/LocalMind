@@ -318,3 +318,29 @@ never makes an entry eligible.
   for worktree-scoped git ops — use `git -C <worktree-path>` for every
   checkout/switch, and assert the expected HEAD (`rev-parse --short HEAD`)
   before runs whose provenance matters.
+
+---
+## 2026-09-19 — Kofi / unknown (S025) — prior sessions left worktree residue on disk the next agent has to diagnose and clear
+
+- **What happened:** picking up Tariq's (S020) unfinished B-2026-09-15-15
+  closeout, `git worktree list` plus a scan of `~/Dev/LocalMind*` turned up two
+  pieces of residue no closeout had cleared: (1) `../LocalMind-s020-baseline` —
+  still a *registered* worktree, detached at Tariq's pre-work baseline `aa086d5c`,
+  holding an untracked superseded draft of `scripts/live_test_passive_context.py`
+  (gemini settings; main carries the newer zai/glm-4.5-flash version) and a
+  `backend/.venv` junction into the main checkout; (2) `../LocalMind-kamau-s018`
+  — an orphan directory whose worktree registration was already pruned, leaving
+  only a `node_modules` junction (4K). The override (rules.md, set 2026-08-20)
+  requires every closeout to clear generated artifacts and verify `git status`
+  clean; this is exactly the "stale checkout claims locked files" trap the
+  collaboration README warns about.
+- **Fix applied:** verified nothing unique was lost first (the untracked script
+  is a superseded draft — `git show main:` has the newer committed copy; both
+  junctions resolve to the main checkout's intact `node_modules` / `backend/.venv`),
+  then `git worktree remove --force` the baseline, removed each junction with
+  `rmdir` (junction-safe — never `rm -rf`, which on Windows can traverse into the
+  target), deleted the empty dirs, and `git worktree prune`. Confirmed main's
+  `node_modules/.bin/eslint` and `backend/.venv/Scripts/python.exe` intact after.
+- **Prevent next time:** a session that opens a baseline/live-test worktree tears
+  it down in closeout (README teardown step); a junction into the shared checkout
+  is removed with `rmdir`, not `rm -rf`. Supervisor directed this cleanup mid-session.

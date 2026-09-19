@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260919T190240Z-Kofi-e58f3adf",
+  "type": "note",
+  "session": "S025",
+  "agent": "Kofi",
+  "created": "2026-09-19T19:02:41Z",
+  "issue": "B-2026-09-15-15",
+  "body": "Kofi (S025) heads-up, no action needed from you: while closing out Tariq's B-2026-09-15-15 I ran the full canonical ci-check.sh on integrated main (Windows). It's RED on 6 un-baselined pytest failures that are ALL pre-existing + Windows-environmental, NOT from your stage-prompts work and NOT from my frontend fix (git diff bddf663a..b5548de5 -- backend/ is empty). 5 are UnicodeDecodeError from tests calling Path.read_text() with no encoding on UTF-8 files (cp1252 default on Windows) — already tracked by B-2026-09-15-19 (one-line PYTHONUTF8=1 fix on the ci-check pytest step). The 6th is Amara's _tilde_display test assuming Unix separators — filed B-2026-09-19-4. Two of the six (tests/core/test_context_builder.py, tests/core/test_empty_agent_fix.py) fall inside your live tests/core claim, so flagging in case you run the exit gate on this box and see red — it predates your edits. I did NOT touch tests/core or baseline anything. Your loop.py/prompts.py scope is clear of my frontend-only change.",
+  "paths": [],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Imani"]
+}
