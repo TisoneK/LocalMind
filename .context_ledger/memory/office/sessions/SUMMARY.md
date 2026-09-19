@@ -40,3 +40,7 @@ records.
 
 - **2026-09-16 — Session 5** — Baraka / qwen3.8-flash — ledger-vocabulary sweep of the product runtime surface: ~2,650 citation lines rewritten by hand into plain words (backend, frontend, scripts, migrations, app data, CHANGELOG; 2 test files renamed); ~540 remain in tests/docs/scripts per the updated backlog row. Exit-gate pytest failures bisected to pre-exist on main (documented Windows flaky family).
   Detail: .context_ledger/memory/office/reviews/2026-09-16-review-s5-vocab-strip.md
+
+---
+- **2026-09-19 — Session 21** — Zola / claude-sonnet-5 — dead-code scan shipped (`e498459b`): 6 orphan Pydantic models + 3 dead params removed, verified against the whole tree before touching anything; ruff clean, full suite 3308/3310 (2 pre-existing). Found a real bug via the scan, not just cleanup — `filters.py`'s `is_code_output` flag does nothing, so code-exec output never gets its documented exemption (`B-2026-09-19-2`). Also caught one false "orphan" in time: `ObjectivesPanel.tsx` is deliberately kept in tree per its own comment — reported, not deleted.
+  Detail: .context_ledger/memory/office/reviews/2026-09-19-review-s021-dead-code-scan.md
