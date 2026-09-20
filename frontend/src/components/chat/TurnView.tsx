@@ -7,7 +7,7 @@
  * finishes it folds to a one-line summary the user can reopen.
  */
 
-import { memo, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   AlertTriangle,
@@ -184,7 +184,7 @@ function StepRow({ step, depth = 0 }: { step: TurnStep; depth?: number }) {
 interface TurnViewProps {
   message: Pick<
     ChatMessage,
-    'acknowledgement' | 'thinking' | 'thinkMs' | 'toolCalls' | 'agentPhases' | 'agentRuns' | 'statusText'
+    'acknowledgement' | 'thinking' | 'thinkMs' | 'toolCalls' | 'agentPhases' | 'agentRuns' | 'statusText' | 'performance'
   > & { content?: string };
   todos?: TodoItem[];
   isStreaming?: boolean;
@@ -210,6 +210,11 @@ export const TurnView = memo(function TurnView({ message, todos, isStreaming }: 
   const turn = buildTurn(message, { todos, isStreaming });
   const running = turn.state === 'running';
   const elapsed = useElapsedSeconds(running);
+  // The header's clock must not vanish the moment the turn ends: remember what it showed
+  // while running, and prefer the measured latency once the reply carries it.
+  const lastShown = useRef(0);
+  if (running) lastShown.current = elapsed;
+  const totalMs = message.performance?.latencyMs || (lastShown.current > 0 ? lastShown.current * 1000 : 0);
   // null = follow the turn (open while running, folded when done); a click pins it.
   const [pinned, setPinned] = useState<boolean | null>(null);
   const open = pinned ?? running;
@@ -221,7 +226,9 @@ export const TurnView = memo(function TurnView({ message, todos, isStreaming }: 
 
   if (turn.steps.length === 0 && !running) return null;
 
-  const title = running ? `Working · ${elapsed}s` : turn.summary || 'Done';
+  const title = running
+    ? `Working · ${elapsed}s`
+    : `${turn.summary || 'Done'}${totalMs > 0 ? ` · ${formatLatency(totalMs)}` : ''}`;
   const sub = running ? turn.activeLabel : '';
   const failed = !running && turn.counts.failed > 0;
   const unfinished = !running && turn.counts.unfinished > 0;

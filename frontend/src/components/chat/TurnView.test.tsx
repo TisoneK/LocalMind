@@ -94,4 +94,23 @@ describe('TurnView', () => {
     expect((onPreview.mock.calls[0][0] as CustomEvent).detail).toBe('/w/out.txt');
     window.removeEventListener('localmind:open-file-preview', onPreview);
   });
+
+  it('keeps the total time in the header once the turn is done', () => {
+    render(
+      <TurnView
+        message={{
+          toolCalls: [tool('a'), tool('b')],
+          performance: { latencyMs: 4800 } as never,
+        }}
+      />,
+    );
+    expect(screen.getByText(/Ran 2 tools · 4\.8s/)).toBeInTheDocument();
+  });
+
+  it('carries the live clock into the finished header when no measured latency exists yet', () => {
+    const { rerender } = render(<TurnView isStreaming message={{ toolCalls: [tool('a', { status: 'running' })] }} />);
+    rerender(<TurnView message={{ toolCalls: [tool('a')] }} />);
+    // No measured latency and no elapsed time yet: nothing invented.
+    expect(screen.queryByText(/·\s+\d/)).toBeNull();
+  });
 });
