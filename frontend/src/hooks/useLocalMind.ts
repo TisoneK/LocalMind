@@ -18,7 +18,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { classifyClientIntent, localmindClient } from '@/lib/localmind/client';
 import { applyTodoCreated, applyTodoUpdated, estimateTokens, isActiveToolStatus } from '@/lib/localmind/progress';
-import type {
+import { friendlyUnmet } from '@/lib/localmind/errorText';import type {
   ChatMessage,
   Session,
   ActionItem,
@@ -2291,7 +2291,7 @@ export function buildAgentPhase(
         label: intent
           ? `Replanning — ${intent} criteria unmet`
           : 'Replanning — acceptance criteria unmet',
-        detail: unmet.length ? `Unmet: ${unmet.slice(0, 3).join('; ')}` : undefined,
+        detail: unmet.length ? `Unmet: ${unmet.slice(0, 3).map(friendlyUnmet).join('; ')}` : undefined,
         timestamp: ts,
         iteration: data?.iteration !== undefined ? Number(data.iteration) : undefined,
       };

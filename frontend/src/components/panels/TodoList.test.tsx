@@ -123,3 +123,16 @@ describe('TodoList', () => {
     expect(screen.getByText('1/2')).toBeInTheDocument();
   });
 });
+
+describe('TodoList when the turn is over', () => {
+  it('marks an unchecked task as not finished instead of leaving an empty checkbox', () => {
+    const todos = [
+      { id: 'plan-0', text: 'Read the file', completed: true },
+      { id: 'plan-1', text: 'Run ls', completed: false },
+    ] as never;
+    const { rerender } = render(<TodoList todos={todos} />);
+    expect(screen.queryByTestId('todo-unfinished')).toBeNull();
+    rerender(<TodoList todos={todos} settled />);
+    expect(screen.getAllByTestId('todo-unfinished')).toHaveLength(1);
+  });
+});

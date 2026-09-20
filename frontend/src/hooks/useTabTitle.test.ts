@@ -12,6 +12,11 @@ describe('useTabTitle', () => {
     unmount();
   });
 
+  it('never puts a raw command in the title', () => {
+    renderHook(() => useTabTitle(true, 'Running: ls -1 /etc/host*.conf 2>/dev/null'));
+    expect(document.title).toBe('● Running… — LocalMind');
+  });
+
   it('ignores heartbeat filler', () => {
     renderHook(() => useTabTitle(true, 'Agent is still working — this can take a moment'));
     expect(document.title).toBe('● Working… — LocalMind');

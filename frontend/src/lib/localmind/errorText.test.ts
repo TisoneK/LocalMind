@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { stripFallbackErrorText, stripVerificationFooter } from './errorText';
+import { cleanToolFailure, friendlyUnmet, stripFallbackErrorText, stripVerificationFooter } from './errorText';
 
 describe('stripFallbackErrorText', () => {
   it('removes the loop fallback when it is the whole reply', () => {
@@ -28,5 +28,22 @@ describe('stripVerificationFooter', () => {
   });
   it('leaves ordinary text alone', () => {
     expect(stripVerificationFooter('All 3 criteria are described below.')).toBe('All 3 criteria are described below.');
+  });
+});
+
+describe('cleanToolFailure', () => {
+  it('drops the model-facing header and recovery advice, keeping what the command said', () => {
+    const raw = "[Tool 'shell' returned error_type='command_failed']\nCommand failed:\ncat: /x: No such file\n[RECOVERY]: `shell` command failed. Check the error message, fix the command, and retry.";
+    expect(cleanToolFailure(raw)).toBe('cat: /x: No such file');
+  });
+  it('leaves ordinary output alone', () => {
+    expect(cleanToolFailure('permission denied')).toBe('permission denied');
+  });
+});
+
+describe('friendlyUnmet', () => {
+  it('rewords loop jargon and keeps real criteria verbatim', () => {
+    expect(friendlyUnmet('model narrated an action plan but made zero tool calls')).toMatch(/described a plan/);
+    expect(friendlyUnmet('file exists at /tmp/a')).toBe('file exists at /tmp/a');
   });
 });

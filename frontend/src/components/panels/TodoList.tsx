@@ -14,9 +14,11 @@ interface TodoListProps {
   actions?: ActionItem[];
   onToggle?: (id: string, completed: boolean) => void;
   onAdd?: (text: string) => void;
+  /** The turn is over: a task still unchecked did not finish, and reads that way. */
+  settled?: boolean;
 }
 
-export function TodoList({ todos, actions = [], onToggle, onAdd }: TodoListProps) {
+export function TodoList({ todos, actions = [], onToggle, onAdd, settled = false }: TodoListProps) {
   const { reduce: reduceMotion, enter } = useEnterMotion();
   const [newTodoText, setNewTodoText] = useState('');
   const [showInput, setShowInput] = useState(false);
@@ -176,6 +178,14 @@ export function TodoList({ todos, actions = [], onToggle, onAdd }: TodoListProps
                   <div className="w-3.5 h-3.5 flex items-center justify-center shrink-0" title="In progress">
                     <Loader2 className={`h-3 w-3 text-brand-amber ${reduceMotion ? '' : 'animate-spin'}`} />
                   </div>
+                ) : settled ? (
+                  <div
+                    className="w-3.5 h-3.5 rounded border border-dashed border-brand-border/70 flex items-center justify-center text-[9px] leading-none text-brand-green-faint shrink-0"
+                    title="Didn't finish"
+                    data-testid="todo-unfinished"
+                  >
+                    –
+                  </div>
                 ) : (
                   <div className="w-3.5 h-3.5 rounded border border-brand-border bg-transparent group-hover:border-brand-green-muted transition-colors shrink-0" />
                 )}
@@ -185,7 +195,9 @@ export function TodoList({ todos, actions = [], onToggle, onAdd }: TodoListProps
                       ? 'text-brand-green-muted line-through'
                       : isActive
                         ? 'text-brand-amber-soft font-medium'
-                        : 'text-brand-green-soft'
+                        : settled
+                          ? 'text-brand-green-muted'
+                          : 'text-brand-green-soft'
                   }`}
                 >
                 <span

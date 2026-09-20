@@ -92,7 +92,7 @@ export function ActivityRail({ runs, todos = [], actions, onToggleTodo, onAddTod
   // Tasks sit right under "Now" (or under the idle note) so the plan reads next to what is running.
   const tasksSection = (
     <section className="border-b border-white/[0.06] px-3 py-2.5" data-testid="rail-tasks">
-      <TodoList todos={todos} actions={actions} onToggle={onToggleTodo} onAdd={onAddTodo} />
+      <TodoList todos={todos} actions={actions} onToggle={onToggleTodo} onAdd={onAddTodo} settled={isStreaming === false} />
     </section>
   );
 

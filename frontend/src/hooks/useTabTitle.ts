@@ -13,7 +13,7 @@ export function useTabTitle(isStreaming: boolean, label?: string) {
   useEffect(() => {
     if (isStreaming) {
       // Heartbeat filler ("Agent is still working — this can take…") is not worth a tab title.
-      const specific = label && !/^(agent is|got it|done)/i.test(label) ? label.replace(/…|\.\.\.$/, '').slice(0, 36) : '';
+      const specific = label && !/^(agent is|got it|done)/i.test(label) ? label.split(':')[0].replace(/…|\.\.\.$/, '').slice(0, 36) : '';
       document.title = `● ${specific || 'Working'}… — ${BASE}`;
     } else if (wasStreaming.current && document.hidden) {
       document.title = `✓ Done — ${BASE}`;

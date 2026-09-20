@@ -28,3 +28,23 @@ export function stripVerificationFooter(content: string): string {
     .replace(/\n*📁\s*Files:\s*\n(?:\s*[-•*][^\n]*\n?)+/g, '')
     .trim();
 }
+
+/**
+ * A failed tool's output carries text written for the MODEL, not for you: a
+ * "[Tool 'shell' returned error_type='command_failed']" header and a "[RECOVERY]: …" paragraph
+ * telling it how to retry. Show only what the command itself said.
+ */
+export function cleanToolFailure(text: string): string {
+  return text
+    .replace(/^\s*\[Tool '[^']*' returned error_type='[^']*'\]\s*/i, '')
+    .replace(/\n*\s*\[RECOVERY\]:[\s\S]*$/i, '')
+    .replace(/^Command failed:\s*/i, '')
+    .replace(/^-{3,}\s*$/gm, '')
+    .trim();
+}
+
+/** Loop-internal reasons an acceptance check was unmet, put in words for the person watching. */
+export function friendlyUnmet(item: string): string {
+  if (/^model narrated an action plan/i.test(item)) return 'it described a plan instead of carrying it out';
+  return item;
+}

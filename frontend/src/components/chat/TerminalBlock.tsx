@@ -7,6 +7,7 @@
  */
 
 import { useState } from 'react';
+import { cleanToolFailure } from '@/lib/localmind/errorText';
 import { Check, Copy } from 'lucide-react';
 import type { ToolCall } from '@/types';
 
@@ -18,7 +19,8 @@ export function TerminalBlock({ tool }: { tool: ToolCall }) {
   const [copied, setCopied] = useState(false);
   const isCode = tool.name === 'code_exec';
   const failed = tool.status === 'failed';
-  const output = (tool.error || tool.output || '').replace(ANSI, '').replace(/\s+$/, '');
+  const raw = (tool.error || tool.output || '').replace(ANSI, '').replace(/\s+$/, '');
+  const output = failed ? cleanToolFailure(raw) || raw : raw;
 
   const copy = () => {
     void navigator.clipboard?.writeText(tool.input).then(() => {
