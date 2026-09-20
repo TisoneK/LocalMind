@@ -555,6 +555,7 @@ export function WorkspaceLayout() {
           onAddTodo={addTodo}
           onAbort={abort}
           fileDiffs={fileDiffs}
+          answering={isStreaming && !!messages[messages.length - 1]?.content?.trim()}
           collapsed={rightPanelCollapsed}
           onToggleCollapse={() => setRightPanelCollapsed(!rightPanelCollapsed)}
           forceTerminalTab={forceTerminalTab}

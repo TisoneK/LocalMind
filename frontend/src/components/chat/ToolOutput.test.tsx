@@ -89,3 +89,21 @@ describe('ToolOutput JSON', () => {
   });
 });
 
+
+describe('TurnView tool icons', () => {
+  it('colours a step by the kind of work', () => {
+    render(
+      <TurnView
+        message={{
+          toolCalls: [
+            { id: '1', name: 'web_search', status: 'done', input: 'q', output: 'x', iteration: 1 },
+            { id: '2', name: 'file_write', status: 'done', input: '/w/a.txt:\nx', output: 'ok', iteration: 2 },
+          ],
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByText('Ran 2 tools'));
+    expect(document.querySelector('[data-tool-kind="web"]')?.getAttribute('class')).toContain('text-brand-blue');
+    expect(document.querySelector('[data-tool-kind="write"]')?.getAttribute('class')).toContain('text-brand-amber');
+  });
+});

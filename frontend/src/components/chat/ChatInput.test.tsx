@@ -86,3 +86,14 @@ describe('ChatInput width', () => {
   });
 });
 
+
+describe('ChatInput send hint', () => {
+  it('says plain Enter sends, because that is what sends', async () => {
+    const onSend = vi.fn();
+    render(<ChatInput onSend={onSend} onAbort={() => {}} isStreaming={false} />);
+    expect(screen.queryByText('⌘')).toBeNull();
+    const box = screen.getByRole('textbox');
+    await userEvent.type(box, 'hello{Enter}');
+    expect(onSend).toHaveBeenCalledWith('hello');
+  });
+});

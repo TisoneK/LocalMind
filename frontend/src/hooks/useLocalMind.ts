@@ -2628,14 +2628,14 @@ export function useTodos(sessionId: string | null) {
 
   const toggleTodo = useCallback(async (id: string, completed: boolean) => {
     setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, completed } : t)));
-    try { await localmindClient.updateTodo(id, { completed }); }
+    try { await localmindClient.updateTodo(id, { completed }, sessionId ?? undefined); }
     catch { setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, completed: !completed } : t))); }
-  }, []);
+  }, [sessionId]);
 
   const removeTodo = useCallback(async (id: string) => {
     setTodos((prev) => prev.filter((t) => t.id !== id));
-    try { await localmindClient.deleteTodo(id); } catch { /* */ }
-  }, []);
+    try { await localmindClient.deleteTodo(id, sessionId ?? undefined); } catch { /* */ }
+  }, [sessionId]);
 
   return { todos, loading, addTodo, toggleTodo, removeTodo };
 }

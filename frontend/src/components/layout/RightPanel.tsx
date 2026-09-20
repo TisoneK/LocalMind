@@ -50,6 +50,8 @@ interface RightPanelProps {
   onAbort?: () => void;
   /** Per-path diffs captured this session, for the rail's file list. */
   fileDiffs?: Record<string, DiffData>;
+  /** The reply is streaming in with no tool running. */
+  answering?: boolean;
   collapsed: boolean;
   onToggleCollapse: () => void;
   /** FIX 4: Force the terminal tab to be active when agent runs shell/code_exec */
@@ -103,6 +105,7 @@ export function RightPanel({
   onAddTodo,
   onAbort,
   fileDiffs,
+  answering,
   collapsed,
   onToggleCollapse,
   forceTerminalTab,
@@ -316,6 +319,7 @@ export function RightPanel({
             onAbort={onAbort}
             fileDiffs={fileDiffs}
             isStreaming={agentStreaming}
+            answering={answering}
           />
         )}
         {activeTab === 'memory' && (

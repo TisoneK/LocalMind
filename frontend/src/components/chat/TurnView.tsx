@@ -15,11 +15,6 @@ import {
   Brain,
   Check,
   ChevronRight,
-  FileEdit,
-  FileSearch,
-  Globe,
-  Search,
-  Terminal,
   X,
 } from 'lucide-react';
 import { buildTurn, isShellBlocked, isTerminalTool, type TurnStep } from '@/lib/localmind/turnTimeline';
@@ -29,21 +24,11 @@ import { formatLatency } from '@/lib/localmind/progress';
 import type { ChatMessage, TodoItem, ToolCall } from '@/types';
 import { MarkdownContent } from '@/components/shared/MarkdownContent';
 import { StateIcon } from './StateIcon';
+import { ToolIcon } from './ToolIcon';
 import { TerminalBlock } from './TerminalBlock';
 import { ToolOutput } from './ToolOutput';
 import { ThoughtText } from './ThoughtText';
 import { useElapsedSeconds } from '@/lib/localmind/useElapsedSeconds';
-
-const TOOL_ICONS: Record<string, typeof Terminal> = {
-  file_write: FileEdit,
-  edit_file: FileEdit,
-  file_read: FileSearch,
-  file_task: FileSearch,
-  dir_explorer: FileSearch,
-  grep: Search,
-  web_search: Globe,
-  memory_op: Brain,
-};
 
 /** A running row ticks its own seconds; a finished row shows the recorded duration. */
 function RowClock({ step }: { step: TurnStep }) {
@@ -126,8 +111,6 @@ function StepRow({ step, depth = 0 }: { step: TurnStep; depth?: number }) {
 
   const nested = step.kind === 'agent' || step.kind === 'parallel';
   const expandable = nested || !!step.detail || !!step.tool?.output || !!step.tool?.error;
-  const Icon =
-    step.kind === 'agent' ? Bot : step.kind === 'thought' ? Brain : TOOL_ICONS[step.tool?.name ?? ''] ?? Terminal;
   // Nested groups start open while running so parallel work is visible without a click.
   const isOpen = nested ? open || step.state === 'running' : open;
 
@@ -143,7 +126,13 @@ function StepRow({ step, depth = 0 }: { step: TurnStep; depth?: number }) {
         }`}
       >
         <StateIcon state={step.state} />
-        <Icon className="h-3 w-3 shrink-0 text-brand-green-muted" aria-hidden />
+        {step.kind === 'agent' ? (
+          <Bot className="h-3 w-3 shrink-0 text-brand-purple" aria-label="agent" />
+        ) : step.kind === 'thought' ? (
+          <Brain className="h-3 w-3 shrink-0 text-brand-purple" aria-label="thought" />
+        ) : (
+          <ToolIcon name={step.tool?.name} />
+        )}
         <span className={`min-w-0 truncate ${step.state === 'failed' ? 'text-red-300' : 'text-brand-green'}`} title={step.label}>
           {step.label}
         </span>
@@ -196,7 +185,7 @@ interface TurnViewProps {
   message: Pick<
     ChatMessage,
     'acknowledgement' | 'thinking' | 'thinkMs' | 'toolCalls' | 'agentPhases' | 'agentRuns' | 'statusText'
-  >;
+  > & { content?: string };
   todos?: TodoItem[];
   isStreaming?: boolean;
 }

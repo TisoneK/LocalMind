@@ -223,7 +223,6 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onC
       <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-4 pb-2">
         <div className="flex items-center gap-3">
           <span className="text-[9px] text-brand-green-muted">
-            <kbd className="px-1 py-0.5 rounded bg-brand-border text-brand-green-muted mr-0.5">⌘</kbd>
             <kbd className="px-1 py-0.5 rounded bg-brand-border text-brand-green-muted">Enter</kbd>
             {' '}to send
           </span>

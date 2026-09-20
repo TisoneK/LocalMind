@@ -85,4 +85,11 @@ describe('ActivityRail', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onAbort).toHaveBeenCalledTimes(1);
   });
+
+  it('says the agent is writing the answer, not deciding, while the reply streams', () => {
+    render(<ActivityRail runs={[parent([tool('a')])]} isStreaming answering />);
+    expect(screen.getByText('Writing the answer…')).toBeInTheDocument();
+    expect(screen.queryByText('Deciding the next step…')).toBeNull();
+  });
 });
+

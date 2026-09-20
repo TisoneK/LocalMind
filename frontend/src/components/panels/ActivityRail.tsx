@@ -13,6 +13,7 @@ import type { ActionItem, AgentRun, DiffData, TodoItem } from '@/types';
 import { buildRail } from '@/lib/localmind/activityRail';
 import { useEnterMotion } from '@/lib/localmind/motion';
 import { StateIcon } from '@/components/chat/StateIcon';
+import { ToolIcon } from '@/components/chat/ToolIcon';
 import { useElapsedSeconds } from '@/lib/localmind/useElapsedSeconds';
 import { AgentWorkspace } from '@/components/panels/AgentWorkspace';
 import { TodoList } from '@/components/panels/TodoList';
@@ -29,6 +30,8 @@ interface ActivityRailProps {
   onAbort?: () => void;
   fileDiffs?: Record<string, DiffData>;
   isStreaming?: boolean;
+  /** The reply text is streaming in (no tool running): the agent is writing, not deciding. */
+  answering?: boolean;
 }
 
 function Section({
@@ -63,12 +66,13 @@ function Section({
   );
 }
 
-function NowRow({ label, agent, detail }: { label: string; agent: string; detail?: string }) {
+function NowRow({ tool, label, agent, detail }: { tool: string; label: string; agent: string; detail?: string }) {
   const { enter } = useEnterMotion();
   const secs = useElapsedSeconds(true);
   return (
     <motion.div {...enter({ x: 6 })} className="flex items-center gap-2 rounded bg-brand-amber/[0.05] px-1.5 py-1 text-[11.5px]">
       <StateIcon state="running" />
+      <ToolIcon name={tool} />
       <div className="min-w-0 flex-1">
         <div className="truncate text-brand-green">{label}</div>
         <div className="truncate text-[10px] text-brand-green-muted">
@@ -81,7 +85,7 @@ function NowRow({ label, agent, detail }: { label: string; agent: string; detail
   );
 }
 
-export function ActivityRail({ runs, todos = [], actions, onToggleTodo, onAddTodo, onAbort, fileDiffs, isStreaming }: ActivityRailProps) {
+export function ActivityRail({ runs, todos = [], actions, onToggleTodo, onAddTodo, onAbort, fileDiffs, isStreaming, answering }: ActivityRailProps) {
   const rail = buildRail({ runs, fileDiffs, isStreaming });
   const [details, setDetails] = useState(false);
   const live = rail.now.length > 0 || !!isStreaming;
@@ -132,11 +136,11 @@ export function ActivityRail({ runs, todos = [], actions, onToggleTodo, onAddTod
             {rail.now.length > 0 ? (
               <div className="space-y-1">
                 {rail.now.map((n) => (
-                  <NowRow key={n.id} label={n.label} agent={n.agent} detail={n.detail} />
+                  <NowRow key={n.id} tool={n.tool} label={n.label} agent={n.agent} detail={n.detail} />
                 ))}
               </div>
             ) : (
-              <p className="text-[11px] text-brand-green-muted">Deciding the next step…</p>
+              <p className="text-[11px] text-brand-green-muted">{answering ? 'Writing the answer…' : 'Deciding the next step…'}</p>
             )}
           </Section>
           )}

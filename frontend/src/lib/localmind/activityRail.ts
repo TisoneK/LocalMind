@@ -11,6 +11,8 @@ import { toolLabel, toolState, type StepState } from '@/lib/localmind/turnTimeli
 export interface RailNow {
   id: string;
   label: string;
+  /** The tool's name, so the rail can show the same icon as the turn view. */
+  tool: string;
   /** Owning agent's name, so parallel work reads "explorer · Reading file". */
   agent: string;
   detail?: string;
@@ -99,7 +101,7 @@ export function buildRail(input: {
       const state = toolState(tool.status, settled);
       if (state === 'done' || state === 'failed') done += 1;
       if (state === 'running') {
-        now.push({ id: `${run.id}:${tool.id}`, label: toolLabel(tool, state), agent: run.title || run.name, detail: tool.input || undefined });
+        now.push({ id: `${run.id}:${tool.id}`, tool: tool.name, label: toolLabel(tool, state), agent: run.title || run.name, detail: tool.input || undefined });
       }
       if (FILE_TOOLS.has(tool.name)) {
         const raw = filePathOf(tool);

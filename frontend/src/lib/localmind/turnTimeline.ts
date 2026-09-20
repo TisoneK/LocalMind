@@ -131,7 +131,8 @@ function toolStep(tool: ToolCall, settled: boolean): TurnStep {
   // Backend labels often already carry the target ("Exploring (list): /path") —
   // don't print it a second time as the detail.
   const target = tool.input?.trim().split(/\s+/).pop();
-  const repeated = !!target && target.length >= 4 && label.includes(target);
+  const inputText = tool.input?.trim().toLowerCase() ?? '';
+  const repeated = (!!inputText && label.toLowerCase().includes(inputText)) || (!!target && target.length >= 4 && label.includes(target));
   const detail = tool.input && !repeated ? tool.input : undefined;
   return {
     id: `tool:${tool.id}`,
@@ -249,7 +250,7 @@ export function buildTurn(
   message: Pick<
     ChatMessage,
     'acknowledgement' | 'thinking' | 'thinkMs' | 'toolCalls' | 'agentPhases' | 'agentRuns' | 'statusText'
-  >,
+  > & { content?: string },
   opts: { todos?: TodoItem[]; isStreaming?: boolean } = {},
 ): TurnModel {
   const steps: TurnStep[] = [];
@@ -264,7 +265,10 @@ export function buildTurn(
   if (understanding?.label) {
     steps.push({ id: 'understanding', kind: 'narration', label: understanding.label, state: 'done' });
   }
-  if (message.thinking) {
+  // A sub-second thought beside real work is noise; keep it only when it is all there is.
+  const hasWork = (message.toolCalls?.length ?? 0) > 0 || (message.agentRuns ?? []).some((r) => r.role !== 'parent');
+  const trivialThought = hasWork && (message.thinkMs ?? Infinity) < 800;
+  if (message.thinking && !trivialThought) {
     steps.push({
       id: 'thought',
       kind: 'thought',
@@ -308,7 +312,10 @@ export function buildTurn(
     ? running.length > 1
       ? `${plural(running.length, 'tool')} running`
       : toolLabel(active.tool as ToolCall, 'running')
-    : streaming
+    : streaming && (message.content ?? '').trim()
+      ? // The reply itself is streaming in: say so, not "thinking about the result".
+        'Writing the answer'
+      : streaming
       ? // Between tools the model is reading the result; the backend's status text
         // at that point is the previous tool's "Done — …" line, which reads as stale.
         leaves.length > 0

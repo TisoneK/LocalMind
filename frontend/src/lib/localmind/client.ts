@@ -939,15 +939,18 @@ class LocalMindClient {
     });
   }
 
-  async updateTodo(id: string, updates: { completed?: boolean; content?: string }): Promise<void> {
-    await this.request(`/api/todos/${id}`, {
+  /** Plan ids ("plan-0") repeat in every chat, so pass the chat to address its own row. */
+  async updateTodo(id: string, updates: { completed?: boolean; content?: string }, sessionId?: string): Promise<void> {
+    const q = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : '';
+    await this.request(`/api/todos/${encodeURIComponent(id)}${q}`, {
       method: 'PATCH',
       body: JSON.stringify(updates),
     });
   }
 
-  async deleteTodo(id: string): Promise<void> {
-    await this.request(`/api/todos/${id}`, { method: 'DELETE' });
+  async deleteTodo(id: string, sessionId?: string): Promise<void> {
+    const q = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : '';
+    await this.request(`/api/todos/${encodeURIComponent(id)}${q}`, { method: 'DELETE' });
   }
 
   // ── Autonomous objectives ──────────────────────────────────────────

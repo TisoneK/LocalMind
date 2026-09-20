@@ -158,4 +158,26 @@ describe('buildTurn', () => {
     expect(t.summary).toBe('Thought for 15.8s');
     expect(buildTurn({ thinking: 'hmm' }).summary).toBe('Thought');
   });
+
+  it('does not repeat the whole query when the label already says it', () => {
+    const t = buildTurn({ toolCalls: [tool('a', { name: 'web_search', label: 'Searching: weather Kisumu now', input: 'weather Kisumu now' })] });
+    expect(t.steps[0].detail).toBeUndefined();
+  });
+
+  it('drops a sub-second thought beside real work, but keeps it when it is all there is', () => {
+    const withWork = buildTurn({ thinking: 'hm', thinkMs: 147, toolCalls: [tool('a')] });
+    expect(withWork.steps.map((s) => s.kind)).toEqual(['tool']);
+    const alone = buildTurn({ thinking: 'hm', thinkMs: 147 });
+    expect(alone.steps.map((s) => s.kind)).toEqual(['thought']);
+    const longThought = buildTurn({ thinking: 'hm', thinkMs: 5000, toolCalls: [tool('a')] });
+    expect(longThought.steps.map((s) => s.kind)).toEqual(['thought', 'tool']);
+  });
+
+  it('says the answer is being written once reply text is streaming and no tool is running', () => {
+    const t = buildTurn({ toolCalls: [tool('a')], content: 'Based on the results…' }, { isStreaming: true });
+    expect(t.activeLabel).toBe('Writing the answer');
+    const thinking = buildTurn({ toolCalls: [tool('a')], content: '' }, { isStreaming: true });
+    expect(thinking.activeLabel).toBe('Thinking about the result');
+  });
 });
+
