@@ -20,7 +20,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from core.agent.loop import AgentLoop, TerminalProviderError
 from core.models import Intent, StreamChunk
 from core.obs import ObsCollector
@@ -463,111 +462,72 @@ class TestFileWriteVerificationReadbackDirective:
     """
 
     @pytest.mark.asyncio
-    async def test_verification_line_is_factual_with_no_readback_instruction(self):
+    async def test_verification_line_is_factual_with_no_readback_instruction(self, tmp_path):
         """The verification line states the on-disk fact and gives NO read-back
         instruction of any kind — regardless of what the user asked."""
-        from core.models import ToolResult
-
+        target = tmp_path / "facts.txt"
+        target.write_text("Fact A\nFact B\nFact C", encoding="utf-8")
         loop = AgentLoop(adapter=MagicMock())
 
-        async def fake_dispatch(intent, path, max_retries=0, allowed_tool_names=None):
-            return (
-                ToolResult(
-                    source="file_task",
-                    content="Fact A\nFact B\nFact C",
-                    success=True,
-                    metadata={"path": path, "size_bytes": 20},
-                ),
-                False,
-                0,
-            )
-
-        with patch("core.agent.loop.dispatch_with_retry", new=fake_dispatch):
-            msg = await loop._verify_tool_result(
-                tool_name="file_write",
-                tool_args={"path": "C:/Users/tison/Desktop/kenya_notes/facts.txt", "content": "Fact A\nFact B\nFact C"},
-                observation="",
-            )
+        msg = await loop._verify_tool_result(
+            tool_name="file_write",
+            tool_args={"path": str(target), "content": "Fact A\nFact B\nFact C"},
+            observation="",
+        )
 
         assert msg is not None
-        # Factual evidence of the on-disk result …
         assert "confirmed" in msg and "on disk" in msg
-        # … and NO instruction about reading the file back, either way.
         assert "do NOT read it back" not in msg, f"prohibition leaked: {msg!r}"
         assert "read it back" not in msg.lower(), f"read-back directive leaked: {msg!r}"
 
     @pytest.mark.asyncio
-    async def test_verification_reports_file_size_not_report_length(self):
-        """The verification number is the file's REAL on-disk
-        size from file_task metadata — not the length of the read-back report.
-        Live Windows trace: file_write confirmed "79 chars verified on disk"
-        for a 19-byte file because len(content) counted the "File: <path> / Size:
-        N bytes" header + preview, not the file."""
-        from core.models import ToolResult
-
+    async def test_verification_reports_the_files_real_size(self, tmp_path):
+        """The number is the file's REAL on-disk size (a stat), not the length of any read-back
+        report: a 19-byte file once confirmed "79 chars" because a report header was counted."""
+        target = tmp_path / "notes.txt"
+        target.write_text("hello from deepseek", encoding="utf-8")
         loop = AgentLoop(adapter=MagicMock())
-        report = (
-            "File: C:\\Users\\tison\\Dev\\test-run\\notes.txt\n"
-            "Size: 19 bytes\n\n"
-            "hello from deepseek"
+
+        msg = await loop._verify_tool_result(
+            tool_name="file_write",
+            tool_args={"path": str(target), "content": "hello from deepseek"},
+            observation="",
         )
 
-        async def fake_dispatch(intent, path, max_retries=0, allowed_tool_names=None):
-            return (
-                ToolResult(
-                    source="file_task",
-                    content=report,
-                    success=True,
-                    metadata={"path": path, "size_bytes": 19},
-                ),
-                False,
-                0,
-            )
-
-        with patch("core.agent.loop.dispatch_with_retry", new=fake_dispatch):
-            msg = await loop._verify_tool_result(
-                tool_name="file_write",
-                tool_args={"path": "dev\\test-run\\notes.txt", "content": "hello from deepseek"},
-                observation="",
-            )
-
-        assert msg is not None
-        # The reported number is the file's 19 bytes, NOT the ~79-char report.
-        assert "19 bytes verified on disk" in msg, f"got: {msg!r}"
-        assert "79 chars" not in msg
+        assert msg is not None and "19 bytes verified on disk" in msg, f"got: {msg!r}"
 
     @pytest.mark.asyncio
-    async def test_verification_flags_truncation_by_file_size_not_header(self):
-        """The truncation check compares the file's real size
-        against what was written. Under the old len(report) metric, the ~60-char
-        header masked real content loss — a 200-char write that landed as 90
-        bytes produced a report ~150 chars long and slipped past the 50% bar."""
-        from core.models import ToolResult
-
+    async def test_verification_flags_truncation_by_real_file_size(self, tmp_path):
+        """A 200-char write that landed as 90 bytes is flagged as possibly truncated."""
+        target = tmp_path / "f.txt"
+        target.write_text("x" * 90, encoding="utf-8")
         loop = AgentLoop(adapter=MagicMock())
-        report = "File: C:/t/f.txt\nSize: 90 bytes\n\n" + "x" * 90
 
-        async def fake_dispatch(intent, path, max_retries=0, allowed_tool_names=None):
-            return (
-                ToolResult(
-                    source="file_task",
-                    content=report,
-                    success=True,
-                    metadata={"path": path, "size_bytes": 90},
-                ),
-                False,
-                0,
-            )
+        msg = await loop._verify_tool_result(
+            tool_name="file_write",
+            tool_args={"path": str(target), "content": "x" * 200},
+            observation="",
+        )
 
-        with patch("core.agent.loop.dispatch_with_retry", new=fake_dispatch):
-            msg = await loop._verify_tool_result(
-                tool_name="file_write",
-                tool_args={"path": "C:/t/f.txt", "content": "x" * 200},
-                observation="",
-            )
+        assert msg is not None and "may be truncated" in msg, f"truncation not flagged: {msg!r}"
 
-        assert msg is not None
-        assert "may be truncated" in msg, f"truncation not flagged: {msg!r}"
+    @pytest.mark.asyncio
+    async def test_a_write_is_verified_by_the_disk_not_by_a_read_tool_that_can_fail(self, tmp_path, monkeypatch):
+        """The read-back used to dispatch a tool; when THAT failed (permissions, a timeout) the model
+        was told a perfectly good file had not been created. A missing file still fails; a present
+        one passes even if every tool call would fail."""
+        async def exploding_dispatch(*a, **k):
+            raise RuntimeError("no tool should be dispatched for verification")
+
+        monkeypatch.setattr("core.agent.loop.dispatch_with_retry", exploding_dispatch)
+        loop = AgentLoop(adapter=MagicMock())
+        present = tmp_path / "style.css"
+        present.write_text("body { margin: 0 }", encoding="utf-8")
+
+        ok = await loop._verify_tool_result("file_write", {"path": str(present), "content": "body { margin: 0 }"}, "")
+        gone = await loop._verify_tool_result("file_write", {"path": str(tmp_path / "nope.css"), "content": "x"}, "")
+        assert "confirmed" in ok
+        assert "FAILED" in gone
 
     @pytest.mark.asyncio
     async def test_loop_surfaces_factual_verification_without_readback_directive(self):

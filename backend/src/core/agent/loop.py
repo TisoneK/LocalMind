@@ -8807,35 +8807,19 @@ class AgentLoop:
                 if not path:
                     return None
 
-                # Dispatch a file_task to read the file back
-                # NOTE: dispatch_with_retry is imported at module level (line 177).
-                # Do NOT re-import it here — that would shadow the module-level
-                # binding and cause UnboundLocalError in other parts of run().
-                verify_result, verify_failed, _ = await dispatch_with_retry(
-                    Intent.FILE_TASK,
-                    path,
-                    max_retries=0,  # no retry for verification
-                    allowed_tool_names=allowed_tool_names,
-                )
-                if verify_failed or not verify_result or not verify_result.success:
+                # Check the file on disk directly. This used to dispatch a file_task read, which
+                # can fail for reasons that have nothing to do with the write (a permission rule, a
+                # timeout, a busy file): the loop then told the model "do NOT claim the file was
+                # created" about a file that was fine. A stat cannot be wrong about that.
+                import os as _os
+
+                try:
+                    actual_len = _os.path.getsize(path)
+                except OSError:
                     return (
                         f"File verification FAILED — could not read back '{path}'. "
                         f"The file may not have been written correctly."
                     )
-
-                actual_content = verify_result.content or ""
-                # Count the FILE, not the read-back report.
-                # len(content) counts the file_task REPORT ("File: <path> / Size:
-                # N bytes" header + preview), so a 19-byte file reported as ~79
-                # "chars" and the ~60-char header skewed the truncation heuristic
-                # (real content loss could hide under it). file_task now surfaces
-                # the real on-disk size in metadata; fall back to the report
-                # length only for callers that don't provide it.
-                verify_meta = verify_result.metadata or {}
-                if "size_bytes" in verify_meta:
-                    actual_len = verify_meta["size_bytes"]
-                else:
-                    actual_len = len(actual_content)
 
                 # Check if the file was written with reasonable content
                 # (guard with expected_len > 0 so a deliberately empty write is
