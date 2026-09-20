@@ -137,8 +137,11 @@ def _run_without_a_plan():
 def test_the_first_web_tool_seeds_the_whole_plan_when_none_was_given():
     _, obs = _run_without_a_plan()
     created = [e.data for e in obs.drain_matching({"todo_created"})]
-    texts = [c.get("text") for c in created if str(c.get("id", "")).startswith("plan-")]
-    assert texts == list(LOOKUP_STEPS)
+    final = {c["id"]: c["text"] for c in created if str(c.get("id", "")).startswith("plan-")}
+    # All three steps exist up front; the first is then made specific to the query.
+    assert list(final) == ["plan-0", "plan-1", "plan-2"]
+    assert final["plan-0"] == "Search the web for today's livescore results"
+    assert [final["plan-1"], final["plan-2"]] == list(LOOKUP_STEPS[1:])
     # ...and not a lone synthetic per-tool task on top of it.
     assert not [c for c in created if str(c.get("id", "")).startswith("syn-")]
 
@@ -147,3 +150,12 @@ def test_the_seeded_plan_ticks_when_the_search_finishes():
     _, obs = _run_without_a_plan()
     completed = [e.data.get("id") for e in obs.drain_matching({"todo_completed"})]
     assert "plan-0" in completed
+
+
+def test_the_plan_steps_get_specific_as_the_agent_commits_to_a_query_and_a_page():
+    _, obs, _ = _run()
+    labels = {}
+    for e in obs.drain_matching({"todo_created"}):
+        labels[e.data.get("id")] = e.data.get("text")
+    assert labels["plan-0"] == "Search the web for today's livescore results"
+    assert labels["plan-1"] == "Read scores.example.com"

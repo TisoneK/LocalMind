@@ -103,7 +103,7 @@ from core.agent.initialization import (
     ensure_upfront_plan,
     parse_initialization,
 )
-from core.agent.lookup_plan import LOOKUP_STEPS, lookup_step_for_tool
+from core.agent.lookup_plan import LOOKUP_STEPS, lookup_step_for_tool, lookup_step_label
 from core.agent.models import AgentStep, AgentTrace, strip_worker_reports, strip_worker_reports_from_history
 from core.agent.prompts import build_agent_intent_tail, build_agent_system_prompt, build_planning_prompt
 from core.agent.synthesizer import AnswerSynthesizer
@@ -1073,6 +1073,28 @@ def _intent_for_tool(tool_name: str) -> Intent:
     except ValueError:
         # Unknown tool name — fall back to a neutral intent rather than crash.
         return Intent.SHELL
+
+
+# A shell command can be one to three letters (ls, df, ps, id, cd, w, du).
+_SHORT_COMMAND_RE = re.compile(r"[A-Za-z][A-Za-z0-9]{0,2}")
+
+
+def _input_is_degenerate(tool_name: str, tool_input: str) -> bool:
+    """True when a tool call's input is too empty/short to mean anything.
+
+    The guard exists to stop blank or punctuation-only inputs ("?", ".") — a search with no
+    query, a path with no name. Under three characters is a fair cut for those, but not for a
+    shell command: `ls`, `df` and `ps` are complete commands. Refusing `ls` sent a live turn
+    into thirteen replans, because the model can never make `ls` longer.
+    """
+    if _tool_allows_empty_input(tool_name):
+        return False
+    stripped = (tool_input or "").strip("?. \t")
+    if len(stripped) >= 3:
+        return False
+    if tool_name == "shell" and _SHORT_COMMAND_RE.fullmatch(stripped):
+        return False
+    return True
 
 
 def _tool_allows_empty_input(tool_name: str) -> bool:
@@ -3064,6 +3086,10 @@ class AgentLoop:
         # execution: todo_created on dispatch (pending→in_progress),
         # todo_completed when the tool lands. Model-agnostic, bounded, and
         # skipped for scaffolding calls (describe_tool) and single-step noise.
+        # True while the plan is the lookup plan (seeded at the start, or by the first web tool).
+        # Its step labels get more specific as the agent commits to a query or a page, so the
+        # checks below key off this flag rather than the exact label text.
+        _lookup_plan_active = list(_plan_steps) == list(LOOKUP_STEPS)
         _synthetic_todos: list[str] = []
         # Track total gate replans to cap replanning loops
         _gate_replan_count: int = 0
@@ -3085,7 +3111,17 @@ class AgentLoop:
         _SYNTH_TODO_MAX = 12
 
         def _synth_begin(tool_name: str, tool_input: str) -> Optional[str]:
-            nonlocal _plan_steps, _plan_step_cursor
+            nonlocal _plan_steps, _plan_step_cursor, _lookup_plan_active
+            if _lookup_plan_active and _obs:
+                _label = lookup_step_label(tool_name, tool_input)
+                if _label is not None:
+                    _obs.emit(
+                        "todo_created",
+                        id=f"plan-{_label[0]}",
+                        text=_label[1],
+                        content=_label[1],
+                        completed=False,
+                    )
             if _plan_steps or not _obs:
                 return None
             if len(_synthetic_todos) >= _SYNTH_TODO_MAX:
@@ -3103,10 +3139,20 @@ class AgentLoop:
             if not _synthetic_todos and lookup_step_for_tool(tool_name) is not None:
                 _first = lookup_step_for_tool(tool_name) or 0
                 _plan_steps = list(LOOKUP_STEPS)
+                _lookup_plan_active = True
                 _plan_step_cursor = _first
                 _obs.emit("todo_cleared")
                 for _i, _step in enumerate(_plan_steps):
                     _obs.emit("todo_created", id=f"plan-{_i}", text=_step, content=_step, completed=False)
+                _first_label = lookup_step_label(tool_name, tool_input)
+                if _first_label is not None:
+                    _obs.emit(
+                        "todo_created",
+                        id=f"plan-{_first_label[0]}",
+                        text=_first_label[1],
+                        content=_first_label[1],
+                        completed=False,
+                    )
                 return f"plan-{_first}"
             todo_id = f"syn-{len(_synthetic_todos)}"
             label = _synthetic_todo_text(tool_name, tool_input)
@@ -4130,9 +4176,7 @@ class AgentLoop:
                     if _name not in AGENT_ALLOWED_TOOLS:
                         logger.warning(f"[agent.loop] parallel: rejected tool {_name!r}")
                         continue
-                    if (
-                        not _inp or len(_inp.strip("?. \t")) < 3
-                    ) and not _tool_allows_empty_input(_name):
+                    if _input_is_degenerate(_name, _inp):
                         logger.warning(f"[agent.loop] parallel: rejected degenerate input for {_name!r}")
                         continue
                     if _name == "file_write":
@@ -4614,9 +4658,7 @@ class AgentLoop:
                 # Semantic validation: reject empty or degenerate inputs
                 # — except for tools that declare empty input as valid
                 # (sysinfo/observe default to a full overview when bare).
-                if (
-                    not tool_input or len(tool_input.strip("?. \t")) < 3
-                ) and not _tool_allows_empty_input(tool_name):
+                if _input_is_degenerate(tool_name, tool_input):
                     observation = (
                         f"[Action rejected: input for '{tool_name}' is empty or too short. "
                         f"Provide a specific, meaningful input and try again.]"
@@ -5356,7 +5398,7 @@ class AgentLoop:
                 # A lookup plan ticks with real progress, not only on narration (a silent tool
                 # run never narrates): a finished search completes "Search the web", a finished
                 # page read completes "Check the sources".
-                if _obs and not tool_failed and list(_plan_steps) == list(LOOKUP_STEPS):
+                if _obs and not tool_failed and _lookup_plan_active:
                     _done_idx = lookup_step_for_tool(tool_name)
                     if _done_idx is not None:
                         for _i in range(_done_idx + 1):
