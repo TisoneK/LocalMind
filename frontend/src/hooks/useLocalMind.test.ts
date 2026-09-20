@@ -1004,3 +1004,29 @@ describe('useChat file undo', () => {
     unmount();
   });
 });
+
+describe('useChat turn end', () => {
+  it('closes the turn\'s run at the done event, not when the stream later closes', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+      const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+      expect(result.current.agentRuns.some((r) => r.status === 'running')).toBe(true);
+      vi.setSystemTime(new Date('2026-01-01T00:00:06Z'));
+      act(() => {
+        onChunk()(JSON.stringify({ type: 'done' }));
+      });
+      const root = result.current.agentRuns.find((r) => r.role === 'parent')!;
+      expect(root.status).toBe('completed');
+      expect(root.completedAt! - root.startedAt).toBeLessThan(7000);
+      // The post-answer services keep the stream open for a while; closing it must not move the clock.
+      vi.setSystemTime(new Date('2026-01-01T00:00:14Z'));
+      const stamped = root.completedAt;
+      act(() => onDone()());
+      expect(result.current.agentRuns.find((r) => r.role === 'parent')!.completedAt).toBe(stamped);
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

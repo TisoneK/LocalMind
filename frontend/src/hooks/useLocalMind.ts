@@ -279,6 +279,26 @@ function updateAgentRun(runs: AgentRun[], runId: string, patch: Partial<AgentRun
   return runs.map((run) => run.id === runId ? { ...run, ...patch } : run);
 }
 
+/** Close the turn's root run and every run still running beneath it, stamped at `now`. */
+function finishTurnRuns(runs: AgentRun[], rootRunId: string, now: number): AgentRun[] {
+  const ours = new Set<string>([rootRunId]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const r of runs) {
+      if (r.parentId && ours.has(r.parentId) && !ours.has(r.id)) {
+        ours.add(r.id);
+        grew = true;
+      }
+    }
+  }
+  return runs.map((r) =>
+    ours.has(r.id) && r.status === 'running'
+      ? { ...r, status: 'completed' as AgentRunStatus, completedAt: r.completedAt ?? now }
+      : r,
+  );
+}
+
 function attachToolToAgentRun(runs: AgentRun[], rootRunId: string, tool: ToolCall): AgentRun[] {
   const target = tool.runId
     ? runs.find((run) => run.id === tool.runId)
@@ -1538,6 +1558,12 @@ export function useChat(
                 // stay open a while for post-answer services and the final flush.
                 turnSettled = true;
                 setIsStreaming(false);
+                // Everything the user sees about THIS turn ends here, not when the stream later
+                // closes after the post-answer services: the run's clock stops at the answer
+                // (closing it at stream close stretched every duration by the reflection time and
+                // left the Agents view "running" after the reply), and the task list re-syncs now.
+                setAgentRuns((prev) => finishTurnRuns(prev, rootRunId, Date.now()));
+                window.dispatchEvent(new CustomEvent('localmind:todo-refetch'));
                 streamStartedAtRef.current = null;
                 streamingSessionRef.current = null;
                 abortRef.current = null;
@@ -1937,10 +1963,9 @@ export function useChat(
             streamingSessionRef.current = null;
             abortRef.current = null;
           }
-          setAgentRuns((prev) => updateAgentRun(prev, rootRunId, {
-            status: 'completed',
-            completedAt: Date.now(),
-          }));
+          if (!turnSettled) {
+            setAgentRuns((prev) => finishTurnRuns(prev, rootRunId, Date.now()));
+          }
           // Finalize the closure-owned list synchronously, then publish the
           // same snapshot to both the Actions state and assistant message.
           // Reading values populated inside a React state updater here is racy:
