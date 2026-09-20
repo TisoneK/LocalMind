@@ -192,6 +192,13 @@ async def refine_title_async(session_id: str, message: str) -> None:
         ]
 
         adapter = get_adapter(settings.localmind_adapter)
+        # A title is cosmetic: it must ride the same provider failover as the turn, so a provider
+        # that is out of quota costs a quiet retry elsewhere instead of an error in the log.
+        from adapters.base import BaseAdapter
+        from adapters.failover import FailoverAdapter
+
+        if isinstance(adapter, BaseAdapter):
+            adapter = FailoverAdapter(adapter, settings.localmind_adapter)
         chunks: list[str] = []
 
         # Use a timeout so title generation doesn't block the model for 90s+
