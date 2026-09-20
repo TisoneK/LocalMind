@@ -105,7 +105,12 @@ from core.agent.initialization import (
 )
 from core.agent.lookup_plan import LOOKUP_STEPS, lookup_step_for_tool, lookup_step_label, opening_step_label
 from core.agent.models import AgentStep, AgentTrace, strip_worker_reports, strip_worker_reports_from_history
-from core.agent.prompts import build_agent_intent_tail, build_agent_system_prompt, build_planning_prompt
+from core.agent.prompts import (
+    build_agent_intent_tail,
+    build_agent_system_prompt,
+    build_planning_prompt,
+    staged_system_prompt,
+)
 from core.agent.synthesizer import AnswerSynthesizer
 from core.agent.task_state import TaskState
 from core.agent.text_tools import (
@@ -4099,6 +4104,23 @@ class AgentLoop:
                     "(tool schemas withheld)",
                     iteration + 1,
                 )
+            # Input selection: a call that already holds a tool result does not
+            # need the guidance for choosing its FIRST tool (style examples, the
+            # tool-list one-liners, the selection hints); every rule stays. An
+            # answer-only call (no tools offered) also drops the on-demand-loading
+            # paragraph. Placed after the answer-only decision so `_iter_tools`
+            # is final, and before the breakdown so the meter shows what is sent.
+            if (
+                iteration_messages
+                and iteration_messages[0].get("role") == "system"
+                and isinstance(iteration_messages[0].get("content"), str)
+                and any(m.get("role") == "tool" for m in iteration_messages)
+            ):
+                _staged_sys = staged_system_prompt(
+                    iteration_messages[0]["content"], with_tools=bool(_iter_tools)
+                )
+                if _staged_sys != iteration_messages[0]["content"]:
+                    iteration_messages[0] = {**iteration_messages[0], "content": _staged_sys}
             # Context-usage breakdown estimate for THIS call's exact payload,
             # taken after every per-iteration mutation (observation log,
             # nudges, tool-result simplification, scratchpad, answer-only

@@ -36,6 +36,33 @@ from core.models import Intent
 from core.system_snapshot import get_cached_summary
 from core.user_context import get_cached_fused
 
+# Section heads of the native parent prompt that `staged_system_prompt` cuts at.
+# The builder below interpolates these same constants, so the boundaries cannot
+# drift from the text they describe.
+_STYLE_HEAD = "Style — terseness and the converse-or-act call (arrows show the final reply):"
+_TOOLS_HEAD = "Available tools — pick the RIGHT one for the request (name: what it does):"
+_CORE_HEAD = "Core tools ("
+_SAFETY_HEAD = "Safety: check current state before writes, edits, or deletes."
+
+
+def staged_system_prompt(prompt: str, with_tools: bool) -> str:
+    """Input selection for calls AFTER a tool result: what the model still needs.
+
+    The style examples, the tool-list one-liners and the selection hints only
+    help it choose its FIRST tool and its reply style, so a call that already
+    holds a tool result drops them; every rule (multi-part completion,
+    act-not-announce, anti-hedging, check-before-write, machine facts, safety)
+    stays, because those decide whether it stops too early. An answer-only call
+    (no tools offered) also drops the on-demand-loading paragraph. A prompt
+    without the expected sections is returned untouched.
+    """
+    a = prompt.find(_STYLE_HEAD)
+    c = prompt.find(_CORE_HEAD)
+    d = prompt.find(_SAFETY_HEAD)
+    if not (0 <= a < c < d):
+        return prompt
+    return prompt[:a] + (prompt[c:] if with_tools else prompt[d:])
+
 
 def _system_env_line() -> str:
     """The boot-cached system summary as a prompt line, with guidance to answer
@@ -604,14 +631,14 @@ Be concise and direct. Answer what was asked, then stop — no preamble ("Sure, 
 
 Multi-part requests are not done until EVERY part is answered. "X and Y" means both X and Y: if a tool can get a part you don't have yet, call it — never concede a requested part ("I couldn't get X in this pass"), never defer it to a "next pass", and never tell the user to check it themselves. A partial answer plus a punt is an incomplete turn, not an answer.
 
-Style — terseness and the converse-or-act call (arrows show the final reply):
+{_STYLE_HEAD}
 - "how much RAM do I have?" → "16 GB." (from System facts; no tool)
 - "weather in Nairobi?" → run web_search, then: "24°C, partly cloudy."
 - "delete the two .bin files in ~/tmp" → run shell to delete, then: "Deleted junk_a.bin and junk_b.bin."
 - "can you search the web for this?" → "Yes — I can search the web. What would you like me to look up?" (a "can you…?" question: state the capability from your tools; don't fire a blank tool call for an unspecified target)
 - "thanks, that helps" → "Anytime." (conversation, no task)
 
-Available tools — pick the RIGHT one for the request (name: what it does):
+{_TOOLS_HEAD}
 {compact_tool_list}
 Selection hints: current info (weather/news/prices) → web_search or web_fetch;
 find files on this computer → system_search; read a file → file_task; run a
@@ -621,7 +648,7 @@ Core tools ({_core_names_inline}) are loaded with full schemas —
 call them directly. ONLY for an on-demand tool ({_long_tail_names_inline})
 call `describe_tool("<name>")` FIRST (e.g. `describe_tool("sql")`).
 
-Safety: check current state before writes, edits, or deletes. Ground every answer
+{_SAFETY_HEAD} Ground every answer
 in what tools actually returned. Do not emit XML tool calls or expose internal reasoning.
 """
 
