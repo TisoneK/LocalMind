@@ -121,6 +121,8 @@ export interface ChatMessage {
   thinkingBlock?: ThinkingStep;
   thinking?: string;
   thinkMs?: number;
+  /** The reasoning, one entry per phase (before each round of tools), so it can be shown where it happened. */
+  thinkingSegments?: { text: string; ms: number; afterTools: number }[];
   /** Wall time spent streaming the final answer (first→last token), for the
    *  Turn Anatomy strip. Distinct from thinkMs (reasoning) and tool durations. */
   answerMs?: number;

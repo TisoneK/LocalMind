@@ -213,4 +213,32 @@ describe('a check that finds nothing', () => {
     expect(toolLabel(tool, 'done')).toBe('Ran Python');
     expect(toolLabel(tool, 'running')).toBe('Running Python');
   });
+
+  it('shows each phase of reasoning where it happened, not as one growing block', () => {
+    const turn = buildTurn(
+      {
+        thinking: 'plan the folder\n\ncheck the result',
+        thinkMs: 5000,
+        thinkingSegments: [
+          { text: 'plan the folder', ms: 2000, afterTools: 0 },
+          { text: 'check the result', ms: 3000, afterTools: 1 },
+        ],
+        toolCalls: [
+          { id: 'a', name: 'shell', status: 'done', input: 'mkdir x', output: '', iteration: 1 } as never,
+          { id: 'b', name: 'shell', status: 'done', input: 'ls x', output: '', iteration: 2 } as never,
+        ],
+      },
+      { isStreaming: false },
+    );
+    const kinds = turn.steps.map((s) => (s.kind === 'thought' ? `thought:${s.detail}` : s.kind));
+    expect(kinds).toEqual(['thought:plan the folder', 'tool', 'thought:check the result', 'tool']);
+  });
+
+  it('keeps a single Thought block when there is only one phase of reasoning', () => {
+    const turn = buildTurn(
+      { thinking: 'just one', thinkMs: 4000, thinkingSegments: [{ text: 'just one', ms: 4000, afterTools: 0 }] },
+      { isStreaming: false },
+    );
+    expect(turn.steps.filter((s) => s.kind === 'thought')).toHaveLength(1);
+  });
 });

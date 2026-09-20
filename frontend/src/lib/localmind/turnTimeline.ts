@@ -266,7 +266,7 @@ function plural(n: number, word: string): string {
 export function buildTurn(
   message: Pick<
     ChatMessage,
-    'acknowledgement' | 'thinking' | 'thinkMs' | 'toolCalls' | 'agentPhases' | 'agentRuns' | 'statusText'
+    'acknowledgement' | 'thinking' | 'thinkMs' | 'thinkingSegments' | 'toolCalls' | 'agentPhases' | 'agentRuns' | 'statusText'
   > & { content?: string },
   opts: { todos?: TodoItem[]; isStreaming?: boolean } = {},
 ): TurnModel {
@@ -285,15 +285,40 @@ export function buildTurn(
   // A sub-second thought beside real work is noise; keep it only when it is all there is.
   const hasWork = (message.toolCalls?.length ?? 0) > 0 || (message.agentRuns ?? []).some((r) => r.role !== 'parent');
   const trivialThought = hasWork && (message.thinkMs ?? Infinity) < 800;
+  // Reasoning is shown where it happened: one "Thought" per phase, in front of the tools that
+  // phase led to, instead of a single block that every later phase keeps appending to.
+  const segments = (message.thinkingSegments ?? []).filter((g) => g.text.trim());
+  const thoughtSteps: { at: number; step: TurnStep }[] = [];
   if (message.thinking && !trivialThought) {
-    steps.push({
-      id: 'thought',
-      kind: 'thought',
-      label: streaming && !(message.toolCalls?.length) ? 'Thinking' : 'Thought',
-      detail: message.thinking,
-      state: streaming && !(message.toolCalls?.length) ? 'running' : 'done',
-      durationMs: message.thinkMs,
-    });
+    if (segments.length > 1) {
+      segments.forEach((g, i) => {
+        const last = i === segments.length - 1;
+        const live = streaming && last && g.afterTools >= (message.toolCalls?.length ?? 0);
+        thoughtSteps.push({
+          at: g.afterTools,
+          step: {
+            id: `thought-${i}`,
+            kind: 'thought',
+            label: live ? 'Thinking' : 'Thought',
+            detail: g.text,
+            state: live ? 'running' : 'done',
+            durationMs: g.ms || undefined,
+          },
+        });
+      });
+    } else {
+      thoughtSteps.push({
+        at: 0,
+        step: {
+          id: 'thought',
+          kind: 'thought',
+          label: streaming && !(message.toolCalls?.length) ? 'Thinking' : 'Thought',
+          detail: message.thinking,
+          state: streaming && !(message.toolCalls?.length) ? 'running' : 'done',
+          durationMs: message.thinkMs,
+        },
+      });
+    }
   }
 
   // Sub-agent runs own their tools; keep those out of the top-level list.
@@ -306,13 +331,21 @@ export function buildTurn(
   const toolSteps = batchByIteration(topTools, settled);
   const iterOf = (s: TurnStep): number => s.tool?.iteration ?? s.children?.[0]?.tool?.iteration ?? 0;
   let ci = 0;
+  let toolsSeen = 0;
+  let ti = 0;
+  const pushThoughtsUpTo = (n: number) => {
+    while (ti < thoughtSteps.length && thoughtSteps[ti].at <= n) steps.push(thoughtSteps[ti++].step);
+  };
   for (const ts of toolSteps) {
+    pushThoughtsUpTo(toolsSeen);
+    toolsSeen += flatTools([ts]).length;
     while (ci < checkpoints.length && (checkpoints[ci].iteration ?? 0) <= iterOf(ts)) {
       steps.push(checkpointStep(checkpoints[ci++]));
     }
     steps.push(ts);
   }
   while (ci < checkpoints.length) steps.push(checkpointStep(checkpoints[ci++]));
+  pushThoughtsUpTo(Number.MAX_SAFE_INTEGER);
 
   for (const run of childRuns) steps.push(agentStep(run, settled));
 

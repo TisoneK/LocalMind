@@ -767,6 +767,10 @@ export function useChat(
 
       let currentContent = '';
       let thinkingContent = '';
+      // The same reasoning split by phase: a new entry starts at each thinking_start, so a later
+      // phase's thoughts are not appended to an earlier phase's block.
+      const thinkingSegments: { text: string; ms: number; afterTools: number; startedAt: number }[] = [];
+      const publicSegments = () => thinkingSegments.map(({ text, ms, afterTools }) => ({ text, ms, afterTools }));
       let streamedProgressText = '';
       // Thinking spans multiple model calls with TOOL EXECUTIONS
       // between them. Measuring thinkMs as (last − first) thinking-token wall time
@@ -881,6 +885,7 @@ export function useChat(
                 }
                 // (Re)start a thinking segment — a preceding tool paused it.
                 thinkResume();
+                thinkingSegments.push({ text: '', ms: 0, afterTools: toolCalls.length, startedAt: Date.now() });
                 setMessages((prev) => {
                   const updated = [...prev];
                   const last = updated[updated.length - 1];
@@ -895,6 +900,17 @@ export function useChat(
               case 'thinking_token': {
                 const thinkingToken = parsed.thinking || parsed.content || '';
                 thinkingContent += thinkingToken;
+                {
+                  // Reasoning that arrives after tools ran belongs to a NEW phase even when the
+                  // stream did not announce one.
+                  let seg = thinkingSegments[thinkingSegments.length - 1];
+                  if (!seg || (seg.afterTools !== toolCalls.length && !turnSettled)) {
+                    seg = { text: '', ms: 0, afterTools: toolCalls.length, startedAt: Date.now() };
+                    thinkingSegments.push(seg);
+                  }
+                  seg.text += thinkingToken;
+                  seg.ms = Date.now() - seg.startedAt;
+                }
                 streamedProgressText += thinkingToken;
                 if (!turnSettled) thinkResume();  // reasoning is active again — unless the answer is already done
                 const thinkMs = thinkElapsed();
@@ -920,7 +936,7 @@ export function useChat(
                   const updated = [...prev];
                   const last = updated[updated.length - 1];
                   if (last && last.role === 'assistant') {
-                    updated[updated.length - 1] = { ...last, thinking: thinkingContent, thinkMs, isAgent: true };
+                    updated[updated.length - 1] = { ...last, thinking: thinkingContent, thinkMs, thinkingSegments: publicSegments(), isAgent: true };
                   }
                   return updated;
                 });
@@ -935,7 +951,7 @@ export function useChat(
                     const updated = [...prev];
                     const last = updated[updated.length - 1];
                     if (last && last.role === 'assistant') {
-                      updated[updated.length - 1] = { ...last, thinking: thinkingContent, thinkMs, isAgent: true };
+                      updated[updated.length - 1] = { ...last, thinking: thinkingContent, thinkMs, thinkingSegments: publicSegments(), isAgent: true };
                     }
                     return updated;
                   });

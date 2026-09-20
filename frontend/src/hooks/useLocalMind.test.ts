@@ -1082,3 +1082,23 @@ describe('useChat thinking clock after the answer', () => {
     }
   });
 });
+
+
+describe('useChat reasoning phases', () => {
+  it('starts a new reasoning block for a later phase instead of appending to the first', () => {
+    const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+    act(() => {
+      onChunk()(JSON.stringify({ type: 'thinking_start' }));
+      onChunk()(JSON.stringify({ type: 'thinking_token', thinking: 'first phase' }));
+      onChunk()(JSON.stringify({ type: 'thinking_end' }));
+      onChunk()(JSON.stringify({ type: 'tool_call', tool_call: { id: 't1', name: 'shell', status: 'running', input: 'ls' } }));
+      onChunk()(JSON.stringify({ type: 'thinking_start' }));
+      onChunk()(JSON.stringify({ type: 'thinking_token', thinking: 'second phase' }));
+    });
+    const last = result.current.messages[result.current.messages.length - 1];
+    expect(last.thinkingSegments?.map((g) => g.text)).toEqual(['first phase', 'second phase']);
+    expect(last.thinkingSegments?.map((g) => g.afterTools)).toEqual([0, 1]);
+    act(() => onDone()());
+    unmount();
+  });
+});
