@@ -28,7 +28,7 @@ function renderMenu({
 }: { getMessageText?: (id: string) => string | undefined } = {}) {
   return render(
     <TranscriptContextMenu getMessageText={getMessageText} onSelectAll={() => {}}>
-      <div data-testid="transcript">
+      <div data-testid="transcript" tabIndex={-1}>
         {messages.map((m) => (
           <div key={m.id} data-message-content-id={m.id}>
             {m.content}
@@ -41,7 +41,10 @@ function renderMenu({
 
 async function openContextMenu() {
   await act(async () => {
-    fireEvent.contextMenu(screen.getByTestId('transcript'));
+    // A real right-click focuses what it lands on first; the menu relies on that.
+    const surface = screen.getByTestId('transcript');
+    surface.focus();
+    fireEvent.contextMenu(surface);
   });
 }
 
@@ -107,6 +110,7 @@ describe('TranscriptContextMenu', () => {
     const { container } = renderMenu({ getMessageText });
     // Right-click on the user message's text node.
     await act(async () => {
+      screen.getByTestId('transcript').focus();
       fireEvent.contextMenu(container.querySelector('[data-message-content-id="u1"]')!);
     });
     expect(screen.getByTestId('ctx-copy-message')).toBeInTheDocument();
@@ -124,6 +128,7 @@ describe('TranscriptContextMenu', () => {
     const { container } = renderMenu({ getMessageText });
     // Right-click directly on the assistant message's text node.
     await act(async () => {
+      screen.getByTestId('transcript').focus();
       fireEvent.contextMenu(container.querySelector('[data-message-content-id="a1"]')!);
     });
     await act(async () => {
@@ -146,7 +151,7 @@ describe('TranscriptContextMenu', () => {
     stubSelection('');
     render(
       <TranscriptContextMenu onSelectAll={onSelectAll}>
-        <div data-testid="transcript">content</div>
+        <div data-testid="transcript" tabIndex={-1}>content</div>
       </TranscriptContextMenu>,
     );
     await openContextMenu();
@@ -160,7 +165,7 @@ describe('TranscriptContextMenu', () => {
     stubSelection('');
     render(
       <TranscriptContextMenu>
-        <div data-testid="transcript">content</div>
+        <div data-testid="transcript" tabIndex={-1}>content</div>
       </TranscriptContextMenu>,
     );
     await openContextMenu();

@@ -131,6 +131,8 @@ function DiffAppliedCard({
     try {
       const res = await localmindClient.undoFileChange(undoId);
       setUndo({ state: 'done', note: res.message });
+      // The rest of the UI (the Files-changed list) forgets this file's change.
+      window.dispatchEvent(new CustomEvent('localmind:file-undone', { detail: { path: fileName } }));
     } catch (e) {
       setUndo({ state: 'failed', note: e instanceof Error ? e.message : 'Could not undo' });
     }

@@ -627,6 +627,22 @@ export function useChat(
     };
   }, [sessionId]);
 
+  // An undone file change is no longer a change: drop it from the Files-changed list.
+  useEffect(() => {
+    const onUndone = (e: Event) => {
+      const path = (e as CustomEvent<{ path?: string }>).detail?.path;
+      if (!path) return;
+      const key = path.split('\\').join('/');
+      setFileDiffs((prev) => {
+        if (!(key in prev)) return prev;
+        const { [key]: _gone, ...rest } = prev;
+        return rest;
+      });
+    };
+    window.addEventListener('localmind:file-undone', onUndone);
+    return () => window.removeEventListener('localmind:file-undone', onUndone);
+  }, []);
+
   const send = useCallback(
     (message: string, sessionIdOverride?: string, tool?: string, retry?: boolean | 'edit') => {
       // Use the override (passed by handleSend when creating a new session)

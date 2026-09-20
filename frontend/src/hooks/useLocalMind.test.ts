@@ -988,3 +988,19 @@ describe('useChat retry', () => {
     unmount();
   });
 });
+
+describe('useChat file undo', () => {
+  it('drops an undone file from fileDiffs', () => {
+    const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+    act(() => {
+      onChunk()(JSON.stringify({ type: 'diff', diff: { filePath: '/tmp/x/a.txt', language: 'txt', hunks: [], additions: 1, deletions: 0 } }));
+    });
+    expect(result.current.fileDiffs['/tmp/x/a.txt']).toBeDefined();
+    act(() => {
+      window.dispatchEvent(new CustomEvent('localmind:file-undone', { detail: { path: '/tmp/x/a.txt' } }));
+    });
+    expect(result.current.fileDiffs['/tmp/x/a.txt']).toBeUndefined();
+    act(() => onDone()());
+    unmount();
+  });
+});

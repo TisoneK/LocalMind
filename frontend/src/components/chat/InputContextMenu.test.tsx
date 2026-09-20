@@ -16,7 +16,13 @@ function stubClipboard({ text = '' } = {}) {
 
 async function openContextMenu() {
   await act(async () => {
-    fireEvent.contextMenu(screen.getByTestId('editable'));
+    // A real right-click focuses the field first; the menu relies on that.
+    const field = screen.getByTestId('editable') as HTMLTextAreaElement;
+    if (document.activeElement !== field) field.focus();
+    fireEvent.contextMenu(field);
+  });
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 30));
   });
 }
 
