@@ -282,6 +282,8 @@ def _bridge_todo_event(evt, session_id) -> list[str]:
                 text=_full,
                 completed=bool(evt.data.get("completed", False)),
                 title=_title,
+                # Only a failure is persisted as a status: it must survive the end-of-turn sweep.
+                status="failed" if evt.data.get("status") == "failed" else None,
             )
         except Exception as _exc:
             logger.warning(f"[todos] persist failed: {_exc}")
@@ -458,7 +460,11 @@ def _finalize_plan_todos(session_id: str, skip: bool = False) -> list[dict]:
         return flipped
     try:
         for row in _engine._store.list_todos(session_id):
-            if row.get("id", "").startswith("plan-") and not row.get("completed"):
+            if (
+                row.get("id", "").startswith("plan-")
+                and not row.get("completed")
+                and row.get("status") != "failed"  # a step that did not work is not "done or moot"
+            ):
                 _engine._store.upsert_todo(session_id, row["id"], completed=True)
                 flipped.append({"id": row["id"], "completed": True})
     except Exception as _exc:

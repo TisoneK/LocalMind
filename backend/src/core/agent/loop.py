@@ -1020,6 +1020,15 @@ def _write_kind_from_snapshot(pre: str | None) -> str:
     return "created" if pre == "" else "overwritten"
 
 
+_EXISTENCE_CHECK_TOOLS = frozenset({"file_task", "file_read", "dir_explorer", "system_search", "find_path"})
+
+
+def _is_benign_not_found(tool_name: str, tool_result) -> bool:
+    """Looking for something and finding it absent is an answer, not a failure: the agent checks
+    whether a folder exists before creating it. Mirrors the chat UI, which shows it as done."""
+    return tool_name in _EXISTENCE_CHECK_TOOLS and getattr(tool_result, "error_type", "") == "not_found"
+
+
 def _synthetic_todo_text(tool_name: str, tool_input: str) -> str:
     """One terse imperative step label per real tool execution.
 
@@ -3103,17 +3112,57 @@ class AgentLoop:
                         completed=True,
                     )
 
+        # Tools attributed to each plan step, so a step is judged by what ITS tools did.
+        _plan_step_tools: dict[int, int] = {}
+
         def _advance_plan_on_narration() -> None:
+            """Move to the next step once the current one has had a tool run under it.
+
+            A step used to tick the moment the agent narrated the next action, before that action
+            had run, so a fetch that then failed still showed as done. Now a step is ticked by its
+            tool succeeding (see `_plan_tool_finished`); narration only moves the cursor on.
+            """
             nonlocal _plan_step_cursor
             if (
                 _plan_steps
-                and _plan_step_cursor < len(_plan_steps)
+                and _plan_step_cursor < len(_plan_steps) - 1
                 and (result.raw_content or "").strip()
                 and _obs
+                and _plan_step_tools.get(_plan_step_cursor, 0) > 0
             ):
-                _obs.emit("todo_completed", id=f"plan-{_plan_step_cursor}", completed=True)
-                _complete_sub_goals(_plan_step_cursor)
                 _plan_step_cursor += 1
+
+        _plan_failed_key: dict[str, tuple[str, str]] = {}
+
+        def _plan_tool_finished(
+            plan_id: Optional[str], failed: bool, tool_name: str = "", tool_input: str = ""
+        ) -> None:
+            """A tool attributed to a plan step ended: tick the step if it worked, mark it failed if not.
+
+            A failure sticks: trying a DIFFERENT source or way does not turn the step for the failed
+            one into done. Only a success of the same tool on the same target (the retry) clears it.
+            After a failure the plan moves on, so what the agent tries next lands on the next step.
+            """
+            nonlocal _plan_step_cursor
+            if not plan_id or not plan_id.startswith("plan-") or not _obs:
+                return
+            try:
+                idx = int(plan_id.split("-")[1])
+            except (IndexError, ValueError):
+                return
+            key = (tool_name, (tool_input or "").strip().splitlines()[0][:120] if (tool_input or "").strip() else "")
+            _plan_step_tools[idx] = _plan_step_tools.get(idx, 0) + 1
+            if failed:
+                _plan_failed_key[plan_id] = key
+                _mark_plan_step_failed(plan_id)
+                if _plan_step_cursor == idx and _plan_step_cursor < len(_plan_steps) - 1:
+                    _plan_step_cursor += 1
+                return
+            if plan_id in _plan_failed and _plan_failed_key.get(plan_id) != key:
+                return  # a different way of doing something else: the failed step stays failed
+            _plan_failed.discard(plan_id)
+            _obs.emit("todo_completed", id=plan_id, completed=True)
+            _complete_sub_goals(idx)
 
         # The 'why' for any tool call under the active plan
         # step. The frontend renders `why: {action.reasoning}` in the
@@ -3134,8 +3183,31 @@ class AgentLoop:
         # showed NOT landing in the UI. Emit from the loop itself so the
         # bridge's todo_completed handler (chat.py) forwards it regardless.
         # Does NOT advance the cursor — one todo may own many actions.
+        # Plan steps whose tool did not work. They are shown failed and never ticked as done, even
+        # when the agent later narrates past them or the turn ends.
+        _plan_failed: set[str] = set()
+
+        def _mark_plan_step_failed(plan_id: str) -> None:
+            try:
+                idx = int(plan_id.split("-")[1])
+            except (IndexError, ValueError):
+                return
+            if plan_id in _plan_failed or not _obs or not (0 <= idx < len(_plan_steps)):
+                return
+            _plan_failed.add(plan_id)
+            _obs.emit(
+                "todo_created",
+                id=plan_id,
+                text=f"{str(_plan_steps[idx])[:100]} — didn't work",
+                content=str(_plan_steps[idx]),
+                completed=False,
+                status="failed",
+            )
+
         def _complete_current_plan_step() -> None:
             if not _plan_steps or not _obs:
+                return
+            if f"plan-{_plan_step_cursor}" in _plan_failed:
                 return
             if 0 <= _plan_step_cursor < len(_plan_steps):
                 _obs.emit(
@@ -5502,6 +5574,9 @@ class AgentLoop:
                     latency_ms = round((time.monotonic() - t_tool) * 1000)
 
                 _todo_id = _syn_todo_id or (f"plan-{_plan_step_cursor}" if _plan_steps else None)
+                _benign_absent = tool_failed and _is_benign_not_found(tool_name, tool_result)
+                if not _benign_absent:
+                    _plan_tool_finished(_todo_id, tool_failed, tool_name, tool_input)
                 if tool_failed:
                     last_tool_failed = True
                     consecutive_failures += 1
@@ -5541,7 +5616,7 @@ class AgentLoop:
 
                                         )
 
-                _synth_end(_syn_todo_id, tool_failed)
+                _synth_end(_syn_todo_id, tool_failed and not _benign_absent)
                 # Evidence-sufficient detection — the flag says
                 # "the last successful real tool put substantive page content
                 # in the transcript" (web intent only). The mid-task exclusion

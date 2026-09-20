@@ -421,3 +421,17 @@ def test_search_messages_treats_wildcards_literally_and_ignores_tiny_queries(sto
     assert len(store.search_messages("100%")) == 1
     assert store.search_messages("%") == []  # too short
     assert store.search_messages("_ _") == []  # underscore is not a wildcard
+
+
+def test_a_failed_todo_keeps_its_status_and_is_not_swept_to_done(store):
+    import api.routes.chat as chat_mod
+    from api.routes.chat import _finalize_plan_todos
+
+    store.upsert_todo("s1", "plan-0", text="Fetch it", completed=False, status="failed")
+    store.upsert_todo("s1", "plan-1", text="Answer", completed=False)
+    rows = {r["id"]: r for r in store.list_todos("s1")}
+    assert rows["plan-0"]["status"] == "failed" and not rows["plan-0"]["completed"]
+
+    chat_mod._engine._store = store
+    flipped = [f["id"] for f in _finalize_plan_todos("s1")]
+    assert flipped == ["plan-1"]  # the failed step stays failed

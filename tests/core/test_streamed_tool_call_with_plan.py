@@ -148,3 +148,58 @@ def test_a_step_that_failed_is_marked_failed_not_left_running():
     assert failed and "didn't work" in failed[0][2]
     completed = [e.data.get("id") for e in obs.drain_matching({"todo_completed"})]
     assert failed[0][0] not in completed  # a failed step is never ticked as done
+
+
+def test_a_plan_step_whose_tool_failed_is_marked_failed_and_never_ticked():
+    from adapters.ollama import ToolCallResult
+
+    async def dispatch(*args, **kwargs):
+        return ToolResult(source="web", content="blocked", success=False, error_type="http_error"), True, 0
+
+    seen = {"calls": 0}
+
+    async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
+        seen["calls"] += 1
+        if seen["calls"] == 1:
+            return ToolCallResult(tool_name="web_fetch", tool_args={"url": "https://dead.example/"}, raw_content="Fetching it.")
+
+        async def _stream():
+            yield StreamChunk(text="That site failed; here is another answer.", done=False)
+            yield StreamChunk(text="", done=True)
+
+        return _stream()
+
+    adapter = MagicMock()
+    adapter.chat_with_tools = chat_with_tools
+    adapter.chat = lambda *a, **k: iter(())
+    obs = ObsCollector()
+
+    async def go():
+        with patch("core.agent.loop.dispatch_with_retry", dispatch):
+            return [
+                c
+                async for c in AgentLoop(adapter=MagicMock()).run(
+                    messages=[{"role": "user", "content": "fetch https://dead.example/ then tell me"}],
+                    intent=Intent.WEB_FETCH,
+                    initial_tool_result=None,
+                    available_tools=[],
+                    adapter=adapter,
+                    obs=obs,
+                    skip_planning=True,
+                    plan_steps=["Fetch https://dead.example/", "Tell you what it says"],
+                )
+            ]
+
+    asyncio.run(go())
+    created = [(e.data.get("id"), e.data.get("status")) for e in obs.drain_matching({"todo_created"})]
+    assert ("plan-0", "failed") in created
+    assert "plan-0" not in [e.data.get("id") for e in obs.drain_matching({"todo_completed"})]
+
+
+def test_an_existence_check_that_finds_nothing_is_not_a_failure():
+    from core.agent.loop import _is_benign_not_found
+
+    absent = ToolResult(source="dir", content="no such dir", success=False, error_type="not_found")
+    assert _is_benign_not_found("dir_explorer", absent)
+    assert not _is_benign_not_found("file_write", absent)  # writing to a missing place IS a failure
+    assert not _is_benign_not_found("dir_explorer", ToolResult(source="dir", content="x", success=False, error_type="io_error"))

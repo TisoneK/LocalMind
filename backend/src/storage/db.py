@@ -526,6 +526,7 @@ class SessionStore:
         text: Optional[str] = None,
         completed: Optional[bool] = None,
         title: Optional[str] = None,
+        status: Optional[str] = None,
     ) -> None:
         """Create or update a plan todo (migration 006 schema). Only non-None
         fields are written, so a todo_completed event (id + completed only)
@@ -551,7 +552,7 @@ class SessionStore:
                         session_id,
                         text or "",
                         1 if completed else 0,
-                        "done" if completed else "pending",
+                        status or ("done" if completed else "pending"),
                         now,
                         now,
                         title,
@@ -569,6 +570,8 @@ class SessionStore:
                 if completed is not None:
                     updates["completed"] = 1 if completed else 0
                     updates["status"] = "done" if completed else "pending"
+                if status is not None:
+                    updates["status"] = status
                 set_clause = ", ".join(f"{k} = ?" for k in updates)
                 conn.execute(
                     f"UPDATE todos SET {set_clause} WHERE session_id = ? AND id = ?",
