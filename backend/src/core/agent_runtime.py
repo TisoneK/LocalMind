@@ -2188,24 +2188,6 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 llm_calls=usage.get("llm_calls"),
             )
 
-        # Reflection and response-fact extraction remain post-turn services;
-        # they never make routing decisions or expose child tool output.
-        await _run_bounded_services(
-            [
-                (
-                    "fact_extraction",
-                    lambda: self._maybe_store_response_facts(
-                        response_text, session_id, collector, user_message=message
-                    ),
-                ),
-                (
-                    "reflection",
-                    lambda: self._reflect_on_answer(response_text, Intent.ANALYZE, message, session_id, collector),
-                ),
-            ],
-            POST_TURN_LLM_BUDGET_S,
-            collector,
-        )
         total_ms = round((time.monotonic() - started) * 1000)
 
         # Deterministic file-task summary appended to the final
@@ -2352,4 +2334,26 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             done=True,
             usage=usage,
             metadata=_final_meta,
+        )
+        # Reflection and response-fact extraction remain post-turn services;
+        # they never make routing decisions or expose child tool output. They
+        # run AFTER the final `done` chunk: the answer is complete and
+        # persisted, so the user must not wait on up to POST_TURN_LLM_BUDGET_S
+        # of quality-gate LLM calls. Their visible events (reflection_lesson,
+        # passive_context_stored) still ride the open stream's final flush.
+        await _run_bounded_services(
+            [
+                (
+                    "fact_extraction",
+                    lambda: self._maybe_store_response_facts(
+                        response_text, session_id, collector, user_message=message
+                    ),
+                ),
+                (
+                    "reflection",
+                    lambda: self._reflect_on_answer(response_text, Intent.ANALYZE, message, session_id, collector),
+                ),
+            ],
+            POST_TURN_LLM_BUDGET_S,
+            collector,
         )

@@ -746,6 +746,10 @@ export function useChat(
       // is the answer-generation span, disjoint from thinking + tool time.
       let answerStartedAt = 0;
       const toolCalls: ToolCall[] = [];
+      // True once the SSE `done` event settled the busy state. The stream can
+      // stay open after it (post-answer quality services, final flush), so the
+      // stream-end callback must not reset busy state a newer turn now owns.
+      let turnSettled = false;
       const toolsUsedSet = new Set<string>();
 
       const abortFn = localmindClient.streamChat(
@@ -1515,6 +1519,13 @@ export function useChat(
               }
 
               case 'done': {
+                // The answer is complete: free the input now. The stream may
+                // stay open a while for post-answer services and the final flush.
+                turnSettled = true;
+                setIsStreaming(false);
+                streamStartedAtRef.current = null;
+                streamingSessionRef.current = null;
+                abortRef.current = null;
                 // Mark ALL running tool calls as done — the response is complete
                 if (toolCalls.length > 0) {
                   const hasRunning = toolCalls.some(tc => isActiveToolStatus(tc.status));
@@ -1905,10 +1916,12 @@ export function useChat(
         // the persistent "task ran but checkbox stayed unchecked" report.
         () => {
           window.dispatchEvent(new CustomEvent('localmind:todo-refetch'));
-          setIsStreaming(false);
-          streamStartedAtRef.current = null;
-          streamingSessionRef.current = null;
-          abortRef.current = null;
+          if (!turnSettled) {
+            setIsStreaming(false);
+            streamStartedAtRef.current = null;
+            streamingSessionRef.current = null;
+            abortRef.current = null;
+          }
           setAgentRuns((prev) => updateAgentRun(prev, rootRunId, {
             status: 'completed',
             completedAt: Date.now(),
