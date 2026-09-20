@@ -50,3 +50,14 @@ export function friendlyUnmet(item: string): string {
   }
   return item;
 }
+
+/**
+ * A replanning row is the agent correcting course, which is normal and usually invisible work —
+ * not a warning. Say so: "Adjusting the approach" with the reason, not "Replanning — analyze
+ * criteria unmet" in amber, which reads like something broke.
+ */
+export function friendlyReplan(label: string, detail?: string): { label: string; detail?: string } {
+  if (!/^replanning/i.test(label)) return { label, detail };
+  const reason = detail?.replace(/^unmet:\s*/i, '').trim();
+  return { label: 'Adjusting the approach', detail: reason ? `Because ${reason}` : undefined };
+}

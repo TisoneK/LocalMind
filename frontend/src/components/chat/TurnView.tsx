@@ -15,8 +15,10 @@ import {
   Brain,
   Check,
   ChevronRight,
+  RefreshCw,
   X,
 } from 'lucide-react';
+import { friendlyReplan } from '@/lib/localmind/errorText';
 import { buildTurn, isShellBlocked, isTerminalTool, type TurnStep } from '@/lib/localmind/turnTimeline';
 import { filePathOf } from '@/lib/localmind/activityRail';
 import { useEnterMotion } from '@/lib/localmind/motion';
@@ -91,19 +93,20 @@ function StepRow({ step, depth = 0 }: { step: TurnStep; depth?: number }) {
 
   if (step.kind === 'checkpoint') {
     const warn = step.tone === 'warn';
-    const color = step.state === 'failed' ? 'text-red-300' : warn ? 'text-brand-amber' : 'text-brand-green-soft';
+    const shown = warn ? friendlyReplan(step.label, step.detail) : { label: step.label, detail: step.detail };
+    const color = step.state === 'failed' ? 'text-red-300' : warn ? 'text-brand-blue' : 'text-brand-green-soft';
     return (
       <motion.div {...enter({ x: -4 })} className="flex items-start gap-2 px-1 py-1 text-[11.5px]">
         {step.state === 'failed' ? (
           <X className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-400" aria-label="failed" />
         ) : warn ? (
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-amber" aria-label="replanning" />
+          <RefreshCw className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-blue" aria-label="adjusting" />
         ) : (
           <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-green" aria-label="verified" />
         )}
         <div className="min-w-0">
-          <div className={color}>{step.label}</div>
-          {step.detail && <div className="text-[10.5px] leading-snug text-brand-green-muted">{step.detail}</div>}
+          <div className={color}>{shown.label}</div>
+          {shown.detail && <div className="text-[10.5px] leading-snug text-brand-green-muted">{shown.detail}</div>}
         </div>
       </motion.div>
     );

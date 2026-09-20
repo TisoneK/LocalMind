@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanToolFailure, friendlyUnmet, stripFallbackErrorText, stripVerificationFooter } from './errorText';
+import { cleanToolFailure, friendlyReplan, friendlyUnmet, stripFallbackErrorText, stripVerificationFooter } from './errorText';
 
 describe('stripFallbackErrorText', () => {
   it('removes the loop fallback when it is the whole reply', () => {
@@ -46,5 +46,17 @@ describe('friendlyUnmet', () => {
     expect(friendlyUnmet('model narrated an action plan but made zero tool calls')).toMatch(/instead of doing it/);
     expect(friendlyUnmet('narrated a pending action without a tool call')).toMatch(/instead of doing it/);
     expect(friendlyUnmet('file exists at /tmp/a')).toBe('file exists at /tmp/a');
+  });
+});
+
+describe('friendlyReplan', () => {
+  it('turns a replanning warning into a calm course correction', () => {
+    expect(friendlyReplan('Replanning — analyze criteria unmet', 'Unmet: it said what it would do instead of doing it')).toEqual({
+      label: 'Adjusting the approach',
+      detail: 'Because it said what it would do instead of doing it',
+    });
+  });
+  it('leaves other checkpoints alone', () => {
+    expect(friendlyReplan('Verified — acceptance gate passed')).toEqual({ label: 'Verified — acceptance gate passed', detail: undefined });
   });
 });
