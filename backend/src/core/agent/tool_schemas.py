@@ -420,7 +420,7 @@ TOOL_DEFINITIONS: list[dict] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "command": {"type": "string", "description": "Shell command — MUST match the OS (check env). Windows: Get-ChildItem, New-Item -ItemType Directory -Force. Unix: ls, mkdir -p, cat."},  # noqa: E501
+                    "command": {"type": "string", "description": "Shell command — MUST match the OS (see the tool description)"},
                 },
                 "required": ["command"],
             },
