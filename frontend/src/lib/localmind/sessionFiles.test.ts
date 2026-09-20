@@ -61,4 +61,10 @@ describe('filterChatFiles', () => {
   it('returns everything for a blank query', () => {
     expect(filterChatFiles(rows, '  ')).toHaveLength(2);
   });
+
+  it('hides the edit tool\'s .bak backup while the original is there', () => {
+    const rows = buildChatFiles([f('shopping.txt'), f('shopping.txt.bak'), f('orphan.bak')]);
+    expect(rows.map((r) => r.name).sort()).toEqual(['orphan.bak', 'shopping.txt']);
+  });
 });
+

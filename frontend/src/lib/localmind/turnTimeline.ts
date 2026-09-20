@@ -125,8 +125,17 @@ export function toolLabel(tool: ToolCall, state: StepState = 'running'): string 
   return tool.label || (pair ? pair[state === 'done' || state === 'failed' ? 1 : 0] : tool.name);
 }
 
+/** Looking for something and finding it absent is an answer, not an error: the agent checks
+ *  whether a file exists before creating it, and "not found" is the expected result. */
+export function isBenignNotFound(tool: ToolCall): boolean {
+  if (tool.status !== 'failed') return false;
+  if (!['file_task', 'file_read', 'dir_explorer', 'system_search', 'find_path'].includes(tool.name)) return false;
+  return /error_type=['"]not_found['"]/.test(`${tool.output ?? ''} ${tool.error ?? ''}`);
+}
+
 function toolStep(tool: ToolCall, settled: boolean): TurnStep {
-  const state = toolState(tool.status, settled);
+  const notFound = isBenignNotFound(tool);
+  const state = notFound ? 'done' : toolState(tool.status, settled);
   const label = toolLabel(tool, state);
   // Backend labels often already carry the target ("Exploring (list): /path") —
   // don't print it a second time as the detail.
@@ -140,6 +149,7 @@ function toolStep(tool: ToolCall, settled: boolean): TurnStep {
     label,
     detail,
     state,
+    ...(notFound ? { note: 'not found' } : {}),
     // Settled turn + tool still marked in flight = it never reported back.
     ...(settled && state === 'pending' && isActiveToolStatus(tool.status) ? { note: 'no result' } : {}),
     durationMs: tool.duration,

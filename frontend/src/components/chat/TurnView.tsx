@@ -260,9 +260,9 @@ export const TurnView = memo(function TurnView({ message, todos, isStreaming }: 
                     className="ml-auto shrink-0 whitespace-nowrap rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-brand-green-soft"
                     title={turn.plan.items[turn.plan.currentIndex]?.label}
                   >
-                    {turn.plan.done === turn.plan.total
-                      ? `${turn.plan.total}/${turn.plan.total} steps`
-                      : `Step ${turn.plan.currentIndex + 1}/${turn.plan.total}`}
+                    {running && turn.plan.done < turn.plan.total
+                      ? `Step ${turn.plan.currentIndex + 1}/${turn.plan.total}`
+                      : `${turn.plan.done}/${turn.plan.total} steps`}
                   </span>
                 )}
               </span>

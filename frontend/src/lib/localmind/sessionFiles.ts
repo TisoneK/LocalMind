@@ -44,6 +44,9 @@ export function buildChatFiles(entries: SessionFileEntry[], diffs?: Record<strin
     if (e.type !== 'file') continue;
     const rel = (e.relPath || e.name).replace(/\\/g, '/');
     if (isHidden(rel)) continue;
+    // The edit tool leaves "<name>.bak" beside the file it changed; it is the tool's own
+    // backup, not something the user made — hide it while the original is there.
+    if (rel.endsWith('.bak') && entries.some((o) => (o.relPath || o.name) === rel.slice(0, -4))) continue;
     const slash = rel.lastIndexOf('/');
     rows.push({
       path: e.path,

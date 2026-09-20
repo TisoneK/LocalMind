@@ -181,3 +181,30 @@ describe('buildTurn', () => {
   });
 });
 
+
+describe('a check that finds nothing', () => {
+  const missing = tool('m', {
+    name: 'file_task',
+    status: 'failed',
+    output: "[Tool 'file_task' returned error_type='not_found'] No file found.",
+  });
+
+  it('is shown as done with a "not found" note, not as a failure', () => {
+    const t = buildTurn({ toolCalls: [missing, tool('w', { name: 'file_write' })] });
+    expect(t.steps[0]).toMatchObject({ state: 'done', note: 'not found' });
+    expect(t.counts.failed).toBe(0);
+    expect(t.summary).toBe('Ran 2 tools');
+  });
+
+  it('still counts a genuine failure', () => {
+    const t = buildTurn({ toolCalls: [tool('s', { name: 'shell', status: 'failed', error: 'boom' })] });
+    expect(t.counts.failed).toBe(1);
+  });
+
+  it('does not excuse other tools that merely mention not_found', () => {
+    const t = buildTurn({
+      toolCalls: [tool('w', { name: 'file_write', status: 'failed', output: "error_type='not_found'" })],
+    });
+    expect(t.counts.failed).toBe(1);
+  });
+});
