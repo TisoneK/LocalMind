@@ -30,3 +30,8 @@ latest subject `fix: handle empty config gracefully (#42)`; `repo/pkg/core` with
   `python3 ds_runner.py <N> <provider> <model> [pause_s]`; then `python3 ds_stats.py <provider>`.
 - `fx_runner.py`: 15 runs of variant A from a chosen worktree (used to verify the tool-result stubbing fix).
 - Provider failover (`adapters/failover.py`) is inert in these runs because the scratch settings hold ONE key.
+
+## Input-selection experiment (2026-09-20)
+`s_wrap.py` (variant `S` = staged prompt emulated by request rewriting), `s_run.py` (5 tasks: list, write, edit, find, sys;
+`find`/`sys` are tool-SELECTION tasks scored on the first tool), `s_runner.py` (A vs S), `s_stats.py`; `p2_runner.py` compares two
+CODE TREES (main snapshot vs a worktree) with no rewriting — use this to verify a product change. Fixture and paths as above.

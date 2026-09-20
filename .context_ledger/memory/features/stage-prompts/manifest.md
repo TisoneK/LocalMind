@@ -75,6 +75,24 @@ schemas) into the on-demand set; fewer act calls per turn (batching independent 
 block (git status/diff of the cwd is injected every turn and grows with repo state).
 Eval gap to close first: selection-sensitive tasks + a second flash-tier model (Cerebras 402, glm throttled, Gemini keyed).
 
+## CLARIFIED INTENT + SHIPPED (2026-09-20, S024): input SELECTION by stage — `561775f2`
+Owner clarification: the feature is NOT compaction; it is deciding WHEN to use WHAT as input on each call. Rounds 1-2 tested
+compaction (wrong target). The selection policy, tested properly:
+- Policy: cold-start act call = everything; a call that already holds a tool result omits the FIRST-TOOL guidance (style
+  examples, tool-list one-liners, selection hints); every rule stays; an answer-only call also omits the on-demand paragraph.
+- Harness emulation (DeepSeek, 5 task shapes incl. two selection-sensitive: find -> system_search, system fact -> no shell,
+  10 rounds, serial): correct 50/50 vs 49/50. PRODUCT code vs main, same harness: **50/50 vs 50/50**, first tool right 100%.
+  Captured requests: 8463 chars on the first call, 5238 (-38%) on later calls; input -6..-12% per task (find/sys have no or
+  few later calls).
+- Implementation: `staged_system_prompt()` + shared section-head constants in `core/agent/prompts.py`; one hook in `loop.py`
+  before the adapter call (after the answer-only decision); prompt cache still shares the first ~60% of the prefix.
+- Why the saving is modest: the first call is unchanged and tool schemas (40% of input) are untouched.
+NEXT levers under the same principle (each needs its own eval, incl. tool-selection tasks on a 2nd model):
+1. **Schema selection by capability/stage** (largest: 40% of input; e.g. browse = 22% of schemas is irrelevant to a file task;
+   an answer-only call after a local-tool result offers no tools — ADR-61 only does this for web fetches).
+2. Per-turn workspace-state block (git status/diff injected every turn).
+3. Thinker/reflection calls (9% of input) - skip when the turn is trivially answered.
+
 ## Next (revised)
 1. Rebuild C keeping EVERY load-bearing rule of the full prompt (multi-part completion, act-not-announce,
    anti-hedging, tool-selection hints, safety) and compress only wording/duplication; re-run lookup + write

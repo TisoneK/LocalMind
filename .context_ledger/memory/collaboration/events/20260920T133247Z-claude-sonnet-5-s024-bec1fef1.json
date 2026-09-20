@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260920T133247Z-claude-sonnet-5-s024-bec1fef1",
+  "type": "release",
+  "session": "S024",
+  "agent": "claude-sonnet-5-s024",
+  "created": "2026-09-20T13:32:47Z",
+  "issue": "staged-system-prompt",
+  "body": "Imani (S024): shipped 561775f2 — input selection by stage (later calls omit first-tool guidance); live 50/50 vs 50/50 on DeepSeek, -38% system prompt on later calls. Scope released.",
+  "paths": [],
+  "refs": ["561775f2"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
