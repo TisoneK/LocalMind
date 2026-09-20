@@ -4,7 +4,7 @@
  * question and you never scroll past Ollama to find your theme.
  */
 
-export type PageId = 'general' | 'appearance' | 'providers' | 'models' | 'local' | 'agent';
+export type PageId = 'general' | 'appearance' | 'shortcuts' | 'providers' | 'models' | 'local' | 'agent' | 'terminal';
 
 export interface SettingsPage {
   id: PageId;
@@ -17,10 +17,12 @@ export interface SettingsPage {
 export const PAGES: SettingsPage[] = [
   { id: 'general', label: 'General', blurb: 'What LocalMind does when it opens.', group: 'Basics' },
   { id: 'appearance', label: 'Appearance', blurb: 'Theme, mode and tone.', group: 'Basics' },
+  { id: 'shortcuts', label: 'Keyboard shortcuts', blurb: 'Keys the app answers to.', group: 'Basics' },
   { id: 'providers', label: 'Providers & keys', blurb: 'Which AI service to use, and the keys to reach it.', group: 'Models' },
   { id: 'models', label: 'Models', blurb: 'The model that answers, and how it reasons.', group: 'Models' },
   { id: 'local', label: 'Local models', blurb: 'Ollama, running on this machine.', group: 'Models' },
   { id: 'agent', label: 'Agent', blurb: 'What the agent may do, and where its installs go.', group: 'Agent' },
+  { id: 'terminal', label: 'Terminal', blurb: 'The shell commands run in.', group: 'Agent' },
 ];
 
 export const GROUPS: SettingsPage['group'][] = ['Basics', 'Models', 'Agent'];
@@ -28,6 +30,9 @@ export const GROUPS: SettingsPage['group'][] = ['Basics', 'Models', 'Agent'];
 /** Which page each section (by its heading) belongs to. */
 export const SECTION_PAGE: Record<string, PageId> = {
   'On Startup': 'general',
+  'Chat mode': 'general',
+  'Keyboard shortcuts': 'shortcuts',
+  Shell: 'terminal',
   Appearance: 'appearance',
   'AI Provider': 'providers',
   'API Keys': 'providers',

@@ -880,6 +880,15 @@ class LocalMindClient {
     });
   }
 
+  /** The shell commands run in, and which shells this machine has. */
+  async getShell(): Promise<{ shell: string; options: { id: string; label: string; path: string; available: boolean }[] }> {
+    return this.request('/api/settings/shell');
+  }
+
+  async setShell(shell: string): Promise<{ shell: string; message: string }> {
+    return this.request('/api/settings/shell', { method: 'POST', body: JSON.stringify({ shell }) });
+  }
+
   /** Where `pip install` goes: LocalMind's own folder, or the system Python. */
   async getPackageEnv(): Promise<{ package_env: 'localmind' | 'system'; packages_dir: string }> {
     return this.request('/api/settings/package-env');

@@ -139,6 +139,37 @@ async def set_chat_mode(req: ChatModeRequest):
     return {"chat_mode": val, "message": f"Chat mode set to {val}"}
 
 
+class ShellRequest(BaseModel):
+    """Body for POST /api/settings/shell."""
+    shell: str  # "auto" or a shell id from GET /api/settings/shell
+
+
+@router.get("/settings/shell")
+async def get_shell():
+    from core.shell_config import configured, detect_shells
+
+    return {"shell": configured(), "options": [c.to_dict() for c in detect_shells()]}
+
+
+@router.post("/settings/shell")
+async def set_shell(req: ShellRequest):
+    """Choose the shell commands run in (terminal panel and the agent's shell tool)."""
+    from core.shell_config import detect_shells
+
+    val = req.shell.strip().lower()
+    known = {c.id: c for c in detect_shells()}
+    if val != "auto" and val not in known:
+        raise HTTPException(status_code=400, detail=f"Unknown shell: {val}")
+    if val != "auto" and not known[val].available:
+        raise HTTPException(status_code=400, detail=f"{known[val].label} is not installed on this machine")
+    settings.localmind_shell = val
+    _path = settings._runtime_settings_path()
+    _data = settings._load_json_file(_path)
+    _data["shell"] = val
+    settings._secure_write_json(_path, _data)
+    return {"shell": val, "message": f"Commands now run in: {val}"}
+
+
 class PackageEnvRequest(BaseModel):
     """Body for POST /api/settings/package-env."""
     package_env: str  # "localmind" | "system"

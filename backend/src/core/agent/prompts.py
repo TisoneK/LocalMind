@@ -70,6 +70,9 @@ def _system_env_line() -> str:
     summary = get_cached_summary()
     if not summary:
         return ""
+    from core.shell_config import note as _shell_note
+
+    summary = f"{summary}\n{_shell_note()}".rstrip()
     return (
         f"{summary}\n(You already know the machine above — answer OS/CPU/RAM/disk/"
         "hostname questions directly from it — free disk/RAM are as of startup, so "

@@ -43,6 +43,28 @@ MAX_OUTPUT_BYTES = 1_000_000  # 1 MB output cap to prevent memory exhaustion
 _spawned_pids: set[int] = set()
 
 
+
+async def _spawn(command: str, cwd: str, env: dict):
+    """Start `command` in the shell the user chose in Settings (the platform default on "auto")."""
+    from core.shell_config import exec_args, resolve
+
+    choice = resolve()
+    if choice is not None:
+        return await asyncio.create_subprocess_exec(
+            *exec_args(command, choice),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=cwd,
+            env=env,
+        )
+    return await asyncio.create_subprocess_shell(
+        command,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=cwd,
+        env=env,
+    )
+
 def _get_session(session_id: str) -> dict:
     """Get or create a terminal session with defaults."""
     if session_id not in _terminal_sessions:
@@ -117,13 +139,7 @@ class TerminalSessionBridge:
         try:
             start_time = time.time()
 
-            process = await asyncio.create_subprocess_shell(
-                command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=cwd,
-                env=env,
-            )
+            process = await _spawn(command, cwd, env)
 
             try:
                 stdout, stderr = await asyncio.wait_for(
@@ -357,13 +373,7 @@ async def execute_terminal_command(request: TerminalRequest):
     try:
         start_time = time.time()
 
-        process = await asyncio.create_subprocess_shell(
-            request.command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=cwd,
-            env=env,
-        )
+        process = await _spawn(request.command, cwd, env)
 
         # Track the PID so POST /api/terminal/kill can verify ownership
         # before sending SIGKILL. This prevents arbitrary process kills.

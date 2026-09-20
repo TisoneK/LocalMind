@@ -16,6 +16,7 @@ import {
   Package,
 } from 'lucide-react';
 import { PackageInstaller } from './PackageInstaller';
+import { localmindClient } from '@/lib/localmind/client';
 
 // ─── Color Map ─────────────────────────────────────────────────────────
 //
@@ -124,6 +125,26 @@ export function TerminalPanel({
   // The package installer is a rare task: it lives behind a toggle instead of taking a row of the
   // terminal all the time.
   const [showPackages, setShowPackages] = useState(false);
+  // The shell chip names the shell commands really run in (chosen in Settings).
+  const [activeShell, setActiveShell] = useState('shell');
+  useEffect(() => {
+    let live = true;
+    const load = () =>
+      Promise.resolve()
+        .then(() => localmindClient.getShell())
+        .then((r) => {
+          if (!live) return;
+          const chosen = r.options.find((o) => o.id === r.shell);
+          setActiveShell(chosen ? chosen.label.replace(/ \(.*\)$/, '') : 'shell');
+        })
+        .catch(() => {});
+    load();
+    window.addEventListener('localmind:shell-changed', load);
+    return () => {
+      live = false;
+      window.removeEventListener('localmind:shell-changed', load);
+    };
+  }, []);
   const [suggestions, setSuggestions] = useState<CompletionSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState(0);
@@ -641,7 +662,7 @@ export function TerminalPanel({
 
       {/* ── Terminal Header ── */}
       <div className="flex items-center gap-2 px-3 py-1 bg-brand-bg-dark border-b border-brand-border">
-        <span className="rounded bg-brand-border/60 px-1.5 py-px font-mono text-[9px] text-brand-green-soft">shell</span>
+        <span className="rounded bg-brand-border/60 px-1.5 py-px font-mono text-[9px] text-brand-green-soft">{activeShell}</span>
         <div className="flex items-center gap-1 text-[10px] text-brand-green-muted ml-1">
           <FolderOpen className="h-2.5 w-2.5" />
           <span className="truncate max-w-[150px]" title={cwd}>{shortCwd}</span>

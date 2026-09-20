@@ -329,6 +329,9 @@ class Settings(BaseSettings):
     # Where `pip install` goes: "localmind" (a folder LocalMind owns) or "system" (the Python on PATH).
     localmind_package_env: str = "localmind"
 
+    # Which shell runs commands: "auto" (platform default) or powershell / cmd / git-bash / bash / zsh / fish / sh.
+    localmind_shell: str = "auto"
+
     def is_ollama_configured(self) -> bool:
         """Return True only when Ollama has been explicitly confirmed working
         AND the adapter is ollama. Cloud adapters should never trigger Ollama
@@ -490,6 +493,10 @@ class Settings(BaseSettings):
                 else:
                     logger.warning(f"[config] Ignoring invalid startup_session: {data['startup_session']!r}")
             # Chat mode ("auto" | "agent" | "direct").
+            if "shell" in data:
+                val = str(data["shell"]).strip().lower()
+                if val in ("auto", "powershell", "cmd", "git-bash", "bash", "zsh", "fish", "sh"):
+                    self.localmind_shell = val
             if "package_env" in data:
                 val = str(data["package_env"]).strip().lower()
                 if val in ("localmind", "system"):

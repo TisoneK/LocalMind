@@ -6,6 +6,9 @@ import { localmindClient, type ConnectionRecord, type ConnectionTestResult } fro
 import { Progress } from '@/components/ui/progress';
 import { PAGES, GROUPS, SECTION_PAGE, type PageId } from './settingsPages';
 import { PackageEnvChoice } from '@/components/panels/PackageEnvChoice';
+import { ShellChoice } from './ShellChoice';
+import { ChatModeChoice } from './ChatModeChoice';
+import { ShortcutsList } from './ShortcutsList';
 import { useTheme, THEMES, type CustomTheme, type ModePref } from '@/hooks/useTheme';
 
 // ── Provider definitions ──
@@ -1859,6 +1862,35 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
             >
               {bestOfNEnabled ? 'Enabled' : 'Disabled'}
             </button>
+          </section>
+
+          {/* ── Chat mode ── */}
+          <section hidden={page !== SECTION_PAGE['Chat mode']}>
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
+              <MessageSquarePlus className="h-4 w-4 text-brand-green" />
+              Chat mode
+            </h3>
+            <p className="mb-3 text-xs text-brand-green-muted">How messages are handled by default. You can also change it from the message box.</p>
+            <ChatModeChoice />
+          </section>
+
+          {/* ── Keyboard shortcuts ── */}
+          <section hidden={page !== SECTION_PAGE['Keyboard shortcuts']}>
+            <h3 className="sr-only">Keyboard shortcuts</h3>
+            <ShortcutsList />
+          </section>
+
+          {/* ── Shell ── */}
+          <section hidden={page !== SECTION_PAGE['Shell']}>
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
+              <Zap className="h-4 w-4 text-brand-green" />
+              Shell
+            </h3>
+            <p className="mb-3 text-xs text-brand-green-muted">
+              The shell the terminal panel and the agent&apos;s commands run in. Automatic uses your platform&apos;s default; on
+              Windows you can choose PowerShell, Command Prompt or Git Bash.
+            </p>
+            <ShellChoice />
           </section>
 
           {/* ── Package installs ── */}

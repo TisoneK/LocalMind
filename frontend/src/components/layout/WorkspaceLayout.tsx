@@ -435,6 +435,16 @@ export function WorkspaceLayout() {
     [currentSessionId, send, refreshSessions]
   );
 
+  // Settings can change the chat mode too; keep the message box's picker in step.
+  useEffect(() => {
+    const onMode = (e: Event) => {
+      const m = (e as CustomEvent<{ mode?: 'auto' | 'agent' | 'direct' }>).detail?.mode;
+      if (m) setChatMode(m);
+    };
+    window.addEventListener('localmind:chat-mode-changed', onMode);
+    return () => window.removeEventListener('localmind:chat-mode-changed', onMode);
+  }, []);
+
   // The Chat→Agent gate (in ChatMessage) dispatches this when
   // the user accepts. Switch to Agent mode (persist to backend) THEN resend the
   // original message as an agent turn — the await ensures the backend has the

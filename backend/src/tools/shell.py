@@ -308,7 +308,13 @@ def _run(cmd: str | list, timeout: int = 20, cwd: str | None = None) -> dict:
         if isinstance(cmd, str):
             cmd = rewrite_install(cmd)
         exec_cmd: str | list = cmd
-        if IS_WIN and isinstance(cmd, str) and _looks_like_powershell(cmd):
+        from core.shell_config import exec_args, resolve
+
+        chosen = resolve() if isinstance(cmd, str) else None
+        if chosen is not None:
+            # The user picked a shell in Settings: every command runs there.
+            exec_cmd = exec_args(cmd, chosen)
+        elif IS_WIN and isinstance(cmd, str) and _looks_like_powershell(cmd):
             exec_cmd = ["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd]
         proc = subprocess.Popen(
             exec_cmd,
