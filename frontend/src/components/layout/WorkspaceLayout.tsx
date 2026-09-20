@@ -433,6 +433,17 @@ export function WorkspaceLayout() {
     [currentSessionId, send, refreshSessions, refreshActions]
   );
 
+  // Retry re-runs the last question in place: the failed reply and its error card are
+  // replaced rather than kept above the new attempt.
+  const handleRetry = useCallback(
+    (message: string) => {
+      if (!currentSessionId) return;
+      send(message, currentSessionId, undefined, true);
+      refreshSessions();
+    },
+    [currentSessionId, send, refreshSessions]
+  );
+
   // The Chat→Agent gate (in ChatMessage) dispatches this when
   // the user accepts. Switch to Agent mode (persist to backend) THEN resend the
   // original message as an agent turn — the await ensures the backend has the
@@ -490,6 +501,7 @@ export function WorkspaceLayout() {
           isStreaming={isStreaming}
           health={health}
           onSend={handleSend}
+          onRetry={handleRetry}
           onAbort={abort}
           onSteer={steer}
           memoryCount={memoryFacts.length}

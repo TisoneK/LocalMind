@@ -677,13 +677,15 @@ class LocalMindClient {
     onChunk: (rawData: string) => void,
     onDone: () => void,
     onError: () => void,
-    toolHint?: string
+    toolHint?: string,
+    retry?: boolean
   ): () => void {
     const controller = new AbortController();
 
     const formData = new FormData();
     formData.append('message', message);
     formData.append('session_id', sessionId);
+    if (retry) formData.append('retry', 'true');
 
     const headers: Record<string, string> = {};
     if (toolHint) {

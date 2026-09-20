@@ -4079,16 +4079,39 @@ class AgentLoop:
                 logger.debug("[agent.loop] context breakdown failed", exc_info=True)
                 _breakdown_est = None
             try:
-                result = await asyncio.wait_for(
-                    active_adapter.chat_with_tools(
-                        messages=iteration_messages,
-                        tools=_iter_tools,
-                        temperature=0.3,
-                        intent=intent.value,
-                        tool_choice="required" if _force_tool_choice else None,
-                    ),
-                    timeout=_per_call_timeout,
+                _call = asyncio.ensure_future(
+                    asyncio.wait_for(
+                        active_adapter.chat_with_tools(
+                            messages=iteration_messages,
+                            tools=_iter_tools,
+                            temperature=0.3,
+                            intent=intent.value,
+                            tool_choice="required" if _force_tool_choice else None,
+                        ),
+                        timeout=_per_call_timeout,
+                    )
                 )
+                # A provider limit is absorbed inside the adapter (retry / switch provider); its
+                # progress ("X is busy — switching to Y") is shown while the call is still in flight.
+                _progress = getattr(active_adapter, "status_queue", None)
+                if not isinstance(_progress, asyncio.Queue):
+                    _progress = None
+                try:
+                    while not _call.done():
+                        if _progress is None:
+                            await asyncio.wait({_call})
+                            break
+                        try:
+                            _line = await asyncio.wait_for(_progress.get(), timeout=0.25)
+                        except asyncio.TimeoutError:
+                            continue
+                        yield StreamChunk(text="", done=False, status=_line)
+                    while _progress is not None and not _progress.empty():
+                        yield StreamChunk(text="", done=False, status=_progress.get_nowait())
+                except BaseException:
+                    _call.cancel()
+                    raise
+                result = _call.result()
             except asyncio.TimeoutError:
                 logger.warning(
                     "[agent_loop] model call timed out after %.0fs (iter %d) — breaking with error",

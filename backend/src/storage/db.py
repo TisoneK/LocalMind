@@ -606,6 +606,26 @@ class SessionStore:
         except (ValueError, TypeError):
             return None
 
+    def drop_last_turn(self, session_id: str, user_content: str) -> bool:
+        """Remove the newest user message and the reply after it, when it is `user_content`.
+
+        A retry re-asks the same question; without this the stored chat would hold the failed
+        attempt AND the new one, and the failed reply (and its error) would return on reload.
+        Only an exact match on the trailing turn is removed, so retrying never eats other history.
+        """
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT id, role, content FROM messages WHERE session_id = ? ORDER BY id DESC LIMIT 2",
+                (session_id,),
+            ).fetchall()
+            if len(rows) < 2:
+                return False
+            reply, asked = rows[0], rows[1]
+            if reply[1] != "assistant" or asked[1] != "user" or (asked[2] or "").strip() != user_content.strip():
+                return False
+            conn.execute("DELETE FROM messages WHERE id IN (?, ?)", (reply[0], asked[0]))
+            return True
+
     def get_history(self, session_id: str, limit: int = 100) -> list[Message]:
         with self._conn() as conn:
             rows = conn.execute(

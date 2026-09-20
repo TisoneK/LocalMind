@@ -264,7 +264,7 @@ interface ChatState {
    *  right corner answers "how is this session doing overall" while each
    *  bubble keeps its own per-message line. */
   sessionStats: SessionStats;
-  send: (message: string, sessionIdOverride?: string, tool?: string) => void;
+  send: (message: string, sessionIdOverride?: string, tool?: string, retry?: boolean) => void;
   abort: () => void;
   /** Inject a user message at the next step boundary
    *  of the in-flight agent turn without aborting it. No-op when idle. */
@@ -628,7 +628,7 @@ export function useChat(
   }, [sessionId]);
 
   const send = useCallback(
-    (message: string, sessionIdOverride?: string, tool?: string) => {
+    (message: string, sessionIdOverride?: string, tool?: string, retry?: boolean) => {
       // Use the override (passed by handleSend when creating a new session)
       // so we never see sessionId===null on the first message.
       const effectiveSessionId = sessionIdOverride ?? sessionId;
@@ -656,7 +656,17 @@ export function useChat(
         statusText: 'Got it — working on your request...',
       };
 
-      setMessages((prev) => [...prev, userMsg, assistantMsg]);
+      setMessages((prev) => {
+        // Retry replaces the failed reply (and its error card) instead of stacking a second
+        // copy of the question and a second answer under it. Only the latest reply is
+        // replaced; retrying an older one sends a fresh turn, like any new message.
+        if (retry && prev.length >= 2 && prev[prev.length - 1].role === 'assistant') {
+          const before = prev.slice(0, -1);
+          const last = before[before.length - 1];
+          if (last.role === 'user' && last.content === message) return [...before, assistantMsg];
+        }
+        return [...prev, userMsg, assistantMsg];
+      });
       setIsStreaming(true);
       streamStartedAtRef.current = Date.now();
       // Stats split: this turn belongs to the effective session and gets a
@@ -1957,7 +1967,8 @@ export function useChat(
         // An explicitly-picked tool always wins; otherwise a deterministic
         // classifier hints 'chat' for obvious conversational sends. It never
         // invents a tool intent the user didn't pick.
-        tool || classifyClientIntent(message)
+        tool || classifyClientIntent(message),
+        retry
       );
 
       abortRef.current = abortFn;

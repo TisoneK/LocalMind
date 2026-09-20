@@ -927,3 +927,53 @@ describe('useChat thinking timer excludes tool time', () => {
     expect(result.current.passiveMemories).toHaveLength(0);
     unmount();
   });
+
+const RATE_LIMIT_ERROR = { status: 'error', code: 'rate_limit', message: 'limit', retryable: true };
+
+describe('useChat retry', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    streamMock.getSessionHistory.mockResolvedValue([]);
+  });
+
+  async function failedTurn() {
+    // What the server returns once the failed turn is stored.
+    streamMock.getSessionHistory.mockResolvedValue([
+      { id: 'u1', role: 'user', content: 'Hi there!', timestamp: '10:00' },
+      { id: 'a1', role: 'assistant', content: '', timestamp: '10:00', error: RATE_LIMIT_ERROR },
+    ]);
+    const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+    act(() => {
+      onChunk()(JSON.stringify({ type: 'error', error: { status: 'error', code: 'rate_limit', message: 'limit', retryable: true } }));
+    });
+    act(() => onDone()());
+    await act(async () => {});
+    return { result, unmount };
+  }
+
+  it('replaces the failed reply instead of stacking a second question and answer', async () => {
+    const { result, unmount } = await failedTurn();
+    expect(result.current.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
+    const failedId = result.current.messages[1].id;
+
+    act(() => {
+      result.current.send('Hi there!', undefined, undefined, true);
+    });
+
+    const roles = result.current.messages.map((m) => m.role);
+    expect(roles).toEqual(['user', 'assistant']);
+    const fresh = result.current.messages[1];
+    expect(fresh.id).not.toBe(failedId);
+    expect(fresh.error).toBeUndefined();
+    unmount();
+  });
+
+  it('a plain send still appends', async () => {
+    const { result, unmount } = await failedTurn();
+    act(() => {
+      result.current.send('Hi there!');
+    });
+    expect(result.current.messages.length).toBe(4);
+    unmount();
+  });
+});

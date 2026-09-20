@@ -380,3 +380,17 @@ def test_upsert_todo_create_update_clear(store):
     # clear
     store.clear_todos("s1")
     assert store.list_todos("s1") == []
+
+
+def test_drop_last_turn_removes_only_the_failed_attempt(store):
+    for role, text in [(Role.USER, "first"), (Role.ASSISTANT, "ok"), (Role.USER, "again"), (Role.ASSISTANT, "")]:
+        store.append("s1", Message(role=role, content=text))
+    assert store.drop_last_turn("s1", "again") is True
+    assert [m.content for m in store.get_history("s1")] == ["first", "ok"]
+
+
+def test_drop_last_turn_refuses_when_the_trailing_turn_is_not_the_retried_question(store):
+    store.append("s1", Message(role=Role.USER, content="other"))
+    store.append("s1", Message(role=Role.ASSISTANT, content="reply"))
+    assert store.drop_last_turn("s1", "something else") is False
+    assert len(store.get_history("s1")) == 2

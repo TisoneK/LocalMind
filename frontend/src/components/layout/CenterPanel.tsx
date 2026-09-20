@@ -71,6 +71,8 @@ interface CenterPanelProps {
   isStreaming: boolean;
   health: HealthState;
   onSend: (message: string, tool?: string) => void;
+  /** Re-run a failed turn in place. Falls back to `onSend` when not provided. */
+  onRetry?: (message: string) => void;
   onAbort: () => void;
   onSteer?: (message: string) => void;
   memoryCount: number;
@@ -113,6 +115,7 @@ export function CenterPanel({
   isStreaming,
   health,
   onSend,
+  onRetry: onRetryTurn,
   onAbort,
   onSteer,
   memoryCount,
@@ -603,7 +606,7 @@ export function CenterPanel({
                   key={msg.id}
                   message={msg}
                   isStreaming={isStreaming && msg === messages[messages.length - 1] && msg.role === 'assistant'}
-                  onRetry={prompt ? () => onSend(prompt) : undefined}
+                  onRetry={prompt ? () => (onRetryTurn ?? onSend)(prompt) : undefined}
                   fileDiffs={fileDiffs}
                   todos={msg === messages[messages.length - 1] ? todos : undefined}
                 />

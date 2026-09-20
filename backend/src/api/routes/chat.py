@@ -489,6 +489,12 @@ def _heartbeat_status_text(obs: ObsCollector, live_tool_events: bool) -> str:
         _start = next(e for e in reversed(_history) if e.type == "provider_call_start")
         _waited = time.monotonic() - float(_start.data.get("started_at", time.monotonic()))
         _provider = _start.data.get("provider") or "the model provider"
+        # When the agent has moved to another provider, the wait is on THAT one.
+        from adapters.failover import get_provider_health
+
+        _now_trying = get_provider_health().trying
+        if _now_trying and get_provider_health().is_down(_provider):
+            _provider = _now_trying
         if _waited >= PROVIDER_OFFER_AFTER_S:
             return (
                 f"Waiting for {_provider} to respond — nothing back after "
@@ -1291,9 +1297,13 @@ async def chat(
     file: Optional[UploadFile] = File(default=None),
     file_full_path: Optional[str] = Form(default=None),
     original_path: Optional[str] = Form(default=None),
+    retry: bool = Form(default=False),
 ):
     """Stream a chat response as Server-Sent Events."""
     sid = session_id or str(uuid.uuid4())
+    if retry and session_id:
+        # Re-running the last question replaces the stored failed attempt instead of adding to it.
+        _engine._store.drop_last_turn(sid, message)
     is_first = _is_first_turn(sid)
 
     file_bytes = None

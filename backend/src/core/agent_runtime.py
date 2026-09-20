@@ -227,6 +227,10 @@ def _history_without_current_turn(history: list, message: str) -> list:
     return list(history)
 
 
+from adapters.base import BaseAdapter  # noqa: E402
+from adapters.failover import FailoverAdapter  # noqa: E402
+
+
 class _ParentAdapterCompat:
     """Give simple chat-only adapters the parent loop's tool-call seam.
 
@@ -303,6 +307,11 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
 
         model = active_parent_model()
         adapter = get_adapter(settings.localmind_adapter, model_override=model)
+        # Provider limits (rate limit, quota, overload, outage) are absorbed for EVERY consumer of
+        # the kernel's adapter — the loop, the trivial-input path, memory, the thinker — so the
+        # turn moves to the next configured provider instead of ending in an error card.
+        if isinstance(adapter, BaseAdapter):  # concrete providers only; doubles pass through as-is
+            adapter = FailoverAdapter(adapter, settings.localmind_adapter)
         degraded_reason = ""
         if refresh_provider:
             try:
@@ -1781,6 +1790,11 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         adapter = kernel.adapter
         if not inspect.iscoroutinefunction(getattr(adapter, "chat_with_tools", None)):
             adapter = _ParentAdapterCompat(adapter)
+        # The kernel's adapter already absorbs provider limits (see `_ensure_parent_kernel`).
+        # Drop progress lines left over from work outside the loop, so they aren't shown late.
+        _stale = getattr(adapter, "status_queue", None)
+        while isinstance(_stale, asyncio.Queue) and not _stale.empty():
+            _stale.get_nowait()
         # Warm the model's real declared context window (Ollama /api/show) so
         # the budget below and the frontend meter reflect actual capacity, not
         # the 8192 fallback. Best-effort — the property degrades gracefully.

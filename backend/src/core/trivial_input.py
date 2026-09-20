@@ -877,6 +877,10 @@ async def _direct_chat_response(
             _err = getattr(chunk, "error", None)
             if isinstance(_err, str) and _err:
                 _stream_error = _err
+            # Progress from the adapter itself ("X is busy — switching to Y") reaches the UI.
+            _status = getattr(chunk, "status", None)
+            if isinstance(_status, str) and _status:
+                yield StreamChunk(text="", done=False, status=_status)
             # Reasoning-capable models think BRIEFLY before a conversational
             # answer (a "few seconds of thought" that calibrates tone and
             # length — the same shape every mainstream agent UI shows). That
