@@ -120,6 +120,8 @@ export function ErrorMessage({ error, onRetry }: ErrorMessageProps) {
           by default; this is the debug surface the user's principle allows. */}
       {error.raw !== undefined && error.raw !== null && (
         <details
+          // A "too long" verdict on a short chat needs its reason on screen, not behind a click.
+          open={error.code === 'context_overflow'}
           className="border-t border-brand-border"
           onToggle={(e) => setShowDetails((e.target as HTMLDetailsElement).open)}
         >

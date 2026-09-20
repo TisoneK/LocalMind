@@ -352,6 +352,21 @@ def _looks_like_edge_block(text: str) -> bool:
     return any(m in head for m in _CF_MARKERS)
 
 
+_OUTPUT_SIDE_RE = re.compile(
+    r"max_tokens|max_completion_tokens|max_new_tokens|completion tokens|output tokens|max output"
+)
+_INPUT_SIDE_RE = re.compile(r"context|prompt|input|messages|conversation")
+
+
+def _is_output_side_limit(lowered: str) -> bool:
+    """True when the limit named is about the REPLY (max_tokens and friends), not what was sent.
+
+    "exceeds the maximum" appears in both; telling a user with a 3K-token chat on a 1M-token model
+    that their conversation is too long, when a reply-size setting was rejected, is simply wrong.
+    """
+    return bool(_OUTPUT_SIDE_RE.search(lowered)) and not _INPUT_SIDE_RE.search(_OUTPUT_SIDE_RE.sub("", lowered))
+
+
 def _classify(
     status: int | None,
     text: str,
@@ -375,6 +390,8 @@ def _classify(
     lowered = (text or "").lower()
     for patterns, code, retryable in _KEYWORD_RULES:
         if any(p in lowered for p in patterns):
+            if code == CONTEXT_OVERFLOW and _is_output_side_limit(lowered):
+                continue  # a bad max_tokens is not "the conversation is too long"
             return code, retryable
     return GENERIC_ERROR, False
 

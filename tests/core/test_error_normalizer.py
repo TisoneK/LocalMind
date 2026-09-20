@@ -469,3 +469,12 @@ def test_plain_html_without_cf_markers_stays_status_classified() -> None:
     # 404 has no _STATUS_CODES HTML override — but the page lacks CF markers,
     # so it falls to the status map as before.
     assert out["code"] == MODEL_NOT_FOUND, out
+
+
+def test_a_rejected_max_tokens_is_not_reported_as_the_conversation_being_too_long():
+    from core.error_normalizer import CONTEXT_OVERFLOW, normalize_error
+
+    out = normalize_error("deepseek returned 400: max_tokens 400000 exceeds the maximum allowed value of 65536")
+    assert out["code"] != CONTEXT_OVERFLOW
+    real = normalize_error("deepseek returned 400: This model's maximum context length is 65536 tokens; your messages exceed it")
+    assert real["code"] == CONTEXT_OVERFLOW
