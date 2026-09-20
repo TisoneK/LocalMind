@@ -82,9 +82,6 @@ export function PerformanceMetrics({
   const cacheHitPct = cachedTokens > 0 && promptTokens > 0
     ? Math.min(100, Math.round((cachedTokens / promptTokens) * 100))
     : 0;
-  // Fresh input is billed full price; cached input at ~10% (0.1×). This is
-  // the honest "equivalent work" number the single prompt count obscured.
-  const equivalentInputTokens = Math.round(promptTokens - cachedTokens * 0.9);
 
   const hasTokenBreakdown = totalTokens > 0 || sessionTurnCount > 0;
 
