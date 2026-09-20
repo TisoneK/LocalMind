@@ -73,4 +73,15 @@ describe('PerformanceMetrics cache telemetry', () => {
     expect(screen.getByText(/79%/)).toBeInTheDocument();
     expect(screen.getByText('4')).toBeInTheDocument(); // 3 + 1
   });
+
+  it('reports the typical (median) turn, not an average dragged up by one slow run', () => {
+    render(
+      <PerformanceMetrics
+        metrics={baseMetrics}
+        sessionStats={stats({ latencyMs: 62000, turnCount: 3, turnLatencies: [900, 1100, 60000], promptTokens: 100, completionTokens: 10 })}
+      />,
+    );
+    expect(screen.getByText('Typical latency')).toBeInTheDocument();
+    expect(screen.getByText('1.1s')).toBeInTheDocument();
+  });
 });

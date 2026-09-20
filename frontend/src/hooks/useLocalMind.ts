@@ -69,12 +69,13 @@ const _EMPTY_SESSION_STATS: SessionStats = {
   turnCount: 0,
   cachedTokens: 0,
   llmCalls: 0,
+  turnLatencies: [],
 };
 
 /** Rebuild session totals from loaded history (assistant messages that carry
  *  attached `performance`). Used when no in-memory cache entry exists. */
 function _seedSessionStats(history: ChatMessage[]): SessionStats {
-  const acc: SessionStats = { ..._EMPTY_SESSION_STATS };
+  const acc: SessionStats = { ..._EMPTY_SESSION_STATS, turnLatencies: [] };
   for (const m of history) {
     if (m.role !== 'assistant' || !m.performance) continue;
     const p = m.performance;
@@ -83,6 +84,7 @@ function _seedSessionStats(history: ChatMessage[]): SessionStats {
     acc.promptTokens += p.promptTokens ?? 0;
     acc.completionTokens += completion;
     acc.latencyMs += latency;
+    if (latency > 0) acc.turnLatencies!.push(latency);
     acc.genTimeMs += p.tokensPerSecond && p.tokensPerSecond > 0 && completion > 0
       ? (completion / p.tokensPerSecond) * 1000
       : latency;
@@ -471,6 +473,8 @@ export function useChat(
           turnCount: Math.max(0, prev.turnCount - 1) + 1,
           cachedTokens: prev.cachedTokens - prevContribution.cached + cached,
           llmCalls: prev.llmCalls - prevContribution.llmCalls + calls,
+          // A late metrics upgrade replaces this turn's entry rather than adding a second one.
+          turnLatencies: [...(prev.turnLatencies ?? []).slice(0, -1), ...(latency > 0 ? [latency] : [])],
         }
       : {
           promptTokens: prev.promptTokens + prompt,
@@ -480,6 +484,7 @@ export function useChat(
           turnCount: prev.turnCount + 1,
           cachedTokens: prev.cachedTokens + cached,
           llmCalls: prev.llmCalls + calls,
+          turnLatencies: [...(prev.turnLatencies ?? []), ...(latency > 0 ? [latency] : [])],
         };
     applySessionStats(next);
     if (sessionId) sessionStatsBySessionRef.current.set(sessionId, next);

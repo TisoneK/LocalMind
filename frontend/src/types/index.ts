@@ -657,4 +657,6 @@ export interface SessionStats {
   cachedTokens: number;
   /** Total LLM calls that reported usage across turns. */
   llmCalls: number;
+  /** Each turn's latency (ms), oldest first — the corner reports the median, not the mean. */
+  turnLatencies?: number[];
 }

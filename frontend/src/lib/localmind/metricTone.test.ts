@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cacheTone, latencyTone, speedTone } from './metricTone';
+import { median, cacheTone, latencyTone, speedTone } from './metricTone';
 
 describe('metric tones', () => {
   it('grades latency', () => {
@@ -10,5 +10,13 @@ describe('metric tones', () => {
   });
   it('grades cache hits', () => {
     expect([cacheTone(94), cacheTone(40), cacheTone(5), cacheTone(0)]).toEqual(['good', 'warn', 'neutral', 'neutral']);
+  });
+});
+
+describe('median', () => {
+  it('ignores a slow outlier that would drag an average', () => {
+    expect(median([900, 1100, 60000])).toBe(1100);
+    expect(median([1000, 3000])).toBe(2000);
+    expect(median([])).toBe(0);
   });
 });

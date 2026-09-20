@@ -34,3 +34,11 @@ export function cacheTone(pct: number): Tone {
   if (pct >= 30) return 'warn';
   return 'neutral';
 }
+
+/** The middle value of the turn latencies, or 0 when there are none. */
+export function median(values: number[]): number {
+  const v = values.filter((n) => n > 0).sort((a, b) => a - b);
+  if (v.length === 0) return 0;
+  const mid = Math.floor(v.length / 2);
+  return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
+}

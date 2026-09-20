@@ -2,7 +2,7 @@
 
 import { Activity, Clock, Hash } from 'lucide-react';
 import { formatLatency, formatTokens } from '@/lib/localmind/progress';
-import { TONE_CLASS, cacheTone, latencyTone, speedTone } from '@/lib/localmind/metricTone';
+import { TONE_CLASS, cacheTone, latencyTone, median, speedTone } from '@/lib/localmind/metricTone';
 import type { SessionStats } from '@/types';
 
 interface PerformanceMetricsType {
@@ -56,6 +56,11 @@ export function PerformanceMetrics({
   const sessionAvgLatency = sessionTurnCount > 0 && sessionTotalLatency > 0
     ? sessionTotalLatency / sessionTurnCount
     : 0;
+  // The middle turn, not the mean: one 60 s agent run among quick replies makes an average that
+  // describes none of them. Falls back to the mean when per-turn values are not known.
+  const turnLatencies = sessionStats?.turnLatencies ?? [];
+  const sessionTypicalLatency = median(turnLatencies) || sessionAvgLatency;
+  const slowestTurn = turnLatencies.length ? Math.max(...turnLatencies) : 0;
 
   const isActive = isStreaming && elapsedMs > 0;
   // While a request is in flight the corner stays live (wall-clock latency,
@@ -63,7 +68,7 @@ export function PerformanceMetrics({
   // totals); at rest it reports the session summary.
   const liveTps = live.tokensPerSecond ?? 0;
   const tokensPerSecond = isActive && liveTps > 0 ? liveTps : sessionSpeed;
-  const latency = isActive ? elapsedMs : sessionAvgLatency;
+  const latency = isActive ? elapsedMs : sessionTypicalLatency;
   const completionTokens = sessionCompletion + (isStreaming ? (live.completionTokens || 0) : 0);
   const promptTokens = sessionPrompt + (isStreaming ? (live.promptTokens || 0) : 0);
   const totalTokens = promptTokens + completionTokens;
@@ -89,7 +94,7 @@ export function PerformanceMetrics({
         <Activity className="h-3 w-3 text-brand-green shrink-0" />
         <span
           className="text-[9px] text-brand-green-muted uppercase tracking-wider shrink-0"
-          title="Session throughput — total output tokens ÷ total generation time (weighted by output)"
+          title={'Output speed\nTokens generated per second across this chat.'}
         >
           Speed
         </span>
@@ -104,11 +109,11 @@ export function PerformanceMetrics({
           className="text-[9px] text-brand-green-muted uppercase tracking-wider shrink-0"
           title={
             sessionTurnCount > 0
-              ? `AVERAGE latency per turn — the session's total wall time ${formatLatency(sessionTotalLatency)} across ${sessionTurnCount} turns, NOT the last turn's duration (that's on the turn card). While a reply streams, this shows the live wall clock instead.`
-              : 'Response latency'
+              ? `Typical time per turn (median of ${sessionTurnCount})\nAverage ${formatLatency(sessionAvgLatency)}${slowestTurn > 0 ? ` · slowest ${formatLatency(slowestTurn)}` : ''}\nWhile a reply runs this shows the live clock.`
+              : 'Time per turn\nShows once you have a reply.'
           }
         >
-          Avg latency
+          Typical latency
         </span>
         <span className={`text-[11px] ${TONE_CLASS[latencyTone(latency)]} font-mono font-medium whitespace-nowrap`}>
           {latency > 0 ? formatLatency(latency) : '—'}
@@ -119,7 +124,7 @@ export function PerformanceMetrics({
         <Hash className="h-3 w-3 text-brand-green-muted shrink-0" />
         <span
           className="text-[9px] text-brand-green-muted uppercase tracking-wider shrink-0"
-          title="Cumulative tokens used this session (prompt + completion)"
+          title={'Tokens used in this chat\nPrompt + completion, all turns.'}
         >
           Tokens
         </span>
@@ -137,13 +142,8 @@ export function PerformanceMetrics({
           {cachedTokens > 0 && (
             <div
               className="flex items-center gap-1"
-              title={
-                `Prompt cache (SESSION total): ${formatTokens(cachedTokens)} of ${formatTokens(promptTokens)} input tokens ` +
-                `(${cacheHitPct}%) were served from the provider's cache at ~10% of the price. ` +
-                `Equivalent full-price input: ~${formatTokens(equivalentInputTokens)} tokens. ` +
-                `This is the whole session's share — the header's "· N% cached" is the LAST call's share, so the two can differ.`
-              }
-            >
+              title={`Prompt cache\n${cacheHitPct}% of input was served from the provider's cache, at about 10% of the price.`}
+                        >
               <span className="text-[9px] text-brand-green-muted">cached:</span>
               <span className={`text-[10px] ${TONE_CLASS[cacheTone(cacheHitPct)]} font-mono`}>
                 {formatTokens(cachedTokens)} ({cacheHitPct}%)
@@ -157,7 +157,7 @@ export function PerformanceMetrics({
           {llmCalls > 0 && (
             <div
               className="flex items-center gap-1"
-              title={`${llmCalls} LLM call${llmCalls === 1 ? '' : 's'} reported usage. Agent turns chain several model calls and each re-sends the conversation; the prompt count is the LAST call's context size, so real input across a multi-call turn is larger.`}
+              title={`${llmCalls} model call${llmCalls === 1 ? '' : 's'}\nEach agent step re-sends the conversation, so real input is larger than the prompt count.`}
             >
               <span className="text-[9px] text-brand-green-muted">calls:</span>
               <span className="text-[10px] text-brand-green-soft font-mono">{llmCalls}</span>
