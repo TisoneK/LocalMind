@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260920T123048Z-claude-sonnet-5-s024-288644eb",
+  "type": "claim",
+  "session": "S024",
+  "agent": "claude-sonnet-5-s024",
+  "created": "2026-09-20T12:30:48Z",
+  "issue": "staged-system-prompt",
+  "body": "Imani (S024): input-selection policy — on calls after a tool result, the native parent system prompt omits the style examples, tool-list one-liners and selection hints (first-tool guidance); rules kept. Live A/B on DeepSeek 50/50 vs 49/50. Small hook in loop.py before the adapter call + a helper in prompts.py. Own worktree ../LocalMind-imani.",
+  "paths": ["backend/src/core/agent/prompts.py", "backend/src/core/agent/loop.py", "tests/core"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
