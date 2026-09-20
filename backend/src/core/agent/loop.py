@@ -134,6 +134,7 @@ from core.agent.text_tools import (
 )
 from core.agent.tool_dispatch import dispatch_with_retry
 from core.agent.tool_schemas import TOOL_DEFINITIONS, tool_defs_for_call
+from core.agent.turn_bus import TurnBus
 from core.agent.turn_outcome import Recovery, TurnOutcome, classify_turn_outcome
 from core.context_builder import _build_environment_context
 from core.context_compactor import TOOL_RESULT_BUDGET_CHARS, simplify_tool_results
@@ -566,7 +567,7 @@ class _BackgroundConsult:
     by the consult timeout; nothing consumes it and it is garbage-collected.
     """
 
-    def __init__(self, evidence, adapter, timeout_secs: float) -> None:
+    def __init__(self, evidence, adapter, timeout_secs: float, bus: Optional[TurnBus] = None) -> None:
         from core.agent.thinker import Thinker
 
         self._thinker = Thinker(timeout_secs=timeout_secs)
@@ -575,9 +576,15 @@ class _BackgroundConsult:
         self.queue: asyncio.Queue = asyncio.Queue()
         self.task: Optional[asyncio.Task] = None
         self.iteration = evidence.iteration
+        # The plan generation this consult STARTED under: if the goal is re-planned
+        # before it finishes, its analysis answers a plan that no longer exists.
+        self.bus = bus
+        self.goal_version = bus.goal_version if bus is not None else 0
 
     def start(self) -> None:
         self.task = asyncio.create_task(self._run())
+        if self.bus is not None:
+            self.bus.track("thinker", self.task, step=self.iteration)
 
     async def _run(self) -> None:
         try:
@@ -613,11 +620,28 @@ class _BackgroundConsult:
         return chunks, finished
 
 
-def _absorb_thinker_analysis(loop_messages, trace, obs, analysis, iteration: int) -> None:
+def _absorb_thinker_analysis(
+    loop_messages, trace, obs, analysis, iteration: int, bus: Optional[TurnBus] = None,
+    goal_version: Optional[int] = None,
+) -> None:
     """Inject a completed Thinker analysis into the model context (shared by
     the blocking and background consult paths). Mirrors the inline-consult contract:
     context block for the model, user-facing summary on the trace for the
-    degraded fallback, lifecycle event for observability."""
+    degraded fallback, lifecycle event for observability.
+
+    With a turn bus the analysis is first published as a fact stamped with the
+    plan generation it was STARTED under (``goal_version``). If the goal was
+    re-planned since, the fact is stale and is dropped, never injected: a slow
+    analysis of the plan that was just replaced would otherwise read as current."""
+    if bus is not None and analysis and not analysis.is_empty:
+        _fact = bus.publish(
+            "thinker", "analysis", analysis, step=iteration,
+            goal_version=goal_version, grounded_in=(f"step:{iteration}",),
+        )
+        if bus.is_stale(_fact):
+            if obs:
+                obs.emit("agent_thinker_dropped_stale", iteration=iteration, goal_version=_fact.goal_version)
+            return
     if analysis and not analysis.is_empty:
         loop_messages.append({"role": "user", "content": _thinker_context_block(analysis)})
         # Preserve a user-facing rendering on the trace so the
@@ -3415,6 +3439,14 @@ class AgentLoop:
         # without ever having blocked one. A tool FAILURE keeps the blocking
         # path (recovery advice must shape the very next call) — see the
         # post-tool consult site below.
+        def _bus_fact_seen(_fact, _stale) -> None:
+            if _obs:
+                _obs.emit(
+                    "bus_fact", source=_fact.source, kind=_fact.kind, step=_fact.step,
+                    goal_version=_fact.goal_version, stale=_stale,
+                )
+
+        _bus = TurnBus(on_fact=_bus_fact_seen)
         _consult_inflight = None
         _consults_fired = 0
 
@@ -3465,7 +3497,7 @@ class AgentLoop:
                         "localmind_reasoning_plan_timeout_secs", REASONING_PLAN_TIMEOUT_SECS
                     )
                     _consults_fired += 1
-                    _consult_inflight = _BackgroundConsult(_ev, active_adapter, _consult_timeout)
+                    _consult_inflight = _BackgroundConsult(_ev, active_adapter, _consult_timeout, bus=_bus)
                     _consult_inflight.start()
             except Exception as _thx:  # never let the Thinker break a turn
                 logger.warning("[agent.loop] first-tool Thinker consult skipped: %s", _thx)
@@ -3948,7 +3980,8 @@ class AgentLoop:
                     yield StreamChunk(text="", thinking=_filter_system_leaks(_tc.thinking), done=False)
                 if _drain_done:
                     _absorb_thinker_analysis(
-                        loop_messages, trace, _obs, _consult_inflight.analysis, _consult_inflight.iteration
+                        loop_messages, trace, _obs, _consult_inflight.analysis, _consult_inflight.iteration,
+                        bus=_bus, goal_version=_consult_inflight.goal_version,
                     )
                     _consult_inflight = None
 
@@ -5663,7 +5696,8 @@ class AgentLoop:
                         yield StreamChunk(text="", thinking=_filter_system_leaks(_tc.thinking), done=False)
                     if _drain_done:
                         _absorb_thinker_analysis(
-                            loop_messages, trace, _obs, _consult_inflight.analysis, _consult_inflight.iteration
+                            loop_messages, trace, _obs, _consult_inflight.analysis, _consult_inflight.iteration,
+                            bus=_bus, goal_version=_consult_inflight.goal_version,
                         )
                         _consult_inflight = None
                 if (
@@ -5705,11 +5739,11 @@ class AgentLoop:
                                             text="", thinking=_filter_system_leaks(_tc.thinking), done=False
                                         )
                                 _absorb_thinker_analysis(
-                                    loop_messages, trace, _obs, _thinker.last_analysis, iteration + 1
+                                    loop_messages, trace, _obs, _thinker.last_analysis, iteration + 1, bus=_bus
                                 )
                             else:
                                 # BACKGROUND — overlap the next model call.
-                                _consult_inflight = _BackgroundConsult(_ev, active_adapter, _consult_timeout)
+                                _consult_inflight = _BackgroundConsult(_ev, active_adapter, _consult_timeout, bus=_bus)
                                 _consult_inflight.start()
                     except Exception as _thx:  # never let the Thinker break a turn
                         logger.warning("[agent.loop] Thinker consult skipped: %s", _thx)
@@ -7032,6 +7066,7 @@ class AgentLoop:
                     )
                     if not _gate_final:
                         _gate_replan_count += 1
+                        _bus.replan()  # everything said about the old plan is now stale
                         logger.info("[agent.loop] gate replan #%d", _gate_replan_count)
                         # Discard this iteration's text — don't
                         # emit it. The next iteration will produce the answer.
@@ -7201,6 +7236,7 @@ class AgentLoop:
                 )
                 if not _gate_final:
                     _gate_replan_count += 1
+                    _bus.replan()  # everything said about the old plan is now stale
                     logger.info("[agent.loop] gate replan #%d (alt)", _gate_replan_count)
                     # Discard the buffered text — don't emit it.
                     if _obs:
