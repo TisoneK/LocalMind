@@ -1,55 +1,129 @@
 /**
- * WelcomeScreen — the empty chat. Instead of a blurb, it offers a handful of real things to try,
- * one click each. LocalMind is a general assistant (files, the web, the machine, memory,
- * research, code), so the starters span that range rather than leaning on coding.
+ * WelcomeScreen — the first thing you see, and what an empty chat shows.
+ *
+ * It says the app is alive (a status line that tells the truth about the local engine), greets
+ * you, and offers six real things to try, one click each. LocalMind is a general assistant
+ * (files, the web, the machine, memory, research, code), so the starters span that range.
  */
 
-import { Cpu, FileText, Globe, HardDrive, Brain, Code2, Newspaper } from 'lucide-react';
-import type { ComponentType } from 'react';
+import { Brain, Code2, Cpu, FileText, Globe, HardDrive, Newspaper, type LucideIcon } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { useEnterMotion } from '@/lib/localmind/motion';
 
 interface Starter {
-  icon: ComponentType<{ className?: string }>;
+  icon: LucideIcon;
   label: string;
   prompt: string;
+  /** Tile colour, from the same palette as the tool icons. */
+  tone: string;
 }
 
 export const STARTERS: Starter[] = [
-  { icon: HardDrive, label: 'Check my machine', prompt: 'How much free disk space and memory do I have right now?' },
-  { icon: Globe, label: 'Look something up', prompt: "What's the weather in Nairobi right now?" },
-  { icon: Newspaper, label: 'Catch me up', prompt: 'Search the web for the top tech news today and summarise it in five bullets.' },
-  { icon: FileText, label: 'Make a file', prompt: 'Create a folder called notes and put a todo.md in it with a short plan for my week.' },
-  { icon: Brain, label: 'Remember something', prompt: "Remember that I prefer short answers with the key point first." },
-  { icon: Code2, label: 'Explore a project', prompt: 'List the files in my current folder and tell me what this project does.' },
+  { icon: HardDrive, label: 'Check my machine', prompt: 'How much free disk space and memory do I have right now?', tone: 'text-brand-amber bg-brand-amber/10' },
+  { icon: Globe, label: 'Look something up', prompt: "What's the weather in Nairobi right now?", tone: 'text-brand-blue bg-brand-blue/10' },
+  { icon: Newspaper, label: 'Catch me up', prompt: 'Search the web for the top tech news today and summarise it in five bullets.', tone: 'text-brand-purple bg-brand-purple/10' },
+  { icon: FileText, label: 'Make a file', prompt: 'Create a folder called notes and put a todo.md in it with a short plan for my week.', tone: 'text-brand-green bg-brand-green/10' },
+  { icon: Brain, label: 'Remember something', prompt: 'Remember that I prefer short answers with the key point first.', tone: 'text-brand-purple bg-brand-purple/10' },
+  { icon: Code2, label: 'Explore a project', prompt: 'List the files in my current folder and tell me what this project does.', tone: 'text-brand-blue bg-brand-blue/10' },
 ];
 
-export function WelcomeScreen({ onPick }: { onPick: (prompt: string) => void }) {
+export type EngineStatus = 'online' | 'offline' | 'checking';
+
+/** "Good morning" / "Good afternoon" / "Good evening" for a given hour (0-23). */
+export function greetingFor(hour: number): string {
+  if (hour < 5) return 'Still up?';
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+const STATUS_COPY: Record<EngineStatus, { text: string; dot: string }> = {
+  online: { text: 'Ready · everything runs on your machine', dot: 'bg-brand-green' },
+  checking: { text: 'Starting the local engine…', dot: 'bg-brand-amber animate-pulse' },
+  offline: { text: "Can't reach the local engine — retrying", dot: 'bg-brand-red animate-pulse' },
+};
+
+interface WelcomeScreenProps {
+  onPick: (prompt: string) => void;
+  /** State of the local engine; starters wait until it is online. */
+  status?: EngineStatus;
+  memoryCount?: number;
+  /** Injected for tests. */
+  hour?: number;
+}
+
+function Kbd({ children }: { children: string }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-5 px-6 text-center" data-testid="welcome">
-      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-green/10">
-        <Cpu className="h-6 w-6 text-brand-green" />
-      </div>
-      <div>
-        <h2 className="mb-1 text-sm font-medium text-brand-green-soft">What can I do for you?</h2>
-        <p className="mx-auto max-w-sm text-[11px] text-brand-green-muted">
-          I work on your machine: files, commands, the web, and things you ask me to remember. Pick one, or just type.
-        </p>
-      </div>
-      <div className="grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2">
-        {STARTERS.map(({ icon: Icon, label, prompt }) => (
-          <button
+    <kbd className="rounded border border-brand-border bg-brand-bg-rail px-1 py-px font-mono text-[9.5px] text-brand-green-soft">
+      {children}
+    </kbd>
+  );
+}
+
+export function WelcomeScreen({ onPick, status = 'online', memoryCount = 0, hour = new Date().getHours() }: WelcomeScreenProps) {
+  const { reduce, enter } = useEnterMotion();
+  const ready = status === 'online';
+  const state = STATUS_COPY[status];
+
+  return (
+    <div className="relative flex h-full flex-col items-center justify-center gap-6 overflow-hidden px-6 text-center" data-testid="welcome" data-status={status}>
+      {/* A soft glow behind the mark; decoration only. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-[18%] h-64 w-64 -translate-x-1/2 rounded-full bg-brand-green/[0.07] blur-3xl"
+      />
+
+      <motion.div {...enter({ y: 6, duration: 0.35 })} className="relative flex flex-col items-center gap-4">
+        <div className="relative">
+          {!ready && !reduce && <span aria-hidden className="absolute inset-0 animate-ping rounded-2xl bg-brand-green/20" />}
+          <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-brand-green/30 bg-gradient-to-br from-brand-green/20 to-brand-green/5 shadow-lg shadow-brand-green/10">
+            <Cpu className="h-7 w-7 text-brand-green" />
+          </div>
+        </div>
+        <div>
+          <p className="mb-0.5 text-[11px] uppercase tracking-[0.18em] text-brand-green-muted">{greetingFor(hour)}</p>
+          <h2 className="text-lg font-medium text-brand-green-soft">What can I do for you?</h2>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-2 text-[10.5px] text-brand-green-muted" data-testid="welcome-status">
+          <span className="flex items-center gap-1.5 rounded-full border border-brand-border bg-brand-bg-rail px-2.5 py-1">
+            <span className={`h-1.5 w-1.5 rounded-full ${state.dot}`} aria-hidden />
+            {state.text}
+          </span>
+          {memoryCount > 0 && (
+            <span className="flex items-center gap-1.5 rounded-full border border-brand-border bg-brand-bg-rail px-2.5 py-1">
+              <Brain className="h-3 w-3 text-brand-purple" aria-hidden />
+              {memoryCount} {memoryCount === 1 ? 'memory' : 'memories'}
+            </span>
+          )}
+        </div>
+      </motion.div>
+
+      <div className="relative grid w-full max-w-lg grid-cols-1 gap-2 sm:grid-cols-2">
+        {STARTERS.map(({ icon: Icon, label, prompt, tone }, i) => (
+          <motion.button
             key={label}
             type="button"
+            disabled={!ready}
             onClick={() => onPick(prompt)}
-            className="group flex items-start gap-2 rounded-lg border border-brand-border bg-brand-bg-rail px-3 py-2 text-left transition-colors hover:border-brand-green/40 hover:bg-brand-green/5"
+            {...enter({ y: 8, duration: 0.3 + i * 0.05 })}
+            className="group flex items-start gap-2.5 rounded-xl border border-brand-border bg-brand-bg-rail px-3 py-2.5 text-left transition-all hover:-translate-y-px hover:border-brand-green/40 hover:bg-brand-green/[0.04] hover:shadow-md hover:shadow-black/20 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
           >
-            <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-green-muted group-hover:text-brand-green" />
+            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${tone}`}>
+              <Icon className="h-3.5 w-3.5" aria-hidden />
+            </span>
             <span className="min-w-0">
               <span className="block text-[11.5px] font-medium text-brand-green-soft">{label}</span>
-              <span className="line-clamp-2 text-[10.5px] text-brand-green-muted">{prompt}</span>
+              <span className="line-clamp-2 text-[10.5px] leading-snug text-brand-green-muted">{prompt}</span>
             </span>
-          </button>
+          </motion.button>
         ))}
       </div>
+
+      <p className="relative flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] text-brand-green-faint">
+        <span><Kbd>⌘K</Kbd> search chats</span>
+        <span><Kbd>⌘N</Kbd> new chat</span>
+        <span><Kbd>Esc</Kbd> stop the agent</span>
+      </p>
     </div>
   );
 }

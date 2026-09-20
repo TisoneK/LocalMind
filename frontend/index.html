@@ -47,8 +47,12 @@
       <!-- Shown until the app mounts (React replaces #root's children). If the app never mounts
            - a script failed to load or crashed at startup - the watchdog below says so instead of
            leaving a blank window. -->
-      <div id="boot" style="display:flex;height:100vh;align-items:center;justify-content:center;flex-direction:column;gap:10px;font:13px system-ui,sans-serif;color:#9aa5a0;background:#0e1211">
-        <div style="font-weight:600;color:#c9d4cf">LocalMind</div>
+      <div id="boot" style="display:flex;height:100vh;align-items:center;justify-content:center;flex-direction:column;gap:14px;font:13px system-ui,sans-serif;color:#7f8c86;background:#0e1211">
+        <style>@keyframes lm-pulse{0%,100%{box-shadow:0 0 0 0 rgba(74,222,128,.25)}50%{box-shadow:0 0 0 14px rgba(74,222,128,0)}}</style>
+        <div style="width:56px;height:56px;border-radius:16px;border:1px solid rgba(74,222,128,.3);background:linear-gradient(135deg,rgba(74,222,128,.2),rgba(74,222,128,.05));display:flex;align-items:center;justify-content:center;animation:lm-pulse 1.8s ease-in-out infinite">
+          <div style="width:22px;height:22px;border:2px solid #4ade80;border-radius:6px;opacity:.9"></div>
+        </div>
+        <div style="font-weight:600;letter-spacing:.02em;color:#c9d4cf">LocalMind</div>
         <div id="boot-msg">Starting…</div>
       </div>
     </div>

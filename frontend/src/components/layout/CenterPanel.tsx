@@ -612,7 +612,7 @@ export function CenterPanel({
       <TranscriptContextMenu getMessageText={getMessageText} onSelectAll={selectAllTranscript}>
         <div ref={messagesContainerRef} onScroll={onTranscriptScroll} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar min-w-0">
           {messages.length === 0 && (
-            <WelcomeScreen onPick={onSend} />
+            <WelcomeScreen onPick={onSend} status={health.status} memoryCount={memoryCount} />
           )}
 
           {/* A readable column: replies, the turn group and the composer share one centred
