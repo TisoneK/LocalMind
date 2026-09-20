@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The right rail no longer jumps to the Terminal tab when the agent runs a command (its output is already in the chat, and the jump hid the plan). The verification footer ("✓ 1/1 criteria met…", "📁 Files:") is hidden from replies since the diff card and Files panel show the same facts. Result tables no longer wrap short values.
 
 ### Added
+- **The ⌘K palette now searches what was said in your chats**, not just their titles: type a word and matching chats appear under "In your chats" with a snippet around the match.
 - **Undo now covers the agent's targeted edits too**, not only whole-file writes: it restores the file from the backup the edit tool already keeps, with the same refusal if the file changed since.
 - **Edit your last message.** Hover your latest message and choose Edit: it returns to the composer, and sending replaces that turn (on screen and in the saved chat) instead of adding a second one.
 - **Undo for files the agent writes.** The applied-file card has an Undo that puts the file back as it was (or removes a file the agent created). It refuses if the file changed since, so it can never overwrite your newer work.

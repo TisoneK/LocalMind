@@ -70,6 +70,12 @@ def resolve_title(session: dict) -> str:
     return "New Chat"
 
 
+@router.get("/search")
+async def search_chats(q: str = ""):
+    """Find chats by what was said in them (the command palette's "in your chats")."""
+    return {"results": _store.search_messages(q)}
+
+
 @router.get("/sessions")
 async def list_sessions():
     """List all conversation sessions in frontend-compatible format."""

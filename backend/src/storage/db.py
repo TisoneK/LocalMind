@@ -606,6 +606,40 @@ class SessionStore:
         except (ValueError, TypeError):
             return None
 
+    def search_messages(self, query: str, limit: int = 20) -> list[dict]:
+        """Chats whose message text contains `query`, newest first, one row per chat.
+
+        Plain substring match (case-insensitive) with LIKE wildcards escaped, so what you type is
+        what is searched. Returns the chat title and a snippet around the first hit.
+        """
+        q = (query or "").strip()
+        if len(q) < 2:
+            return []
+        escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        with self._conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT m.session_id, s.title, m.role, m.content, MAX(m.timestamp) AS ts
+                FROM messages m JOIN sessions s ON s.id = m.session_id
+                WHERE m.content LIKE ? ESCAPE '\\'
+                GROUP BY m.session_id
+                ORDER BY ts DESC
+                LIMIT ?
+                """,
+                (f"%{escaped}%", limit),
+            ).fetchall()
+        out = []
+        for session_id, title, role, content, _ts in rows:
+            text = content or ""
+            at = text.lower().find(q.lower())
+            start = max(0, at - 40)
+            window = text[start : start + 120].replace("\n", " ")
+            for mark in ("**", "`", "##"):  # markdown noise reads badly in a one-line snippet
+                window = window.replace(mark, "")
+            snippet = ("…" if start else "") + window
+            out.append({"id": session_id, "title": title or "", "role": role, "snippet": snippet})
+        return out
+
     def drop_last_turn(self, session_id: str, user_content: str | None = None) -> bool:
         """Remove the newest user message and the reply after it, when it is `user_content`.
 

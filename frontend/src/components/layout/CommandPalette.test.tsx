@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { CommandPalette, isPaletteShortcut } from './CommandPalette';
+import { localmindClient } from '@/lib/localmind/client';
 
 const sessions = [
   { id: 's1', title: 'Weather in Nairobi', lastMessage: '', timestamp: '', messageCount: 2, active: false },
@@ -46,5 +47,23 @@ describe('CommandPalette', () => {
       fireEvent.keyDown(window, { key: 'k', metaKey: true });
     });
     expect(screen.getByText('Stop the agent')).toBeInTheDocument();
+  });
+});
+
+describe('CommandPalette message search', () => {
+  it('shows chats whose messages match what you typed, with a snippet', async () => {
+    vi.spyOn(localmindClient, 'searchChats').mockResolvedValue([
+      { id: 's9', title: 'Trip planning', snippet: '…pack the sunscreen for Mombasa' },
+    ]);
+    render(<CommandPalette {...props()} />);
+    act(() => {
+      fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+    });
+    const box = screen.getByPlaceholderText(/search chats/i);
+    act(() => {
+      fireEvent.change(box, { target: { value: 'sunscreen' } });
+    });
+    expect(await screen.findByText(/pack the sunscreen/, {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(screen.getByText('Trip planning')).toBeInTheDocument();
   });
 });

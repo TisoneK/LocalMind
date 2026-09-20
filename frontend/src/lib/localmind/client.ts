@@ -880,6 +880,14 @@ class LocalMindClient {
     });
   }
 
+  /** Chats whose messages contain `query` (id, title, and a snippet around the match). */
+  async searchChats(query: string): Promise<{ id: string; title: string; snippet: string }[]> {
+    const data = await this.request<{ results: { id: string; title: string; snippet: string }[] }>(
+      `/api/search?q=${encodeURIComponent(query)}`,
+    );
+    return data.results ?? [];
+  }
+
   /** Restore a file the agent wrote to what it held before (fails if it changed since). */
   async undoFileChange(undoId: string): Promise<{ message: string }> {
     return this.request<{ message: string }>('/api/files/undo', {

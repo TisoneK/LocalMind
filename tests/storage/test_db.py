@@ -403,3 +403,21 @@ def test_drop_last_turn_without_content_removes_any_trailing_pair(store):
     store.append("s1", Message(role=Role.ASSISTANT, content="answer"))
     assert store.drop_last_turn("s1") is True
     assert [m.content for m in store.get_history("s1")] == ["keep", "ok"]
+
+
+def test_search_messages_finds_text_in_any_chat_with_a_snippet(store):
+    store.ensure_session("s1")
+    store.ensure_session("s2")
+    store.append("s1", Message(role=Role.USER, content="what is the weather in Nairobi today"))
+    store.append("s2", Message(role=Role.USER, content="disk space please"))
+    hits = store.search_messages("nairobi")
+    assert [h["id"] for h in hits] == ["s1"]
+    assert "Nairobi" in hits[0]["snippet"]
+
+
+def test_search_messages_treats_wildcards_literally_and_ignores_tiny_queries(store):
+    store.append("s1", Message(role=Role.USER, content="100% sure"))
+    store.append("s1", Message(role=Role.USER, content="nothing here"))
+    assert len(store.search_messages("100%")) == 1
+    assert store.search_messages("%") == []  # too short
+    assert store.search_messages("_ _") == []  # underscore is not a wildcard
