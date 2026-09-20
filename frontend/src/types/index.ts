@@ -629,6 +629,8 @@ export interface ModelOption {
   name: string;
   provider: string;
   size?: string;
+  /** Turned off for this provider: kept on the provider but left out of the picker. */
+  hidden?: boolean;
   /** The model's max input-token budget (backend adapter effective_context_window).
    *  Used by the top-bar context-window occupancy meter. ABSENT when the
    *  window is unknown (provider doesn't report it and the model isn't in

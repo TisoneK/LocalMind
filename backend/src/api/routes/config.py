@@ -398,6 +398,8 @@ async def get_settings():
             "capabilities": conn.capabilities.to_dict(),
             "enabled": conn.enabled,
             "fallback_to": conn.fallback_to,
+            "extra_models": list(conn.extra_models),
+            "hidden_models": list(conn.hidden_models),
             "preset": conn.preset,
             "api_key_set": bool(settings.get_api_key(conn.id)),
         })

@@ -248,6 +248,8 @@ export interface ConnectionRecord {
   capabilities: ConnectionCapabilities;
   enabled: boolean;
   fallback_to: string;
+  extra_models?: string[];
+  hidden_models?: string[];
   preset: boolean;
   api_key_set: boolean;
 }
@@ -1240,6 +1242,7 @@ class LocalMindClient {
             ? m.context_window
             : m.contextWindow,
         contextWindowSource: m.context_window_source,
+        hidden: (m as { hidden?: boolean }).hidden,
       })),
     };
   }
@@ -1465,6 +1468,8 @@ class LocalMindClient {
     capabilities?: Partial<ConnectionCapabilities>;
     enabled?: boolean;
     fallback_to?: string;
+    extra_models?: string[];
+    hidden_models?: string[];
   }): Promise<{ connection: ConnectionRecord; message: string }> {
     return this.request('/api/settings/connections', {
       method: 'POST',
@@ -1472,7 +1477,7 @@ class LocalMindClient {
     });
   }
 
-  async deleteConnection(connectionId: string): Promise<{ connection: string; deleted: boolean; adapter: string; message: string }> {
+  async deleteConnection(connectionId: string): Promise<{ connection: string; deleted: boolean; adapter: string; switched_to?: string; message: string }> {
     return this.request(`/api/settings/connections/${encodeURIComponent(connectionId)}`, {
       method: 'DELETE',
     });

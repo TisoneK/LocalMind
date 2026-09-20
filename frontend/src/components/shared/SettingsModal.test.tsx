@@ -95,22 +95,6 @@ describe('SettingsModal', () => {
     );
   });
 
-  it('renders provider names from the live settings payload', async () => {
-    mockClient.getSettings.mockResolvedValue(settingsPayload());
-    mockClient.getOllamaUrl.mockResolvedValue({ url: 'http://localhost:11434' });
-
-    render(<SettingsModal onClose={() => {}} onSave={() => {}} />);
-
-    // Dialog title
-    expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument();
-    await goTo('Providers & keys');
-
-    // Provider buttons (Ollama + each provider from settings.providers)
-    expect(screen.getByRole('button', { name: /Ollama \(Local\)/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Zen AI/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Anthropic/i })).toBeInTheDocument();
-  });
-
   it('closes via the X button', async () => {
     mockClient.getSettings.mockResolvedValue(settingsPayload());
     mockClient.getOllamaUrl.mockResolvedValue({ url: 'http://localhost:11434' });
@@ -121,23 +105,6 @@ describe('SettingsModal', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Close settings' }));
     expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it('switching adapter resets the model to the new provider default', async () => {
-    mockClient.getSettings.mockResolvedValue(settingsPayload());
-    mockClient.getOllamaUrl.mockResolvedValue({ url: 'http://localhost:11434' });
-    mockClient.setAdapter.mockResolvedValue({ ok: true });
-
-    render(<SettingsModal onClose={() => {}} onSave={() => {}} />);
-    await screen.findByRole('heading', { name: 'Settings' });
-    await goTo('Providers & keys');
-
-    await userEvent.click(screen.getByRole('button', { name: /Zen AI/i }));
-    await waitFor(() => {
-      // The switch carries the new provider's default model so a previous
-      // provider's model can never be stranded under the new adapter.
-      expect(mockClient.setAdapter).toHaveBeenCalledWith('zen', 'deepseek-v4-flash-free');
-    });
   });
 
   it('shows an API key field for cloud providers', async () => {

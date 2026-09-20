@@ -4,7 +4,7 @@
  * question and you never scroll past Ollama to find your theme.
  */
 
-export type PageId = 'general' | 'appearance' | 'shortcuts' | 'providers' | 'models' | 'local' | 'agent' | 'terminal';
+export type PageId = 'general' | 'appearance' | 'shortcuts' | 'providers' | 'models' | 'local' | 'agent' | 'terminal' | 'legacy';
 
 export interface SettingsPage {
   id: PageId;
@@ -27,6 +27,7 @@ export const PAGES: SettingsPage[] = [
 
 export const GROUPS: SettingsPage['group'][] = ['Basics', 'Models', 'Agent'];
 
+/** `legacy` sections are the pre-redesign provider UI, kept mounted but never shown (see ProvidersPage). */
 /** Which page each section (by its heading) belongs to. */
 export const SECTION_PAGE: Record<string, PageId> = {
   'On Startup': 'general',
@@ -34,9 +35,9 @@ export const SECTION_PAGE: Record<string, PageId> = {
   'Keyboard shortcuts': 'shortcuts',
   Shell: 'terminal',
   Appearance: 'appearance',
-  'AI Provider': 'providers',
-  'API Keys': 'providers',
-  'AI Connections': 'providers',
+  'AI Provider': 'legacy',
+  'API Keys': 'legacy',
+  'AI Connections': 'legacy',
   Model: 'models',
   Reasoning: 'models',
   'Local model (Ollama)': 'local',
