@@ -6,9 +6,8 @@ far / one positive Decision, only the tools that decision needs) for every later
 recover, answer). Owner intent (2026-09-19): quality first, token consumption second, time third.
 
 **Started:** 2026-09-19 (S024, Imani)
-**Status:** **BACKLOGGED — resume when a second model/provider is available** (owner call, 2026-09-19).
-Only glm-4.5-flash is available now, and z.ai throttles (~5 x 429 per run), which removed the power
-to compare answer quality.
+**Status:** **ACTIVE again 2026-09-20 — DeepSeek (deepseek-chat) is available** (was backlogged 2026-09-19 for lack of
+a second model; glm-4.5-flash on z.ai throttles ~5 x 429 per run). First DeepSeek round done, see below.
 
 ## Shipped from this feature's groundwork (on main)
 - `6899023a` structured stage cards replace the paragraph nudges and the per-iteration SYNTHESIS
@@ -28,7 +27,29 @@ to compare answer quality.
 - NOT proven: that compact strict input improves quality. Not built: the product assembler (variants
   were emulated by rewriting requests in the harness).
 
-## To resume
+## DeepSeek round (2026-09-20, S024) — 90 serial interleaved runs, N=15 per cell, no rate limits
+Frozen-snapshot code (`eedb787d`), fixed fixture, two task shapes. A = current input, C = compact strict
+system prompt, D = C + compact tool schemas.
+- **Lookup (3-part read-only): A 13/15 vs C 0/15 vs D 0/15 (Fisher p < 0.001).** The compact prompts
+  narrate the next step and END THE TURN ("I have the folder list. Now I need the commit and the count.").
+  My compact head dropped the original prompt's explicit multi-part rule ("not done until EVERY part is
+  answered; act instead of announcing"): it is load-bearing. **Compaction by trimming is refuted; compaction
+  that preserves the rules is untested.**
+- **Write (create file + read back): A 15/15, C 14/15, D 15/15** — no quality difference; input chars -12% (C, n.s.)
+  and -24% (D, p = 0.008); D/C ~2 s slower (n.s.).
+- **A byproduct beat both variants:** A's FINAL answers were right only 5/15 although its evidence was right 13/15 —
+  `simplify_tool_results` cut older tool results mid-list (415-char folder listing). Fixed in `28c7eaae`
+  (budget-gated stubbing): final answers 5/15 -> 14/15 (p = 0.0017), turn 9.8 s -> 6.4 s, input -21%. Two models
+  had shown symptoms (glm invented `theta`, DeepSeek reported 4 folders).
+
+## Next (revised)
+1. Rebuild C keeping EVERY load-bearing rule of the full prompt (multi-part completion, act-not-announce,
+   anti-hedging, tool-selection hints, safety) and compress only wording/duplication; re-run lookup + write
+   (+ a third shape: multi-step edit) on DeepSeek, N >= 15. Success = no loss on lookup AND fewer tokens.
+2. Only then consider the stage-aware assembler (seam: `_iter_tools` / `iteration_messages` per call in `loop.py`,
+   next to the ADR-61 answer-only call; the stable system prompt is deliberately byte-identical for provider caching).
+
+## Original resume notes (pre-DeepSeek)
 1. Run `harness/` with N >= 10 per variant on a non-throttled provider (a second model/provider, or
    off-peak); score clean finals only; also run a different task shape (write/edit) so one prompt does
    not overfit.

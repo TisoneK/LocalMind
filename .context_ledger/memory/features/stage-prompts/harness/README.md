@@ -20,3 +20,13 @@ Fixture (recreate): `projects/{alpha,beta,gamma,delta,epsilon}`; `repo/` git rep
 latest subject `fix: handle empty config gracefully (#42)`; `repo/pkg/core` with 12 `.py` files
 (6 top-level, 3 in `util/`, 3 in `io/`). Prompt: list the folders, the latest commit message, and the
 `.py` count. Run ONE run at a time per provider key — parallel runs trip z.ai's 1302 rate limit.
+
+## DeepSeek generalization (2026-09-20)
+- `ds_wrap.py` / `ds_run.py` / `ds_runner.py` / `ds_stats.py`: provider- and task-generic versions.
+  `PROVIDER`/`MODEL`/`TASK` (`list` = multi-part read-only lookup, scored from GATHERED EVIDENCE; `write` =
+  create a file listing the folders and read it back, scored from the FILE STATE) come from env;
+  `REPO_DIR` selects the code under test (use a FROZEN `git worktree add --detach` snapshot — a moving
+  worktree contaminated the first attempt; never rebase the tree an experiment is reading).
+  `python3 ds_runner.py <N> <provider> <model> [pause_s]`; then `python3 ds_stats.py <provider>`.
+- `fx_runner.py`: 15 runs of variant A from a chosen worktree (used to verify the tool-result stubbing fix).
+- Provider failover (`adapters/failover.py`) is inert in these runs because the scratch settings hold ONE key.
