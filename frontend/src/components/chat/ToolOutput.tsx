@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import type { ToolCall } from '@/types';
 import { formatHidden, parseToolOutput, type ToolOutputView } from '@/lib/localmind/toolOutput';
+import { cleanToolFailure } from '@/lib/localmind/errorText';
 import { looksLikeJson, prettyJson, tokenizeJson, type JsonTokenKind } from '@/lib/localmind/jsonFormat';
 
 const PREVIEW_LINES = 8;
@@ -133,7 +134,7 @@ export function ToolOutput({ tool }: { tool: ToolCall }) {
 
   return (
     <div>
-      <Preview text={view.body} json={looksLikeJson(view.body)} />
+      <Preview text={cleanToolFailure(view.body)} json={looksLikeJson(view.body)} />
       <HiddenNote hidden={view.hidden} />
     </div>
   );

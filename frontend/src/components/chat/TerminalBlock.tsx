@@ -20,7 +20,8 @@ export function TerminalBlock({ tool }: { tool: ToolCall }) {
   const isCode = tool.name === 'code_exec';
   const failed = tool.status === 'failed';
   const raw = (tool.error || tool.output || '').replace(ANSI, '').replace(/\s+$/, '');
-  const output = failed ? cleanToolFailure(raw) || raw : raw;
+  // Only text tagged for the model is stripped, so this is safe on any output.
+  const output = cleanToolFailure(raw);
 
   const copy = () => {
     void navigator.clipboard?.writeText(tool.input).then(() => {
@@ -64,7 +65,7 @@ export function TerminalBlock({ tool }: { tool: ToolCall }) {
           {output}
         </pre>
       ) : (
-        <div className="px-2.5 py-1.5 text-brand-green-faint">{tool.status === 'done' ? '(no output)' : ''}</div>
+        <div className="px-2.5 py-1.5 text-brand-green-faint">{tool.status === 'done' || failed ? '(no output)' : ''}</div>
       )}
       {failed && <div className="border-t border-red-400/20 px-2.5 py-1 text-[10px] text-red-300">Command failed</div>}
     </div>

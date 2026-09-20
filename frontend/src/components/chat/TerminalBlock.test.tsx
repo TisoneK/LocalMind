@@ -70,3 +70,18 @@ describe('TurnView terminal steps', () => {
     expect(screen.getByTestId('terminal-block')).toBeInTheDocument();
   });
 });
+
+describe('TerminalBlock failure text', () => {
+  it('shows "(no output)" rather than the model-facing recovery advice when the command printed nothing', () => {
+    render(
+      <TerminalBlock
+        tool={{
+          id: 't', name: 'shell', input: 'ls /nope', status: 'failed',
+          output: "[Tool 'shell' returned error_type='command_failed']\nCommand failed:\n---\n[RECOVERY]: `shell` command failed. Check the error message, fix the command, and retry.",
+        } as never}
+      />,
+    );
+    expect(screen.queryByText(/RECOVERY/)).toBeNull();
+    expect(screen.getByText('(no output)')).toBeInTheDocument();
+  });
+});
