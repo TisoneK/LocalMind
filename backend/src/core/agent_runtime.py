@@ -131,6 +131,7 @@ def _collect_diff(collector: ObsCollector) -> Optional[dict]:
                 "filePath": d.get("path", ""),
                 "additions": d.get("diff_additions", 0),
                 "deletions": d.get("diff_deletions", 0),
+                "undoId": d.get("undo_id") or None,
             }
     return None
 

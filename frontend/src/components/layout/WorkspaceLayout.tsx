@@ -427,9 +427,9 @@ export function WorkspaceLayout() {
   // Retry re-runs the last question in place: the failed reply and its error card are
   // replaced rather than kept above the new attempt.
   const handleRetry = useCallback(
-    (message: string) => {
+    (message: string, edited?: boolean) => {
       if (!currentSessionId) return;
-      send(message, currentSessionId, undefined, true);
+      send(message, currentSessionId, undefined, edited ? 'edit' : true);
       refreshSessions();
     },
     [currentSessionId, send, refreshSessions]

@@ -968,6 +968,17 @@ describe('useChat retry', () => {
     unmount();
   });
 
+  it('edit swaps your last question for the rewritten one and replaces the reply', async () => {
+    const { result, unmount } = await failedTurn();
+    act(() => {
+      result.current.send('A better question', undefined, undefined, 'edit');
+    });
+    const msgs = result.current.messages;
+    expect(msgs.map((m) => m.role)).toEqual(['user', 'assistant']);
+    expect(msgs[0].content).toBe('A better question');
+    unmount();
+  });
+
   it('a plain send still appends', async () => {
     const { result, unmount } = await failedTurn();
     act(() => {

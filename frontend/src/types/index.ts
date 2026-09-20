@@ -241,6 +241,8 @@ export interface DiffData {
   filePath?: string;
   additions?: number;
   deletions?: number;
+  /** Set when the write can be undone (see /api/files/undo). */
+  undoId?: string;
 }
 
 /** A single diff hunk from the backend's edit_file tool */

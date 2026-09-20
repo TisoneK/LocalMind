@@ -74,7 +74,7 @@ interface CenterPanelProps {
   health: HealthState;
   onSend: (message: string, tool?: string) => void;
   /** Re-run a failed turn in place. Falls back to `onSend` when not provided. */
-  onRetry?: (message: string) => void;
+  onRetry?: (message: string, edited?: boolean) => void;
   onAbort: () => void;
   onSteer?: (message: string) => void;
   memoryCount: number;
@@ -188,6 +188,7 @@ export function CenterPanel({
   // every streamed token made it impossible to scroll up and read while the agent worked; now
   // scrolling away pauses the follow, and a "Jump to latest" pill brings it back. Scrolls the
   // transcript container itself (scrollIntoView on a nested marker can move the whole layout).
+  const [prefill, setPrefill] = useState<{ text: string; key: number } | null>(null);
   const stickRef = useRef(true);
   const [awayFromBottom, setAwayFromBottom] = useState(false);
 
@@ -618,6 +619,7 @@ export function CenterPanel({
               width instead of stretching edge to edge on a wide window. */}
           <div className="mx-auto w-full max-w-3xl divide-y divide-brand-border/50 overflow-hidden" data-testid="chat-column">
             {messages.map((msg, i) => {
+              const lastUserIndex = messages.map((m) => m.role).lastIndexOf('user');
               // Retry = regenerate the response to the user message that
               // precedes this assistant reply (re-sends that exact prompt).
               const prompt = findRetryPrompt(messages, i);
@@ -627,6 +629,12 @@ export function CenterPanel({
                   message={msg}
                   isStreaming={isStreaming && msg === messages[messages.length - 1] && msg.role === 'assistant'}
                   onRetry={prompt ? () => (onRetryTurn ?? onSend)(prompt) : undefined}
+                  // Only your latest message can be rewritten (older ones would branch the chat).
+                  onEdit={
+                    msg.role === 'user' && i === lastUserIndex && !isStreaming
+                      ? () => setPrefill({ text: msg.content, key: Date.now() })
+                      : undefined
+                  }
                   fileDiffs={fileDiffs}
                   todos={msg === messages[messages.length - 1] ? todos : undefined}
                 />
@@ -703,6 +711,9 @@ export function CenterPanel({
         sessionId={sessionId}
         chatMode={chatMode}
         onChatModeChange={onChatModeChange}
+        prefill={prefill}
+        onEditSend={(m) => (onRetryTurn ? onRetryTurn(m, true) : onSend(m))}
+        onEditCancel={() => setPrefill(null)}
       />
     </div>
   );

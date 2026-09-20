@@ -891,6 +891,11 @@ def _emit_file_diff(
         after_lines = content_after.splitlines() or []
         diff_additions = sum(1 for line in after_lines if line not in before_lines)
         diff_deletions = sum(1 for line in before_lines if line not in after_lines)
+    undo_id = None
+    if content_before != content_after and (content_before or content_after):
+        from core.file_undo import save_undo
+
+        undo_id = save_undo(path, content_before, content_after)
     obs.emit(
         "file_diff",
         diff_hunks=diff_hunks,
@@ -898,6 +903,7 @@ def _emit_file_diff(
         path=path,
         diff_additions=diff_additions,
         diff_deletions=diff_deletions,
+        undo_id=undo_id,
     )
 
 

@@ -678,14 +678,14 @@ class LocalMindClient {
     onDone: () => void,
     onError: () => void,
     toolHint?: string,
-    retry?: boolean
+    retry?: boolean | 'edit'
   ): () => void {
     const controller = new AbortController();
 
     const formData = new FormData();
     formData.append('message', message);
     formData.append('session_id', sessionId);
-    if (retry) formData.append('retry', 'true');
+    if (retry) formData.append('retry', retry === 'edit' ? 'edit' : 'true');
 
     const headers: Record<string, string> = {};
     if (toolHint) {
@@ -877,6 +877,14 @@ class LocalMindClient {
     return this.request<{ opened: string }>('/api/open-file', {
       method: 'POST',
       body: JSON.stringify({ path }),
+    });
+  }
+
+  /** Restore a file the agent wrote to what it held before (fails if it changed since). */
+  async undoFileChange(undoId: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>('/api/files/undo', {
+      method: 'POST',
+      body: JSON.stringify({ undo_id: undoId }),
     });
   }
 

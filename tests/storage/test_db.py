@@ -394,3 +394,12 @@ def test_drop_last_turn_refuses_when_the_trailing_turn_is_not_the_retried_questi
     store.append("s1", Message(role=Role.ASSISTANT, content="reply"))
     assert store.drop_last_turn("s1", "something else") is False
     assert len(store.get_history("s1")) == 2
+
+
+def test_drop_last_turn_without_content_removes_any_trailing_pair(store):
+    store.append("s1", Message(role=Role.USER, content="keep"))
+    store.append("s1", Message(role=Role.ASSISTANT, content="ok"))
+    store.append("s1", Message(role=Role.USER, content="old wording"))
+    store.append("s1", Message(role=Role.ASSISTANT, content="answer"))
+    assert store.drop_last_turn("s1") is True
+    assert [m.content for m in store.get_history("s1")] == ["keep", "ok"]

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { User, Copy, Check, FileEdit, FilePlus, FileMinus, Activity, RefreshCw } from 'lucide-react';
+import { User, Copy, Check, Pencil, Undo2, FileEdit, FilePlus, FileMinus, Activity, RefreshCw } from 'lucide-react';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 // Register only the languages LocalMind commonly encounters.
@@ -48,6 +48,7 @@ SyntaxHighlighter.registerLanguage('shell', shell);
 SyntaxHighlighter.registerLanguage('shell-session', shell);
 import { ChatMessage as ChatMessageType, FileResult, PendingWrite, DiffData, TodoItem } from '@/types';
 import { formatLatency, formatTokens } from '@/lib/localmind/progress';
+import { localmindClient } from '@/lib/localmind/client';
 import { MarkdownContent } from '@/components/shared/MarkdownContent';
 import { ResponseBlockRenderer } from './ResponseBlockRenderer';
 import { TurnView } from './TurnView';
@@ -63,6 +64,8 @@ interface ChatMessageProps {
   /** Re-send the user prompt that produced this assistant reply (regenerate).
    *  Only provided for assistant messages that have a preceding user prompt. */
   onRetry?: () => void;
+  /** Put this (your last) message back in the composer to rewrite and resend. */
+  onEdit?: () => void;
   /** Per-path diff hunks captured this turn (preview Diff mode). */
   fileDiffs?: Record<string, DiffData>;
   /** The session's plan, shown as step progress inside the turn. */
@@ -110,14 +113,29 @@ function DiffAppliedCard({
   deletions,
   open,
   onToggle,
+  undoId,
 }: {
   fileName: string;
   additions: number;
   deletions: number;
   open: boolean;
   onToggle: () => void;
+  undoId?: string;
 }) {
   const shortName = fileName.split('/').pop() || fileName;
+  const [undo, setUndo] = useState<{ state: 'idle' | 'busy' | 'done' | 'failed'; note?: string }>({ state: 'idle' });
+
+  const runUndo = async () => {
+    if (!undoId) return;
+    setUndo({ state: 'busy' });
+    try {
+      const res = await localmindClient.undoFileChange(undoId);
+      setUndo({ state: 'done', note: res.message });
+    } catch (e) {
+      setUndo({ state: 'failed', note: e instanceof Error ? e.message : 'Could not undo' });
+    }
+  };
+
   return (
     <div className="flex items-center gap-2 my-2 px-2.5 py-1.5 rounded-lg border border-brand-green/25 bg-brand-green/5">
       <FileEdit className="h-3.5 w-3.5 text-brand-green shrink-0" />
@@ -128,8 +146,26 @@ function DiffAppliedCard({
         +{additions} <span className="text-brand-red/70">−{deletions}</span>
       </span>
       <span className="text-[9px] uppercase tracking-wider text-brand-green/60 shrink-0">
-        applied
+        {undo.state === 'done' ? 'undone' : 'applied'}
       </span>
+      {undoId && undo.state !== 'done' && (
+        <button
+          type="button"
+          onClick={runUndo}
+          disabled={undo.state === 'busy'}
+          data-testid="diff-undo"
+          className="flex shrink-0 items-center gap-1 text-[10px] text-brand-amber hover:text-brand-amber/80 disabled:opacity-50"
+          title="Put the file back the way it was"
+        >
+          <Undo2 className="h-3 w-3" aria-hidden />
+          {undo.state === 'busy' ? 'Undoing…' : 'Undo'}
+        </button>
+      )}
+      {undo.note && (
+        <span className={`truncate text-[10px] ${undo.state === 'failed' ? 'text-brand-red' : 'text-brand-green/70'}`} title={undo.note}>
+          {undo.note}
+        </span>
+      )}
       <button
         type="button"
         onClick={onToggle}
@@ -412,11 +448,13 @@ function MessageActions({
   content,
   isStreaming,
   onRetry,
+  onEdit,
 }: {
   isUser: boolean;
   content: string;
   isStreaming: boolean;
   onRetry?: () => void;
+  onEdit?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -445,6 +483,17 @@ function MessageActions({
         {copied ? <Check className="h-3 w-3 text-brand-green" /> : <Copy className="h-3 w-3" />}
         <span>{copied ? 'Copied' : 'Copy'}</span>
       </button>
+      {isUser && onEdit && (
+        <button
+          onClick={onEdit}
+          disabled={isStreaming}
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-brand-green-muted hover:text-brand-green hover:bg-brand-green/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          title="Edit and resend"
+        >
+          <Pencil className="h-3 w-3" />
+          <span>Edit</span>
+        </button>
+      )}
       {!isUser && onRetry && (
         <button
           onClick={onRetry}
@@ -460,7 +509,7 @@ function MessageActions({
   );
 }
 
-export function ChatMessage({ message, isStreaming, onRetry, fileDiffs, todos }: ChatMessageProps) {
+export function ChatMessage({ message, isStreaming, onRetry, onEdit, fileDiffs, todos }: ChatMessageProps) {
   const isUser = message.role === 'user';
 
   // Clickable file-result chips open an inline preview dialog
@@ -524,7 +573,7 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs, todos }:
       className={`px-4 py-3 overflow-hidden group relative ${isUser ? 'justify-end' : 'justify-start border-l-2 border-l-brand-green/30'}`}
     >
       {/* Hover action row — auto-hides, revealed on message hover */}
-      <MessageActions isUser={isUser} content={message.content || ''} isStreaming={!!isStreaming} onRetry={onRetry} />
+      <MessageActions isUser={isUser} content={message.content || ''} isStreaming={!!isStreaming} onRetry={onRetry} onEdit={onEdit} />
       <div className={`flex items-start gap-3 max-w-full ${isUser ? 'flex-row-reverse' : ''}`}>
         <div className={`flex-1 min-w-0 max-w-full overflow-hidden ${isUser ? 'items-end flex flex-col' : ''}`}>
           {/* Header */}
@@ -606,6 +655,7 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs, todos }:
               deletions={diffStats.deletions}
               open={diffReopen}
               onToggle={() => setDiffReopen((v) => !v)}
+              undoId={message.diffData?.undoId}
             />
           )}
           {diffHunks.length > 0 && diffAccepted && diffReopen && (

@@ -9,6 +9,8 @@ import {
   Navigation,
   MessageSquare,
   Bot,
+  Pencil,
+  X,
 } from 'lucide-react';
 import { InputContextMenu } from './InputContextMenu';
 
@@ -31,13 +33,40 @@ interface ChatInputProps {
   chatMode?: string;
   /** Callback to change chat mode. */
   onChatModeChange?: (mode: 'auto' | 'agent' | 'direct') => void;
+  /** Your last message, put back to rewrite. A new `key` loads it (the same text twice still reloads). */
+  prefill?: { text: string; key: number } | null;
+  /** Send the rewritten message in place of the last turn. */
+  onEditSend?: (message: string) => void;
+  /** Called when editing ends without sending. */
+  onEditCancel?: () => void;
 }
 
-export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onChatModeChange }: ChatInputProps) {
+export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onChatModeChange, prefill, onEditSend, onEditCancel }: ChatInputProps) {
   const [input, setInput] = useState('');
   const [steerInput, setSteerInput] = useState('');
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [editing, setEditing] = useState(false);
+
+  // "Edit" on your last message loads it here.
+  useEffect(() => {
+    if (!prefill) return;
+    setInput(prefill.text);
+    setEditing(true);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (el) {
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+      }
+    });
+  }, [prefill]);
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setInput('');
+    onEditCancel?.();
+  };
   const modeMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -65,7 +94,9 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onC
     if (!msg || isStreaming) return;
     // The chat-mode picker (Auto/Agent/Chat)
     // replaced the old per-message tool/intent hint — send just the message.
-    onSend(msg);
+    if (editing && onEditSend) onEditSend(msg);
+    else onSend(msg);
+    setEditing(false);
     setInput('');
     // Reset textarea height
     if (textareaRef.current) {
@@ -116,6 +147,15 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onC
             </button>
           </div>
         )}
+        {editing && (
+          <div className="mb-1.5 flex items-center gap-1.5 text-[10.5px] text-brand-amber" data-testid="editing-banner">
+            <Pencil className="h-3 w-3" aria-hidden />
+            <span className="flex-1">Editing your last message — sending replaces that turn</span>
+            <button type="button" onClick={cancelEdit} className="rounded p-0.5 hover:bg-brand-amber/10" title="Cancel editing (Esc)">
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )}
         <div className="relative flex items-end gap-2 bg-brand-bg-rail border border-brand-border rounded-lg px-3 py-2 focus-within:border-brand-green/30 transition-colors">
           {/* Prompt symbol */}
           <span className="text-brand-green text-sm font-mono pb-0.5 shrink-0">&gt;</span>
@@ -135,6 +175,9 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onC
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   handleSend();
+                } else if (e.key === 'Escape' && editing) {
+                  e.preventDefault();
+                  cancelEdit();
                 }
               }}
             />

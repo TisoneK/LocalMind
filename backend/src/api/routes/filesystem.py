@@ -53,6 +53,21 @@ class ConfirmWriteRequest(BaseModel):
     sheets: list[dict] | None = None
 
 
+class UndoRequest(BaseModel):
+    undo_id: str
+
+
+@router.post("/files/undo")
+async def undo_file_change(req: UndoRequest):
+    """Restore the file the agent wrote to what it held before (see core.file_undo)."""
+    from core.file_undo import apply_undo
+
+    ok, message = apply_undo(req.undo_id)
+    if not ok:
+        raise HTTPException(status_code=409, detail=message)
+    return {"status": "restored", "message": message}
+
+
 @router.post("/open-file")
 async def open_file(req: OpenFileRequest):
     """Open a file using the OS default application."""

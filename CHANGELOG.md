@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The right rail no longer jumps to the Terminal tab when the agent runs a command (its output is already in the chat, and the jump hid the plan). The verification footer ("✓ 1/1 criteria met…", "📁 Files:") is hidden from replies since the diff card and Files panel show the same facts. Result tables no longer wrap short values.
 
 ### Added
+- **Edit your last message.** Hover your latest message and choose Edit: it returns to the composer, and sending replaces that turn (on screen and in the saved chat) instead of adding a second one.
+- **Undo for files the agent writes.** The applied-file card has an Undo that puts the file back as it was (or removes a file the agent created). It refuses if the file changed since, so it can never overwrite your newer work.
+
 - **The chat window got a round of "feels like an app" fixes.** ⌘K / Ctrl+K opens a command palette to jump to any chat or run an action (new chat, stop, side-panel tabs). The empty chat now offers six one-click starters across machine, web, files and memory instead of a coder-only blurb. Esc stops the agent. The tab title shows what the agent is doing ("● Searching…") and "✓ Done" if it finished while you were elsewhere. The transcript no longer yanks you to the bottom on every streamed token while you scroll up to read: scrolling away pauses following, and a "Jump to latest" pill brings it back. File changes open as the compact applied card instead of an Accept/Reject bar whose Reject did nothing.
 - A request that both searches the web and writes a file now plans the search first ("Search the web", "Check the sources", then the file steps), and the steps tick as each finishes.
 

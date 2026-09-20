@@ -160,6 +160,19 @@ describe('ChatMessage file diff', () => {
   });
 });
 
+describe('ChatMessage edit', () => {
+  it('offers Edit on your message only when an edit handler is given', () => {
+    const onEdit = vi.fn();
+    const user = makeMessage({ role: 'user', content: 'hello there' });
+    const { unmount } = render(<ChatMessage message={user} onEdit={onEdit} />);
+    fireEvent.click(screen.getByRole('button', { name: /edit/i }));
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    unmount();
+    render(<ChatMessage message={user} />);
+    expect(screen.queryByRole('button', { name: /edit/i })).toBeNull();
+  });
+});
+
 describe('ChatMessage failed reply', () => {
   const error = { status: 'error' as const, source: 'model_provider' as const, code: 'rate_limit', message: 'The model provider has temporarily reached its usage limit.', retryable: true };
 
@@ -179,5 +192,21 @@ describe('ChatMessage failed reply', () => {
   it('keeps a real partial answer beside the card', () => {
     render(<ChatMessage message={makeMessage({ error, content: 'The file has 3 rows.' })} />);
     expect(screen.getByText('The file has 3 rows.')).toBeInTheDocument();
+  });
+});
+
+describe('ChatMessage undo', () => {
+  it('shows Undo only when the write can be undone, and reports the result', async () => {
+    const { localmindClient } = await import('@/lib/localmind/client');
+    const spy = vi.spyOn(localmindClient, 'undoFileChange').mockResolvedValue({ message: 'Restored the previous version.' });
+    const withUndo = makeMessage({ diffData: { ...makeDiffData(), undoId: 'abc' } });
+    const { unmount } = render(<ChatMessage message={withUndo} />);
+    fireEvent.click(screen.getByTestId('diff-undo'));
+    expect(await screen.findByText('Restored the previous version.')).toBeInTheDocument();
+    expect(spy).toHaveBeenCalledWith('abc');
+    expect(screen.queryByTestId('diff-undo')).toBeNull();
+    unmount();
+    render(<ChatMessage message={makeMessage({ diffData: makeDiffData() })} />);
+    expect(screen.queryByTestId('diff-undo')).toBeNull();
   });
 });

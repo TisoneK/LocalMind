@@ -919,6 +919,7 @@ async def _event_stream(
                                 "filePath": evt.data.get("path", ""),
                                 "additions": evt.data.get("diff_additions", 0),
                                 "deletions": evt.data.get("diff_deletions", 0),
+                                "undoId": evt.data.get("undo_id") or None,
                             },
                         }
                     )
@@ -1297,13 +1298,14 @@ async def chat(
     file: Optional[UploadFile] = File(default=None),
     file_full_path: Optional[str] = Form(default=None),
     original_path: Optional[str] = Form(default=None),
-    retry: bool = Form(default=False),
+    retry: str = Form(default=""),
 ):
     """Stream a chat response as Server-Sent Events."""
     sid = session_id or str(uuid.uuid4())
     if retry and session_id:
-        # Re-running the last question replaces the stored failed attempt instead of adding to it.
-        _engine._store.drop_last_turn(sid, message)
+        # Re-running the last question replaces the stored failed attempt instead of adding to it;
+        # "edit" replaces the last turn with a rewritten question.
+        _engine._store.drop_last_turn(sid, None if retry == "edit" else message)
     is_first = _is_first_turn(sid)
 
     file_bytes = None

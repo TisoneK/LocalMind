@@ -264,7 +264,7 @@ interface ChatState {
    *  right corner answers "how is this session doing overall" while each
    *  bubble keeps its own per-message line. */
   sessionStats: SessionStats;
-  send: (message: string, sessionIdOverride?: string, tool?: string, retry?: boolean) => void;
+  send: (message: string, sessionIdOverride?: string, tool?: string, retry?: boolean | 'edit') => void;
   abort: () => void;
   /** Inject a user message at the next step boundary
    *  of the in-flight agent turn without aborting it. No-op when idle. */
@@ -628,7 +628,7 @@ export function useChat(
   }, [sessionId]);
 
   const send = useCallback(
-    (message: string, sessionIdOverride?: string, tool?: string, retry?: boolean) => {
+    (message: string, sessionIdOverride?: string, tool?: string, retry?: boolean | 'edit') => {
       // Use the override (passed by handleSend when creating a new session)
       // so we never see sessionId===null on the first message.
       const effectiveSessionId = sessionIdOverride ?? sessionId;
@@ -663,6 +663,8 @@ export function useChat(
         if (retry && prev.length >= 2 && prev[prev.length - 1].role === 'assistant') {
           const before = prev.slice(0, -1);
           const last = before[before.length - 1];
+          // Retry keeps your original question; edit swaps it for the rewritten one.
+          if (last.role === 'user' && retry === 'edit') return [...before.slice(0, -1), userMsg, assistantMsg];
           if (last.role === 'user' && last.content === message) return [...before, assistantMsg];
         }
         return [...prev, userMsg, assistantMsg];
@@ -1062,6 +1064,7 @@ export function useChat(
                     filePath: d.filePath,
                     additions: typeof d.additions === 'number' ? d.additions : undefined,
                     deletions: typeof d.deletions === 'number' ? d.deletions : undefined,
+                    undoId: typeof d.undoId === 'string' ? d.undoId : undefined,
                   };
                   // Windows-tolerance: normalize the key so the preview's
                   // path lookup matches regardless of backslash/forward slash.
