@@ -271,31 +271,19 @@ async def list_models(provider: str | None = None):
             )
             seen_ids.add(default_model)
 
-        # Providers that expose a working OpenAI-compatible /models endpoint
-        # can be queried live so the model selector shows the full current list.
-        # Zen: opencode.ai/zen/v1/models
-        # Cerebras: api.cerebras.ai/v1/models (gpt-oss-120b, gemma-4-31b, zai-glm-4.7)
-        # Gemini: generativelanguage.googleapis.com/v1beta/openai/models
-        # Chutes: llm.chutes.ai/v1/models (all TEE-suffixed)
-        # Z.ai: api.z.ai/api/paas/v4/models (GLM-5.2, GLM-4.5-Flash, etc.)
-        # OmniRoute: localhost:20128/v1/models (self-hosted gateway, 500+
-        # models across 290+ upstreams — live-listing is its headline feature).
-        # Any user-defined connection (never preset) gets the same live-listing
-        # treatment — that's the whole point of a custom OpenAI-compatible
-        # endpoint: no product-code change needed to discover its models.
-        is_custom_connection = connection is not None and not connection.preset
-        live_listable = ("zen", "cerebras", "gemini", "chutes", "zai", "bankofai", "omniroute")
-        if adapter_name in live_listable or is_custom_connection:
-            try:
-                available = await adapter.list_models()
-                for m in available:
-                    if m and m not in seen_ids:
-                        model_options.append(
-                            {"id": m, "name": m, "provider": adapter_name, "size": "Cloud"}
-                        )
-                        seen_ids.add(m)
-            except Exception as exc:
-                logger.warning("[models] failed to list models for %s: %s", adapter_name, exc)
+        # Every provider is asked for its real model list (OpenAI-compatible /models, cached and
+        # never raising). This used to be an allowlist of seven providers, so DeepSeek, OpenAI,
+        # OpenRouter, Groq and the rest showed only the one configured model and never the models
+        # the user's plan actually offers. A provider whose /models endpoint is missing or
+        # unreachable falls back to the configured model below.
+        try:
+            available = await adapter.list_models()
+            for m in available:
+                if m and m not in seen_ids:
+                    model_options.append({"id": m, "name": m, "provider": adapter_name, "size": "Cloud"})
+                    seen_ids.add(m)
+        except Exception as exc:
+            logger.warning("[models] failed to list models for %s: %s", adapter_name, exc)
 
         # Zen-specific free default when no model is configured
         if adapter_name == "zen" and not current_model:
