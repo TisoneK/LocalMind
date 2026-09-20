@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260920T134309Z-claude-sonnet-5-s024-4066547b",
+  "type": "claim",
+  "session": "S024",
+  "agent": "claude-sonnet-5-s024",
+  "created": "2026-09-20T13:43:09Z",
+  "issue": "turn-bus",
+  "body": "Imani (S024): the parallel-components architecture the owner has asked for since the first message. TurnBus = append-only fact record (source, kind, step, goal_version, grounded_in), lanes for in-flight processes, one bounded gate(); Thinker moved onto it, replan bumps goal_version so stale analyses are dropped. loop.py touched at the Thinker consult/absorb/replan sites only (claimed late — apologies, pushed with the commit). Own worktree ../LocalMind-imani.",
+  "paths": ["backend/src/core/agent/turn_bus.py", "backend/src/core/agent/loop.py", "tests/core"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
