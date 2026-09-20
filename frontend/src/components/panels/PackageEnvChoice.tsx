@@ -21,14 +21,16 @@ export function PackageEnvChoice({ compact = false }: { compact?: boolean }) {
 
   useEffect(() => {
     let live = true;
-    localmindClient
-      .getPackageEnv()
+    // Through a promise so a client that cannot answer (offline, or an older backend) is just "keep
+    // the default", never an exception out of an effect.
+    Promise.resolve()
+      .then(() => localmindClient.getPackageEnv())
       .then((r) => {
         if (!live) return;
         setEnv(r.package_env);
         setDir(r.packages_dir);
       })
-      .catch(() => live && setFailed(true));
+      .catch(() => {});
     return () => {
       live = false;
     };

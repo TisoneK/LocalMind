@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Server, Key, Loader2, CheckCircle2, AlertCircle, Trash2, FileEdit, Palette, Sun, Moon, Monitor, Brain, Cpu, Database, RotateCcw, MessageSquarePlus, Download, Shield, Plug, Zap } from 'lucide-react';
 import { localmindClient, type ConnectionRecord, type ConnectionTestResult } from '@/lib/localmind/client';
 import { Progress } from '@/components/ui/progress';
+import { PAGES, GROUPS, SECTION_PAGE, type PageId } from './settingsPages';
+import { PackageEnvChoice } from '@/components/panels/PackageEnvChoice';
 import { useTheme, THEMES, type CustomTheme, type ModePref } from '@/hooks/useTheme';
 
 // ── Provider definitions ──
@@ -691,6 +693,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
   // the backdrop. Close on Escape. Restore focus to the previously-focused
   // element when the modal closes.
   const modalRef = useRef<HTMLDivElement>(null);
+  const [page, setPage] = useState<PageId>('general');
   const previouslyFocused = useRef<HTMLElement | null>(null);
   // Keep the latest onClose in a ref so the focus/keydown effect below can
   // run ONCE (empty deps) and never tear down on a parent re-render.
@@ -776,11 +779,11 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
         aria-modal="true"
         aria-labelledby="settings-modal-title"
         tabIndex={-1}
-        className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-xl border border-brand-border bg-brand-bg-panel shadow-2xl outline-none"
+        className="flex h-[82vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-brand-border bg-brand-bg-panel shadow-2xl outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-brand-border bg-brand-bg-panel px-6 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-brand-border bg-brand-bg-panel px-6 py-4">
           <h2 id="settings-modal-title" className="text-lg font-semibold text-brand-green-soft">
             Settings
           </h2>
@@ -794,7 +797,35 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
           </button>
         </div>
 
+        <div className="flex min-h-0 flex-1">
+          {/* Left nav: pages, grouped */}
+          <nav aria-label="Settings pages" className="w-52 shrink-0 overflow-y-auto border-r border-brand-border bg-brand-bg-dark/40 px-2 py-3">
+            {GROUPS.map((g) => (
+              <div key={g} className="mb-3">
+                <div className="px-2 pb-1 text-[10px] uppercase tracking-wider text-brand-green-faint">{g}</div>
+                {PAGES.filter((pg) => pg.group === g).map((pg) => (
+                  <button
+                    key={pg.id}
+                    type="button"
+                    onClick={() => setPage(pg.id)}
+                    aria-current={page === pg.id ? 'page' : undefined}
+                    className={`mb-0.5 flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-[12.5px] transition-colors ${
+                      page === pg.id ? 'bg-brand-green/10 text-brand-green' : 'text-brand-green-muted hover:bg-brand-border/40 hover:text-brand-green-soft'
+                    }`}
+                  >
+                    {pg.label}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </nav>
+          <div className="min-w-0 flex-1 overflow-y-auto">
         <div className="space-y-6 px-6 py-5">
+          {/* Page heading */}
+          <div>
+            <h3 className="text-base font-medium text-brand-green-soft">{PAGES.find((pg) => pg.id === page)?.label}</h3>
+            <p className="text-xs text-brand-green-muted">{PAGES.find((pg) => pg.id === page)?.blurb}</p>
+          </div>
           {/* Status message */}
           {status !== 'idle' && message && (
             <div
@@ -814,7 +845,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
           )}
 
           {/* ── Appearance ── */}
-          <section>
+          <section hidden={page !== SECTION_PAGE['Appearance']}>
             <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
               <Palette className="h-4 w-4 text-brand-green" />
               Appearance
@@ -952,7 +983,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
           </section>
 
           {/* ── Adapter Selection ── */}
-          <section>
+          <section hidden={page !== SECTION_PAGE['AI Provider']}>
             <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
               <Server className="h-4 w-4 text-brand-green" />
               AI Provider
@@ -1004,7 +1035,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
           </section>
 
           {/* ── Active Model ── */}
-          <section>
+          <section hidden={page !== SECTION_PAGE['Model']}>
             <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
               <Cpu className="h-4 w-4 text-brand-green" />
               Model
@@ -1045,7 +1076,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
           </section>
 
           {/* ── Local model (Ollama) — embeddings + context window ── */}
-          <section>
+          <section hidden={page !== SECTION_PAGE['Local model (Ollama)']}>
             <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
               <Database className="h-4 w-4 text-brand-green" />
               Local model (Ollama)
@@ -1173,7 +1204,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
           </section>
 
           {/* ── Startup Session ── */}
-          <section>
+          <section hidden={page !== SECTION_PAGE['On Startup']}>
             <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
               <RotateCcw className="h-4 w-4 text-brand-green" />
               On Startup
@@ -1206,7 +1237,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
           </section>
 
           {/* ── Reasoning ── */}
-          <section>
+          <section hidden={page !== SECTION_PAGE['Reasoning']}>
             <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
               <Brain className="h-4 w-4 text-brand-green" />
               Reasoning
@@ -1318,7 +1349,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
 
           {/* ── Ollama URL Configuration ── */}
           {adapter === 'ollama' && (
-            <section>
+            <section hidden={page !== SECTION_PAGE['Ollama Server URL']}>
               <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
                 <Server className="h-4 w-4 text-brand-green" />
                 Ollama Server URL
@@ -1355,7 +1386,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
 
           {/* ── API Key Management ── */}
           {adapter !== 'ollama' && (
-            <section>
+            <section hidden={page !== SECTION_PAGE['API Keys']}>
               <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
                 <Key className="h-4 w-4 text-brand-green" />
                 API Keys
@@ -1536,7 +1567,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
           )}
 
           {/* ── AI Connections — custom OpenAI-compatible endpoints ── */}
-          <section>
+          <section hidden={page !== SECTION_PAGE['AI Connections']}>
             <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
               <Plug className="h-4 w-4 text-brand-green" />
               AI Connections
@@ -1753,7 +1784,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
           </section>
 
           {/* ── Operation Permissions ── */}
-          <section>
+          <section hidden={page !== SECTION_PAGE['Permissions']}>
             <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
               <Shield className="h-4 w-4 text-brand-green" />
               Permissions
@@ -1797,7 +1828,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
           </section>
 
           {/* ── Best-of-N Editor (C2 spec step 7) ── */}
-          <section>
+          <section hidden={page !== SECTION_PAGE['Best-of-N Editor']}>
             <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
               <FileEdit className="h-4 w-4 text-brand-green" />
               Best-of-N Editor
@@ -1830,6 +1861,19 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
             </button>
           </section>
 
+          {/* ── Package installs ── */}
+          <section hidden={page !== SECTION_PAGE['Package installs']}>
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
+              <Download className="h-4 w-4 text-brand-green" />
+              Package installs
+            </h3>
+            <p className="mb-3 text-xs text-brand-green-muted">
+              Where <code className="font-mono">pip install</code> puts things when you or the agent install a Python
+              package. LocalMind's own folder keeps your system Python untouched; System installs like running pip yourself.
+            </p>
+            <PackageEnvChoice />
+          </section>
+
           {/* ── Footer ── */}
           <div className="flex justify-end border-t border-brand-border pt-4">
             <button
@@ -1838,6 +1882,8 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
             >
               Done
             </button>
+          </div>
+        </div>
           </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SettingsModal } from './SettingsModal';
 import { localmindClient } from '@/lib/localmind/client';
@@ -22,6 +22,11 @@ vi.mock('@/lib/localmind/client', () => ({
     setAppearance: vi.fn(),
   },
 }));
+
+/** Settings is a set of pages behind a left nav; go to one the way a user would. */
+async function goTo(page: string) {
+  await userEvent.click(within(screen.getByRole('navigation', { name: 'Settings pages' })).getByRole('button', { name: page }));
+}
 
 const mockClient = localmindClient as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
@@ -56,6 +61,7 @@ describe('SettingsModal', () => {
 
     render(<SettingsModal onClose={() => {}} onSave={() => {}} />);
     await screen.findByRole('heading', { name: 'Settings' });
+    await goTo('Appearance');
 
     // Custom appears as a theme option (from THEMES, which now includes it).
     await userEvent.click(screen.getByRole('button', { name: /Custom/i }));
@@ -80,6 +86,7 @@ describe('SettingsModal', () => {
 
     render(<SettingsModal onClose={() => {}} onSave={() => {}} />);
     await screen.findByRole('heading', { name: 'Settings' });
+    await goTo('Appearance');
 
     const slider = screen.getByRole('slider', { name: /UI tone/i });
     fireEvent.change(slider, { target: { value: '1.1' } });
@@ -96,6 +103,7 @@ describe('SettingsModal', () => {
 
     // Dialog title
     expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+    await goTo('Providers & keys');
 
     // Provider buttons (Ollama + each provider from settings.providers)
     expect(screen.getByRole('button', { name: /Ollama \(Local\)/i })).toBeInTheDocument();
@@ -122,6 +130,7 @@ describe('SettingsModal', () => {
 
     render(<SettingsModal onClose={() => {}} onSave={() => {}} />);
     await screen.findByRole('heading', { name: 'Settings' });
+    await goTo('Providers & keys');
 
     await userEvent.click(screen.getByRole('button', { name: /Zen AI/i }));
     await waitFor(() => {
@@ -242,5 +251,21 @@ describe('SettingsModal', () => {
     rerender(<SettingsModal onClose={() => {}} onSave={() => {}} />);
 
     expect(document.activeElement).toBe(input);
+  });
+
+  it('shows one page at a time behind a left nav', async () => {
+    mockClient.getSettings.mockResolvedValue(settingsPayload());
+    mockClient.getOllamaUrl.mockResolvedValue({ url: 'http://localhost:11434' });
+    render(<SettingsModal onClose={() => {}} onSave={() => {}} />);
+    await screen.findByRole('heading', { name: 'Settings' });
+
+    // General is first: startup behaviour is visible, the theme is not.
+    expect(screen.getByRole('heading', { name: 'On Startup' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Appearance', level: 3 })).toBeNull();
+    await goTo('Agent');
+    expect(screen.getByRole('heading', { name: 'Package installs' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Permissions' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'On Startup' })).toBeNull(); // hidden pages leave the a11y tree
+    expect(screen.getByRole('button', { name: 'Agent' })).toHaveAttribute('aria-current', 'page');
   });
 });
