@@ -9,7 +9,6 @@ plain lookups ("today's livescore results").
 import asyncio
 from unittest.mock import MagicMock, patch
 
-from core.agent.lookup_plan import LOOKUP_STEPS
 from core.agent.loop import AgentLoop
 from core.models import Intent, StreamChunk, ToolResult
 from core.obs import ObsCollector
@@ -61,7 +60,7 @@ def _run():
                     adapter=adapter,
                     obs=obs,
                     skip_planning=True,
-                    plan_steps=list(LOOKUP_STEPS),
+                    plan_steps=["Look it up", "Check a page"],
                 )
             ]
 
@@ -69,7 +68,7 @@ def _run():
 
 
 def test_a_streamed_text_tool_call_does_not_crash_a_planned_turn():
-    chunks, obs, seen = _run()
+    chunks, _obs, seen = _run()
     assert not [c.error for c in chunks if c.error]
     assert seen["calls"] >= 3  # search -> streamed fetch -> answer
     assert "Arsenal" in "".join(c.text for c in chunks)
@@ -82,34 +81,23 @@ def test_the_streamed_tool_call_is_reported_like_any_other():
     assert {e.get("status") for e in fetches} >= {"started", "done"}
 
 
-def test_plan_steps_tick_as_the_tools_finish():
-    _, obs, _ = _run()
-    completed = [e.data.get("id") for e in obs.drain_matching({"todo_completed"})]
-    assert "plan-0" in completed  # search finished
-    assert "plan-1" in completed  # the fetch finished
+# ── no plan is invented: tasks appear as the agent acts, and say when a step did not work ──
 
 
-# ── no plan given (the request wording was not recognised): the first web tool seeds it ──
-
-
-def _run_without_a_plan():
-    from adapters.ollama import ToolCallResult
-
+def _run_turn(first_call, dispatch):
+    """One turn: the model makes `first_call`, then answers. Returns the collected obs events."""
     seen = {"calls": 0}
 
     async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
         seen["calls"] += 1
         if seen["calls"] == 1:
-            return ToolCallResult(tool_name="web_search", tool_args={"query": "today's livescore results"})
+            return first_call
 
         async def _stream():
-            yield StreamChunk(text="Arsenal 2-1 Chelsea.", done=False)
+            yield StreamChunk(text="Done.", done=False)
             yield StreamChunk(text="", done=True)
 
         return _stream()
-
-    async def dispatch(*args, **kwargs):
-        return ToolResult(source="web", content="Scores: Arsenal 2-1 Chelsea."), False, 0
 
     adapter = MagicMock()
     adapter.chat_with_tools = chat_with_tools
@@ -121,7 +109,7 @@ def _run_without_a_plan():
             return [
                 c
                 async for c in AgentLoop(adapter=MagicMock()).run(
-                    messages=[{"role": "user", "content": "today's livescore results"}],
+                    messages=[{"role": "user", "content": "EPL livescore results today"}],
                     intent=Intent.WEB_SEARCH,
                     initial_tool_result=None,
                     available_tools=[],
@@ -131,79 +119,32 @@ def _run_without_a_plan():
                 )
             ]
 
-    return asyncio.run(go()), obs
+    asyncio.run(go())
+    return obs
 
 
-def test_the_first_web_tool_seeds_the_whole_plan_when_none_was_given():
-    _, obs = _run_without_a_plan()
-    created = [e.data for e in obs.drain_matching({"todo_created"})]
-    final = {c["id"]: c["text"] for c in created if str(c.get("id", "")).startswith("plan-")}
-    # All three steps exist up front; the first is then made specific to the query.
-    assert list(final) == ["plan-0", "plan-1", "plan-2"]
-    assert final["plan-0"] == "Search the web for today's livescore results"
-    assert [final["plan-1"], final["plan-2"]] == list(LOOKUP_STEPS[1:])
-    # ...and not a lone synthetic per-tool task on top of it.
-    assert not [c for c in created if str(c.get("id", "")).startswith("syn-")]
-
-
-def test_the_seeded_plan_ticks_when_the_search_finishes():
-    _, obs = _run_without_a_plan()
-    completed = [e.data.get("id") for e in obs.drain_matching({"todo_completed"})]
-    assert "plan-0" in completed
-
-
-def test_the_plan_steps_get_specific_as_the_agent_commits_to_a_query_and_a_page():
-    _, obs, _ = _run()
-    labels = {}
-    for e in obs.drain_matching({"todo_created"}):
-        labels[e.data.get("id")] = e.data.get("text")
-    assert labels["plan-0"] == "Search the web for today's livescore results"
-    assert labels["plan-1"] == "Read scores.example.com"
-
-
-def test_a_direct_page_read_relabels_the_opening_step_instead_of_claiming_a_search():
+def test_a_lookup_gets_no_canned_three_step_plan():
     from adapters.ollama import ToolCallResult
 
-    seen = {"calls": 0}
+    async def dispatch(*args, **kwargs):
+        return ToolResult(source="web", content="Scores: Arsenal 2-1 Chelsea."), False, 0
 
-    async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
-        seen["calls"] += 1
-        if seen["calls"] == 1:
-            return ToolCallResult(tool_name="web_fetch", tool_args={"url": "https://httpbin.org/json"})
+    obs = _run_turn(ToolCallResult(tool_name="web_search", tool_args={"query": "epl scores"}), dispatch)
+    created = [e.data for e in obs.drain_matching({"todo_created"})]
+    assert not [c for c in created if str(c.get("id", "")).startswith("plan-")]
+    # The one thing it really did is the one task there is.
+    assert [c["id"] for c in created if str(c.get("id", "")).startswith("syn-")] == ["syn-0"]
 
-        async def _stream():
-            yield StreamChunk(text="The slideshow title is Sample Slide Show.", done=False)
-            yield StreamChunk(text="", done=True)
 
-        return _stream()
+def test_a_step_that_failed_is_marked_failed_not_left_running():
+    from adapters.ollama import ToolCallResult
 
     async def dispatch(*args, **kwargs):
-        return ToolResult(source="web", content='{"slideshow": {"title": "Sample Slide Show"}}'), False, 0
+        return ToolResult(source="web", content="blocked", success=False, error_type="http_error"), True, 0
 
-    adapter = MagicMock()
-    adapter.chat_with_tools = chat_with_tools
-    adapter.chat = lambda *a, **k: iter(())
-    obs = ObsCollector()
-
-    async def go():
-        with patch("core.agent.loop.dispatch_with_retry", dispatch):
-            return [
-                c
-                async for c in AgentLoop(adapter=MagicMock()).run(
-                    messages=[{"role": "user", "content": "fetch https://httpbin.org/json and tell me the title"}],
-                    intent=Intent.WEB_FETCH,
-                    initial_tool_result=None,
-                    available_tools=[],
-                    adapter=adapter,
-                    obs=obs,
-                    skip_planning=True,
-                )
-            ]
-
-    asyncio.run(go())
-    final = {}
-    for e in obs.drain_matching({"todo_created"}):
-        final[e.data.get("id")] = e.data.get("text")
-    assert final["plan-0"] == "Look up httpbin.org"
-    assert final["plan-1"] == "Read httpbin.org"
-    assert "Search the web" not in final.values()
+    obs = _run_turn(ToolCallResult(tool_name="web_fetch", tool_args={"url": "https://livescore.example/"}), dispatch)
+    states = [(e.data.get("id"), e.data.get("status"), e.data.get("text")) for e in obs.drain_matching({"todo_created"})]
+    failed = [s for s in states if s[1] == "failed"]
+    assert failed and "didn't work" in failed[0][2]
+    completed = [e.data.get("id") for e in obs.drain_matching({"todo_completed"})]
+    assert failed[0][0] not in completed  # a failed step is never ticked as done

@@ -351,14 +351,3 @@ def test_a_file_put_in_a_named_folder_is_expected_inside_that_folder():
         "Create a folder called trip, put a packing.md in it, then run ls", base_dir="/ws/s1"
     )
     assert "file exists at /ws/s1/trip/packing.md with content" in items
-
-
-def test_lookup_steps_lead_a_file_plan_without_shifting_the_goal_tree():
-    from core.agent.lookup_plan import LOOKUP_STEPS
-    from core.agent.loop import _lookup_prefix_len
-
-    tree = [{"goal": "file exists at a.md with content", "sub_goals": ["write a.md"]}]
-    plan = [*LOOKUP_STEPS[:2], "file exists at a.md with content"]
-    assert _lookup_prefix_len(plan, tree) == 2
-    assert _lookup_prefix_len(plan[2:], tree) == 0
-    assert _lookup_prefix_len(plan, None) == 0

@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
-
 from adapters.ollama import ToolCallResult
 from agents.parent import ParentAgent
 from core.agent.initialization import (
@@ -497,19 +496,12 @@ class TestEnsureUpfrontPlan:
 
         assert ensure_upfront_plan(["Find it", "Read it"], Intent.WEB_SEARCH) == ["Find it", "Read it"]
 
-    def test_an_empty_plan_for_a_web_lookup_gets_the_lookup_steps(self):
+    def test_no_steps_are_invented_for_a_lookup(self):
         from core.agent.initialization import ensure_upfront_plan
-        from core.agent.lookup_plan import LOOKUP_STEPS
         from core.models import Intent
 
-        assert ensure_upfront_plan([], Intent.WEB_SEARCH) == list(LOOKUP_STEPS)
-
-    def test_a_lone_step_is_kept_as_the_first_of_the_lookup(self):
-        from core.agent.initialization import ensure_upfront_plan
-        from core.agent.lookup_plan import LOOKUP_STEPS
-        from core.models import Intent
-
-        assert ensure_upfront_plan(["Fetch weather"], Intent.WEB_FETCH) == ["Fetch weather", *LOOKUP_STEPS[1:]]
+        assert ensure_upfront_plan([], Intent.WEB_SEARCH) == []
+        assert ensure_upfront_plan(["Fetch weather"], Intent.WEB_FETCH) == ["Fetch weather"]
 
     def test_other_work_is_left_alone(self):
         from core.agent.initialization import ensure_upfront_plan

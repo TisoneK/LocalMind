@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useState } from 'react';
-import { Check, Plus, Loader2 } from 'lucide-react';
+import { Check, Plus, Loader2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ActionItem, TodoItem } from '@/types';
 import { useEnterMotion } from '@/lib/localmind/motion';
@@ -174,6 +174,10 @@ export function TodoList({ todos, actions = [], onToggle, onAdd, settled = false
                   >
                     <Check className="h-2.5 w-2.5 text-brand-green" />
                   </motion.div>
+                ) : (todo.status as string) === 'failed' ? (
+                  <div className="w-3.5 h-3.5 rounded border border-brand-red/50 bg-brand-red/10 flex items-center justify-center shrink-0" title="Didn't work" data-testid="todo-failed">
+                    <X className="h-2.5 w-2.5 text-brand-red" />
+                  </div>
                 ) : isActive ? (
                   <div className="w-3.5 h-3.5 flex items-center justify-center shrink-0" title="In progress">
                     <Loader2 className={`h-3 w-3 text-brand-amber ${reduceMotion ? '' : 'animate-spin'}`} />
@@ -193,6 +197,8 @@ export function TodoList({ todos, actions = [], onToggle, onAdd, settled = false
                   className={`text-[11px] leading-tight flex-1 ${
                     todo.completed
                       ? 'text-brand-green-muted line-through'
+                      : (todo.status as string) === 'failed'
+                        ? 'text-brand-red/80'
                       : isActive
                         ? 'text-brand-amber-soft font-medium'
                         : settled

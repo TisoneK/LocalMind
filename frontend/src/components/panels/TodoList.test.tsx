@@ -136,3 +136,15 @@ describe('TodoList when the turn is over', () => {
     expect(screen.getAllByTestId('todo-unfinished')).toHaveLength(1);
   });
 });
+
+describe('TodoList failed steps', () => {
+  it('shows a step that did not work as failed, not as unfinished work', () => {
+    const todos = [
+      { id: 'syn-0', text: 'Fetch livescore.com — didn\'t work', completed: false, status: 'failed', order: 0 },
+      { id: 'syn-1', text: 'Fetch espn.com', completed: true, order: 1 },
+    ] as never;
+    render(<TodoList todos={todos} settled />);
+    expect(screen.getAllByTestId('todo-failed')).toHaveLength(1);
+    expect(screen.queryByTestId('todo-unfinished')).toBeNull();
+  });
+});

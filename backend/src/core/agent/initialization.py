@@ -267,29 +267,15 @@ def _salvage_response(raw: str) -> str:
     return ""
 
 
-# The steps of a lookup, in order. Used only when the model returned no real plan for a
-# web-lookup task, so the checklist is whole before the first action runs.
-from core.agent.lookup_plan import LOOKUP_STEPS as _LOOKUP_PLAN  # noqa: E402
-
-_LOOKUP_INTENTS = frozenset({"web_search", "web_fetch"})
-
-
 def ensure_upfront_plan(steps: list[str], intent) -> list[str]:
-    """Make sure an execute turn starts with its whole plan, not one step that grows.
+    """The model's own plan, cleaned: at most six non-empty steps.
 
-    A model may skip `plan` or give a lone step ("Fetch weather") for a task that is really
-    search -> read -> answer; the panel then fills in one task per tool as each starts. A
-    plan of two or more steps is trusted as given. For a web lookup with fewer, supply the
-    standard lookup steps (keeping the model's own first step when it gave one). Any other
-    turn is left alone: guessing steps for work whose shape is unknown would be noise.
+    No steps are invented. A fixed "search, read, answer" skeleton used to be filled in for
+    lookups; it made every lookup look identical and could not follow what actually happened
+    (a source failing, a different one being used). The plan is what the model wrote, or the
+    steps that emerge as it works.
     """
-    clean = [s.strip() for s in steps if isinstance(s, str) and s.strip()]
-    if len(clean) >= 2:
-        return clean[:6]
-    if str(getattr(intent, "value", intent)) in _LOOKUP_INTENTS:
-        first = clean[0] if clean else _LOOKUP_PLAN[0]
-        return [first, _LOOKUP_PLAN[1], _LOOKUP_PLAN[2]]
-    return clean
+    return [s.strip() for s in steps if isinstance(s, str) and s.strip()][:6]
 
 
 def parse_initialization(text: str) -> InitializationDecision:

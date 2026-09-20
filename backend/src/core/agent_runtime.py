@@ -1897,13 +1897,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             derive_goal_items,
             derive_goal_tree,
         )
-        from core.agent.lookup_plan import (
-            LOOKUP_STEPS,
-            derive_followup_steps,
-            derive_lookup_plan,
-            derive_sequence_plan,
-            request_needs_live_lookup,
-        )
+        from core.agent.lookup_plan import derive_followup_steps, derive_sequence_plan
 
         # Workspace steering: resolve bare path
         # tokens in the goal derivation onto the session workspace, so the
@@ -2001,19 +1995,12 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # denominator never mutates) AND the acceptance gate's
                 # success criteria (completion gated on evidence against
                 # these items). None when nothing concrete was derived.
-                # A request that needs live information has no derived goal, but its shape
-                # is always search -> read -> answer: show that whole plan before the first
-                # tool runs (display only — the success criteria below stay goal-based).
+                # Anything without a derived goal has no canned plan: its tasks are the model's own
+                # (todo_write) or appear as the agent actually acts, so they follow what happens.
                 plan_steps=(
-                    [
-                        # A request that both needs live information and produces a file plans
-                        # the lookup first, so the plan shows the whole job, not just the file.
-                        *(LOOKUP_STEPS[:2] if request_needs_live_lookup(message) else ()),
-                        *goal_items,
-                        *derive_followup_steps(message, goal_items),
-                    ]
+                    [*goal_items, *derive_followup_steps(message, goal_items)]
                     if goal_items
-                    else derive_lookup_plan(message) or derive_sequence_plan(message) or None
+                    else derive_sequence_plan(message) or None
                 ),
                 # The same goals decomposed into an ordered
                 # sub-goal route, rendered nested in the Todos panel and

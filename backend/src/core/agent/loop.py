@@ -103,7 +103,6 @@ from core.agent.initialization import (
     ensure_upfront_plan,
     parse_initialization,
 )
-from core.agent.lookup_plan import LOOKUP_STEPS, lookup_step_for_tool, lookup_step_label, opening_step_label
 from core.agent.models import AgentStep, AgentTrace, strip_worker_reports, strip_worker_reports_from_history
 from core.agent.prompts import (
     build_agent_intent_tail,
@@ -1072,13 +1071,6 @@ def _render_todo_state(todo_state: Optional[list[dict]]) -> str:
         "todo_write with the full list.)"
     )
     return "\n".join(lines)
-
-
-def _lookup_prefix_len(plan_steps: list, goal_tree: Optional[list]) -> int:
-    """How many display-only lookup steps ("Search the web", "Check the sources") lead a plan
-    whose remaining rows are the goal tree's, so tree index i sits at plan row i + this."""
-    lead = list(LOOKUP_STEPS[:2])
-    return len(lead) if goal_tree and len(plan_steps) > len(lead) and list(plan_steps[: len(lead)]) == lead else 0
 
 
 def _render_goal_route(goal_tree: Optional[list[dict]]) -> str:
@@ -2950,7 +2942,7 @@ class AgentLoop:
             if _obs:
                 for i, step in enumerate(_plan_steps):
                     _ttl = ""
-                    _ti = i - _lookup_prefix_len(_plan_steps, goal_tree)
+                    _ti = i
                     if isinstance(goal_tree, list) and 0 <= _ti < len(goal_tree):
                         _te = goal_tree[_ti]
                         if isinstance(_te, dict):
@@ -2984,7 +2976,7 @@ class AgentLoop:
                                 ttl = str(_st.get("title") or "").strip()
                         _obs.emit(
                             "todo_created",
-                            id=f"plan-{i + _lookup_prefix_len(_plan_steps, goal_tree)}-sub-{j}",
+                            id=f"plan-{i}-sub-{j}",
                             text=ttl or str(sub).strip()[:60],
                             content=str(sub).strip(),
                             completed=False,
@@ -3085,7 +3077,7 @@ class AgentLoop:
             """
             if not _obs or not goal_tree:
                 return
-            _ti = parent_idx - _lookup_prefix_len(_plan_steps, goal_tree)
+            _ti = parent_idx
             for tree_entry in goal_tree[_ti : _ti + 1] if _ti >= 0 else []:
                 if not isinstance(tree_entry, dict):
                     continue
@@ -3147,10 +3139,6 @@ class AgentLoop:
         # execution: todo_created on dispatch (pending→in_progress),
         # todo_completed when the tool lands. Model-agnostic, bounded, and
         # skipped for scaffolding calls (describe_tool) and single-step noise.
-        # True while the plan is the lookup plan (seeded at the start, or by the first web tool).
-        # Its step labels get more specific as the agent commits to a query or a page, so the
-        # checks below key off this flag rather than the exact label text.
-        _lookup_plan_active = list(_plan_steps[: len(LOOKUP_STEPS[:2])]) == list(LOOKUP_STEPS[:2])
         _synthetic_todos: list[str] = []
         # Track total gate replans to cap replanning loops
         _gate_replan_count: int = 0
@@ -3170,24 +3158,17 @@ class AgentLoop:
         # post-evidence-narration recovery from SYNTHESIZE to FORCE_TOOL.
         _answer_only_call_used: bool = False
         _SYNTH_TODO_MAX = 12
+        # Once the model writes its own checklist (todo_write) those are the tasks: nothing is
+        # synthesized on top of them.
+        _model_owns_plan = False
+        _synth_labels: dict[str, str] = {}
 
         def _synth_begin(tool_name: str, tool_input: str) -> Optional[str]:
-            nonlocal _plan_steps, _plan_step_cursor, _lookup_plan_active
-            if _lookup_plan_active and _obs:
-                _label = lookup_step_label(tool_name, tool_input)
-                if _label is not None:
-                    _obs.emit(
-                        "todo_created",
-                        id=f"plan-{_label[0]}",
-                        text=_label[1],
-                        content=_label[1],
-                        completed=False,
-                    )
-                # Going straight to a page: step 0 must not claim a search that never ran.
-                _open = opening_step_label(tool_name, tool_input) if _plan_step_cursor == 0 else None
-                if _open is not None:
-                    _obs.emit("todo_created", id="plan-0", text=_open, content=_open, completed=False)
-            if _plan_steps or not _obs:
+            nonlocal _model_owns_plan
+            if tool_name == "todo_write":
+                _model_owns_plan = True
+                return None
+            if _plan_steps or not _obs or _model_owns_plan:
                 return None
             if len(_synthetic_todos) >= _SYNTH_TODO_MAX:
                 return None
@@ -3197,33 +3178,9 @@ class AgentLoop:
             # (todo_completed with no text after todo_cleared). Skip it.
             if tool_name == "todo_write":
                 return None
-            # The first thing the agent actually does is a web lookup and there is no plan
-            # yet: show the WHOLE lookup plan now (search -> check sources -> answer) instead
-            # of a lone task that ticks itself to 100% while the agent is still working. This
-            # keys off real behaviour, so it holds however the request was phrased.
-            if not _synthetic_todos and lookup_step_for_tool(tool_name) is not None:
-                _first = lookup_step_for_tool(tool_name) or 0
-                _plan_steps = list(LOOKUP_STEPS)
-                _lookup_plan_active = True
-                _plan_step_cursor = _first
-                _obs.emit("todo_cleared")
-                for _i, _step in enumerate(_plan_steps):
-                    _obs.emit("todo_created", id=f"plan-{_i}", text=_step, content=_step, completed=False)
-                _first_label = lookup_step_label(tool_name, tool_input)
-                if _first_label is not None:
-                    _obs.emit(
-                        "todo_created",
-                        id=f"plan-{_first_label[0]}",
-                        text=_first_label[1],
-                        content=_first_label[1],
-                        completed=False,
-                    )
-                _open = opening_step_label(tool_name, tool_input)
-                if _open is not None:
-                    _obs.emit("todo_created", id="plan-0", text=_open, content=_open, completed=False)
-                return f"plan-{_first}"
             todo_id = f"syn-{len(_synthetic_todos)}"
             label = _synthetic_todo_text(tool_name, tool_input)
+            _synth_labels[todo_id] = label
             _synthetic_todos.append(label)
             _obs.emit(
                 "todo_created",
@@ -3235,7 +3192,22 @@ class AgentLoop:
             return todo_id
 
         def _synth_end(todo_id: Optional[str], failed: bool) -> None:
-            if not todo_id or not _obs or failed:
+            if not todo_id or not _obs:
+                return
+            if failed:
+                # A step that did not work says so, instead of hanging as "in progress" and being
+                # ticked or dropped later. The next step the agent takes (another source, another
+                # way) appears as its own task.
+                label = _synth_labels.get(todo_id)
+                if label:
+                    _obs.emit(
+                        "todo_created",
+                        id=todo_id,
+                        text=f"{label} — didn't work",
+                        content=label,
+                        completed=False,
+                        status="failed",
+                    )
                 return
             _obs.emit("todo_completed", id=todo_id, completed=True)
 
@@ -5516,15 +5488,6 @@ class AgentLoop:
                     latency_ms = round((time.monotonic() - t_tool) * 1000)
 
                 _todo_id = _syn_todo_id or (f"plan-{_plan_step_cursor}" if _plan_steps else None)
-                # A lookup plan ticks with real progress, not only on narration (a silent tool
-                # run never narrates): a finished search completes "Search the web", a finished
-                # page read completes "Check the sources".
-                if _obs and not tool_failed and _lookup_plan_active:
-                    _done_idx = lookup_step_for_tool(tool_name)
-                    if _done_idx is not None:
-                        for _i in range(_done_idx + 1):
-                            _obs.emit("todo_completed", id=f"plan-{_i}", completed=True)
-                        _plan_step_cursor = max(_plan_step_cursor, _done_idx + 1)
                 if tool_failed:
                     last_tool_failed = True
                     consecutive_failures += 1
