@@ -67,6 +67,9 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     "openrouter/free": 128000,
     # DeepSeek
     "deepseek-chat": 64000,
+    # The current DeepSeek plan models (as listed by api.deepseek.com/models): 1M-token windows.
+    "deepseek-flash": 1000000,
+    "deepseek-v4-pro": 1000000,
     "deepseek-coder": 64000,
     # Zen (curated models)
     "zen/default": 128000,

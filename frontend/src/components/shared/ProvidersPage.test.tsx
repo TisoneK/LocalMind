@@ -145,3 +145,15 @@ describe('ProvidersPage', () => {
     expect(within(form).getByText(/already exists/)).toBeInTheDocument();
   });
 });
+
+describe('context window', () => {
+  it('saves the window you enter for a provider', async () => {
+    setup();
+    const save = vi.spyOn(localmindClient, 'saveConnection').mockResolvedValue({ connection: conn() as never, message: 'ok' });
+    render(<ProvidersPage />);
+    const box = await screen.findByLabelText('Context window');
+    fireEvent.change(box, { target: { value: '1,000,000' } });
+    fireEvent.blur(box);
+    await waitFor(() => expect(save).toHaveBeenCalledWith({ id: 'deepseek', capabilities: { context_window: 1000000 } }));
+  });
+});

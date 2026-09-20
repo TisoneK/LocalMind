@@ -98,3 +98,10 @@ class TestWindowSource:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_deepseek_plan_models_have_known_windows():
+    from adapters.openai_compat import MODEL_CONTEXT_WINDOWS
+
+    assert MODEL_CONTEXT_WINDOWS["deepseek-flash"] == 1_000_000
+    assert MODEL_CONTEXT_WINDOWS["deepseek-v4-pro"] == 1_000_000

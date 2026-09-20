@@ -447,6 +447,24 @@ function ProviderDetail({
             </button>
           </div>
 
+          <Field
+            label="Context window (tokens)"
+            hint="How much the model can read at once. Leave empty to use what LocalMind knows about each model; set it if the context meter says the window is unknown."
+          >
+            <input
+              className={INPUT}
+              inputMode="numeric"
+              defaultValue={conn.capabilities?.context_window ? String(conn.capabilities.context_window) : ''}
+              onBlur={(e) => {
+                const n = parseInt(e.target.value.replace(/[^\d]/g, ''), 10);
+                const next = Number.isFinite(n) && n > 0 ? n : 0;
+                if (next !== (conn.capabilities?.context_window ?? 0)) void save({ capabilities: { context_window: next } }, 'Context window saved.');
+              }}
+              placeholder="e.g. 1000000"
+              aria-label="Context window"
+            />
+          </Field>
+
           <Field label="If this provider fails, try" hint="Used automatically when it is rate-limited, out of quota or unreachable.">
             <select className={INPUT} value={conn.fallback_to} onChange={(e) => save({ fallback_to: e.target.value })} aria-label="Fallback provider">
               <option value="">Any other provider with a key</option>
