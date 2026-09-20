@@ -49,3 +49,16 @@ def test_undo_is_single_use_and_rejects_forged_ids(tmp_path):
 
 def test_nothing_to_undo_when_content_is_unchanged(tmp_path):
     assert save_undo(str(tmp_path / "e.txt"), "same", "same") is None
+
+
+def test_edit_file_undo_id_is_built_from_the_backup(tmp_path):
+    from core.agent.loop import _undo_id_for_edit
+
+    f = tmp_path / "e.py"
+    b = tmp_path / "e.py.bak"
+    b.write_text("original", encoding="utf-8")
+    f.write_text("edited", encoding="utf-8")
+    uid = _undo_id_for_edit({"path": str(f), "backup_path": str(b)})
+    assert uid and apply_undo(uid)[0]
+    assert f.read_text(encoding="utf-8") == "original"
+    assert _undo_id_for_edit({"path": str(f)}) is None

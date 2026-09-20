@@ -862,6 +862,23 @@ def _diff_hunks_module(original: str, modified: str, path: str) -> list[dict]:
     return hunks
 
 
+def _undo_id_for_edit(metadata: dict) -> str | None:
+    """Undo id for an edit_file change, built from the backup edit_file wrote before editing."""
+    try:
+        from core.file_undo import save_undo
+
+        path, backup = metadata.get("path", ""), metadata.get("backup_path", "")
+        if not path or not backup:
+            return None
+        with open(backup, "r", encoding="utf-8", errors="strict") as f:
+            before = f.read()
+        with open(path, "r", encoding="utf-8", errors="strict") as f:
+            after = f.read()
+        return save_undo(path, before, after)
+    except Exception:
+        return None  # binary/unreadable/missing backup: simply not undoable
+
+
 def _emit_file_diff(
     obs,
     *,
@@ -4285,6 +4302,7 @@ class AgentLoop:
                                     path=tc_result.metadata.get("path", ""),
                                     diff_additions=tc_result.metadata.get("diff_additions", 0),
                                     diff_deletions=tc_result.metadata.get("diff_deletions", 0),
+                                    undo_id=_undo_id_for_edit(tc_result.metadata),
                                 )
                         # Log write stat for edit_file in batch
                         if tc_result and tc_result.success and tc_result.metadata and tc_result.source == "edit_file":
@@ -5200,6 +5218,7 @@ class AgentLoop:
                                     path=tool_result.metadata.get("path", ""),
                                     diff_additions=tool_result.metadata.get("diff_additions", 0),
                                     diff_deletions=tool_result.metadata.get("diff_deletions", 0),
+                                    undo_id=_undo_id_for_edit(tool_result.metadata),
                                 )
 
                     else:
