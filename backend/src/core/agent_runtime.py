@@ -230,6 +230,7 @@ def _history_without_current_turn(history: list, message: str) -> list:
 
 from adapters.base import BaseAdapter  # noqa: E402
 from adapters.failover import FailoverAdapter  # noqa: E402
+from core.text_join import needs_paragraph_break  # noqa: E402
 
 
 class _ParentAdapterCompat:
@@ -1941,6 +1942,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 goals="; ".join(goal_items)[:400],
             )
         response_chunks: list[str] = []
+        _tools_at_last_text = 0
         # Accumulate the reasoning trace so the persisted message
         # carries the thinking block the user saw (survives reload). The loop
         # streams thinking as "start"/"end" markers plus token text — mirror
@@ -2070,6 +2072,17 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     yield chunk
                     return
                 if chunk.text:
+                    # Text from a later iteration (after tools ran) must not run into the text
+                    # before it: "...install it and retry." + "I found the file..." read as
+                    # "retry.I found". Streamed iterations carry no trailing break of their own.
+                    _tools_now = sum(1 for e in collector.history() if e.type == "tool_call")
+                    if not chunk.done and needs_paragraph_break(
+                        response_chunks, chunk.text, _tools_now, _tools_at_last_text
+                    ):
+                        response_chunks.append("\n\n")
+                        yield StreamChunk(text="\n\n", done=False)
+                    if chunk.text.strip():
+                        _tools_at_last_text = _tools_now
                     response_chunks.append(chunk.text)
                     if chunk.done:
                         yield chunk.model_copy(update={"done": False})
