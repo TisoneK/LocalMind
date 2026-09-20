@@ -377,7 +377,13 @@ def _content_requested_by_user(content: str, request: str) -> bool:
     esc = re.escape(literal)
     if re.search(rf"[\"'`\u201c\u2018]\s*{esc}\s*[\"'`\u201d\u2019]", request, re.IGNORECASE):
         return True
-    cue = r"(?:containing|contains|with (?:the )?(?:text|content|line|word|value)|that says|saying)"
+    # "containing 42", "containing the text 42", "with the number 42", "that says hi", "having value 7":
+    # a cue word, then optionally a determiner and a noun naming what the text is, then the literal.
+    cue = (
+        r"(?:containing|contains|contain|with|having|holding|that says|saying|reads?|of)"
+        r"(?:\s+(?:the|a|an|just|only|exactly))*"
+        r"(?:\s+(?:text|content|contents|line|word|value|number|string|digit|characters?))?"
+    )
     return bool(re.search(rf"\b{cue}\s+{esc}(?=[\s.,;:!?]|$)", request, re.IGNORECASE))
 
 

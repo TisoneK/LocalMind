@@ -709,3 +709,20 @@ class TestReasoningCapEmptyStreamRoutesToRecovery:
 
         errors = [c.error for c in chunks if c.error]
         assert errors, "a real provider error after reasoning must still surface as an error"
+
+
+@pytest.mark.parametrize(
+    "request_text,content,expected",
+    [
+        ("Create a folder verify-test, write result.txt containing the text 42, then read it back", "42", True),
+        ("write a.txt with the number 7", "7", True),
+        ("make hi.txt containing exactly OK", "OK", True),
+        ('write x.txt containing "eta"', "eta", True),
+        ("write result.txt, then read it back and compare 42 with the file", "42", False),  # merely mentioned
+        ("read the file and tell me", "read", False),  # a placeholder, not a requested literal
+    ],
+)
+def test_a_short_body_the_user_spelled_out_is_not_mistaken_for_a_placeholder(request_text, content, expected):
+    from core.agent.loop import _content_requested_by_user
+
+    assert _content_requested_by_user(content, request_text) is expected
