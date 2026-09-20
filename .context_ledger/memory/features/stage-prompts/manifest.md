@@ -58,6 +58,23 @@ D = C + one-sentence tool-schema descriptions (schema chars -31%). Frozen snapsh
 - NOT shipped: C/D exist only as request rewrites in the harness. Productizing = edit `prompts.py` (drop stale
   delegation text, dedupe tool list) + shorten schema descriptions in `tool_schemas.py`.
 
+## Decision + what shipped (2026-09-20, S024) — "what is best for LocalMind"
+Shipped the ZERO-GUARDRAIL-LOSS subset only (`6155cb7c`): stale delegation text and the "weak models" wording out of the
+parent contract, duplicate OS examples out of the shell param. Live A/B vs main on DeepSeek (lookup/write/edit, 10 rounds each,
+serial interleaved): correct 30/30 vs 28/30 (p = 0.49), main prompt 8871 -> 8463 chars (~100 tokens/call). Small by design.
+Deliberately NOT shipped:
+- **Compact schema descriptions (variant D, -8..-17% input, no quality loss on 3 shapes):** first-sentence cuts drop guardrail
+  sentences (ADR-40 "per-tool guardrail prose"); needs tool-SELECTION tasks (web weather vs sysinfo, find vs shell, create-file
+  probe) on two models. `compact_tool_summary` exists because a names-only prompt once made the model pick sysinfo for weather.
+- **describe_tool's on-demand index** duplicate: pinned by ADR-40 option C tests; ~600 chars only.
+- **Stage-aware assembler:** breaks provider prefix caching, the rules needed LATER (multi-part completion) are the ones a minimal
+  later-stage prompt would drop (round 1: 0/15), and no measured quality benefit. Prototype only against D, with the stage card
+  carrying the continue rule.
+Bigger untested levers (fixed overhead = 83% of input, ~4.4 act calls/turn): tier `browse` (21 params, 2.4k chars = 22% of the
+schemas) into the on-demand set; fewer act calls per turn (batching independent read-only calls); the per-turn workspace-state
+block (git status/diff of the cwd is injected every turn and grows with repo state).
+Eval gap to close first: selection-sensitive tasks + a second flash-tier model (Cerebras 402, glm throttled, Gemini keyed).
+
 ## Next (revised)
 1. Rebuild C keeping EVERY load-bearing rule of the full prompt (multi-part completion, act-not-announce,
    anti-hedging, tool-selection hints, safety) and compress only wording/duplication; re-run lookup + write
