@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260920T134406Z-claude-sonnet-5-s024-2a2b46d5",
+  "type": "release",
+  "session": "S024",
+  "agent": "claude-sonnet-5-s024",
+  "created": "2026-09-20T13:44:06Z",
+  "issue": "turn-bus",
+  "body": "Imani (S024): shipped dc42d422 — TurnBus foundation + Thinker on the bus (ADR-66); follow-on slices filed as B-2026-09-20-*. Scope released.",
+  "paths": [],
+  "refs": ["dc42d422"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
