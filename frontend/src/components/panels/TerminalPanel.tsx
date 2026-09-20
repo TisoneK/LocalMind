@@ -13,6 +13,7 @@ import {
   Minimize2,
   ChevronRight,
   ChevronDown,
+  Package,
 } from 'lucide-react';
 import { PackageInstaller } from './PackageInstaller';
 
@@ -120,6 +121,9 @@ export function TerminalPanel({
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isMaximized, setIsMaximized] = useState(false);
+  // The package installer is a rare task: it lives behind a toggle instead of taking a row of the
+  // terminal all the time.
+  const [showPackages, setShowPackages] = useState(false);
   const [suggestions, setSuggestions] = useState<CompletionSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState(0);
@@ -505,7 +509,7 @@ export function TerminalPanel({
   const shortCwd = cwd.replace(/^\/Users\/[^/]+/, '~').replace(/^\/home\/[^/]+/, '~');
 
   return (
-    <div className={`font-mono text-[12px] leading-relaxed flex flex-col ${isMaximized ? 'fixed inset-0 z-50 bg-brand-bg-dark' : ''}`}>
+    <div className={`font-mono text-[12px] leading-relaxed flex flex-col ${isMaximized ? 'fixed inset-0 z-50 bg-brand-bg-dark' : 'h-full min-h-0'}`}>
       {/* ── Tab Bar ── */}
       <div className="flex items-center bg-brand-bg-panel-alt border-b border-brand-border">
         {tabs.map((tab) => (
@@ -562,6 +566,16 @@ export function TerminalPanel({
 
         {/* Toolbar */}
         <div className="ml-auto flex items-center gap-0.5 pr-1.5">
+          <button
+            onClick={() => setShowPackages((v) => !v)}
+            className={`p-1 rounded transition-colors ${
+              showPackages ? 'text-brand-green bg-brand-border' : 'text-brand-green-muted hover:text-brand-green-soft'
+            }`}
+            title="Install a package"
+            aria-pressed={showPackages}
+          >
+            <Package className="h-3 w-3" />
+          </button>
           <button
             onClick={() => setShowSearch(!showSearch)}
             className={`p-1 rounded transition-colors ${
@@ -627,25 +641,19 @@ export function TerminalPanel({
 
       {/* ── Terminal Header ── */}
       <div className="flex items-center gap-2 px-3 py-1 bg-brand-bg-dark border-b border-brand-border">
-        <div className="flex gap-1">
-          <div className="w-2 h-2 rounded-full bg-brand-gh-red" />
-          <div className="w-2 h-2 rounded-full bg-brand-gh-amber" />
-          <div className="w-2 h-2 rounded-full bg-brand-gh-green" />
-        </div>
+        <span className="rounded bg-brand-border/60 px-1.5 py-px font-mono text-[9px] text-brand-green-soft">shell</span>
         <div className="flex items-center gap-1 text-[10px] text-brand-green-muted ml-1">
           <FolderOpen className="h-2.5 w-2.5" />
           <span className="truncate max-w-[150px]" title={cwd}>{shortCwd}</span>
         </div>
-        {isRunning && (
-          <div className="flex items-center gap-1 ml-auto">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-gh-amber animate-pulse" />
-            <span className="text-[9px] text-brand-gh-amber">running</span>
-          </div>
-        )}
+        <div className="ml-auto flex items-center gap-1" data-testid="terminal-status">
+          <span className={`inline-block h-1.5 w-1.5 rounded-full ${isRunning ? 'animate-pulse bg-brand-gh-amber' : 'bg-brand-green'}`} />
+          <span className={`text-[9px] ${isRunning ? 'text-brand-gh-amber' : 'text-brand-green-muted'}`}>{isRunning ? 'running' : 'ready'}</span>
+        </div>
       </div>
 
       {/* ── Package Installer ── */}
-      {onExecute && (
+      {onExecute && showPackages && (
         <PackageInstaller onExecute={(cmd) => onExecute(cmd, cwd)} isRunning={isRunning} />
       )}
 
@@ -653,19 +661,24 @@ export function TerminalPanel({
       <div
         ref={scrollRef}
         className="flex-1 p-2 space-y-0 overflow-y-auto custom-scrollbar bg-brand-bg-dark min-h-0"
-        style={{ maxHeight: isMaximized ? 'calc(100vh - 120px)' : '288px' }}
+        style={isMaximized ? { maxHeight: 'calc(100vh - 120px)' } : undefined}
         onClick={() => inputRef.current?.focus()}
       >
         {filteredLines.length === 0 && !searchQuery && (
-          <div className="space-y-2 py-3 px-1">
-            <div className="text-[10px] text-brand-green-muted">
-              Type a command and press Enter to execute...
-            </div>
-            <div className="text-[9px] text-brand-green-deleted space-y-0.5">
-              <div><span className="text-brand-gh-blue">↑/↓</span> Navigate history</div>
-              <div><span className="text-brand-gh-blue">Tab</span> Autocomplete</div>
-              <div><span className="text-brand-gh-blue">Ctrl+L</span> Clear screen</div>
-              <div><span className="text-brand-gh-blue">Ctrl+C</span> Cancel command</div>
+          <div className="space-y-3 px-1 py-4">
+            <div className="text-[11px] text-brand-green-muted">Type a command and press Enter.</div>
+            <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1 text-[10px] text-brand-green-muted">
+              {[
+                ['↑ ↓', 'History'],
+                ['Tab', 'Autocomplete'],
+                ['Ctrl L', 'Clear screen'],
+                ['Ctrl C', 'Cancel a command'],
+              ].map(([k, d]) => (
+                <span key={k} className="contents">
+                  <kbd className="justify-self-start rounded border border-brand-border bg-brand-bg-rail px-1.5 py-px font-mono text-[9.5px] text-brand-green-soft">{k}</kbd>
+                  <span>{d}</span>
+                </span>
+              ))}
             </div>
           </div>
         )}
@@ -678,6 +691,8 @@ export function TerminalPanel({
           // blocks). No per-row timestamp — the block header carries the time.
           const outputRow = (line: TerminalLine) => {
             const displayContent = stripAnsi(line.content);
+            // A blank error/info line would render as a lone "✗" with nothing after it.
+            if (!displayContent.trim() && line.type !== 'output') return null;
             const isMatch =
               searchQuery && displayContent.toLowerCase().includes(searchQuery.toLowerCase());
             return (
@@ -695,7 +710,7 @@ export function TerminalPanel({
                     {line.toolName}
                   </span>
                 )}
-                <span className={`flex-1 min-w-0 break-all [overflow-wrap:anywhere] ${lineColors[line.type]}`}>
+                <span className={`flex-1 min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere] ${lineColors[line.type]}`}>
                   {linePrefixes[line.type]}
                   {renderContent(displayContent)}
                 </span>

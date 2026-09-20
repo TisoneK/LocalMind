@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **The terminal panel is tidied.** It fills the panel (the prompt sits at the bottom instead of floating under a fixed-height box), the fake window dots are replaced by a shell chip and a ready/running indicator, the package installer folds behind a toolbar button instead of taking a row, the empty state lists the shortcuts as keys, output keeps its column alignment and wraps at spaces instead of mid-word, and a failed command no longer prints a lone empty "✗" line.
 - **The bottom stats are aligned.** Speed, latency and tokens sit in three equal columns (label above value) with the prompt/cached/completion breakdown and the turn count on one tidy row underneath, instead of wrapping unevenly in a narrow panel. Short table values ("113 Gi", "32%") stay on one line.
 - **Replanning no longer looks like an error.** A course correction showed an amber warning triangle and "Replanning — analyze criteria unmet". It is now a calm blue "Adjusting the approach" with the reason in words ("Because it said what it would do instead of doing it").
 - **"Yes" no longer sends the agent into chat mode.** In Auto mode, after the agent offered to do something ("want me to run a live df?"), replying "yes" / "ok do it" was treated as small talk and answered by the no-tools chat shortcut: "I can't run that from here — switch to Agent mode." A bare affirmation that answers an offer is now an instruction and goes to the full agent loop, which runs the check.
