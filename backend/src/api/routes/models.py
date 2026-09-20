@@ -50,6 +50,29 @@ def _build_model_setting_map() -> dict[str, str]:
     }
 
 
+def _apply_model_prefs(options: list[dict], connection, current: str, *, keep_hidden: bool) -> list[dict]:
+    """Add the models the user added by hand; hide (or, for Settings, flag) the ones turned off.
+
+    The current model is never hidden: the picker must always be able to show what is in use.
+    """
+    if connection is None:
+        return options
+    have = {o["id"] for o in options}
+    for extra in getattr(connection, "extra_models", []) or []:
+        if extra not in have:
+            options.append({"id": extra, "name": extra, "provider": connection.id, "size": "Cloud"})
+            have.add(extra)
+    hidden = set(getattr(connection, "hidden_models", []) or [])
+    out = []
+    for o in options:
+        is_hidden = o["id"] in hidden and o["id"] != current
+        if keep_hidden:
+            out.append({**o, "hidden": is_hidden})
+        elif not is_hidden:
+            out.append(o)
+    return out
+
+
 async def _list_models_for_provider(provider: str) -> dict:
     """
     List models for a specific provider without switching the active adapter.
@@ -117,6 +140,8 @@ async def _list_models_for_provider(provider: str) -> dict:
         # Non-fatal — the dropdown will just show the default model.
         logger.debug("[models] could not list live models for %s: %s", provider, exc)
 
+    # Settings sees every model with a hidden flag so it can offer the on/off switch.
+    model_options = _apply_model_prefs(model_options, connection, current_model, keep_hidden=True)
     return {
         "models": model_options,
         "current": current_model or (cfg.default_model if cfg else ""),
@@ -302,6 +327,14 @@ async def list_models(provider: str | None = None):
                     "size": "Cloud",
                 }
             )
+
+    # The picker shows what the user left on, plus any models they added by hand.
+    if adapter_name != "ollama":
+        from core.connections import get_connection_registry as _registry
+
+        model_options = _apply_model_prefs(
+            model_options, _registry().get(adapter_name), current_model, keep_hidden=False
+        )
 
     # Attach the active model's token budget to every option (additive field;
     # the frontend falls back gracefully when it's absent). When the ONLY

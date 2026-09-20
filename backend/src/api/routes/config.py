@@ -787,9 +787,21 @@ class ConnectionSaveRequest(BaseModel):
     capabilities: Optional[dict] = None
     enabled: Optional[bool] = None
     fallback_to: Optional[str] = None
+    extra_models: Optional[list] = None
+    hidden_models: Optional[list] = None
 
 
 _CAPABILITY_KEYS = ("streaming", "vision", "tool_calling", "structured_output", "context_window")
+
+
+def _clean_model_ids(values: list) -> list[str]:
+    """Trimmed, de-duplicated model ids (bounded, so a bad client cannot bloat settings.json)."""
+    seen: list[str] = []
+    for v in values or []:
+        item = str(v).strip()
+        if item and item not in seen:
+            seen.append(item)
+    return seen[:200]
 
 
 def _validated_base_url(value: str) -> str:
@@ -865,6 +877,10 @@ async def save_connection(req: ConnectionSaveRequest):
             record["enabled"] = bool(req.enabled)
         if req.fallback_to is not None:
             record["fallback_to"] = (req.fallback_to or "").strip()
+        if req.extra_models is not None:
+            record["extra_models"] = _clean_model_ids(req.extra_models)
+        if req.hidden_models is not None:
+            record["hidden_models"] = _clean_model_ids(req.hidden_models)
         if req.kind is not None:
             # Kind is structural (routes to the adapter family) — only the
             # ollama preset uses "ollama"; refuse silent rewrites.

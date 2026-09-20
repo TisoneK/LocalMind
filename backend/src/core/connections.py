@@ -75,6 +75,10 @@ class Connection:
     capabilities: ConnectionCapabilities = field(default_factory=ConnectionCapabilities)
     enabled: bool = True
     fallback_to: str = ""  # connection id tried when this one fails; "" = none
+    # Models the user added by hand (a provider with no /models endpoint) and models they turned
+    # off (still on the provider, but hidden from the picker).
+    extra_models: list = field(default_factory=list)
+    hidden_models: list = field(default_factory=list)
     preset: bool = True  # seeded from the registry; the UI offers Reset, not Delete
 
     def to_dict(self) -> dict:
@@ -89,6 +93,8 @@ class Connection:
             "capabilities": self.capabilities.to_dict(),
             "enabled": self.enabled,
             "fallback_to": self.fallback_to,
+            "extra_models": list(self.extra_models),
+            "hidden_models": list(self.hidden_models),
         }
 
 
@@ -119,6 +125,9 @@ def _merge_record(base: Connection | None, record: dict) -> dict:
     for key in ("name", "kind", "base_url", "model", "protocol", "enabled", "fallback_to"):
         if key in record and record[key] is not None:
             merged[key] = record[key]
+    for key in ("extra_models", "hidden_models"):
+        if isinstance(record.get(key), list):
+            merged[key] = [str(m).strip() for m in record[key] if str(m).strip()]
     if isinstance(record.get("capabilities"), dict):
         cap = merged.get("capabilities") or {}
         for key in ("streaming", "vision", "tool_calling", "structured_output", "context_window"):
@@ -140,6 +149,8 @@ def _connection_from_record(base: Connection | None, record: dict, *, preset: bo
         capabilities=ConnectionCapabilities.from_dict(merged.get("capabilities")),
         enabled=bool(merged.get("enabled", True)),
         fallback_to=str(merged.get("fallback_to") or ""),
+        extra_models=list(merged.get("extra_models") or []),
+        hidden_models=list(merged.get("hidden_models") or []),
         preset=preset,
     )
 
