@@ -6,8 +6,8 @@
  * shows a ready cursor when idle and empty.
  */
 
-import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { TerminalPanel } from './TerminalPanel';
 import type { TerminalLine } from '../../types';
 
@@ -106,5 +106,46 @@ describe('TerminalPanel command grouping', () => {
     // Re-expand.
     fireEvent.click(screen.getByTitle('Expand output'));
     expect(screen.getByText('file-a.txt')).toBeInTheDocument();
+  });
+});
+
+describe('TerminalPanel input', () => {
+  it('is focused as soon as it opens', () => {
+    render(<TerminalPanel lines={[]} onExecute={noop} />);
+    expect(screen.getByPlaceholderText(/enter command/i)).toHaveFocus();
+  });
+
+  it('runs what you typed on ONE Enter even while suggestions are showing', async () => {
+    const onExecute = vi.fn().mockResolvedValue(undefined);
+    const onTabComplete = vi.fn().mockResolvedValue([{ text: 'dir /b', type: 'history' }]);
+    render(<TerminalPanel lines={[]} onExecute={onExecute} onTabComplete={onTabComplete} />);
+    const box = screen.getByPlaceholderText(/enter command/i);
+    fireEvent.change(box, { target: { value: 'dir' } });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250)); // let the suggestions arrive
+    });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(onExecute).toHaveBeenCalledWith('dir');
+  });
+
+  it('takes the highlighted suggestion only after you arrowed to it', async () => {
+    const onExecute = vi.fn().mockResolvedValue(undefined);
+    const onTabComplete = vi.fn().mockResolvedValue([{ text: 'dir /b', type: 'history' }]);
+    render(<TerminalPanel lines={[]} onExecute={onExecute} onTabComplete={onTabComplete} />);
+    const box = screen.getByPlaceholderText(/enter command/i) as HTMLInputElement;
+    fireEvent.change(box, { target: { value: 'dir' } });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250));
+    });
+    fireEvent.keyDown(box, { key: 'ArrowDown' });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(onExecute).not.toHaveBeenCalled();
+    expect(box.value).toBe('dir /b');
+  });
+
+  it('takes focus back when a command finishes', () => {
+    const { rerender } = render(<TerminalPanel lines={[]} onExecute={noop} isRunning />);
+    rerender(<TerminalPanel lines={[]} onExecute={noop} isRunning={false} />);
+    expect(screen.getByPlaceholderText(/enter command/i)).toHaveFocus();
   });
 });

@@ -135,6 +135,10 @@ export function TerminalPanel({
   // ── Refs ──
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // True once the user moved through the suggestions with the arrow keys. Enter then accepts the
+  // highlighted one; otherwise Enter runs what was typed. Accepting a suggestion the user never
+  // chose made every command need Enter twice.
+  const [suggestionChosen, setSuggestionChosen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
@@ -166,9 +170,25 @@ export function TerminalPanel({
     }
   }, [lines, isRunning]);
 
-  // ── Focus input on mount ──
+  // ── Keep the input focused ──
+  // On mount, whenever a command finishes (a disabled input drops focus), and whenever the
+  // terminal is asked for by name. You should be able to open it and type.
   useEffect(() => {
     inputRef.current?.focus();
+  }, []);
+  useEffect(() => {
+    if (!isRunning) inputRef.current?.focus();
+  }, [isRunning]);
+  useEffect(() => {
+    const focusInput = () => requestAnimationFrame(() => inputRef.current?.focus());
+    window.addEventListener('localmind:activate-terminal', focusInput);
+    window.addEventListener('localmind:focus-terminal', focusInput);
+    window.addEventListener('focus', focusInput);
+    return () => {
+      window.removeEventListener('localmind:activate-terminal', focusInput);
+      window.removeEventListener('localmind:focus-terminal', focusInput);
+      window.removeEventListener('focus', focusInput);
+    };
   }, []);
 
   // FIX 6: Listen for 'localmind:run-code' events from ChatMessage code blocks.
@@ -318,11 +338,13 @@ export function TerminalPanel({
       if (showSuggestions) {
         if (e.key === 'ArrowDown') {
           e.preventDefault();
+          setSuggestionChosen(true);
           setSelectedSuggestion((prev) => Math.min(prev + 1, suggestions.length - 1));
           return;
         }
         if (e.key === 'ArrowUp') {
           e.preventDefault();
+          setSuggestionChosen(true);
           setSelectedSuggestion((prev) => Math.max(prev - 1, 0));
           return;
         }
@@ -377,10 +399,11 @@ export function TerminalPanel({
       // Enter to submit
       if (e.key === 'Enter') {
         e.preventDefault();
-        if (showSuggestions && suggestions.length > 0) {
+        if (showSuggestions && suggestions.length > 0 && suggestionChosen) {
           const selected = suggestions[selectedSuggestion];
           setInput(selected.text);
           setShowSuggestions(false);
+          setSuggestionChosen(false);
         } else {
           handleSubmit();
         }
@@ -392,6 +415,7 @@ export function TerminalPanel({
       showSuggestions,
       suggestions,
       selectedSuggestion,
+      suggestionChosen,
       commandHistoryIndex,
       history,
       savedInput,
@@ -862,6 +886,7 @@ export function TerminalPanel({
                 onChange={(e) => {
                   setInput(e.target.value);
                   setCommandHistoryIndex(-1);
+                  setSuggestionChosen(false);
                 }}
                 onKeyDown={handleKeyDown}
                 placeholder={isRunning ? 'Running...' : 'Enter command… (↑ history · Tab autocomplete)'}
