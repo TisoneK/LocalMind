@@ -785,6 +785,13 @@ export function useChat(
       // stay open after it (post-answer quality services, final flush), so the
       // stream-end callback must not reset busy state a newer turn now owns.
       let turnSettled = false;
+      // Live estimates (elapsed-time latency, token-rate guesses) only make sense while the turn
+      // runs. After `done` the stream clock is gone (elapsed reads 0), and the post-answer
+      // services keep sending token/status events: letting them through overwrote the final
+      // latency with 0, so the corner's average latency and the reply's time vanished.
+      const setLiveMetrics: typeof setLastMetrics = (update) => {
+        if (!turnSettled) setLastMetrics(update);
+      };
       const toolsUsedSet = new Set<string>();
 
       const abortFn = localmindClient.streamChat(
@@ -828,7 +835,7 @@ export function useChat(
                 const liveElapsed = streamStartedAtRef.current
                   ? Date.now() - streamStartedAtRef.current
                   : 0;
-                setLastMetrics((prev) => ({
+                setLiveMetrics((prev) => ({
                   tokensPerSecond: liveElapsed > 0
                     ? Math.round(estimatedCompletionTokens / (liveElapsed / 1000) * 100) / 100
                     : 0,
@@ -884,13 +891,13 @@ export function useChat(
                 const thinkingToken = parsed.thinking || parsed.content || '';
                 thinkingContent += thinkingToken;
                 streamedProgressText += thinkingToken;
-                thinkResume();  // a thinking token means reasoning is active again
+                if (!turnSettled) thinkResume();  // reasoning is active again — unless the answer is already done
                 const thinkMs = thinkElapsed();
                 const estimatedCompletionTokens = estimateTokens(streamedProgressText);
                 const liveElapsed = streamStartedAtRef.current
                   ? Date.now() - streamStartedAtRef.current
                   : 0;
-                setLastMetrics((prev) => ({
+                setLiveMetrics((prev) => ({
                   tokensPerSecond: liveElapsed > 0
                     ? Math.round(estimatedCompletionTokens / (liveElapsed / 1000) * 100) / 100
                     : 0,
@@ -1557,6 +1564,7 @@ export function useChat(
                 // The answer is complete: free the input now. The stream may
                 // stay open a while for post-answer services and the final flush.
                 turnSettled = true;
+                thinkPause();  // the reasoning clock stops with the answer
                 setIsStreaming(false);
                 // Everything the user sees about THIS turn ends here, not when the stream later
                 // closes after the post-answer services: the run's clock stops at the answer
@@ -1826,7 +1834,7 @@ export function useChat(
                     ? Date.now() - streamStartedAtRef.current
                     : 0;
                   setElapsedMs(liveElapsed);
-                  setLastMetrics((prev) => ({
+                  setLiveMetrics((prev) => ({
                     tokensPerSecond: prev?.tokensPerSecond || 0,
                     latency: liveElapsed,
                     totalTokens: prev?.totalTokens || 0,
@@ -1898,7 +1906,7 @@ export function useChat(
                   const liveElapsed = streamStartedAtRef.current
                     ? Date.now() - streamStartedAtRef.current
                     : 0;
-                  setLastMetrics((prev) => ({
+                  setLiveMetrics((prev) => ({
                     tokensPerSecond: liveElapsed > 0
                       ? Math.round(estimatedCompletionTokens / (liveElapsed / 1000) * 100) / 100
                       : 0,
@@ -1929,7 +1937,7 @@ export function useChat(
               const liveElapsed = streamStartedAtRef.current
                 ? Date.now() - streamStartedAtRef.current
                 : 0;
-              setLastMetrics((prev) => ({
+              setLiveMetrics((prev) => ({
                 tokensPerSecond: liveElapsed > 0
                   ? Math.round(estimatedCompletionTokens / (liveElapsed / 1000) * 100) / 100
                   : 0,

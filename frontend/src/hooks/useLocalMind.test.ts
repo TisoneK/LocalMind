@@ -1030,3 +1030,55 @@ describe('useChat turn end', () => {
     }
   });
 });
+
+describe('useChat metrics after the answer', () => {
+  it('keeps the final latency when post-answer token/status events keep arriving', () => {
+    const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+    act(() => {
+      onChunk()(JSON.stringify({
+        obs_event: {
+          type: 'turn_complete',
+          data: { intent: 'chat', confidence: 0.9, tokens_approx: 40, prompt_tokens_approx: 1800, total_latency_ms: 6800, memory_facts: 0, agent_mode: true },
+        },
+      }));
+      onChunk()(JSON.stringify({ type: 'done' }));
+    });
+    const before = result.current.lastMetrics;
+    expect(before?.latency).toBe(6800);
+    // The post-answer services keep the stream open; their events must not zero the numbers.
+    act(() => {
+      onChunk()(JSON.stringify({ type: 'token', content: ' late' }));
+      onChunk()(JSON.stringify({ type: 'status_update', status: 'Agent is still working' }));
+    });
+    expect(result.current.lastMetrics?.latency).toBe(6800);
+    act(() => onDone()());
+    unmount();
+  });
+});
+
+describe('useChat thinking clock after the answer', () => {
+  it('stops counting thinking time at done even if reasoning tokens arrive late', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+      const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+      act(() => {
+        onChunk()(JSON.stringify({ type: 'thinking_token', thinking: 'hmm' }));
+      });
+      vi.setSystemTime(new Date('2026-01-01T00:00:03Z'));
+      act(() => {
+        onChunk()(JSON.stringify({ type: 'done' }));
+      });
+      vi.setSystemTime(new Date('2026-01-01T00:00:15Z'));
+      act(() => {
+        onChunk()(JSON.stringify({ type: 'thinking_token', thinking: ' late reflection' }));
+      });
+      const last = result.current.messages[result.current.messages.length - 1];
+      expect(last.thinkMs).toBeLessThanOrEqual(3100);
+      act(() => onDone()());
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
