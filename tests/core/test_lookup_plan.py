@@ -68,3 +68,11 @@ class TestSequencePlan:
         steps = derive_sequence_plan(msg)
         assert len(steps) == 5
         assert all(s.split()[0] in {"Do"} for s in steps)
+
+
+def test_a_browser_task_is_named_by_the_site_not_by_its_json():
+    from core.agent.loop import _synthetic_todo_text
+
+    label = _synthetic_todo_text("browse", '{"action": "open", "url": "https://www.premierleague.com/en/matches"}')
+    assert label == "Open premierleague.com"
+    assert _synthetic_todo_text("web_search", "epl scores") == "Search: epl scores"

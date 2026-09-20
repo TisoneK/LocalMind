@@ -1029,6 +1029,20 @@ def _synthetic_todo_text(tool_name: str, tool_input: str) -> str:
     """
     verb = _SYNTH_TODO_PREFIX.get(tool_name, tool_name.replace("_", " "))
     first_line = (tool_input or "").strip().splitlines()[0].strip() if (tool_input or "").strip() else ""
+    # A browser call arrives as a JSON blob ({"action": "open", "url": ...}); a page reads better
+    # as the site it opens.
+    if tool_name == "browse" and first_line.startswith("{"):
+        try:
+            args = json.loads(tool_input)
+            from urllib.parse import urlparse
+
+            url = str(args.get("url") or "")
+            host = (urlparse(url if "://" in url else "https://" + url).hostname or "").removeprefix("www.")
+            if host:
+                return f"Open {host}"[:120]
+            first_line = str(args.get("action") or args.get("query") or "")
+        except (ValueError, TypeError, AttributeError):
+            pass
     arg = first_line[:90]
     label = f"{verb}: {arg}" if arg else verb
     return label[:120]
