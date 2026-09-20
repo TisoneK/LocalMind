@@ -486,7 +486,7 @@ async def test_execute_mode_does_boot_the_workspace_or_loop():
 def test_prompt_asks_for_every_action_up_front_without_naming_tools():
     prompt = " ".join(build_initialization_prompt("What is the weather?", env_context="").split())
     assert "EVERY action" in prompt
-    assert "Read the best source" in prompt
+    assert "Check the sources" in prompt
     assert "web_search" not in prompt and "shell" not in prompt
 
 
@@ -499,19 +499,17 @@ class TestEnsureUpfrontPlan:
 
     def test_an_empty_plan_for_a_web_lookup_gets_the_lookup_steps(self):
         from core.agent.initialization import ensure_upfront_plan
+        from core.agent.lookup_plan import LOOKUP_STEPS
         from core.models import Intent
 
-        assert ensure_upfront_plan([], Intent.WEB_SEARCH) == [
-            "Search the web", "Read the best source", "Answer from what I found",
-        ]
+        assert ensure_upfront_plan([], Intent.WEB_SEARCH) == list(LOOKUP_STEPS)
 
     def test_a_lone_step_is_kept_as_the_first_of_the_lookup(self):
         from core.agent.initialization import ensure_upfront_plan
+        from core.agent.lookup_plan import LOOKUP_STEPS
         from core.models import Intent
 
-        assert ensure_upfront_plan(["Fetch weather"], Intent.WEB_FETCH) == [
-            "Fetch weather", "Read the best source", "Answer from what I found",
-        ]
+        assert ensure_upfront_plan(["Fetch weather"], Intent.WEB_FETCH) == ["Fetch weather", *LOOKUP_STEPS[1:]]
 
     def test_other_work_is_left_alone(self):
         from core.agent.initialization import ensure_upfront_plan

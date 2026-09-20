@@ -120,7 +120,7 @@ Modes (choose the tier):
 - execute: anything needing current info, files, code, browser, memory, or
   multi-step work. List EVERY action in `plan` up front, in order (2-6 short
   imperative steps), ending with the one that answers the user. Current info
-  takes three: "Search the web for X", "Read the best source", "Answer from what
+  takes three: "Search the web for X", "Check the sources", "Answer from what
   I found". One step only for a single action on one named thing.
 
 {env_context}{history_block}
@@ -269,7 +269,8 @@ def _salvage_response(raw: str) -> str:
 
 # The steps of a lookup, in order. Used only when the model returned no real plan for a
 # web-lookup task, so the checklist is whole before the first action runs.
-_LOOKUP_PLAN = ("Search the web", "Read the best source", "Answer from what I found")
+from core.agent.lookup_plan import LOOKUP_STEPS as _LOOKUP_PLAN  # noqa: E402
+
 _LOOKUP_INTENTS = frozenset({"web_search", "web_fetch"})
 
 

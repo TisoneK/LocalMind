@@ -1875,6 +1875,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             derive_goal_items,
             derive_goal_tree,
         )
+        from core.agent.lookup_plan import derive_lookup_plan
 
         # Workspace steering: resolve bare path
         # tokens in the goal derivation onto the session workspace, so the
@@ -1971,7 +1972,10 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # denominator never mutates) AND the acceptance gate's
                 # success criteria (completion gated on evidence against
                 # these items). None when nothing concrete was derived.
-                plan_steps=goal_items or None,
+                # A request that needs live information has no derived goal, but its shape
+                # is always search -> read -> answer: show that whole plan before the first
+                # tool runs (display only — the success criteria below stay goal-based).
+                plan_steps=goal_items or derive_lookup_plan(message) or None,
                 # The same goals decomposed into an ordered
                 # sub-goal route, rendered nested in the Todos panel and
                 # injected into the model context so the agent follows the

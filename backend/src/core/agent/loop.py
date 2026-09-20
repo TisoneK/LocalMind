@@ -103,6 +103,7 @@ from core.agent.initialization import (
     ensure_upfront_plan,
     parse_initialization,
 )
+from core.agent.lookup_plan import LOOKUP_STEPS, lookup_step_for_tool
 from core.agent.models import AgentStep, AgentTrace, strip_worker_reports, strip_worker_reports_from_history
 from core.agent.prompts import build_agent_intent_tail, build_agent_system_prompt, build_planning_prompt
 from core.agent.synthesizer import AnswerSynthesizer
@@ -3084,6 +3085,7 @@ class AgentLoop:
         _SYNTH_TODO_MAX = 12
 
         def _synth_begin(tool_name: str, tool_input: str) -> Optional[str]:
+            nonlocal _plan_steps, _plan_step_cursor
             if _plan_steps or not _obs:
                 return None
             if len(_synthetic_todos) >= _SYNTH_TODO_MAX:
@@ -3094,6 +3096,18 @@ class AgentLoop:
             # (todo_completed with no text after todo_cleared). Skip it.
             if tool_name == "todo_write":
                 return None
+            # The first thing the agent actually does is a web lookup and there is no plan
+            # yet: show the WHOLE lookup plan now (search -> check sources -> answer) instead
+            # of a lone task that ticks itself to 100% while the agent is still working. This
+            # keys off real behaviour, so it holds however the request was phrased.
+            if not _synthetic_todos and lookup_step_for_tool(tool_name) is not None:
+                _first = lookup_step_for_tool(tool_name) or 0
+                _plan_steps = list(LOOKUP_STEPS)
+                _plan_step_cursor = _first
+                _obs.emit("todo_cleared")
+                for _i, _step in enumerate(_plan_steps):
+                    _obs.emit("todo_created", id=f"plan-{_i}", text=_step, content=_step, completed=False)
+                return f"plan-{_first}"
             todo_id = f"syn-{len(_synthetic_todos)}"
             label = _synthetic_todo_text(tool_name, tool_input)
             _synthetic_todos.append(label)
@@ -5339,6 +5353,15 @@ class AgentLoop:
                     latency_ms = round((time.monotonic() - t_tool) * 1000)
 
                 _todo_id = _syn_todo_id or (f"plan-{_plan_step_cursor}" if _plan_steps else None)
+                # A lookup plan ticks with real progress, not only on narration (a silent tool
+                # run never narrates): a finished search completes "Search the web", a finished
+                # page read completes "Check the sources".
+                if _obs and not tool_failed and list(_plan_steps) == list(LOOKUP_STEPS):
+                    _done_idx = lookup_step_for_tool(tool_name)
+                    if _done_idx is not None:
+                        for _i in range(_done_idx + 1):
+                            _obs.emit("todo_completed", id=f"plan-{_i}", completed=True)
+                        _plan_step_cursor = max(_plan_step_cursor, _done_idx + 1)
                 if tool_failed:
                     last_tool_failed = True
                     consecutive_failures += 1
@@ -5873,7 +5896,7 @@ class AgentLoop:
                                 status="started",
                                 iteration=iteration + 1,
                                 todo_id=_syn_todo_id or (f"plan-{_plan_step_cursor}" if _plan_steps else None),
-                                thought=result.raw_content or "", reasoning=_step_reasoning(),
+                                thought=_strip_minimax_tool_calls(_minimax_buffer), reasoning=_step_reasoning(),
                             )
 
                         # Dispatch the tool
@@ -6002,7 +6025,7 @@ class AgentLoop:
                                 latency_ms=latency_ms if "latency_ms" in dir() else 0,
                                 iteration=iteration + 1,
                                 todo_id=_syn_todo_id or (f"plan-{_plan_step_cursor}" if _plan_steps else None),
-                                thought=result.raw_content or "", reasoning=_step_reasoning(),
+                                thought=_strip_minimax_tool_calls(_minimax_buffer), reasoning=_step_reasoning(),
                             )
 
                         _synth_end(_syn_todo_id, tool_failed)
