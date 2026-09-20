@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildTurn } from './turnTimeline';
+import { buildTurn, toolLabel } from './turnTimeline';
 import type { AgentPhase, AgentRun, ToolCall, TodoItem } from '@/types';
 
 const tool = (id: string, over: Partial<ToolCall> = {}): ToolCall => ({
@@ -206,5 +206,11 @@ describe('a check that finds nothing', () => {
       toolCalls: [tool('w', { name: 'file_write', status: 'failed', output: "error_type='not_found'" })],
     });
     expect(t.counts.failed).toBe(1);
+  });
+
+  it('names a code run instead of repeating the code as its title', () => {
+    const tool = { id: 'c', name: 'code_exec', status: 'done', label: 'Executing: import subprocess, sys r = subpro...', input: 'import subprocess, sys\nr = subprocess.run(...)' } as never;
+    expect(toolLabel(tool, 'done')).toBe('Ran Python');
+    expect(toolLabel(tool, 'running')).toBe('Running Python');
   });
 });

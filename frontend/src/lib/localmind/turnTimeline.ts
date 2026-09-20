@@ -121,6 +121,13 @@ export function isShellBlocked(tool: ToolCall): boolean {
 }
 
 export function toolLabel(tool: ToolCall, state: StepState = 'running'): string {
+  // "Executing: import subprocess, sys r = subpro…" is a code preview posing as a title, and the
+  // detail column then repeats it. Name the action; the code itself is the detail.
+  if (tool.name === 'code_exec' && /^Executing:/i.test(tool.label ?? '')) {
+    const python = /^\s*(import |from \w+ import |def |print\(|for |with )/m.test(tool.input ?? '');
+    const what = python ? 'Python' : 'code';
+    return state === 'done' || state === 'failed' ? `Ran ${what}` : `Running ${what}`;
+  }
   const pair = TOOL_LABELS[tool.name];
   return tool.label || (pair ? pair[state === 'done' || state === 'failed' ? 1 : 0] : tool.name);
 }

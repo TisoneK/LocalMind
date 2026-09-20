@@ -45,6 +45,8 @@ export function cleanToolFailure(text: string): string {
 
 /** Loop-internal reasons an acceptance check was unmet, put in words for the person watching. */
 export function friendlyUnmet(item: string): string {
-  if (/^model narrated an action plan/i.test(item)) return 'it described a plan instead of carrying it out';
+  if (/^(model )?narrated (an action plan|a pending action)/i.test(item)) {
+    return 'it said what it would do instead of doing it';
+  }
   return item;
 }
