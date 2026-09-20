@@ -149,7 +149,9 @@ _ARG_KEY_VALUE_RE = re.compile(
 # (U+FF5C): <｜DSML｜invoke name="shell"> with a `string="true"` attribute on
 # <｜DSML｜parameter>. Normalize the prefix away so the existing invoke/parameter
 # regexes handle them, and allow extra attributes on <parameter>.
-_DSML_PREFIX_RE = re.compile(r"<｜DSML｜|</｜DSML｜", re.IGNORECASE)
+# The bars come single ("<｜DSML｜invoke") or doubled ("<｜｜DSML｜｜ invoke"), with or without a space
+# before the tag name, and the wrapper is "tool_calls" or "calls": all are the same markup.
+_DSML_PREFIX_RE = re.compile(r"</?｜+\s*DSML\s*｜+\s*", re.IGNORECASE)
 
 
 def _normalize_dsml(text: str) -> str:
@@ -169,7 +171,7 @@ def _normalize_dsml(text: str) -> str:
         </tool_calls>
     which the existing MiniMax-style regexes already parse.
     """
-    if not text or "｜DSML｜" not in text:
+    if not text or "DSML" not in text:
         return text
     return _DSML_PREFIX_RE.sub(lambda m: "</" if m.group(0).startswith("</") else "<", text)
 
@@ -268,7 +270,7 @@ def _strip_minimax_tool_calls_stream(text: str) -> str:
     cleaned = re.sub(r"minimax:tool_call\b", "", cleaned, flags=re.IGNORECASE)
     # Strip DSML tool_calls wrapper tags (left over after normalizing the
     # inner invoke/parameter tags away)
-    cleaned = re.sub(r"<\s*/?\s*tool_calls\s*>", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"<\s*/?\s*(?:tool_)?calls\s*>", "", cleaned, flags=re.IGNORECASE)
     # Collapse runs of blank lines
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned
@@ -376,7 +378,7 @@ _TOOL_TALK_PATTERNS = [
     re.compile(r"<tool>|<action>|<function>", re.IGNORECASE),
     re.compile(r"tool_call|function_call|invoke_tool", re.IGNORECASE),
     # DeepSeek DSML tool-call markup — must be intercepted, not streamed
-    re.compile(r"<｜DSML｜\s*(tool_calls|invoke)\b", re.IGNORECASE),
+    re.compile(r"<｜+\s*DSML\s*｜+\s*(tool_calls|calls|invoke)\b", re.IGNORECASE),
     # MiniMax-style: "I will call the web_search tool" followed by XML
     re.compile(r"i('ll| will) (now |then )?(call|use|invoke) (the )?\w+ (tool|function)", re.IGNORECASE),
     # v0.7: Additional plain-text tool narration patterns — models like MiniMax M2.5
