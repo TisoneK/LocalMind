@@ -7,9 +7,8 @@ rejection emitted no result event, so the UI tool call sat at "started" forever.
 """
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 import core.config as config_module
+import pytest
 from core.agent.loop import _content_requested_by_user, _user_message_text
 
 
@@ -49,14 +48,14 @@ def _allow(tmp_path):
     return patcher
 
 
-async def _run_write(tmp_path, request, content):
+async def _run_write(tmp_path, request, content, target_name="short.txt"):
     """Drive the real loop once: the model calls file_write(content), then answers."""
     from adapters.ollama import ToolCallResult
     from core.agent.loop import AgentLoop
     from core.models import Intent, StreamChunk
     from core.obs import ObsCollector
 
-    target = tmp_path / "short.txt"
+    target = tmp_path / target_name
     seen = {"n": 0}
 
     async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
@@ -112,12 +111,27 @@ async def test_short_body_the_user_asked_for_is_written_exactly(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_an_unrequested_placeholder_is_still_rejected_and_reported_as_failed(tmp_path):
+async def test_a_tiny_body_for_a_new_file_is_written_and_flagged_not_blocked(tmp_path):
+    """Whether "yes" is a placeholder cannot be known without a model, so a new file gets it. The
+    model — which can tell — is shown exactly what landed and told to write again if that was wrong."""
     target, calls = await _run_write(tmp_path, "Write a poem about cats to {path}", "yes")
+    assert target.read_text(encoding="utf-8") == "yes"
+    done = [c for c in calls if c.data.get("status") == "done"]
+    assert done and "only 3 bytes" in done[0].data.get("output", "")
+    assert not any(c.data.get("status") == "failed" for c in calls)
+
+
+@pytest.mark.asyncio
+async def test_an_empty_body_never_creates_a_file(tmp_path):
+    target, calls = await _run_write(tmp_path, "Write a poem about cats to {path}", "   ")
     assert not target.exists()
-    statuses = [c.data.get("status") for c in calls]
-    # started → failed: the rejection must END the tool call, not leave it started.
-    assert "started" in statuses
-    assert "failed" in statuses
-    failed = next(c for c in calls if c.data.get("status") == "failed")
-    assert "REJECTED" in failed.data.get("output", "")
+    assert not any(c.data.get("status") == "done" for c in calls)
+
+
+@pytest.mark.asyncio
+async def test_a_stub_that_would_replace_a_real_file_is_refused(tmp_path):
+    original = tmp_path / "notes.txt"
+    original.write_text("real notes worth keeping, several words long", encoding="utf-8")
+    target, calls = await _run_write(tmp_path, "Update the notes in {path}", "ok", target_name="notes.txt")
+    assert target.read_text(encoding="utf-8").startswith("real notes")
+    assert "REJECTED" in next(c for c in calls if c.data.get("status") == "failed").data.get("output", "")

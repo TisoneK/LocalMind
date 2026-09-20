@@ -726,3 +726,16 @@ def test_a_short_body_the_user_spelled_out_is_not_mistaken_for_a_placeholder(req
     from core.agent.loop import _content_requested_by_user
 
     assert _content_requested_by_user(content, request_text) is expected
+
+
+def test_a_tiny_body_is_only_stopped_when_it_would_replace_a_real_file(tmp_path):
+    from core.agent.loop import _would_clobber_with_stub
+
+    real = tmp_path / "notes.txt"
+    real.write_text("a real file with real content in it", encoding="utf-8")
+    assert _would_clobber_with_stub(str(real), "ok")  # would wipe real work
+    assert not _would_clobber_with_stub(str(tmp_path / "new.txt"), "42")  # a new file: harmless
+    assert not _would_clobber_with_stub(str(real), "a longer body than a stub")  # not a stub
+    tiny = tmp_path / "tiny.txt"
+    tiny.write_text("x", encoding="utf-8")
+    assert not _would_clobber_with_stub(str(tiny), "y")  # replacing a near-empty file is fine

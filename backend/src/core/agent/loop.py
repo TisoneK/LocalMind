@@ -360,6 +360,22 @@ def _user_message_text(messages: list[dict], limit: Optional[int] = 200) -> str:
     return ""
 
 
+def _would_clobber_with_stub(path: str, content: str) -> bool:
+    """True when `content` is a few characters and `path` is an existing, non-trivial file.
+
+    That is the one situation where a tiny body is worth stopping for: overwriting real work with
+    what is probably a mistake. It needs only the disk, not a judgement about the text.
+    """
+    import os as _os
+
+    if len((content or "").strip()) >= 5 or not path:
+        return False
+    try:
+        return _os.path.getsize(_os.path.expanduser(path)) >= 20
+    except OSError:
+        return False  # not there (or not readable): creating it is harmless
+
+
 def _content_requested_by_user(content: str, request: str) -> bool:
     """True when `content` is a literal the user themselves asked to be written.
 
@@ -5165,8 +5181,12 @@ class AgentLoop:
                         tool_args = _normalize_write_payload(tool_args)
                         _content = tool_args.get("content", "")
                         _path = tool_args.get("path", "")
-                        if not _content or (
-                            len(_content.strip()) < 5
+                        # Only two things are refused, and both are facts, not guesses about intent:
+                        # an empty body, and a tiny body that would replace a real existing file.
+                        # Whether "42" or "OK" is a placeholder cannot be known without a model; a
+                        # new file holding it is harmless (and undoable), so it is written.
+                        if not _content.strip() or (
+                            _would_clobber_with_stub(_path, _content)
                             and not _content_requested_by_user(
                                 _content, _user_message_text(loop_messages, limit=None)
                             )
@@ -5176,10 +5196,14 @@ class AgentLoop:
                                 f"(path={_path!r}, content={_content.strip()[:20]!r}) — rejecting"
                             )
                             observation = (
-                                f"[file_write REJECTED: content is too short "
-                                f"({len(_content.strip())} chars: {_content.strip()[:30]!r}). "
-                                f"You MUST provide the actual file content, not a placeholder. "
-                                f"Call file_write again with meaningful content in the 'content' field.]"
+                                "[file_write REJECTED: "
+                                + (
+                                    "the content is empty. "
+                                    if not _content.strip()
+                                    else f"{_path!r} already holds a real file and {_content.strip()[:30]!r} would "
+                                    "replace it with a few characters. "
+                                )
+                                + "Provide the actual file content in the 'content' field.]"
                             )
                             last_tool_failed = True
                             consecutive_failures += 1
@@ -8854,7 +8878,15 @@ class AgentLoop:
                 # phantom "do NOT read it back" / "read it back" instruction is a
                 # bug (it fought legitimate user requests and second-guessed the
                 # agent); the agent decides based on the actual task.
-                return f"file_write confirmed — {actual_len} bytes verified on disk at {path}."
+                confirmed = f"file_write confirmed — {actual_len} bytes verified on disk at {path}."
+                stub = (tool_args.get("content") or "").strip()
+                if 0 < len(stub) < 5:
+                    # Not blocked (a tool cannot know a stub is a mistake), but shown: the model can.
+                    confirmed += (
+                        f" Note: only {actual_len} bytes were written ({stub!r}). If the request "
+                        "needed more than that, write the file again with the full content."
+                    )
+                return confirmed
 
             # ── code_exec verification ───────────────────────────────────
             if tool_name == "code_exec" and VERIFY_CODE_EXEC:
