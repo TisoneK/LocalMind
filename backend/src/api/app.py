@@ -24,7 +24,7 @@ load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from api.routes import (
     actions,
@@ -48,6 +48,24 @@ from core.config import settings
 logger = logging.getLogger(__name__)
 
 UI_HTML = Path(__file__).parent.parent / "ui" / "index.html"
+
+
+def _frontend_dist() -> Path | None:
+    """The built React UI (frontend/dist), when there is one.
+
+    The desktop app loads the UI from here over http, same origin as the API: loading
+    dist/index.html from disk (file://) broke both the asset URLs and every API call (CORS,
+    and no base URL) and left the window blank forever. LOCALMIND_FRONTEND_DIST overrides the
+    location (the packaged app points it at its bundled copy).
+    """
+    import os
+
+    configured = os.getenv("LOCALMIND_FRONTEND_DIST")
+    candidates = [Path(configured)] if configured else [Path(__file__).resolve().parents[3] / "frontend" / "dist"]
+    for dist in candidates:
+        if (dist / "index.html").is_file():
+            return dist
+    return None
 
 
 async def _shutdown(app: FastAPI) -> None:
@@ -366,8 +384,22 @@ def create_app() -> FastAPI:
             "note": "First pulled model from preference list wins per intent.",
         }
 
+    dist = _frontend_dist()
+    if dist is not None:
+
+        @app.get("/", include_in_schema=False)
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def serve_built_ui(full_path: str = ""):
+            if full_path.startswith("api/"):
+                return JSONResponse({"error": "not found"}, status_code=404)
+            target = (dist / full_path).resolve()
+            # Serve a real file inside dist; anything else is a client-side route -> index.html.
+            if full_path and target.is_file() and dist.resolve() in target.parents:
+                return FileResponse(str(target))
+            return FileResponse(str(dist / "index.html"))
+
     # Serve single-file UI — no build step required
-    if UI_HTML.exists():
+    elif UI_HTML.exists():
 
         @app.get("/", include_in_schema=False)
         @app.get("/{full_path:path}", include_in_schema=False)

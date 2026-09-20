@@ -43,7 +43,28 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Shown until the app mounts (React replaces #root's children). If the app never mounts
+           - a script failed to load or crashed at startup - the watchdog below says so instead of
+           leaving a blank window. -->
+      <div id="boot" style="display:flex;height:100vh;align-items:center;justify-content:center;flex-direction:column;gap:10px;font:13px system-ui,sans-serif;color:#9aa5a0;background:#0e1211">
+        <div style="font-weight:600;color:#c9d4cf">LocalMind</div>
+        <div id="boot-msg">Starting…</div>
+      </div>
+    </div>
+    <script>
+      setTimeout(function () {
+        var boot = document.getElementById('boot');
+        if (!boot) return; // the app mounted
+        var msg = document.getElementById('boot-msg');
+        msg.innerHTML = 'The interface did not start. <a href="#" onclick="location.reload();return false" style="color:#4ade80">Reload</a>';
+      }, 10000);
+      window.addEventListener('error', function (e) {
+        var boot = document.getElementById('boot');
+        var msg = document.getElementById('boot-msg');
+        if (boot && msg) msg.textContent = 'The interface failed to start: ' + (e.message || 'unknown error');
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

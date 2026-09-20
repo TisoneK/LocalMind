@@ -42,6 +42,7 @@ const serverScript = path.join(projectRoot, 'backend', 'server.py');
 // In production the built files live in frontend/dist/ (relative to project root).
 const devServerUrl = 'http://localhost:3000';
 const prodIndexPath = path.join(projectRoot, 'frontend', 'dist', 'index.html');
+const prodUiUrl = 'http://127.0.0.1:8000/'; // served by the backend (see LOCALMIND_FRONTEND_DIST)
 
 // ---------------------------------------------------------------------------
 // State
@@ -166,7 +167,9 @@ async function startPythonBackend() {
     : '.venv/bin/python';
   pythonProcess = spawn(pythonBin, [serverScript], {
     cwd: path.join(projectRoot, 'backend'),
-    env: { ...process.env },
+    // The backend serves the built UI itself, so the window loads it over http (same origin as
+    // the API) instead of from disk, where asset URLs and API calls broke and the window stayed blank.
+    env: { ...process.env, LOCALMIND_FRONTEND_DIST: path.dirname(prodIndexPath) },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
@@ -489,7 +492,7 @@ function createMainWindow() {
     // Open DevTools in development
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    mainWindow.loadFile(prodIndexPath).catch(err => {
+    mainWindow.loadURL(prodUiUrl).catch(err => {
       console.error('[LocalMind] Failed to load production index:', err.message);
     });
   }
@@ -503,9 +506,33 @@ function createMainWindow() {
     }
   });
 
-  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDesc) => {
+  // A UI that fails to load must never leave a blank window forever. Retry the load (the dev
+  // server may simply not be up yet), and never keep the window hidden waiting on the backend
+  // for longer than a few seconds: the UI copes with a backend that is still starting.
+  let loadRetries = 0;
+  const loadUi = () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const loading = mainWindow.loadURL(isDev ? devServerUrl : prodUiUrl);
+    loading.catch(() => {});
+  };
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDesc, _url, isMainFrame) => {
     console.error(`[LocalMind] UI failed to load: ${errorCode} — ${errorDesc}`);
+    // -3 is a load superseded by another navigation, not a failure.
+    if (!isMainFrame || errorCode === -3) return;
+    loadRetries += 1;
+    if (loadRetries <= 40) setTimeout(loadUi, 1500);
+    if (mainWindow && !mainWindow.isVisible()) mainWindow.show();
   });
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error(`[LocalMind] UI process gone: ${details.reason}`);
+    if (details.reason !== 'clean-exit') setTimeout(loadUi, 500);
+  });
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      console.warn('[LocalMind] backend not ready after 15s — showing the window anyway');
+      mainWindow.show();
+    }
+  }, 15000);
 
   // Minimize to tray on close instead of quitting
   mainWindow.on('close', (event) => {

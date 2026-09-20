@@ -5,6 +5,10 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
 export default defineConfig({
+  // Relative asset URLs: the packaged Electron app loads dist/index.html from disk (file://),
+  // where an absolute "/assets/..." points at the filesystem root, finds nothing, and leaves the
+  // window blank forever. "./" works from a file, a web server and the dev server alike.
+  base: './',
   plugins: [react(), tailwindcss()],
   test: {
     environment: 'jsdom',
