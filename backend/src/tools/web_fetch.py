@@ -292,7 +292,7 @@ def _is_binary_content_type(content_type: str) -> bool:
     return any(bt in content_type.lower() for bt in binary_types)
 
 
-async def web_fetch(url: str) -> ToolResult:
+async def _fetch_page(url: str) -> ToolResult:
     """
     Fetch a web page and extract its readable text content.
 
@@ -570,6 +570,82 @@ async def web_fetch(url: str) -> ToolResult:
             error_message=error_msg,
             metadata={"url": url},
         )
+
+
+# ── Sources that already failed ─────────────────────────────────────────────
+# A site that refused, timed out or was unreachable is not fixed by asking again a moment later,
+# yet an agent that "knows" the best source will keep returning to it (five tool calls and almost
+# two minutes on one live-scores turn). Remember, for a while, which hosts failed and why, and
+# answer a repeat immediately with an instruction to pick a different source.
+_SOURCE_FAILURE_TTL_S = 900.0
+_MAX_REMEMBERED = 200
+# Failures that describe the SITE (retrying the same host will not help) versus one page (404).
+_HOST_LEVEL_ERRORS = {"timeout", "connection_failed", "empty_content", "extraction_failed"}
+_HOST_LEVEL_STATUSES = {401, 403, 429, 451}
+_failed_sources: dict[str, tuple[float, str]] = {}  # key -> (when, why)
+
+
+def _source_key(url: str, *, host_level: bool) -> str:
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url if "://" in url else "https://" + url)
+    host = (parsed.hostname or "").lower().removeprefix("www.")
+    return f"host:{host}" if host_level else f"url:{host}{parsed.path}"
+
+
+def _remembered_failure(url: str, now: float) -> str | None:
+    for key in (_source_key(url, host_level=True), _source_key(url, host_level=False)):
+        hit = _failed_sources.get(key)
+        if hit and now - hit[0] < _SOURCE_FAILURE_TTL_S:
+            return hit[1]
+    return None
+
+
+def _remember_failure(url: str, result: ToolResult, now: float) -> None:
+    status = (result.metadata or {}).get("status_code")
+    error_type = result.error_type or ""
+    server_error = isinstance(status, int) and status >= 500
+    if error_type in _HOST_LEVEL_ERRORS or status in _HOST_LEVEL_STATUSES or server_error:
+        key, why = _source_key(url, host_level=True), (result.error_message or error_type or "failed")
+    elif error_type == "http_error":  # a 404 and the like: this page, not the whole site
+        key, why = _source_key(url, host_level=False), (result.error_message or "not found")
+    else:
+        return
+    if len(_failed_sources) >= _MAX_REMEMBERED:
+        _failed_sources.pop(next(iter(_failed_sources)))
+    _failed_sources[key] = (now, why)
+
+
+def forget_failed_sources() -> None:
+    _failed_sources.clear()
+
+
+async def web_fetch(url: str) -> ToolResult:
+    """Fetch a web page and extract its readable text; a source that failed earlier is not retried."""
+    import time
+
+    clean = (url or "").strip()
+    now = time.monotonic()
+    earlier = _remembered_failure(clean, now) if clean else None
+    if earlier:
+        host = _source_key(clean, host_level=True).removeprefix("host:")
+        return ToolResult(
+            content=(
+                f"{host} already failed earlier this session ({earlier}). Do not try it again: pick a "
+                "different source, such as another site from the search results, or search again with "
+                "different words."
+            ),
+            risk=RiskLevel.LOW,
+            source="web_fetch",
+            success=False,
+            error_type="source_failed_earlier",
+            error_message=f"{host}: {earlier}",
+            metadata={"url": clean},
+        )
+    result = await _fetch_page(url)
+    if not result.success and clean:
+        _remember_failure(clean, result, now)
+    return result
 
 
 # Register into the tool registry
