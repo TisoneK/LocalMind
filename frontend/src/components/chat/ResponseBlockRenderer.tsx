@@ -91,7 +91,7 @@ function TableBlockRenderer({ block, enter }: { block: ResponseBlock; enter: Ent
               {block.columns.map((col, i) => (
                 <th
                   key={i}
-                  className="px-3 py-1.5 text-left font-medium text-brand-green-muted border-b border-brand-border"
+                  className="whitespace-nowrap px-2.5 py-1.5 text-left font-medium text-brand-green-muted border-b border-brand-border"
                 >
                   {col}
                 </th>
@@ -105,7 +105,12 @@ function TableBlockRenderer({ block, enter }: { block: ResponseBlock; enter: Ent
                 className="border-b border-brand-border/50 last:border-0 hover:bg-brand-bg-rail/50 transition-colors"
               >
                 {row.map((cell, j) => (
-                  <td key={j} className="px-3 py-1.5 text-brand-green-soft">
+                  <td
+                    key={j}
+                    // Short values (ranks, points, scores) stay on one line so a narrow column
+                    // never wraps a number; long text (a team name) may wrap instead.
+                    className={`px-2.5 py-1.5 text-brand-green-soft ${String(cell).length <= 14 ? 'whitespace-nowrap' : 'min-w-[6.5rem]'}`}
+                  >
                     {cell}
                   </td>
                 ))}

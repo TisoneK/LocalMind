@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Plans for file work now match the request.** "Create a folder called trip, put packing.md in it, then run ls" showed "Create packing.md" ticked before its folder, a junk "Create the folder and" step, and a needless replan because the file was expected outside the folder it was put in. Steps now follow the order in the request, filler words are never folders, and a file placed "in it" is expected inside that folder. Live-verified on DeepSeek: 2/2 criteria met, no replanning.
+- The right rail no longer jumps to the Terminal tab when the agent runs a command (its output is already in the chat, and the jump hid the plan). The verification footer ("✓ 1/1 criteria met…", "📁 Files:") is hidden from replies since the diff card and Files panel show the same facts. Result tables no longer wrap short values.
+
 ### Added
 - **A provider running out of quota, rate-limiting, or going down no longer ends your turn.** Any of those used to end the turn with an error card; now the agent moves to the next configured provider (your connection's fallback first, then any other provider with a key) and carries on, remembering what is down so the next call skips it. It honours the wait a provider names ("retry in 12s") when there is nothing to switch to, and it says what it is doing while it works ("BankOfAI is out of quota — switching to Z.ai", "Continuing with Z.ai") instead of leaving a silent gap. A local Ollama model never falls back to a cloud provider unless you set that fallback yourself. Live-verified: with the primary out of quota, both a trivial question and a web-search turn completed on the fallback with no error shown.
 - **Retry now replaces the failed attempt** instead of leaving the old reply and its error card above a duplicate of your question — on screen and in the saved chat, so a reload shows one attempt.

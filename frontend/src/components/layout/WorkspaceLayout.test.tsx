@@ -347,14 +347,14 @@ describe('WorkspaceLayout', () => {
     expect(fns.refreshSessions).toHaveBeenCalledTimes(1);
   });
 
-  it('auto-switches the right panel to the Terminal tab when a shell tool runs (FIX 4)', () => {
+  it('keeps the right panel on its tab when a shell tool runs (output is in the chat)', () => {
     setup({
       activeToolCalls: [
         { id: 'call_1', name: 'shell', status: 'running', input: 'ls', label: '', duration: undefined },
       ],
     });
     const right = mockPanelProps.right;
-    expect(right.forceTerminalTab).toBe(true);
+    expect(right.forceTerminalTab).toBe(false);
     // Terminal lines are bridged from the active tool call into the panel.
     expect(right.terminalLines).toEqual([]);
   });
@@ -378,7 +378,7 @@ describe('WorkspaceLayout', () => {
     });
     const right = mockPanelProps.right;
     expect(right.forceMemoryTab).toBe(false);
-    expect(right.forceTerminalTab).toBe(true); // shell still switches Terminal
+    expect(right.forceTerminalTab).toBe(false); // shell no longer steals the rail
   });
 
   it('auto-activates the Agents tab when a parent turn starts', () => {

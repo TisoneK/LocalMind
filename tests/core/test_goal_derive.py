@@ -35,10 +35,11 @@ def test_goal_tree_matches_flat_checklist_and_adds_ordered_subgoals():
     assert [g.goal for g in tree] == flat
     # The file goal's route spells check → folder prep → write → verify,
     # each feeding the next.
-    file_goal = next(g for g in tree if g.goal.startswith("file exists at a.txt"))
-    assert file_goal.sub_goals[0].startswith("check whether a.txt")
-    assert file_goal.sub_goals[1].startswith("write a.txt")
-    assert file_goal.sub_goals[-1].startswith("verify a.txt")
+    file_goal = next(g for g in tree if g.goal.startswith("file exists at path-test/a.txt"))
+    assert file_goal.sub_goals[0].startswith("check whether path-test/a.txt")
+    assert file_goal.sub_goals[1].startswith("create the folder path-test")
+    assert file_goal.sub_goals[2].startswith("write path-test/a.txt")
+    assert file_goal.sub_goals[-1].startswith("verify path-test/a.txt")
     assert len(file_goal.sub_goals) <= 4
 
 
@@ -77,10 +78,11 @@ def test_path_test_task_derives_fixed_checklist():
         'files: a.txt with "first" and b.txt with "second". Then read both '
         'back and tell me if either one is empty or truncated.'
     )
+    # The folder is mentioned first, so it is the first step.
     assert items == [
-        "file exists at a.txt with content",
-        "file exists at b.txt with content",
         "folder created at path-test",
+        "file exists at path-test/a.txt with content",
+        "file exists at path-test/b.txt with content",
     ]
 
 
@@ -91,8 +93,8 @@ def test_notes_txt_task():
         'file back to me.'
     )
     assert items == [
-        "file exists at notes.txt with content",
         "folder created at test-run",
+        "file exists at test-run/notes.txt with content",
     ]
 
 
@@ -123,8 +125,8 @@ def test_quoted_folder_name_kept_whole():
     # The quoted multi-word name survives whole; the partial unquoted match
     # ("my") is dropped, not the longer name.
     assert items == [
-        "file exists at notes.txt with content",
         "folder created at my stuff",
+        "file exists at my stuff/notes.txt with content",
     ]
 
 
@@ -222,12 +224,9 @@ def test_goal_tree_route_uses_workspace_resolved_path():
         base_dir="/ws/sess-1",
     )
     a_goal = next(g for g in tree if g.goal.startswith("file exists at"))
-    assert a_goal.goal == "file exists at /ws/sess-1/a.txt with content"
-    assert a_goal.sub_goals[0].startswith("check whether /ws/sess-1/a.txt")
-    # The parent IS the workspace root → no redundant "create the folder"
-    # prep step (the harness creates the workspace).
-    assert not any("create the folder" in s for s in a_goal.sub_goals)
-    assert a_goal.sub_goals[1].startswith("write /ws/sess-1/a.txt")
+    # "Inside it" puts the file in the folder the request just named.
+    assert a_goal.goal == "file exists at /ws/sess-1/path-test/a.txt with content"
+    assert a_goal.sub_goals[0].startswith("check whether /ws/sess-1/path-test/a.txt")
     folder_goal = next(g for g in tree if g.goal.startswith("folder created at"))
     assert folder_goal.goal == "folder created at /ws/sess-1/path-test"
 
@@ -290,6 +289,6 @@ def test_multi_sentence_request_keeps_all_legit_items():
     )
     items = derive_goal_items(msg, base_dir="/ws/s-1")
     assert items == [
-        "file exists at /ws/s-1/summary.md with content",
         "folder created at /ws/s-1/project-notes",
+        "file exists at /ws/s-1/project-notes/summary.md with content",
     ]

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { stripFallbackErrorText } from './errorText';
+import { stripFallbackErrorText, stripVerificationFooter } from './errorText';
 
 describe('stripFallbackErrorText', () => {
   it('removes the loop fallback when it is the whole reply', () => {
@@ -17,5 +17,16 @@ describe('stripFallbackErrorText', () => {
 
   it('leaves ordinary text alone', () => {
     expect(stripFallbackErrorText('All done.')).toBe('All done.');
+  });
+});
+
+describe('stripVerificationFooter', () => {
+  const body = 'Saved to `/a/top3.txt` (285 bytes, verified on disk).';
+  it('removes the criteria line and the Files list but keeps the answer', () => {
+    const text = `${body}\n✓ 1/1 criteria met (file exists at /a/top3.txt with\ncontent)\n📁 Files:\n- /a/top3.txt (created, 285 B)`;
+    expect(stripVerificationFooter(text)).toBe(body);
+  });
+  it('leaves ordinary text alone', () => {
+    expect(stripVerificationFooter('All 3 criteria are described below.')).toBe('All 3 criteria are described below.');
   });
 });

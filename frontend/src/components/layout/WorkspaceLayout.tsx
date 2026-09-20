@@ -254,19 +254,9 @@ export function WorkspaceLayout() {
     return [...liveActions, ...extras];
   })();
 
-  // FIX 4: Auto-switch right panel to Terminal tab when agent runs
-  // shell or code_exec commands, so the user sees the output immediately.
-  const [forceTerminalTab, setForceTerminalTab] = useState(false);
-  useEffect(() => {
-    if (activeToolCalls.some(tc => (tc.name === 'shell' || tc.name === 'code_exec') && isActiveToolStatus(tc.status))) {
-      setForceTerminalTab(true);
-      // Auto-uncollapse the right panel if it's collapsed
-      if (rightPanelCollapsed) {
-        setRightPanelCollapsed(false);
-      }
-    }
-  }, [activeToolCalls, rightPanelCollapsed]);
-
+  // A shell command's output is shown inside the chat turn itself, so the right rail no longer
+  // jumps to the Terminal tab when the agent runs one: that hid the plan and tasks the user was
+  // following. The Terminal tab is still one click away (and `localmind:activate-terminal`).
   // Auto-switch right panel to Agents tab when a parent turn
   // starts. The Agents workspace is the canonical live surface for
   // parent/child agent state — the user should see the initialization
@@ -570,8 +560,7 @@ export function WorkspaceLayout() {
           answering={isStreaming && !!messages[messages.length - 1]?.content?.trim()}
           collapsed={rightPanelCollapsed}
           onToggleCollapse={() => setRightPanelCollapsed(!rightPanelCollapsed)}
-          forceTerminalTab={forceTerminalTab}
-          onTerminalTabShown={() => setForceTerminalTab(false)}
+          forceTerminalTab={false}
           forceAgentsTab={forceAgentsTab}
           onAgentsTabShown={() => setForceAgentsTab(false)}
           forceMemoryTab={forceMemoryTab}

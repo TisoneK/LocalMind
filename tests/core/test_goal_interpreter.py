@@ -330,3 +330,24 @@ def test_derived_file_write_criterion_is_checkable_by_gate(tmp_path):
     )
     done, _unmet = criteria_gate(trace, unmet_label="test")
     assert done is True
+
+def test_goals_follow_the_order_of_the_request_and_ignore_filler_words():
+    from core.agent.goal_interpreter import derive_goal_items
+
+    items = derive_goal_items(
+        "Create a folder called trip, put a packing.md in it with a 5 item packing list, "
+        "then run ls on the folder and tell me what you see"
+    )
+    assert len(items) == 2
+    assert items[0].startswith("folder created at") and items[0].endswith("trip")
+    assert items[1].startswith("file exists at") and "packing.md" in items[1]
+    assert not any(i.endswith(" and") for i in items)
+
+
+def test_a_file_put_in_a_named_folder_is_expected_inside_that_folder():
+    from core.agent.goal_interpreter import derive_goal_items
+
+    items = derive_goal_items(
+        "Create a folder called trip, put a packing.md in it, then run ls", base_dir="/ws/s1"
+    )
+    assert "file exists at /ws/s1/trip/packing.md with content" in items

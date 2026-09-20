@@ -320,6 +320,33 @@ _FILE_TOKEN_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Words that can follow "folder"/"directory" without naming one ("run ls on the folder and tell
+# me", "the folder to it"). Without this a plan grew a "Create the folder and" step.
+_NOT_A_FOLDER_NAME = frozenset(
+    "and or the a an it its to of on in at for with then that this there here so if is are was be "
+    "as by from into onto also too again first next".split()
+)
+
+
+def _in_request_order(items: list[str], message: str) -> list[str]:
+    """Order goals as the request mentions them, not by which pass found them first.
+
+    Files are found before folders, so "make a folder trip, put packing.md in it" listed the file
+    first, and the plan showed "Create packing.md" ticking before its folder existed.
+    """
+    lowered = (message or "").lower()
+
+    def position(item: str) -> int:
+        target = item.rsplit(" at ", 1)[-1].removesuffix(" with content").strip()
+        for needle in (target, target.replace("\\", "/").rsplit("/", 1)[-1]):
+            at = lowered.find(needle.lower()) if needle else -1
+            if at >= 0:
+                return at
+        return len(lowered)
+
+    return sorted(items, key=position)  # stable: ties keep the original order
+
+
 _MAX_GOAL_ITEMS = 6
 _MAX_GOAL_ITEM_CHARS = 120
 
@@ -354,6 +381,33 @@ def _resolve_against(
     # contract (os.path.join/backslashes made the text OS-flavored and broke
     # the criteria's cross-platform tests).
     return os.path.normpath(os.path.join(base_dir, token)).replace("\\", "/")
+
+
+# "put a.txt in it", "inside the folder, create b.txt": the file belongs INSIDE the named folder.
+_INSIDE_RE = re.compile(
+    r"\b(?:in|inside|into|within)\s+(?:it|(?:that|this|the(?:\s+new)?)\s+(?:folder|directory))\b",
+    re.IGNORECASE,
+)
+
+
+def _named_folders(message: str) -> list[tuple[int, str]]:
+    """`(position, name)` of every folder the request names, in order of appearance."""
+    found: list[tuple[int, str]] = []
+    for m in _QUOTED_FOLDER_RE.finditer(message):
+        found.append((m.start(), _clean_token(m.group(1))))
+    for m in _FOLDER_REF_RE.finditer(message):
+        name = _clean_token(m.group(1))
+        if name and name.lower() not in _NOT_A_FOLDER_NAME:
+            found.append((m.start(), name))
+    return sorted(found)
+
+
+def _inside_named_folder(token: str, message: str, sentence: str, file_pos: int) -> str:
+    """Prefix `token` with the folder the request says it goes in ("put x.md in it")."""
+    if "/" in token or "\\" in token or not _INSIDE_RE.search(sentence):
+        return token
+    before = [name for pos, name in _named_folders(message) if pos < file_pos]
+    return f"{before[-1]}/{token}" if before else token
 
 
 def derive_goal_items(
@@ -413,6 +467,8 @@ def derive_goal_items(
                 continue
             # Workspace-steering follow-up: bare names resolve onto the session
             # workspace so goals/route/gate reference the REAL destination.
+            _at = (message or "").find(sentence)
+            token = _inside_named_folder(token, message or "", sentence, (_at if _at >= 0 else 0) + m.start())
             token = _resolve_against(token, base_dir)
             _add(f"file exists at {token} with content")
             if len(items) >= max_items:
@@ -429,7 +485,7 @@ def derive_goal_items(
         for m in _FOLDER_REF_RE.finditer(sentence):
             folder_names.append(_clean_token(m.group(1)))
     for name in folder_names:
-        if not name:
+        if not name or name.lower() in _NOT_A_FOLDER_NAME:
             continue
         # Drop partial duplicates: the unquoted regex also matches a
         # prefix of a quoted name ("my" from "my stuff") — keep the
@@ -443,7 +499,7 @@ def derive_goal_items(
         if len(items) >= max_items:
             break
 
-    return items[:_MAX_GOAL_ITEMS]
+    return _in_request_order(items, message)[:_MAX_GOAL_ITEMS]
 
 
 # ── Hierarchical goal tree ─────────────────────────────────
