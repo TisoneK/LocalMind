@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **The bottom stats are aligned.** Speed, latency and tokens sit in three equal columns (label above value) with the prompt/cached/completion breakdown and the turn count on one tidy row underneath, instead of wrapping unevenly in a narrow panel. Short table values ("113 Gi", "32%") stay on one line.
 - **Replanning no longer looks like an error.** A course correction showed an amber warning triangle and "Replanning — analyze criteria unmet". It is now a calm blue "Adjusting the approach" with the reason in words ("Because it said what it would do instead of doing it").
 - **"Yes" no longer sends the agent into chat mode.** In Auto mode, after the agent offered to do something ("want me to run a live df?"), replying "yes" / "ok do it" was treated as small talk and answered by the no-tools chat shortcut: "I can't run that from here — switch to Agent mode." A bare affirmation that answers an offer is now an instruction and goes to the full agent loop, which runs the check.
 - **The terminal input works the first time.** It is focused when the terminal opens and again when a command finishes (a disabled input drops focus), and Enter runs what you typed even while autocomplete suggestions are showing: it only takes a suggestion you moved to with the arrow keys. Before, typing a command and pressing Enter accepted the first suggestion, so every command needed Enter twice.

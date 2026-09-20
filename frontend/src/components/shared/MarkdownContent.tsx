@@ -251,8 +251,11 @@ function MarkdownTableCell({ isHeader, children, ...props }: React.ComponentProp
       </th>
     );
   }
+  // A short plain value ("113 Gi", "32%", "26 Gi") must not wrap in a narrow column; long text may.
+  const plain = typeof children === 'string' ? children : Array.isArray(children) && children.every((c) => typeof c === 'string') ? children.join('') : '';
+  const short = plain.length > 0 && plain.length <= 16;
   return (
-    <td className="px-3 py-2 align-middle text-brand-green-soft" {...props}>
+    <td className={`px-3 py-2 align-middle text-brand-green-soft ${short ? 'whitespace-nowrap' : ''}`} {...props}>
       {withLineBreaks(children)}
     </td>
   );

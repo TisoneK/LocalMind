@@ -89,52 +89,58 @@ export function PerformanceMetrics({
   const hasTokenBreakdown = totalTokens > 0 || sessionTurnCount > 0;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-1.5 bg-brand-bg-dark border-t border-brand-border min-w-0">
-      <div className="flex items-center gap-1.5">
-        <Activity className="h-3 w-3 text-brand-green shrink-0" />
-        <span
-          className="text-[9px] text-brand-green-muted uppercase tracking-wider shrink-0"
+    <div className="grid grid-cols-3 gap-x-3 gap-y-1.5 px-3 py-2 bg-brand-bg-dark border-t border-brand-border min-w-0" data-testid="perf-corner">
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <div className="flex items-center gap-1 min-w-0">
+          <Activity className="h-3 w-3 text-brand-green shrink-0" />
+          <span
+          className="truncate text-[9px] text-brand-green-muted uppercase tracking-wider"
           title={'Output speed\nTokens generated per second across this chat.'}
         >
           Speed
         </span>
+        </div>
         <span className={`text-[11px] ${TONE_CLASS[speedTone(tokensPerSecond)]} font-mono font-medium whitespace-nowrap`}>
           {tokensPerSecond > 0 ? `${tokensPerSecond} tok/s` : '—'}
         </span>
       </div>
 
-      <div className="flex items-center gap-1.5">
-        <Clock className="h-3 w-3 text-brand-amber shrink-0" />
-        <span
-          className="text-[9px] text-brand-green-muted uppercase tracking-wider shrink-0"
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <div className="flex items-center gap-1 min-w-0">
+          <Clock className="h-3 w-3 text-brand-amber shrink-0" />
+          <span
+          className="truncate text-[9px] text-brand-green-muted uppercase tracking-wider"
           title={
             sessionTurnCount > 0
-              ? `Typical time per turn (median of ${sessionTurnCount})\nAverage ${formatLatency(sessionAvgLatency)}${slowestTurn > 0 ? ` · slowest ${formatLatency(slowestTurn)}` : ''}\nWhile a reply runs this shows the live clock.`
+              ? `Typical latency: the median turn (of ${sessionTurnCount})\nAverage ${formatLatency(sessionAvgLatency)}${slowestTurn > 0 ? ` · slowest ${formatLatency(slowestTurn)}` : ''}\nWhile a reply runs this shows the live clock.`
               : 'Time per turn\nShows once you have a reply.'
           }
         >
-          Typical latency
+          Latency
         </span>
+        </div>
         <span className={`text-[11px] ${TONE_CLASS[latencyTone(latency)]} font-mono font-medium whitespace-nowrap`}>
           {latency > 0 ? formatLatency(latency) : '—'}
         </span>
       </div>
 
-      <div className="flex items-center gap-1.5">
-        <Hash className="h-3 w-3 text-brand-green-muted shrink-0" />
-        <span
-          className="text-[9px] text-brand-green-muted uppercase tracking-wider shrink-0"
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <div className="flex items-center gap-1 min-w-0">
+          <Hash className="h-3 w-3 text-brand-green-muted shrink-0" />
+          <span
+          className="truncate text-[9px] text-brand-green-muted uppercase tracking-wider"
           title={'Tokens used in this chat\nPrompt + completion, all turns.'}
         >
           Tokens
         </span>
+        </div>
         <span className="text-[11px] text-brand-green-soft font-mono font-medium whitespace-nowrap">
           {totalTokens > 0 ? formatTokens(totalTokens) : '—'}
         </span>
       </div>
 
       {hasTokenBreakdown && (
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="col-span-3 flex flex-wrap items-center gap-x-3 gap-y-0.5 border-t border-brand-border/50 pt-1.5" data-testid="perf-breakdown">
           <div className="flex items-center gap-1">
             <span className="text-[9px] text-brand-green-muted">prompt:</span>
             <span className="text-[10px] text-brand-blue font-mono">{formatTokens(promptTokens)}</span>
@@ -163,19 +169,17 @@ export function PerformanceMetrics({
               <span className="text-[10px] text-brand-green-soft font-mono">{llmCalls}</span>
             </div>
           )}
-        </div>
-      )}
-
-      {/* Turns chip — makes the session-scope of the corner explicit and
-          distinguishes it from the per-message lines under each bubble. */}
-      {sessionTurnCount > 0 && (
+        {sessionTurnCount > 0 && (
         <span
-          className="shrink-0 text-[9px] text-brand-green-faint font-mono border border-brand-border rounded px-1 py-px"
+          className="ml-auto shrink-0 text-[9px] text-brand-green-faint font-mono border border-brand-border rounded px-1 py-px"
           title={`${sessionTurnCount} assistant turn${sessionTurnCount === 1 ? '' : 's'} this session`}
         >
           {sessionTurnCount} turn{sessionTurnCount === 1 ? '' : 's'}
         </span>
+        )}
+        </div>
       )}
+
     </div>
   );
 }

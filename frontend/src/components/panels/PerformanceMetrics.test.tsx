@@ -81,7 +81,7 @@ describe('PerformanceMetrics cache telemetry', () => {
         sessionStats={stats({ latencyMs: 62000, turnCount: 3, turnLatencies: [900, 1100, 60000], promptTokens: 100, completionTokens: 10 })}
       />,
     );
-    expect(screen.getByText('Typical latency')).toBeInTheDocument();
+    expect(screen.getByText('Latency')).toBeInTheDocument();
     expect(screen.getByText('1.1s')).toBeInTheDocument();
   });
 });
