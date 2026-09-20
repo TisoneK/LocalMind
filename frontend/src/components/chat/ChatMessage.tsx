@@ -48,6 +48,7 @@ SyntaxHighlighter.registerLanguage('shell', shell);
 SyntaxHighlighter.registerLanguage('shell-session', shell);
 import { ChatMessage as ChatMessageType, FileResult, PendingWrite, DiffData, TodoItem } from '@/types';
 import { formatLatency, formatTokens } from '@/lib/localmind/progress';
+import { TONE_CLASS, latencyTone, speedTone } from '@/lib/localmind/metricTone';
 import { localmindClient } from '@/lib/localmind/client';
 import { MarkdownContent } from '@/components/shared/MarkdownContent';
 import { ResponseBlockRenderer } from './ResponseBlockRenderer';
@@ -267,14 +268,16 @@ function CodeBlockComponent({ code, language, filename }: { code: string; langua
 // Backward-compatible: messages without `performance` (old history, user turns)
 // render exactly as before.
 function MessageMetrics({ performance }: { performance: NonNullable<ChatMessageType['performance']> }) {
-  const parts: string[] = [];
-  if (performance.latencyMs) parts.push(formatLatency(performance.latencyMs));
+  const parts: { text: string; cls: string }[] = [];
+  if (performance.latencyMs) parts.push({ text: formatLatency(performance.latencyMs), cls: TONE_CLASS[latencyTone(performance.latencyMs)] });
   const prompt = performance.promptTokens ?? 0;
   const completion = performance.completionTokens ?? 0;
   if (prompt > 0 || completion > 0) {
-    parts.push(`${formatTokens(prompt)}/${formatTokens(completion)} tok`);
+    parts.push({ text: `${formatTokens(prompt)}/${formatTokens(completion)} tok`, cls: 'text-brand-blue' });
   }
-  if (performance.tokensPerSecond) parts.push(`${performance.tokensPerSecond} tok/s`);
+  if (performance.tokensPerSecond) {
+    parts.push({ text: `${performance.tokensPerSecond} tok/s`, cls: TONE_CLASS[speedTone(performance.tokensPerSecond)] });
+  }
   if (parts.length === 0) return null;
   return (
     <div
@@ -282,7 +285,14 @@ function MessageMetrics({ performance }: { performance: NonNullable<ChatMessageT
       title="This reply's performance: latency · prompt/completion tokens · speed"
     >
       <Activity className="h-2.5 w-2.5 opacity-70 shrink-0" />
-      <span>{parts.join(' · ')}</span>
+      <span>
+        {parts.map((p, i) => (
+          <span key={i}>
+            {i > 0 && ' · '}
+            <span className={p.cls}>{p.text}</span>
+          </span>
+        ))}
+      </span>
     </div>
   );
 }

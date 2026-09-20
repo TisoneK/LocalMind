@@ -2,6 +2,7 @@
 
 import { Activity, Clock, Hash } from 'lucide-react';
 import { formatLatency, formatTokens } from '@/lib/localmind/progress';
+import { TONE_CLASS, cacheTone, latencyTone, speedTone } from '@/lib/localmind/metricTone';
 import type { SessionStats } from '@/types';
 
 interface PerformanceMetricsType {
@@ -92,7 +93,7 @@ export function PerformanceMetrics({
         >
           Speed
         </span>
-        <span className="text-[11px] text-brand-green-soft font-mono font-medium whitespace-nowrap">
+        <span className={`text-[11px] ${TONE_CLASS[speedTone(tokensPerSecond)]} font-mono font-medium whitespace-nowrap`}>
           {tokensPerSecond > 0 ? `${tokensPerSecond} tok/s` : '—'}
         </span>
       </div>
@@ -109,7 +110,7 @@ export function PerformanceMetrics({
         >
           Avg latency
         </span>
-        <span className="text-[11px] text-brand-green-soft font-mono font-medium whitespace-nowrap">
+        <span className={`text-[11px] ${TONE_CLASS[latencyTone(latency)]} font-mono font-medium whitespace-nowrap`}>
           {latency > 0 ? formatLatency(latency) : '—'}
         </span>
       </div>
@@ -131,7 +132,7 @@ export function PerformanceMetrics({
         <div className="flex items-center gap-2 shrink-0">
           <div className="flex items-center gap-1">
             <span className="text-[9px] text-brand-green-muted">prompt:</span>
-            <span className="text-[10px] text-brand-green-soft font-mono">{formatTokens(promptTokens)}</span>
+            <span className="text-[10px] text-brand-blue font-mono">{formatTokens(promptTokens)}</span>
           </div>
           {cachedTokens > 0 && (
             <div
@@ -144,14 +145,14 @@ export function PerformanceMetrics({
               }
             >
               <span className="text-[9px] text-brand-green-muted">cached:</span>
-              <span className="text-[10px] text-brand-green font-mono">
+              <span className={`text-[10px] ${TONE_CLASS[cacheTone(cacheHitPct)]} font-mono`}>
                 {formatTokens(cachedTokens)} ({cacheHitPct}%)
               </span>
             </div>
           )}
           <div className="flex items-center gap-1">
             <span className="text-[9px] text-brand-green-muted">completion:</span>
-            <span className="text-[10px] text-brand-green-soft font-mono">{formatTokens(completionTokens)}</span>
+            <span className="text-[10px] text-brand-purple font-mono">{formatTokens(completionTokens)}</span>
           </div>
           {llmCalls > 0 && (
             <div

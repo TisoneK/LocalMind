@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The right rail no longer jumps to the Terminal tab when the agent runs a command (its output is already in the chat, and the jump hid the plan). The verification footer ("✓ 1/1 criteria met…", "📁 Files:") is hidden from replies since the diff card and Files panel show the same facts. Result tables no longer wrap short values.
 
 ### Added
+- **Stats are coloured.** Under each reply and in the corner, latency and speed are green (fast), amber (worth noticing) or red (slow); prompt tokens are blue, completion tokens purple, and the cache share green when high. Thresholds: latency under 5s / 15s, speed 30 / 10 tok/s, cache 70% / 30%.
 - **The ⌘K palette now searches what was said in your chats**, not just their titles: type a word and matching chats appear under "In your chats" with a snippet around the match.
 - **Undo now covers the agent's targeted edits too**, not only whole-file writes: it restores the file from the backup the edit tool already keeps, with the same refusal if the file changed since.
 - **Edit your last message.** Hover your latest message and choose Edit: it returns to the composer, and sending replaces that turn (on screen and in the saved chat) instead of adding a second one.
