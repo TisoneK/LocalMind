@@ -27,10 +27,14 @@ def _allow(monkeypatch, tmp_path):
     """Make tmp_path an allowed folder (tmp is normally outside ~).
 
     Same pattern as test_find_path: the security gate consults
-    core.config._allowed_user_folders(), so we point it at the test tree —
-    plus the real home, which stays searchable so default-root calls
-    (bare call / plain string) resolve their root.
+    core.config._allowed_user_folders(), so we point it at the test tree.
+    HOME is pointed at the test tree too, so default-root calls (bare call /
+    plain string resolve to ``Path.home()``) search the fixture and never the
+    real home folder: a "recent files" scan of a real home grows with whatever
+    the machine holds (a worktree with node_modules made this suite hang).
     """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     monkeypatch.setattr(
         "core.config._allowed_user_folders",
         lambda: [str(tmp_path), str(Path.home())],
