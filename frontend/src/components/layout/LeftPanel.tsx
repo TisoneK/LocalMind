@@ -190,6 +190,13 @@ export function LeftPanel({
     onChatTabShown?.();
   }, [forceChatTab, activeTab, onChatTabShown]);
 
+  // The command palette (⌘K) asks for the Files tab by event, like the right rail's tabs.
+  useEffect(() => {
+    const show = () => setActiveTab('files');
+    window.addEventListener('localmind:focus-files', show);
+    return () => window.removeEventListener('localmind:focus-files', show);
+  }, []);
+
   // The error card's "Switch model" action dispatches
   // this event — forward it to the ModelSelector trigger so the dropdown
   // opens, putting the user one click from a different provider/model.

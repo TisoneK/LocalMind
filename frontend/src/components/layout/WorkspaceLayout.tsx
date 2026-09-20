@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { LeftPanel } from './LeftPanel';
+import { CommandPalette } from './CommandPalette';
 import { CenterPanel } from './CenterPanel';
 import { RightPanel } from './RightPanel';
 import { TitleBar } from './TitleBar';
@@ -450,6 +451,15 @@ export function WorkspaceLayout() {
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-brand-bg-app">
+      <CommandPalette
+        sessions={sessions}
+        currentSessionId={currentSessionId}
+        isStreaming={isStreaming}
+        onSelectSession={handleSelectSession}
+        onNewChat={handleNewChat}
+        onAbort={abort}
+        onToggleRightPanel={() => setRightPanelCollapsed((c) => !c)}
+      />
       {/* Deliberate LocalMind title-bar chrome */}
       <TitleBar version="v0.5.16" />
       {/* Three-panel workspace */}

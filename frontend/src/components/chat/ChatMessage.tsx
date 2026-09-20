@@ -496,7 +496,9 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs, todos }:
   // already applied on disk, so it comes back in the collapsed "applied"
   // state rather than re-offering Accept/Reject. `timestampEpoch` is set
   // only by the history-restore path, so it doubles as the restored marker.
-  const [diffAccepted, setDiffAccepted] = useState(!!message.timestampEpoch);
+  // A file change is already on disk when its diff arrives, so it opens as the compact
+  // "applied" card. The old Accept/Reject bar offered a Reject that did nothing.
+  const [diffAccepted, setDiffAccepted] = useState(true);
   const [diffReopen, setDiffReopen] = useState(false);
 
   // The error card already says the reply failed; drop the fallback line that repeats it.

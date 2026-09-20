@@ -1889,7 +1889,13 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             derive_goal_items,
             derive_goal_tree,
         )
-        from core.agent.lookup_plan import derive_followup_steps, derive_lookup_plan, derive_sequence_plan
+        from core.agent.lookup_plan import (
+            LOOKUP_STEPS,
+            derive_followup_steps,
+            derive_lookup_plan,
+            derive_sequence_plan,
+            request_needs_live_lookup,
+        )
 
         # Workspace steering: resolve bare path
         # tokens in the goal derivation onto the session workspace, so the
@@ -1990,7 +1996,13 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # is always search -> read -> answer: show that whole plan before the first
                 # tool runs (display only — the success criteria below stay goal-based).
                 plan_steps=(
-                    [*goal_items, *derive_followup_steps(message, goal_items)]
+                    [
+                        # A request that both needs live information and produces a file plans
+                        # the lookup first, so the plan shows the whole job, not just the file.
+                        *(LOOKUP_STEPS[:2] if request_needs_live_lookup(message) else ()),
+                        *goal_items,
+                        *derive_followup_steps(message, goal_items),
+                    ]
                     if goal_items
                     else derive_lookup_plan(message) or derive_sequence_plan(message) or None
                 ),

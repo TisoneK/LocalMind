@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState, useCallback } from 'react';
 import {
-  Cpu,
+  ArrowDown,
   Brain,
   Lightbulb,
   UserRound,
@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { ChatMessage as ChatMessageType, DiffData, ReflectionLesson, PassiveMemory } from '@/types';
 import { ChatMessage } from '@/components/chat/ChatMessage';
+import { WelcomeScreen } from '@/components/chat/WelcomeScreen';
+import { useTabTitle } from '@/hooks/useTabTitle';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { TranscriptContextMenu } from '@/components/chat/TranscriptContextMenu';
 import { localmindClient } from '@/lib/localmind/client';
@@ -182,19 +184,49 @@ export function CenterPanel({
     }
   };
 
-  // Scroll only the transcript container on new messages. Calling
-  // scrollIntoView() on a nested marker can also scroll outer ancestors,
-  // which may move the entire workspace (including the header) in a flex
-  // layout. Targeting this container keeps the document viewport fixed.
-  useEffect(() => {
+  // Follow the conversation only while the reader is at the bottom. Yanking the view down on
+  // every streamed token made it impossible to scroll up and read while the agent worked; now
+  // scrolling away pauses the follow, and a "Jump to latest" pill brings it back. Scrolls the
+  // transcript container itself (scrollIntoView on a nested marker can move the whole layout).
+  const stickRef = useRef(true);
+  const [awayFromBottom, setAwayFromBottom] = useState(false);
+
+  const scrollToLatest = useCallback((smooth = true) => {
     const container = messagesContainerRef.current;
     if (!container) return;
+    stickRef.current = true;
+    setAwayFromBottom(false);
+    container.scrollTo({ top: container.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+  }, []);
 
-    container.scrollTo({
-      top: container.scrollHeight,
-      behavior: 'smooth',
-    });
-  }, [messages]);
+  const onTranscriptScroll = useCallback(() => {
+    const c = messagesContainerRef.current;
+    if (!c) return;
+    const atBottom = c.scrollHeight - c.scrollTop - c.clientHeight < 80;
+    stickRef.current = atBottom;
+    setAwayFromBottom(!atBottom);
+  }, []);
+
+  useEffect(() => {
+    // Your own message always brings you to the bottom; agent output only if you are already there.
+    if (messages[messages.length - 1]?.role === 'user') stickRef.current = true;
+    if (stickRef.current) scrollToLatest(!isStreaming);
+    else setAwayFromBottom(true);
+  }, [messages, isStreaming, scrollToLatest]);
+
+  // Esc stops the agent (when nothing else — a dialog, a menu — has claimed the key).
+  useEffect(() => {
+    if (!isStreaming) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.defaultPrevented && !document.querySelector('[role="dialog"], [role="menu"]')) {
+        onAbort();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isStreaming, onAbort]);
+
+  useTabTitle(isStreaming, messages[messages.length - 1]?.statusText);
 
   // Right-click menu: full text of the message under the pointer ("Copy
   // message" copies the stored source — markdown for assistant replies —
@@ -573,25 +605,13 @@ export function CenterPanel({
         </div>
       )}
 
+      <div className="relative flex min-h-0 flex-1 flex-col">
       {/* Messages area — wrapped in the right-click menu (copy selection /
           copy message / select all) */}
       <TranscriptContextMenu getMessageText={getMessageText} onSelectAll={selectAllTranscript}>
-        <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar min-w-0">
+        <div ref={messagesContainerRef} onScroll={onTranscriptScroll} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar min-w-0">
           {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-8">
-              <div className="w-12 h-12 rounded-xl bg-brand-green/10 flex items-center justify-center">
-                <Cpu className="h-6 w-6 text-brand-green" />
-              </div>
-              <div>
-                <h2 className="text-sm font-medium text-brand-green-soft mb-1">
-                  Welcome to LocalMind
-                </h2>
-                <p className="text-[11px] text-brand-green-muted max-w-sm">
-                  Your local AI assistant. Ask me to build, debug, explain, or refactor code.
-                  I can read files, run commands, search code, and more.
-                </p>
-              </div>
-            </div>
+            <WelcomeScreen onPick={onSend} />
           )}
 
           {/* A readable column: replies, the turn group and the composer share one centred
@@ -661,6 +681,18 @@ export function CenterPanel({
 
         </div>
       </TranscriptContextMenu>
+      {awayFromBottom && messages.length > 0 && (
+        <button
+          type="button"
+          onClick={() => scrollToLatest()}
+          className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full border border-brand-green/40 bg-brand-bg-base/95 px-3 py-1 text-[10.5px] text-brand-green shadow-lg shadow-black/30 backdrop-blur transition-colors hover:bg-brand-green/10"
+          data-testid="jump-to-latest"
+        >
+          <ArrowDown className="h-3 w-3" aria-hidden />
+          {isStreaming ? 'Jump to latest' : 'Back to bottom'}
+        </button>
+      )}
+      </div>
 
       {/* Input */}
       <ChatInput

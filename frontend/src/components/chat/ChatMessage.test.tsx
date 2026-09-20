@@ -132,22 +132,12 @@ function makeDiffData() {
   };
 }
 
-describe('ChatMessage diff accept flow', () => {
-  it('renders the full diff with an Accept bar while pending', () => {
+describe('ChatMessage file diff', () => {
+  it('opens as the compact applied card — the change is already on disk, so no Accept/Reject', () => {
     render(<ChatMessage message={makeMessage({ diffData: makeDiffData() })} onRetry={() => {}} />);
-    expect(screen.getByRole('button', { name: /accept/i })).toBeTruthy();
-    // A removed diff line is visible in the colored diff view.
-    expect(screen.getByText('- milk')).toBeTruthy();
-  });
-
-  it('collapses to the compact applied card after Accept — no colored diff, no Accept bar', () => {
-    render(<ChatMessage message={makeMessage({ diffData: makeDiffData() })} onRetry={() => {}} />);
-    fireEvent.click(screen.getByRole('button', { name: /accept/i }));
-    // Accept bar gone.
     expect(screen.queryByRole('button', { name: /accept/i })).toBeNull();
-    // Colored diff lines gone (the normal view replaces them).
+    expect(screen.queryByRole('button', { name: /reject/i })).toBeNull();
     expect(screen.queryByText('- milk')).toBeNull();
-    // Compact applied card shows the file name and +/− stats.
     expect(screen.getByText('todo.md')).toBeTruthy();
     expect(screen.getByText(/\+2/)).toBeTruthy();
     expect(screen.getByTestId('diff-applied-toggle')).toBeTruthy();
@@ -155,13 +145,9 @@ describe('ChatMessage diff accept flow', () => {
 
   it('re-opens the diff read-only via View diff, and hides it again', () => {
     render(<ChatMessage message={makeMessage({ diffData: makeDiffData() })} onRetry={() => {}} />);
-    fireEvent.click(screen.getByRole('button', { name: /accept/i }));
-    // Re-open.
     fireEvent.click(screen.getByTestId('diff-applied-toggle'));
     expect(screen.getByText('- milk')).toBeTruthy();
-    // Read-only: no second Accept bar in the re-opened diff.
     expect(screen.queryByRole('button', { name: /^accept$/i })).toBeNull();
-    // Hide again — back to the compact card only.
     fireEvent.click(screen.getByTestId('diff-applied-toggle'));
     expect(screen.queryByText('- milk')).toBeNull();
     expect(screen.getByTestId('diff-applied-toggle')).toBeTruthy();

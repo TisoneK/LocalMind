@@ -1022,6 +1022,13 @@ def _render_todo_state(todo_state: Optional[list[dict]]) -> str:
     return "\n".join(lines)
 
 
+def _lookup_prefix_len(plan_steps: list, goal_tree: Optional[list]) -> int:
+    """How many display-only lookup steps ("Search the web", "Check the sources") lead a plan
+    whose remaining rows are the goal tree's, so tree index i sits at plan row i + this."""
+    lead = list(LOOKUP_STEPS[:2])
+    return len(lead) if goal_tree and len(plan_steps) > len(lead) and list(plan_steps[: len(lead)]) == lead else 0
+
+
 def _render_goal_route(goal_tree: Optional[list[dict]]) -> str:
     """Render the derived goal tree as an ordered route for the model.
 
@@ -2891,8 +2898,9 @@ class AgentLoop:
             if _obs:
                 for i, step in enumerate(_plan_steps):
                     _ttl = ""
-                    if isinstance(goal_tree, list) and i < len(goal_tree):
-                        _te = goal_tree[i]
+                    _ti = i - _lookup_prefix_len(_plan_steps, goal_tree)
+                    if isinstance(goal_tree, list) and 0 <= _ti < len(goal_tree):
+                        _te = goal_tree[_ti]
                         if isinstance(_te, dict):
                             _ttl = str(_te.get("title") or "").strip()
                     _obs.emit(
@@ -2924,7 +2932,7 @@ class AgentLoop:
                                 ttl = str(_st.get("title") or "").strip()
                         _obs.emit(
                             "todo_created",
-                            id=f"plan-{i}-sub-{j}",
+                            id=f"plan-{i + _lookup_prefix_len(_plan_steps, goal_tree)}-sub-{j}",
                             text=ttl or str(sub).strip()[:60],
                             content=str(sub).strip(),
                             completed=False,
@@ -3025,7 +3033,8 @@ class AgentLoop:
             """
             if not _obs or not goal_tree:
                 return
-            for tree_entry in goal_tree:
+            _ti = parent_idx - _lookup_prefix_len(_plan_steps, goal_tree)
+            for tree_entry in goal_tree[_ti : _ti + 1] if _ti >= 0 else []:
                 if not isinstance(tree_entry, dict):
                     continue
                 sub_goals = tree_entry.get("sub_goals") or []
@@ -3089,7 +3098,7 @@ class AgentLoop:
         # True while the plan is the lookup plan (seeded at the start, or by the first web tool).
         # Its step labels get more specific as the agent commits to a query or a page, so the
         # checks below key off this flag rather than the exact label text.
-        _lookup_plan_active = list(_plan_steps) == list(LOOKUP_STEPS)
+        _lookup_plan_active = list(_plan_steps[: len(LOOKUP_STEPS[:2])]) == list(LOOKUP_STEPS[:2])
         _synthetic_todos: list[str] = []
         # Track total gate replans to cap replanning loops
         _gate_replan_count: int = 0
