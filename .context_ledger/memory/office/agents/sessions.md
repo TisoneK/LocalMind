@@ -432,3 +432,15 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** (1) the model-planning init stage never runs in production (`agent_runtime` passes `skip_planning=True`), so the init prompt / `ensure_upfront_plan` only matter on non-parent paths — plans come from `goal_interpreter` + `lookup_plan` now; (2) 9 jsdom context-menu test failures; (3) `useLocalMind.ts` (3k lines) not yet split into a store; (4) the right-hand Terminal tab: user said the old one should go, but it is also the interactive terminal — decision pending; (5) parallel tool batches and real sub-agents never observed live (only mock + unit tests); (6) the "Files:" block reports the first write's size, not the final size; (7) every keyed cloud provider was rate-limited or paid at times, so some live runs used z.ai free tier only.
 - **Notes:** roster row left in place — the user has not ended the session.
 - **Report:** none separate — this entry + chat summary.
+
+
+## 2026-09-20 — Session 28 — post-answer stall (Kofi)
+
+- **Agent:** Kofi | **Model:** claude-sonnet-5 | **Platform:** macOS (Darwin 24.6), Claude desktop app | **Role:** engineer | **Core:** 2.0.2
+- **Task:** user report: after the agent finished answering, the UI kept "working" for >10s before stopping. No backlog row; owner-directed.
+- **Root cause (two parts):** `agent_runtime.py` ran fact extraction + reflection (LLM calls, up to `POST_TURN_LLM_BUDGET_S`=90s) BEFORE yielding the final `done` chunk, and the frontend only cleared `isStreaming` on stream close (`useLocalMind.ts` end callback), not on the SSE `done` event.
+- **Fix:** backend yields `done` first, then runs the bounded services (their visible `reflection_lesson`/`passive_context_stored` events still ride the open stream's final flush; those land in hook-level state, not the message, so a late arrival is safe). Frontend: `done` now sets `isStreaming=false` and clears the stream refs, and the stream-end callback skips that reset (`turnSettled`) so it cannot clobber a newer turn.
+- **Verification:** live on isolated :8766, deepseek/deepseek-chat, tool turn: `done` at 6.3s, stream closed 8.3s, post-turn events trailing after `done`. pytest tests/core subset 173 passed; vitest useLocalMind 31 passed; tsc clean. No new automated test for the ordering (the parent-path runtime has no light harness) — a gap.
+- **Open items:** the frontend UI was not driven in a browser (only the SSE contract live-tested); the trailing stream stays open until services finish, so a very slow reflection still holds the connection (not the input).
+- **Coordination:** solo edit of `agent_runtime.py` and `useLocalMind.ts` on main; peers Imani/Wanjiru/Nia on the roster were not in these files (did not check claims — should have).
+- **Report:** none separate — this entry + chat summary.
