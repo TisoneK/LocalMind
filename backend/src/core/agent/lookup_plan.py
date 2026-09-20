@@ -78,6 +78,18 @@ def _host_of(url: str) -> str:
     return host[4:] if host.startswith("www.") else host
 
 
+def opening_step_label(tool_name: str, tool_input: str) -> str | None:
+    """The label for step 0 when the agent's first move is to open a page, not to search.
+
+    "Search the web" would be untrue for a turn that goes straight to a URL, so the opening step
+    says what happened instead ("Look up wttr.in")."""
+    if tool_name not in ("web_fetch", "browse"):
+        return None
+    detail = (tool_input or "").strip().splitlines()[0].strip() if (tool_input or "").strip() else ""
+    host = _host_of(detail) if detail else ""
+    return f"Look up {host}" if host else None
+
+
 def lookup_step_label(tool_name: str, tool_input: str) -> tuple[int, str] | None:
     """A specific label for the lookup step a tool is starting, or None.
 

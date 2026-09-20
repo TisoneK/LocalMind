@@ -159,3 +159,51 @@ def test_the_plan_steps_get_specific_as_the_agent_commits_to_a_query_and_a_page(
         labels[e.data.get("id")] = e.data.get("text")
     assert labels["plan-0"] == "Search the web for today's livescore results"
     assert labels["plan-1"] == "Read scores.example.com"
+
+
+def test_a_direct_page_read_relabels_the_opening_step_instead_of_claiming_a_search():
+    from adapters.ollama import ToolCallResult
+
+    seen = {"calls": 0}
+
+    async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
+        seen["calls"] += 1
+        if seen["calls"] == 1:
+            return ToolCallResult(tool_name="web_fetch", tool_args={"url": "https://httpbin.org/json"})
+
+        async def _stream():
+            yield StreamChunk(text="The slideshow title is Sample Slide Show.", done=False)
+            yield StreamChunk(text="", done=True)
+
+        return _stream()
+
+    async def dispatch(*args, **kwargs):
+        return ToolResult(source="web", content='{"slideshow": {"title": "Sample Slide Show"}}'), False, 0
+
+    adapter = MagicMock()
+    adapter.chat_with_tools = chat_with_tools
+    adapter.chat = lambda *a, **k: iter(())
+    obs = ObsCollector()
+
+    async def go():
+        with patch("core.agent.loop.dispatch_with_retry", dispatch):
+            return [
+                c
+                async for c in AgentLoop(adapter=MagicMock()).run(
+                    messages=[{"role": "user", "content": "fetch https://httpbin.org/json and tell me the title"}],
+                    intent=Intent.WEB_FETCH,
+                    initial_tool_result=None,
+                    available_tools=[],
+                    adapter=adapter,
+                    obs=obs,
+                    skip_planning=True,
+                )
+            ]
+
+    asyncio.run(go())
+    final = {}
+    for e in obs.drain_matching({"todo_created"}):
+        final[e.data.get("id")] = e.data.get("text")
+    assert final["plan-0"] == "Look up httpbin.org"
+    assert final["plan-1"] == "Read httpbin.org"
+    assert "Search the web" not in final.values()

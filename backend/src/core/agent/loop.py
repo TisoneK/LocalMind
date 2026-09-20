@@ -103,7 +103,7 @@ from core.agent.initialization import (
     ensure_upfront_plan,
     parse_initialization,
 )
-from core.agent.lookup_plan import LOOKUP_STEPS, lookup_step_for_tool, lookup_step_label
+from core.agent.lookup_plan import LOOKUP_STEPS, lookup_step_for_tool, lookup_step_label, opening_step_label
 from core.agent.models import AgentStep, AgentTrace, strip_worker_reports, strip_worker_reports_from_history
 from core.agent.prompts import build_agent_intent_tail, build_agent_system_prompt, build_planning_prompt
 from core.agent.synthesizer import AnswerSynthesizer
@@ -3122,6 +3122,10 @@ class AgentLoop:
                         content=_label[1],
                         completed=False,
                     )
+                # Going straight to a page: step 0 must not claim a search that never ran.
+                _open = opening_step_label(tool_name, tool_input) if _plan_step_cursor == 0 else None
+                if _open is not None:
+                    _obs.emit("todo_created", id="plan-0", text=_open, content=_open, completed=False)
             if _plan_steps or not _obs:
                 return None
             if len(_synthetic_todos) >= _SYNTH_TODO_MAX:
@@ -3153,6 +3157,9 @@ class AgentLoop:
                         content=_first_label[1],
                         completed=False,
                     )
+                _open = opening_step_label(tool_name, tool_input)
+                if _open is not None:
+                    _obs.emit("todo_created", id="plan-0", text=_open, content=_open, completed=False)
                 return f"plan-{_first}"
             todo_id = f"syn-{len(_synthetic_todos)}"
             label = _synthetic_todo_text(tool_name, tool_input)
@@ -3752,7 +3759,7 @@ class AgentLoop:
                 s for s in (trace.steps or [])
                 if getattr(s, "tool_name", "") and getattr(s, "tool_name", "") not in ("todo_write",)
             ]
-            _has_criteria = bool(getattr(task_state, "criteria", None))
+            _has_criteria = bool(getattr(task_state, "success_criteria", None))
             if (
                 len(_real_tool_calls) >= _DIVERGENT_TOOL_BUDGET
                 and not _has_criteria

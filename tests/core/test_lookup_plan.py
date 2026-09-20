@@ -154,3 +154,18 @@ class TestSequencePlan:
         steps = derive_sequence_plan(msg)
         assert len(steps) == 5
         assert all(s.split()[0] in {"Do"} for s in steps)
+
+
+class TestOpeningStepLabel:
+    def test_going_straight_to_a_page_does_not_claim_a_search(self):
+        from core.agent.lookup_plan import opening_step_label
+
+        assert opening_step_label("web_fetch", "https://httpbin.org/json") == "Look up httpbin.org"
+        assert opening_step_label("browse", "https://www.livescore.com/en/") == "Look up livescore.com"
+
+    def test_a_search_or_other_tool_keeps_the_search_step(self):
+        from core.agent.lookup_plan import opening_step_label
+
+        assert opening_step_label("web_search", "weather") is None
+        assert opening_step_label("shell", "ls") is None
+        assert opening_step_label("web_fetch", "") is None
