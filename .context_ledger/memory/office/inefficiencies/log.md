@@ -344,3 +344,11 @@ never makes an entry eligible.
 - **Prevent next time:** a session that opens a baseline/live-test worktree tears
   it down in closeout (README teardown step); a junction into the shared checkout
   is removed with `rmdir`, not `rm -rf`. Supervisor directed this cleanup mid-session.
+
+
+## 2026-09-19 — Session 26 — a guard or a gate that quietly never works (three found in one session)
+
+- **What happened:** three separate mechanisms looked implemented and tested but did nothing useful in production, and only real conversations exposed them: (a) the divergent-tool budget read `task_state.criteria`, a field that does not exist (`success_criteria`), so it force-stopped every turn at five tool calls; (b) the init-stage plan (`plan_steps` from the model) is dead in production because `agent_runtime` passes `skip_planning=True`, so the task list was structurally per-tool synthetic rows; (c) the todos table keyed rows by `id` alone, so `plan-0` belonged to the first chat forever and every later chat lost its plan after the turn.
+- **Why it hid:** each had passing unit tests against mocks that set the state directly; none drove a real multi-tool, multi-chat conversation. `getattr(obj, "wrong_name", None)` returns a silent default, which turns a typo into a permanently false condition.
+- **Fixed:** `ba405dc9` (attribute name + loop test that fails on the old code), `5e45c7dc` (migration 012 + per-chat scoping), `2a734a46`/`b3d8b272` (plans from `lookup_plan` at the runtime seam).
+- **Prevent next time:** drive a real multi-turn conversation on the isolated stack before calling agent behavior done (as `system/live-testing.md` says); prefer attribute access or a typed accessor over `getattr(..., default)` for fields that must exist.

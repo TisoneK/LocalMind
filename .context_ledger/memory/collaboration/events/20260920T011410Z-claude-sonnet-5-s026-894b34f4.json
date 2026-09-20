@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260920T011410Z-claude-sonnet-5-s026-894b34f4",
+  "type": "release",
+  "session": "S026",
+  "agent": "claude-sonnet-5-s026",
+  "created": "2026-09-20T01:14:10Z",
+  "issue": "agentic-ui-redesign",
+  "body": "Wanjiru (S026): frontend UI redesign + real-conversation backend fixes shipped through ba405dc9 (todos per-chat migration 012, divergent-stop attr, lookup plan, short-shell guard, file_write guard). Scope released; will re-claim for the Terminal-tab / store-split follow-ups.",
+  "paths": [],
+  "refs": ["ba405dc9"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

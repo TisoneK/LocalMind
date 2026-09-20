@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-19T22:11:54Z_
+_Regenerated: 2026-09-20T01:14:10Z_
 
 ## Standing params
 - **Core:** 2.0.2 (locked, verified 2026-09-19)
@@ -17,7 +17,7 @@ _Regenerated: 2026-09-19T22:11:54Z_
 ## Office — who's in, right now
 - **Imani** (S024) — Working — Recording a user preference (design decisions must be grounded in the actual design, limi…
 - **Wanjiru** (S026) — Working — Agentic UI redesign — event-driven turn model, live turn view, plan pill, right rail
-- **Nia** (S027) — Working — Human-style UI testing of the app — drive it in a browser, notice everything, fix what's …
+- **Nia** (S027) — Working — Human-style UI testing of the app — drive it in a browser, notice everything, fix what'…
 
 ## Current task
 (idle — no task recorded)
@@ -29,9 +29,9 @@ _12 medium, 7 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 14 entries, last added 2026-09-19
-- inefficiencies/log.md (project code/env friction): 16 entries, last added 2026-09-19
+- inefficiencies/log.md (project code/env friction): 17 entries, last added 2026-09-19
 - plans/decisions.md (ADRs in force — respected, not relitigated): 5 entries, last added 2026-09-19
 
 ## Collaboration
-- 117 event(s) on file; most recent: `20260919T205404Z-claude-sonnet-5-s024-d3054216.json`
+- 118 event(s) on file; most recent: `20260920T011410Z-claude-sonnet-5-s026-894b34f4.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`

@@ -37,7 +37,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Imani | S024 | claude-sonnet-5 | Recording a user preference (design decisions must be grounded in the actual design, limits, backlog, impact) | Working | Checked in |
-| Wanjiru | S026 | claude-sonnet-5 | Agentic UI redesign — event-driven turn model, live turn view, plan pill, right rail | Working | Turn model + TurnView shipped 17e6599e; next: live-test on real model, then right rail |
+| Wanjiru | S026 | claude-sonnet-5 | Agentic UI redesign — event-driven turn model, live turn view, plan pill, right rail | Working | Agentic UI + real-conversation fixes shipped through ba405dc9; pending: Terminal-tab decision, store split |
 | Nia | S027 | unknown (Qoder harness) | Human-style UI testing of the app — drive it in a browser, notice everything, fix what's found | Working | Checked in |
 
 **Clock out when your session ends**: remove your row in the closing
