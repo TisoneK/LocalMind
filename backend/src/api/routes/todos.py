@@ -173,10 +173,14 @@ async def create_todos_batch(request: CreateTodoBatchRequest):
 
 
 @router.patch("/todos/{todo_id}", response_model=TodoItem)
-async def update_todo(todo_id: str, request: UpdateTodoRequest):
-    """Update a todo item (mark complete, change status, etc.)."""
+async def update_todo(todo_id: str, request: UpdateTodoRequest, session_id: Optional[str] = Query(None)):
+    """Update a todo item (mark complete, change status, etc.).
+
+    Plan/synthetic ids ("plan-0") repeat in every chat, so pass `session_id` to address one
+    chat's row; without it the id must be unique (todos the user added have UUID ids)."""
     conn = _get_conn()
-    row = conn.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
+    scope, scope_args = ("AND session_id = ?", [session_id]) if session_id else ("", [])
+    row = conn.execute(f"SELECT * FROM todos WHERE id = ? {scope}", [todo_id, *scope_args]).fetchone()
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="Todo not found")
@@ -198,11 +202,11 @@ async def update_todo(todo_id: str, request: UpdateTodoRequest):
     updates["updated_at"] = time.time()
 
     set_clause = ", ".join(f"{k} = ?" for k in updates)
-    values = list(updates.values()) + [todo_id]
-    conn.execute(f"UPDATE todos SET {set_clause} WHERE id = ?", values)
+    values = list(updates.values()) + [todo_id, *scope_args]
+    conn.execute(f"UPDATE todos SET {set_clause} WHERE id = ? {scope}", values)
     conn.commit()
 
-    row = conn.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
+    row = conn.execute(f"SELECT * FROM todos WHERE id = ? {scope}", [todo_id, *scope_args]).fetchone()
     conn.close()
     return TodoItem(
         id=row["id"],
@@ -232,10 +236,13 @@ async def clear_session_todos(session_id: str):
 
 
 @router.delete("/todos/{todo_id}")
-async def delete_todo(todo_id: str):
-    """Delete a todo item."""
+async def delete_todo(todo_id: str, session_id: Optional[str] = Query(None)):
+    """Delete a todo item (pass `session_id` for plan ids, which repeat across chats)."""
     conn = _get_conn()
-    conn.execute("DELETE FROM todos WHERE id = ?", (todo_id,))
+    if session_id:
+        conn.execute("DELETE FROM todos WHERE id = ? AND session_id = ?", (todo_id, session_id))
+    else:
+        conn.execute("DELETE FROM todos WHERE id = ?", (todo_id,))
     conn.commit()
     conn.close()
     return {"deleted": todo_id}

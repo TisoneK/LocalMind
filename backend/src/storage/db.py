@@ -538,7 +538,9 @@ class SessionStore:
         """
         with self._conn() as conn:
             now = time.time()
-            row = conn.execute("SELECT id FROM todos WHERE id = ?", (todo_id,)).fetchone()
+            row = conn.execute(
+                "SELECT id FROM todos WHERE session_id = ? AND id = ?", (session_id, todo_id)
+            ).fetchone()
             if row is None:
                 conn.execute(
                     'INSERT INTO todos (id, session_id, content, completed, status, '
@@ -569,8 +571,8 @@ class SessionStore:
                     updates["status"] = "done" if completed else "pending"
                 set_clause = ", ".join(f"{k} = ?" for k in updates)
                 conn.execute(
-                    f"UPDATE todos SET {set_clause} WHERE id = ?",
-                    list(updates.values()) + [todo_id],
+                    f"UPDATE todos SET {set_clause} WHERE session_id = ? AND id = ?",
+                    list(updates.values()) + [session_id, todo_id],
                 )
 
     def list_todos(self, session_id: str) -> list[dict]:
