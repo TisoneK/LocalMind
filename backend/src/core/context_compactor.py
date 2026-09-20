@@ -60,10 +60,20 @@ KEEP_LAST_TOOL_RESULTS: int = 1
 # web_fetch, the file path for file_task, the command for shell) plus a tail
 # stub. Smaller stubs = more history freed per iteration.
 STUB_MAX_CHARS: int = 400
+# Size budget for ALL tool results together, used by the agent loop. Stubbing
+# older results is only worth its cost when the results would otherwise crowd
+# the window: a multi-part request ("list X, then find Y, then count Z") needs
+# EVERY result when it writes the final answer, and a 5-entry folder listing
+# (~475 chars) was being cut mid-list the moment a second tool ran — live, one
+# model then invented a folder and another dropped one. Under this budget nothing
+# is stubbed; over it, the oldest oversized results shrink first, only as far as
+# needed. ~8k chars is ~2k tokens, the same bound the 91 -> 4228 token audit above
+# was after, without discarding small evidence.
+TOOL_RESULT_BUDGET_CHARS: int = 8000
 # Marker that identifies an already-stubbed result (idempotency).
 # Worded to signal the tool SUCCEEDED so a model doing verify-after-write
 # (the check-before-acting safety workflow) doesn't misread the omission as a failure.
-_STUB_MARKER = "…[tool succeeded — output truncated for length; see earlier tool output]…"
+_STUB_MARKER = "…[tool succeeded — output truncated for length; the middle was omitted]…"
 # One-line notice replacing a DISCARDED result (task-aware, P0 off by default).
 # Deliberately outcome-NEUTRAL (a review finding): it must not imply the
 # tool succeeded or failed, so a verify-after-write model (the safety
@@ -90,18 +100,26 @@ def _legacy_simplify(
     tool_indexes: list[int],
     keep_last: int,
     max_chars: int,
+    budget_chars: Optional[int] = None,
 ) -> list[dict]:
-    """The positional legacy path — byte-identical to the original behavior."""
+    """The positional legacy path — byte-identical to the original behavior
+    when ``budget_chars`` is None. With a budget, the oldest oversized results
+    are stubbed first and stubbing stops as soon as the total fits."""
     to_stub = max(0, len(tool_indexes) - keep_last)
     if to_stub == 0:
         return messages  # nothing to stub — no copy needed
 
+    total = sum(len(messages[i]["content"]) for i in tool_indexes)
     result = list(messages)
     for i in tool_indexes[:to_stub]:
+        if budget_chars is not None and total <= budget_chars:
+            break  # everything left fits — keep the remaining evidence whole
         content = messages[i]["content"]
         if len(content) <= max_chars or _STUB_MARKER in content:
             continue  # small, or already stubbed (idempotent)
-        result[i] = {**messages[i], "content": _stub_result(content, max_chars)}
+        stubbed = _stub_result(content, max_chars)
+        total -= len(content) - len(stubbed)
+        result[i] = {**messages[i], "content": stubbed}
     return result
 
 
@@ -110,6 +128,7 @@ def simplify_tool_results(
     keep_last: int = KEEP_LAST_TOOL_RESULTS,
     max_chars: int = STUB_MAX_CHARS,
     policy: Optional[ContextPolicy] = None,
+    budget_chars: Optional[int] = None,
 ) -> list[dict]:
     """Stub old tool-role results, preserving the newest `keep_last`.
 
@@ -121,6 +140,9 @@ def simplify_tool_results(
             legacy policy, behavior is the positional legacy path exactly.
             With keep_markers, matching old results are preserved verbatim
             (bounded by policy.max_keep) in addition to the newest window.
+        budget_chars: When set, nothing is stubbed while ALL tool results
+            together fit this budget, and (legacy path) stubbing stops as soon
+            as they do. None (default) keeps the unconditional behavior.
 
     Returns:
         A new list with older oversized tool results stubbed. Non-tool
@@ -146,9 +168,12 @@ def simplify_tool_results(
     if not tool_indexes:
         return messages
 
+    if budget_chars is not None and sum(len(messages[i]["content"]) for i in tool_indexes) <= budget_chars:
+        return messages  # everything fits — a multi-part answer needs every result
+
     # No policy (or a legacy default) → the exact positional path.
     if policy is None or policy.task_type == "default":
-        return _legacy_simplify(messages, tool_indexes, keep_last, max_chars)
+        return _legacy_simplify(messages, tool_indexes, keep_last, max_chars, budget_chars)
 
     # ── Task-aware path ──────────────────────────────────────────
     protected: set[int] = set()

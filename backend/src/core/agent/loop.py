@@ -131,7 +131,7 @@ from core.agent.tool_dispatch import dispatch_with_retry
 from core.agent.tool_schemas import TOOL_DEFINITIONS, tool_defs_for_call
 from core.agent.turn_outcome import Recovery, TurnOutcome, classify_turn_outcome
 from core.context_builder import _build_environment_context
-from core.context_compactor import simplify_tool_results
+from core.context_compactor import TOOL_RESULT_BUDGET_CHARS, simplify_tool_results
 from core.models import AgentAbortedError, Intent, StreamChunk, ToolResult
 from core.workspace_state import format_snapshot, mark_turn_start
 from core.workspace_state import snapshot as workspace_snapshot
@@ -3972,14 +3972,16 @@ class AgentLoop:
             # marker + tail) to keep the window in budget WITHOUT an LLM
             # call. Preserves tool_call_id (protocol validity) and never
             # touches the newest results the model still needs. Idempotent.
-            # Deliberately unconditional — the keep_last window preserves
-            # what the model still needs; old results it already acted on
-            # are exactly what frees the most context (see
-            # context_compactor.simplify_tool_results docstring).
+            # Budget-gated: nothing is stubbed while all tool results fit
+            # TOOL_RESULT_BUDGET_CHARS, because a multi-part request needs
+            # every result when it writes the final answer (an unconditional
+            # keep-last-1 cut a 5-entry listing mid-list and the model then
+            # dropped or invented an item).
             # Deterministic tool-result simplification.
             iteration_messages = simplify_tool_results(
                 iteration_messages,
                 policy=getattr(self, "_context_policy", None),
+                budget_chars=TOOL_RESULT_BUDGET_CHARS,
             )
 
             # Surface the subgoal scratchpad directly in

@@ -38,6 +38,9 @@ class _SilentAdapter:
         yield  # pragma: no cover
 
 
+_SEEN: dict = {}
+
+
 async def _run_loop_once(task_type: str = "", intent: Intent = Intent.SHELL):
     """Run AgentLoop with the given dispatcher task_type hint + intent and
     capture (a) the context policy the compactor received via the mocked
@@ -46,8 +49,9 @@ async def _run_loop_once(task_type: str = "", intent: Intent = Intent.SHELL):
     captured = {}
     obs = ObsCollector()
 
-    def _fake_simplify(messages, policy=None):
+    def _fake_simplify(messages, policy=None, **kwargs):
         captured["policy"] = policy
+        _SEEN.update(kwargs)
         return messages
 
     with patch("core.agent.loop.simplify_tool_results", side_effect=_fake_simplify):
@@ -137,3 +141,14 @@ async def test_resolve_from_plan_smoke():
 
     policy = policy_for("debug")
     assert policy.task_type == "debug"
+
+
+@pytest.mark.asyncio
+async def test_loop_passes_the_tool_result_budget_to_the_compactor():
+    """A multi-part answer needs every tool result; the loop must opt in to the
+    budget so small results are not cut mid-list."""
+    from core.context_compactor import TOOL_RESULT_BUDGET_CHARS
+
+    _SEEN.clear()
+    await _run_loop_once()
+    assert _SEEN.get("budget_chars") == TOOL_RESULT_BUDGET_CHARS
