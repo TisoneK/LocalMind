@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260920T084435Z-claude-sonnet-5-s024-6a32c71d",
+  "type": "claim",
+  "session": "S024",
+  "agent": "claude-sonnet-5-s024",
+  "created": "2026-09-20T08:44:35Z",
+  "issue": "tool-result-stubbing",
+  "body": "Imani (S024): live-found quality bug — simplify_tool_results keeps only the newest tool result verbatim and cuts every older result >400 chars to head+tail, so multi-part answers lose items (5-entry folder listing cut mid-list; glm invented 'theta', DeepSeek reported 4 folders). Fix: stub only under a size budget, oldest first. Own worktree ../LocalMind-imani.",
+  "paths": ["backend/src/core/context_compactor.py", "tests/core"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
