@@ -1337,6 +1337,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         _conversational_hint = client_intent in (None, "", "chat")
         if file is None and _conversational_hint and _pre_init_override.mode is None:
             from core.trivial_input import (
+                approves_pending_offer,
                 conversational_response,
                 is_conversational_question,
                 is_trivial_input,
@@ -1369,8 +1370,13 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             _recent_memories = await self._recent_memory_facts(limit=5)
 
             _adapter = kernel.adapter
-            _is_trivial = is_trivial_input(message, _hist_dicts)
-            _is_conv = (not _is_trivial) and is_conversational_question(message, _hist_dicts)
+            # "yes" / "go ahead" answering an offer to DO something is an instruction, not small
+            # talk: it must reach the agent loop, not the no-tools chat shortcut.
+            _approves_offer = approves_pending_offer(message, _hist_dicts)
+            _is_trivial = is_trivial_input(message, _hist_dicts) and not _approves_offer
+            _is_conv = (
+                (not _is_trivial) and not _approves_offer and is_conversational_question(message, _hist_dicts)
+            )
             if _is_trivial or _is_conv:
                 _path = "trivial" if _is_trivial else "conversational"
                 logger.info(

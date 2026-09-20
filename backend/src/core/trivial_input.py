@@ -784,6 +784,41 @@ def message_is_action_approval(message: str) -> bool:
     return bool(_APPROVAL_RE.match(cleaned))
 
 
+_AFFIRMATION_RE = re.compile(
+    r"^(?:yes|yeah|yep|yup|ok|okay|sure|please|please do|do it|go ahead|go on|proceed|"
+    r"sounds good|that works|fine|alright|absolutely|definitely|of course|"
+    r"yes please|yes go ahead|ok do it|sure go ahead|ok go ahead)$",
+    re.IGNORECASE,
+)
+_OFFER_RE = re.compile(
+    r"(want me to|would you like|shall i|should i|do you want|let me know if|ready when you are|"
+    r"i can (?:do|run|check|install|try)|i'?ll (?:need|have) to|need your (?:ok|okay|approval|permission)|"
+    r"before i (?:do|run|install|proceed)|confirm)",
+    re.IGNORECASE,
+)
+
+
+def approves_pending_offer(message: str, history: Optional[list[dict]] = None) -> bool:
+    """A bare "yes / ok / go ahead" that answers something the assistant just offered to do.
+
+    Such a message looks trivial ("yes"), so it used to take the no-tools chat shortcut, and the
+    model — told it was in a quick chat — answered "I can't run that from here, switch to Agent
+    mode" even in Auto mode. It is an instruction to carry out the offered action, so it must go
+    to the full agent loop.
+    """
+    if not message:
+        return False
+    cleaned = message.strip().rstrip(_TRIVIAL_PUNCT).strip()
+    if not (_AFFIRMATION_RE.match(cleaned) or message_is_action_approval(message)):
+        return False
+    for h in reversed(history or []):
+        if str(h.get("role", "")).lower() != "assistant":
+            continue
+        text = str(h.get("content") or "").strip()
+        return bool(text) and (text.endswith("?") or bool(_OFFER_RE.search(text[-400:])))
+    return False
+
+
 # ── Direct chat response helper ──────────────────────────────────────────────
 
 

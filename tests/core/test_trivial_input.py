@@ -1113,3 +1113,17 @@ def test_message_implies_tool_action_knowledge_with_file_pattern():
 
     assert message_implies_tool_action("Summarize the contents of app.py.") is True
     assert message_implies_tool_action("Explain what's at https://example.com") is True
+
+
+def test_a_yes_that_answers_an_offer_is_an_instruction_not_small_talk():
+    from core.trivial_input import approves_pending_offer
+
+    offer = [{"role": "assistant", "content": "I haven't run anything yet — want me to do a live df check?"}]
+    assert approves_pending_offer("yes", offer)
+    assert approves_pending_offer("ok do it", offer)
+    assert approves_pending_offer("sure, go ahead", offer)
+    # A yes to a statement, or with no history, stays small talk.
+    assert not approves_pending_offer("yes", [{"role": "assistant", "content": "Done. The file is saved."}])
+    assert not approves_pending_offer("yes", [])
+    # Not an affirmation at all.
+    assert not approves_pending_offer("what is the weather", offer)
