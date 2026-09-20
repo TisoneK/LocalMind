@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Package, Loader2 } from 'lucide-react';
+import { PackageEnvChoice } from './PackageEnvChoice';
 
 interface PackageInstallerProps {
   onExecute: (command: string) => Promise<unknown>;
@@ -27,7 +28,8 @@ export function PackageInstaller({ onExecute, isRunning }: PackageInstallerProps
   };
 
   return (
-    <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-brand-border bg-brand-bg-dark" data-testid="package-installer">
+    <div className="border-b border-brand-border bg-brand-bg-dark" data-testid="package-installer">
+    <div className="flex items-center gap-1.5 px-2 py-1.5">
       <Package className="h-3 w-3 text-brand-amber shrink-0" />
       <select
         value={managerIdx}
@@ -58,6 +60,13 @@ export function PackageInstaller({ onExecute, isRunning }: PackageInstallerProps
       >
         {isRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Install'}
       </button>
+    </div>
+    {/* pip installs only: npm and ollama have their own places. */}
+    {manager.id === 'pip' && (
+      <div className="px-2 pb-1.5">
+        <PackageEnvChoice />
+      </div>
+    )}
     </div>
   );
 }

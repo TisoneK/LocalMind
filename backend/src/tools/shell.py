@@ -301,6 +301,12 @@ def _run(cmd: str | list, timeout: int = 20, cwd: str | None = None) -> dict:
         # pipelines) must run under PowerShell, not the default cmd.exe that
         # shell=True spawns. Passing the full command string as a single
         # argument avoids cmd.exe token-splitting/quoting issues.
+        # `pip install` lands in LocalMind's packages folder unless the user chose the system
+        # Python; that folder is on PYTHONPATH for everything run from here.
+        from core.package_env import apply_env, rewrite_install
+
+        if isinstance(cmd, str):
+            cmd = rewrite_install(cmd)
         exec_cmd: str | list = cmd
         if IS_WIN and isinstance(cmd, str) and _looks_like_powershell(cmd):
             exec_cmd = ["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd]
@@ -311,6 +317,7 @@ def _run(cmd: str | list, timeout: int = 20, cwd: str | None = None) -> dict:
             stderr=subprocess.PIPE,
             text=True,
             cwd=effective_cwd,
+            env=apply_env(),
         )
         output, timed_out = _capture_process_output(proc, timeout)
         if timed_out:

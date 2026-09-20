@@ -326,6 +326,9 @@ class Settings(BaseSettings):
     # (always full agent loop), “direct” (no tools, lightweight chat).
     localmind_chat_mode: str = "auto"
 
+    # Where `pip install` goes: "localmind" (a folder LocalMind owns) or "system" (the Python on PATH).
+    localmind_package_env: str = "localmind"
+
     def is_ollama_configured(self) -> bool:
         """Return True only when Ollama has been explicitly confirmed working
         AND the adapter is ollama. Cloud adapters should never trigger Ollama
@@ -487,6 +490,10 @@ class Settings(BaseSettings):
                 else:
                     logger.warning(f"[config] Ignoring invalid startup_session: {data['startup_session']!r}")
             # Chat mode ("auto" | "agent" | "direct").
+            if "package_env" in data:
+                val = str(data["package_env"]).strip().lower()
+                if val in ("localmind", "system"):
+                    self.localmind_package_env = val
             if "chat_mode" in data:
                 val = str(data["chat_mode"]).strip().lower()
                 if val in ("auto", "agent", "direct"):

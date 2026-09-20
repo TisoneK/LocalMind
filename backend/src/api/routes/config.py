@@ -139,6 +139,34 @@ async def set_chat_mode(req: ChatModeRequest):
     return {"chat_mode": val, "message": f"Chat mode set to {val}"}
 
 
+class PackageEnvRequest(BaseModel):
+    """Body for POST /api/settings/package-env."""
+    package_env: str  # "localmind" | "system"
+
+
+@router.get("/settings/package-env")
+async def get_package_env():
+    from core.package_env import mode, packages_dir
+
+    return {"package_env": mode(), "packages_dir": str(packages_dir())}
+
+
+@router.post("/settings/package-env")
+async def set_package_env(req: PackageEnvRequest):
+    """Choose where installs go: LocalMind's own packages folder, or the system Python."""
+    val = req.package_env.strip().lower()
+    if val not in ("localmind", "system"):
+        raise HTTPException(status_code=400, detail="package_env must be 'localmind' or 'system'")
+    settings.localmind_package_env = val
+    _path = settings._runtime_settings_path()
+    _data = settings._load_json_file(_path)
+    _data["package_env"] = val
+    settings._secure_write_json(_path, _data)
+    from core.package_env import packages_dir
+
+    return {"package_env": val, "packages_dir": str(packages_dir()), "message": f"Installs go to: {val}"}
+
+
 class PermissionsRequest(BaseModel):
     """Body for POST /api/settings/permissions.
 

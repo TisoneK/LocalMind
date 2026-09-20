@@ -20,6 +20,7 @@ import textwrap
 from dataclasses import dataclass
 
 from core.config import settings
+from core.package_env import apply_env
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,7 @@ async def _run_subprocess(cmd: list[str], timeout: int) -> SandboxResult:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             stdin=asyncio.subprocess.DEVNULL,
+            env=apply_env(),
         )
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout)

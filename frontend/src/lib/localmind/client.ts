@@ -880,6 +880,15 @@ class LocalMindClient {
     });
   }
 
+  /** Where `pip install` goes: LocalMind's own folder, or the system Python. */
+  async getPackageEnv(): Promise<{ package_env: 'localmind' | 'system'; packages_dir: string }> {
+    return this.request('/api/settings/package-env');
+  }
+
+  async setPackageEnv(packageEnv: 'localmind' | 'system'): Promise<{ package_env: 'localmind' | 'system'; packages_dir: string }> {
+    return this.request('/api/settings/package-env', { method: 'POST', body: JSON.stringify({ package_env: packageEnv }) });
+  }
+
   /** Chats whose messages contain `query` (id, title, and a snippet around the match). */
   async searchChats(query: string): Promise<{ id: string; title: string; snippet: string }[]> {
     const data = await this.request<{ results: { id: string; title: string; snippet: string }[] }>(

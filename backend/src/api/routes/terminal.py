@@ -103,7 +103,10 @@ class TerminalSessionBridge:
         session = _get_session(session_id)
         cwd = session["cwd"]
 
-        env = {**os.environ, **session.get("env", {})}
+        from core.package_env import apply_env, rewrite_install
+
+        command = rewrite_install(command)
+        env = apply_env({**os.environ, **session.get("env", {})})
 
         # Record in history with source annotation
         history = session["history"]
@@ -338,9 +341,12 @@ async def execute_terminal_command(request: TerminalRequest):
         cwd = os.path.expanduser("~")
 
     # Merge environment: base env + session env + per-command env
-    env = {**os.environ, **session.get("env", {})}
+    from core.package_env import apply_env, rewrite_install
+
+    env = apply_env({**os.environ, **session.get("env", {})})
     if request.env:
         env.update(request.env)
+    request.command = rewrite_install(request.command)
 
     # Record command in history
     history = session["history"]
