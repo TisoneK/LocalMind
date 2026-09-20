@@ -922,20 +922,38 @@ async def delete_connection(connection_id: str):
     invalidate_connection_registry()
     clear_adapter_cache(connection_id)
 
+    switched_to = ""
     if connection.preset:
         message = f"Reset '{connection.name}' to its defaults."
     else:
         message = f"Deleted connection '{connection.name}'."
-        # Never leave the active adapter pointing at a deleted endpoint.
+        # A deleted endpoint takes its secrets and references with it:
+        # its saved API key, and any other connection that named it as a fallback.
+        settings.delete_api_key(connection_id)
+        for other in get_connection_registry().all():
+            if other.fallback_to == connection_id:
+                settings.save_connection_record({**other.to_dict(), "fallback_to": ""})
+        invalidate_connection_registry()
+        # Never leave the active adapter pointing at a deleted endpoint. Prefer another
+        # provider that is ready to use (enabled, key saved) over silently dropping to a local
+        # model the user may not have; Ollama is the last resort.
         if settings.localmind_adapter == connection_id:
-            settings.localmind_adapter = "ollama"
-            settings.save_runtime_settings(adapter="ollama")
+            replacement = "ollama"
+            for other in get_connection_registry().all():
+                if other.id not in (connection_id, "ollama") and other.enabled and settings.get_api_key(other.id):
+                    replacement = other.id
+                    break
+            settings.localmind_adapter = replacement
+            settings.save_runtime_settings(adapter=replacement)
             clear_adapter_cache()
+            switched_to = replacement
+            message += f" It was the active provider, so LocalMind switched to '{replacement}'."
 
     return {
         "connection": connection_id,
         "deleted": removed,
         "adapter": settings.localmind_adapter,
+        "switched_to": switched_to,
         "message": message,
     }
 

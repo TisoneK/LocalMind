@@ -10,7 +10,6 @@ the verification harness.
 import types
 
 import pytest
-
 from api.routes import config as config_mod
 
 
@@ -30,12 +29,17 @@ def _fake_settings(connections=None, api_keys=None, adapter="ollama"):
     def save_runtime_settings(**kwargs):
         captured.setdefault("runtime", {}).update(kwargs)
 
+    def delete_api_key(provider):
+        captured.setdefault("keys_deleted", []).append(provider)
+        return True
+
     ns = types.SimpleNamespace(
         localmind_adapter=adapter,
         get_api_key=get_api_key,
         save_connection_record=save_connection_record,
         delete_connection_record=delete_connection_record,
         save_runtime_settings=save_runtime_settings,
+        delete_api_key=delete_api_key,
         _runtime_connections=connections or [],
         _captured=captured,
         # Legacy model fields the probe/update paths may read for presets,
@@ -221,6 +225,40 @@ async def test_delete_custom_connection_resets_active_adapter(monkeypatch, no_ad
     assert result["deleted"] is True
     assert result["adapter"] == "ollama"  # never points at a deleted endpoint
     assert fake.localmind_adapter == "ollama"
+
+
+@pytest.mark.asyncio
+async def test_deleting_a_provider_takes_its_key_and_references_with_it(monkeypatch, no_adapter_cache, stub_registry):
+    from api.routes.config import delete_connection
+
+    conns = [
+        {"id": "atria-proxy", "name": "Atria", "base_url": "http://x/v1", "model": "m"},
+        {"id": "other", "name": "Other", "base_url": "http://y/v1", "model": "m", "fallback_to": "atria-proxy"},
+    ]
+    fake = _fake_settings(connections=conns, api_keys={"atria-proxy": "sk-secret", "other": "sk-other"}, adapter="ollama")
+    monkeypatch.setattr(config_mod, "settings", fake)
+
+    await delete_connection("atria-proxy")
+    assert "atria-proxy" in fake._captured["keys_deleted"]  # its saved key is not left behind
+    assert fake._captured["record"]["id"] == "other" and fake._captured["record"]["fallback_to"] == ""
+
+
+@pytest.mark.asyncio
+async def test_deleting_the_active_provider_switches_to_a_ready_one_not_blindly_to_ollama(
+    monkeypatch, no_adapter_cache, stub_registry
+):
+    from api.routes.config import delete_connection
+
+    conns = [
+        {"id": "atria-proxy", "name": "Atria", "base_url": "http://x/v1", "model": "m"},
+        {"id": "backup", "name": "Backup", "base_url": "http://y/v1", "model": "m", "enabled": True},
+    ]
+    fake = _fake_settings(connections=conns, api_keys={"backup": "sk-b"}, adapter="atria-proxy")
+    monkeypatch.setattr(config_mod, "settings", fake)
+
+    result = await delete_connection("atria-proxy")
+    assert result["adapter"] == "backup" and result["switched_to"] == "backup"
+    assert "switched to 'backup'" in result["message"]
 
 
 @pytest.mark.asyncio
