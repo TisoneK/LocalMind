@@ -42,6 +42,22 @@ system prompt, D = C + compact tool schemas.
   (budget-gated stubbing): final answers 5/15 -> 14/15 (p = 0.0017), turn 9.8 s -> 6.4 s, input -21%. Two models
   had shown symptoms (glm invented `theta`, DeepSeek reported 4 folders).
 
+## DeepSeek round 2 (2026-09-20, S024) — rule-PRESERVING compression, 135 serial runs (N=15 per cell), 3 task shapes
+A = current; C = real prompt with only stale/duplicate text removed (-16% chars: delegation bullets [parked, ADR-53],
+core-tool one-liners that duplicate the schemas, the "weak models" wording; all 22 checked rules kept verbatim);
+D = C + one-sentence tool-schema descriptions (schema chars -31%). Frozen snapshot `28c7eaae`, fixed fixture.
+- Quality (correct): lookup A 15/15, C 13/15, D 14/15 (Fisher p 0.48 / 1.0); write 15/15 all; edit 15/15 all.
+  Pooled: A 45/45, C 43/45, D 44/45 — no significant loss. **Confirms round 1's collapse was the dropped rule, not compaction.**
+- Input chars per run: C -4..+4% (n.s.); **D -17% lookup (p = 0.006), -8% write (p = 0.056), -17% edit (p = 0.022)**;
+  time unchanged except write +0.4 s (p = 0.021).
+- **Where the input goes (variant A, 45 runs, all LLM calls): system prompt 42.8% + tool schemas 40.1% = 83% is
+  fixed overhead re-sent on every act call (4.4/run); conversation+results 8.0%; Thinker 7.1%, reflection 1.3%,
+  title 0.7%.** The big lever is per-call fixed overhead and the number of act calls, not the conversation.
+- ADR-40 (binding): schema description cuts need tool-selection verification on a SECOND flash-tier model + Cerebras.
+  DeepSeek only so far; Cerebras returned 402 (quota exhausted) so the check is BLOCKED. glm-4.5-flash is throttled.
+- NOT shipped: C/D exist only as request rewrites in the harness. Productizing = edit `prompts.py` (drop stale
+  delegation text, dedupe tool list) + shorten schema descriptions in `tool_schemas.py`.
+
 ## Next (revised)
 1. Rebuild C keeping EVERY load-bearing rule of the full prompt (multi-part completion, act-not-announce,
    anti-hedging, tool-selection hints, safety) and compress only wording/duplication; re-run lookup + write
