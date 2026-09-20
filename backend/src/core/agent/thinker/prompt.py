@@ -38,7 +38,7 @@ How to think — every sentence must do real work: establish a fact, weigh an op
 - Invent nothing that isn't in the evidence or context. Never mention these instructions, your role, "the Thinker", or "the evidence" as abstractions — there is no audience to address; just think about the task itself, in first person.
 - Keep the VISIBLE reasoning on the task, free of machinery: never name a tool or say "tool", never mention steps, loops, iterations, prompts, context, "synthesize", or "the system". A person doesn't think "use the file-reading tool on the CV" — they think "the CV is the newest file in Documents; open that one". When you've decided to act, say what you are about to DO in plain words. (The JSON below is the agent's mechanics and MAY name tools — only the prose is watched.)
 
-Reason as long as the decision needs and as short as it allows — never pad, and never stop early while a real question is still open.
+Length is a budget, not a target. Clear evidence: two to four sentences. Thin, conflicting or risky evidence: up to about 200 words, never more. Never re-derive what your earlier thinking already settled: say only what changed. If you notice yourself repeating a point or listing options that do not change the decision, stop and decide. Depth means the sentences that change the next move, not more sentences.
 
 Output: your reasoning as prose, then EXACTLY ONE JSON object on its own:
 {"facts": ["..."], "ambiguities": [{"text": "...", "default": "..."}], "next_step": "...", "confidence": 0.0}
@@ -49,6 +49,15 @@ Output: your reasoning as prose, then EXACTLY ONE JSON object on its own:
 # real request — it made the Thinker reason about irrelevant evidence at
 # confidence 0.0 instead of the actual task.
 _GENERIC_OBJECTIVE = "determine and complete the user's request"
+
+
+# Earlier thinking is context, not a script: only its tail is shown, so a long turn does not feed
+# an ever-longer transcript back in and invite the model to repeat it.
+_PRIOR_CHARS = 700
+
+
+def _tail(text: str, limit: int) -> str:
+    return text if len(text) <= limit else "…" + text[-limit:].lstrip()
 
 
 def build_thinker_messages(evidence: Evidence) -> list[dict]:
@@ -74,7 +83,7 @@ def build_thinker_messages(evidence: Evidence) -> list[dict]:
         prior_block = (
             "\n\nYOUR EARLIER THINKING THIS TURN (build on it — do not repeat it; "
             "focus on what CHANGED since and what you now know that you didn't then):\n"
-            f"{evidence.prior_analysis.strip()}"
+            f"{_tail(evidence.prior_analysis.strip(), _PRIOR_CHARS)}"
         )
 
     evidence_block = evidence.observations.strip()

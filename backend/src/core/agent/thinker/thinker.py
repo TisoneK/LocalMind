@@ -95,6 +95,10 @@ def _is_contract_meta(paragraph: str) -> bool:
     return keys >= 3 or ("json" in lower and keys >= 1)
 
 
+# About 300 words of prose. The prompt asks for far less; this only stops a runaway.
+MAX_PROSE_CHARS = 1800
+
+
 class _ProseGate:
     """Pass the Thinker's prose through one whole paragraph at a time, dropping any paragraph
     that is about the output contract. Paragraph granularity keeps the reasoning streaming
@@ -163,6 +167,11 @@ class Thinker:
                 if not piece:
                     continue
                 joined += piece
+                if len(joined) > MAX_PROSE_CHARS and _earliest_json_marker(joined) < 0:
+                    # Long and still no decision: more of the same is padding, not depth. Stop
+                    # reading; the agent proceeds on its own next step.
+                    logger.info("[thinker] no decision within %d chars — cutting the reasoning off", MAX_PROSE_CHARS)
+                    break
                 marker = _earliest_json_marker(joined)
                 limit = marker if marker >= 0 else len(joined)
                 if limit > surfaced:
