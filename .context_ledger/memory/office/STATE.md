@@ -5,17 +5,17 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-21T07:24:41Z_
+_Regenerated: 2026-09-21T11:47:22Z_
 
 ## Standing params
-- **Core:** 2.0.2 (locked, verified 2026-09-19)
+- **Core:** 2.0.2 (locked, verified 2026-09-21)
 - **Target:** Resilience + ZCode-import program (set by owner 2026-09-12, S471; full map: `office/reviews/2026-09-12-review-s471.md`). DONE at setting: the provider-stall watchdog on chat turns (`e32e08a1` — no-first-byte stall names the provider at 5s, switch-model offer at 30s, no abort). NEXT, in priority order: (1) **MCP client support** (stdio + streamable-HTTP transports, `mcp__server__tool` naming — the tool surface stops being the boundary); (2) **read-only Explorer subagent** — a Parent TOOL, not a peer: read-only sandbox, returns bounded conclusions with `file:line` refs, not dumps; (3) **fresh-eyes acceptance judge** — read-only, re-reads a finished deliverable against the original request, structured per-item verdicts (deepens ADR-18; the loop never grades its own work); (4) **plugin-style skill packaging** — versioned, namespaced `plugin:skill`, seed manifest, bundleable scripts/.mcp.json/commands. Tier-2 backlog candidates: web_fetch prompt-distillation, background-exec completion re-invocation, structured clarifying questions, plan mode. LocalMind has exactly one active agent: the Parent; live multi-agent delegation stays parked compatibility residue (the explorer/judge are read-only Parent tools, not peers). **Do NOT regress:** the ADR-34 event order, the `Hi`→zero-provider-call boundary (S206), Session 31-33 fixes (thinking-aware timeouts build on them), the ADR-40 guardrail (live-verify tool SELECTION on a weak model + cerebras before any further schema cut), the ADR-41 default (z.ai thinking ON — never re-add a thinking-disable for GLM; GLM-4.5-flash has no effort/budget param, timeout scaling is the lever), the S471 watchdog fall-through (once a first byte lands, the heartbeat must return to the truthful prior branches — never stall-shame a healthy stream), or the Parent-only scope. A chat-message target overrides this standing Target.
 - **Scope:** discovery + review + fix all safe issues
 - **Push policy:** push to main directly after each commit
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-- **Nia** (S027) — Working — Human-style UI testing of the app — drive it in a browser, notice everything, fix what'…
+(office empty — no live roster rows)
 
 ## Current task
 (idle — no task recorded)
@@ -23,14 +23,16 @@ _Regenerated: 2026-09-21T07:24:41Z_
 ## Backlog — High priority (the top of the queue)
 | B-2026-09-21-2 | A real planner (ADR-68 follow-on): a dedicated, self-revising plan step so the agent re-plans when a source fails instead of relying on the model volunteering `todo_write`; make report/conditional steps of a request-derived sequence ("tell me…", "if that fails…") complete by their own action, not the end-of-turn sweep; keep failed steps failed. Live-verify on DeepSeek with a dead-source request. Owner said "the agent loop isn't powerful enough yet" (2026-09-21). Ties B-2026-09-15-17. |
 | B-2026-09-21-5 | Windows verification of S26's settings work (owner is on Windows; verified only by simulation on macOS): shell choice (PowerShell 7 vs 5, cmd `/d /s /c` quoting, Git Bash detection when installed outside the standard folders), packages-folder `PYTHONPATH` with spaces in the path, file-write stat verification, terminal input focus. Run the S26 live checklist on the owner's machine; fix what differs. |
+| B-2026-09-21-12 | Act-don't-punt in the chat lane (Kwame/S029 follow-on to the routing fix): the lightweight reply lane still cannot act, so a message it classifies as conversational that turns out to need a tool ends in a punt ("Say 'go' and I'll do it"). Make it escalate IN THE SAME TURN — detect the punt/needs-action shape (or let the model emit a sentinel the runtime buffers on the first tokens) and re-run the message through the agent loop instead of ending the turn. Retire the user-facing Chat/Direct toggle only with a product decision (see P-2026-09-16-12). Live-verify on DeepSeek with `CONV-CONT-01` plus a standalone "check my disk" phrased as a question. |
+| B-2026-09-21-13 | Remove the two leftover worktrees `.claude/worktrees/buffy-s016` and `../LocalMind-collab-bootup-telemetry` (owner: stale; branches kept, neither to be merged — S016 is superseded by the Providers page, bootup-telemetry holds old `.context/` logs). Blocked on a `Bash(git worktree remove:*)` permission rule the owner adds themselves. (Kwame/S029) |
 
 _21 medium, 10 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
-- flaws/log.md (protocol/.context_ledger friction): 15 entries, last added 2026-09-21
-- inefficiencies/log.md (project code/env friction): 18 entries, last added 2026-09-21
+- flaws/log.md (protocol/.context_ledger friction): 16 entries, last added 2026-09-21
+- inefficiencies/log.md (project code/env friction): 19 entries, last added 2026-09-21
 - plans/decisions.md (ADRs in force — respected, not relitigated): 10 entries, last added 2026-09-21
 
 ## Collaboration
-- 124 event(s) on file; most recent: `20260920T134406Z-claude-sonnet-5-s024-2a2b46d5.json`
+- 125 event(s) on file; most recent: `20260921T104815Z-Kwame-5bf91720.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`
