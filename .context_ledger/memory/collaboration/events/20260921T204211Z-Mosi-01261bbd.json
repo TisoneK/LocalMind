@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260921T204211Z-Mosi-01261bbd",
+  "type": "claim",
+  "session": "S001",
+  "agent": "Mosi",
+  "created": "2026-09-21T20:42:11Z",
+  "issue": "state-engine-ui",
+  "body": "Mosi (S001): claiming the in-app State Explorer + the Classic/State engine setting (the state-engine work left uncommitted in the tree when the previous office closed cold — I am taking it over at the owner's direction). Adds EngineChoice + Settings section, wires WorkspaceLayout to render the explorer, and frontend tests for the pure model layer.",
+  "paths": ["frontend/src/components/engine/StateExplorer.tsx", "frontend/src/components/engine/StateTree.tsx", "frontend/src/components/engine/sampleRun.ts", "frontend/src/components/engine/StateExplorer.test.tsx", "frontend/src/lib/localmind/stateEngine.ts", "frontend/src/lib/localmind/stateEngine.test.ts", "frontend/src/lib/localmind/client.ts", "frontend/src/components/shared/EngineChoice.tsx", "frontend/src/components/shared/SettingsModal.tsx", "frontend/src/components/shared/settingsPages.ts", "frontend/src/components/layout/WorkspaceLayout.tsx", "backend/src/core/config.py", "backend/src/api/routes/config.py", "tests/api/test_engine_setting.py", "tests/conftest.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
