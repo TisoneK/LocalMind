@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260921T211504Z-Mosi-d41f10bf",
+  "type": "claim",
+  "session": "S001",
+  "agent": "Mosi",
+  "created": "2026-09-21T21:15:04Z",
+  "issue": "state-agent-simulator",
+  "body": "Mosi (S001), continuing after clock-out: the Simulator slice — an LLM-backed Simulator so an action that must not be performed is predicted instead of refused; predictions are labelled, never learned as facts, and never settle a goal.",
+  "paths": ["backend/src/state_agent/simulator.py", "backend/src/state_agent/adapters/localmind.py", "backend/src/state_agent/__init__.py", "tests/state_agent/test_engine.py", "tests/api/test_state_engine_routes.py", "frontend/src/components/engine", "frontend/src/lib/localmind/stateEngine.ts"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
