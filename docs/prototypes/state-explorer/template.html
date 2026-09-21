@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LocalMind · State Explorer</title>
+<style>
+:root{
+  --bg:#0c0f14; --panel:#121720; --panel2:#171d28; --line:#232c3a; --line2:#2f3b4d;
+  --text:#d8e0ea; --dim:#7f8b9b; --faint:#4b5566;
+  --sel:#b8f34a; --state:#8b9bff; --ok:#5eead4; --bad:#ff6b6b; --warn:#ffb454; --gate:#c792ea;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: light){:root{--bg:#f3f5f8;--panel:#fff;--panel2:#eef1f5;--line:#dbe1e9;--line2:#c6cfdb;--text:#1b2430;--dim:#5d6a7b;--faint:#a3adbb;--sel:#4a8f00;--state:#4655d6;--ok:#0a8f7e;--bad:#d23b3b;--warn:#b9700a;--gate:#8a4bb8}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:13px/1.45 var(--mono)}
+button{font:inherit;color:inherit;background:var(--panel2);border:1px solid var(--line2);border-radius:5px;padding:4px 9px;cursor:pointer}
+button:hover{border-color:var(--dim)} button:focus-visible,select:focus-visible{outline:2px solid var(--state);outline-offset:1px}
+select{font:inherit;color:inherit;background:var(--panel2);border:1px solid var(--line2);border-radius:5px;padding:4px 6px;max-width:100%}
+#app{display:grid;grid-template-rows:auto auto 1fr auto;height:100vh;min-height:520px}
+header{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line);background:var(--panel)}
+.brand{font-weight:700;letter-spacing:.12em;color:var(--sel)} .brand small{color:var(--dim);letter-spacing:0;font-weight:400;margin-left:8px}
+.goal{flex:1 1 320px;min-width:0;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.goal b{color:var(--dim);font-weight:400;margin-right:6px}
+.pill{padding:2px 9px;border-radius:99px;border:1px solid;font-weight:700;letter-spacing:.06em;font-size:12px}
+.pill.run{color:var(--warn);border-color:var(--warn)} .pill.ok{color:var(--sel);border-color:var(--sel)} .pill.no{color:var(--bad);border-color:var(--bad)}
+.meters{display:flex;flex-wrap:wrap;gap:6px 14px;padding:6px 14px;border-bottom:1px solid var(--line);background:var(--panel2);color:var(--dim);font-size:12px}
+.meters span b{color:var(--text)} .meters .bar{display:inline-block;width:46px;height:5px;background:var(--line);border-radius:3px;vertical-align:middle;margin-left:5px;overflow:hidden}
+.meters .bar i{display:block;height:100%;background:var(--state)}
+main{display:grid;grid-template-columns:230px 34px minmax(0,1fr) 320px;min-height:0}
+@media (max-width:1279px){main{grid-template-columns:34px minmax(0,1fr) 300px} #moves{display:none}
+  body.showpanels #moves{display:block;position:fixed;left:0;top:96px;bottom:118px;width:240px;z-index:6;box-shadow:6px 0 24px #0008}}
+@media (max-width:1000px){main{grid-template-columns:34px minmax(0,1fr)} #insp{display:none}
+  body.showpanels #insp{display:block;position:fixed;right:0;top:96px;bottom:118px;width:min(320px,92vw);z-index:6;box-shadow:-6px 0 24px #0008}}
+aside{border-right:1px solid var(--line);background:var(--panel);overflow:auto;min-height:0}
+#insp{border-right:0;border-left:1px solid var(--line)}
+h3{margin:0;padding:8px 12px;font-size:11px;letter-spacing:.14em;color:var(--dim);font-weight:600;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:2}
+#moves ol{list-style:none;margin:0;padding:4px 0}
+#moves li{display:flex;gap:8px;padding:5px 12px;cursor:pointer;border-left:3px solid transparent;color:var(--dim)}
+#moves li:hover{background:var(--panel2)} #moves li.cur{background:var(--panel2);border-left-color:var(--sel);color:var(--text)}
+#moves li .n{color:var(--faint);min-width:22px;text-align:right} #moves li .t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#moves li.bt{color:var(--warn)} #moves li.end-ok{color:var(--sel)} #moves li.end-no{color:var(--bad)}
+#evalbar{border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:6px;font-size:10px;color:var(--dim)}
+#evalbar .track{flex:1;width:14px;background:var(--line);border-radius:4px;position:relative;overflow:hidden;min-height:120px}
+#evalbar .fill{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(0deg,var(--state),var(--sel));transition:height .35s}
+#stage{position:relative;overflow:auto;min-height:0;background:
+  radial-gradient(circle at 1px 1px,var(--line) 1px,transparent 0) 0 0/22px 22px,var(--bg)}
+#sizer{position:relative} #canvas{position:relative;transform-origin:0 0}
+svg{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
+.edge{fill:none;stroke:var(--line2);stroke-width:1.2} .edge.sel{stroke:var(--sel);stroke-width:2.2}
+.edge.bt{stroke:var(--warn);stroke-dasharray:5 4;stroke-width:1.6} .edge.dead{stroke:var(--faint);stroke-dasharray:2 4}
+.btlabel{fill:var(--warn);font-size:11px}
+.node,.card{position:absolute;border-radius:8px;border:1px solid var(--line2);background:var(--panel);cursor:pointer;transition:opacity .25s,border-color .15s,transform .15s}
+.node:hover,.card:hover{border-color:var(--dim)}
+.node{width:150px;height:58px;padding:7px 9px;border-color:var(--state)} .node .k{color:var(--state);font-size:11px;letter-spacing:.1em}
+.node.goalnode{border-color:var(--sel)} .node.stopnode{border-color:var(--bad)}
+.card{width:262px;height:64px;padding:6px 9px;overflow:hidden}
+.card .top{display:flex;justify-content:space-between;gap:8px} .card .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .why{color:var(--dim);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .foot{display:flex;align-items:center;gap:8px;margin-top:4px;font-size:11px;color:var(--dim)}
+.card .sc{flex:1;height:5px;background:var(--line);border-radius:3px;overflow:hidden} .card .sc i{display:block;height:100%;background:var(--state);transition:width .4s}
+.card.selected{border-color:var(--sel);box-shadow:0 0 0 1px var(--sel) inset} .card.selected .sc i{background:var(--sel)}
+.card.failed{border-color:var(--bad)} .card.failed .lbl{color:var(--bad);text-decoration:line-through}
+.card.pruned{opacity:.55;border-style:dashed} .card.rejected{opacity:.85}
+.card.gated{border-color:var(--gate)} .card.probing .foot span:last-child{animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.3}}
+.hid{opacity:0;pointer-events:none} .fut{opacity:.10}
+.focus{outline:2px solid var(--state);outline-offset:2px}
+#insp .body{padding:10px 12px} #insp dl{display:grid;grid-template-columns:82px 1fr;gap:4px 8px;margin:0 0 10px}
+#insp dt{color:var(--dim)} #insp dd{margin:0;overflow-wrap:anywhere}
+#insp pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:8px;margin:6px 0 0;max-height:220px;overflow:auto;font-size:12px}
+.tag{padding:1px 7px;border-radius:4px;border:1px solid var(--line2);font-size:11px}
+.banner{margin:10px 12px;padding:10px;border-radius:8px;border:1px solid;font-size:12px} .banner.ok{border-color:var(--sel)} .banner.no{border-color:var(--bad)} .banner b{display:block;margin-bottom:4px}
+footer{border-top:1px solid var(--line);background:var(--panel);padding:8px 14px;display:grid;gap:7px}
+.ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ctl .sp{flex:1} .keys{color:var(--faint);font-size:11px}
+#tl{position:relative;height:26px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;cursor:pointer;touch-action:none}
+#tl .tick{position:absolute;top:4px;width:2px;height:16px;border-radius:1px;background:var(--faint)}
+#tl .tick.candidates{background:var(--state)} #tl .tick.probe{background:var(--ok)} #tl .tick.selected{background:var(--sel);height:20px;top:2px}
+#tl .tick.backtrack{background:var(--warn);height:22px;top:2px} #tl .tick.done{background:var(--sel);width:4px} #tl .tick.stopped{background:var(--bad);width:4px} #tl .tick.needs_confirmation{background:var(--gate)}
+#tl .head{position:absolute;top:0;bottom:0;width:2px;background:var(--text);box-shadow:0 0 0 3px color-mix(in srgb,var(--text) 18%,transparent)}
+#log{color:var(--dim);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.note{color:var(--faint);font-size:11px}
+#help{position:fixed;inset:0;background:#0009;display:none;place-items:center;z-index:9} #help.on{display:grid}
+#help div{background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:18px 22px;max-width:420px} #help kbd{background:var(--panel2);border:1px solid var(--line2);border-radius:4px;padding:0 6px}
+@media (max-width:700px){header{gap:6px 10px} #runsel{flex:1 1 100%} .goal{flex:1 1 100%;white-space:normal;max-height:3em} .brand small{display:none}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">STATE EXPLORER<small>LocalMind · experimental engine</small></div>
+    <select id="runsel" aria-label="Run"></select>
+    <div class="goal" id="goal"></div>
+    <span class="pill run" id="pill">REPLAY</span>
+    <button id="pbtn" title="Show/hide move list and inspector" onclick="document.body.classList.toggle('showpanels')">panels</button>
+  </header>
+  <div class="meters" id="meters"></div>
+  <main>
+    <aside id="moves"><h3>MOVE LIST</h3><ol id="movelist"></ol></aside>
+    <div id="evalbar" title="Best progress reached so far"><span id="evtxt">0.00</span><div class="track"><div class="fill" id="evfill" style="height:0%"></div></div><span>EVAL</span></div>
+    <div id="stage" tabindex="0" aria-label="State tree"><div id="sizer"><div id="canvas"><svg id="svg"></svg></div></div></div>
+    <aside id="insp"><h3>INSPECTOR</h3><div class="body" id="inspbody"></div></aside>
+  </main>
+  <footer>
+    <div id="tl" role="slider" aria-label="Timeline" aria-valuemin="0" tabindex="0"><div class="head" id="head"></div></div>
+    <div class="ctl">
+      <button id="bprev" title="Step back (←)">◀</button><button id="bplay" title="Play / pause (Space)">▶ play</button><button id="bnext" title="Step forward (→)">▶|</button>
+      <label class="keys">speed <select id="speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="3">3×</option><option value="8">8×</option></select></label>
+      <span class="keys"><button id="bzo" title="Zoom out (-)">−</button> <button id="bfit" title="Fit to view (0)">fit</button> <button id="bzi" title="Zoom in (+)">+</button></span>
+      <label class="keys"><input type="checkbox" id="fut"> show unrevealed</label>
+      <span class="sp"></span><span class="keys">Space play · ←/→ step · Home/End · 1‑9 run · F ghost · 0 fit · ± zoom · ? help</span>
+    </div>
+    <div id="log"></div>
+    <div class="note">Prototype: a replay of REAL runs captured from the state engine (deepseek-chat, 2026-09-21; home path shown as ~). The live version streams the same events over SSE — it shows states, moves and outcomes, never hidden reasoning.</div>
+  </footer>
+</div>
+<div id="help"><div><b>State Explorer</b><p>Each <span style="color:var(--state)">state</span> fans out candidate <b>moves</b>. Read-only moves are really probed; the best (<span style="color:var(--sel)">green</span>) becomes the next state. When nothing beats where we stand the engine <span style="color:var(--warn)">backtracks</span> (dashed) and the dead-end branch is pruned. Every run ends <span style="color:var(--sel)">SETTLED</span> with a grounded answer or <span style="color:var(--bad)">NOT SETTLED</span> with what is known.</p><p><kbd>Space</kbd> play · <kbd>←</kbd><kbd>→</kbd> step · <kbd>F</kbd> ghost · <kbd>Esc</kbd> close</p></div></div>
+<script id="data" type="application/json">__DATA__</script>
+<script>
+"use strict";
+const RUNS = JSON.parse(document.getElementById('data').textContent);
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const CW = 510, NW = 150, NH = 58, CARDW = 262, CARDH = 64, GAP = 8, X0 = 24, Y0 = 26, BUDGET = {calls:16, depth:6, bt:2};
+let scale = 1, run, M, cursor = 0, playing = false, timer = null, showFuture = false, picked = null;
+
+/* ---------- model: fold the event stream into nodes, rounds (candidate fans) and cards ---------- */
+function buildModel(events){
+  const nodes = new Map(), rounds = [], order = [];
+  let viaFp = null, lastRound = null, end = null;
+  const roundAt = n => { for (let i = rounds.length-1; i >= 0; i--) if (rounds[i].node === n) return rounds[i]; return null; };
+  for (const e of events){
+    if (e.kind === 'state'){
+      const depth = e.parent ? nodes.get(e.parent).depth + 1 : 0;
+      nodes.set(e.node, {id:e.node, parent:e.parent, depth, seq:e.seq, viaFp, facts:e.facts, progress:e.progress});
+      order.push(e.node); viaFp = null;
+    } else if (e.kind === 'candidates'){
+      lastRound = {node:e.at, seq:e.seq, cards:new Map(), sel:null, stalled:null, stalledSeq:null};
+      for (const m of e.moves) lastRound.cards.set(m.fp, {fp:m.fp, label:m.label, tool:m.tool, why:m.why, status:'open'});
+      rounds.push(lastRound);
+    } else if (e.kind === 'probe'){
+      const c = roundAt(e.at)?.cards.get(e.fp); if (c) Object.assign(c, {probeSeq:e.seq, ok:e.ok, ms:e.ms, chars:e.chars, excerpt:e.excerpt});
+    } else if (e.kind === 'evaluation'){
+      const c = roundAt(e.at)?.cards.get(e.fp); if (c) Object.assign(c, {evalSeq:e.seq, progress:e.progress, done:e.done, reason:e.reason});
+    } else if (e.kind === 'needs_confirmation'){
+      const r = roundAt(e.at); if (r){ const c = r.cards.get(e.fp) || (r.cards.set(e.fp, {fp:e.fp, label:e.move, tool:'', why:e.why}), r.cards.get(e.fp)); c.status = 'gated'; c.gateSeq = e.seq; }
+    } else if (e.kind === 'selected'){
+      const r = roundAt(e.at); if (r){ r.sel = e.fp; r.selSeq = e.seq; } viaFp = e.fp;
+    } else if (e.kind === 'backtrack'){
+      if (lastRound){ lastRound.stalled = e.node; lastRound.stalledSeq = e.seq; }
+    } else if (e.kind === 'done' || e.kind === 'stopped'){ end = e; }
+  }
+  // final card statuses
+  for (const r of rounds) for (const c of r.cards.values()){
+    if (c.status === 'gated') continue;
+    c.status = c.fp === r.sel ? 'selected' : (r.stalled ? 'pruned' : (c.ok === false ? 'failed' : 'rejected'));
+    if (c.ok === false) c.status = 'failed';
+  }
+  return {nodes, rounds, order, end, events};
+}
+
+/* ---------- layout ---------- */
+function layout(){
+  const colBottom = {}, pos = new Map(), cardPos = new Map(), roundsBy = new Map();
+  for (const r of M.rounds) (roundsBy.get(r.node) || roundsBy.set(r.node, []).get(r.node)).push(r);
+  let maxX = 0, maxY = 0;
+  for (const id of M.order){
+    const n = M.nodes.get(id), rs = roundsBy.get(id) || [];
+    let want = Y0;
+    if (n.parent){ const pr = (roundsBy.get(n.parent) || []).find(r => r.sel === n.viaFp); const pc = pr && cardPos.get(pr.seq + ':' + n.viaFp); if (pc) want = pc.y; }
+    let y = Math.max(want, colBottom[n.depth] ?? Y0);
+    const x = X0 + n.depth * CW;
+    pos.set(id, {x, y: y + (CARDH - NH) / 2, x2: x + NW});
+    for (const r of rs){
+      let cy = y;
+      for (const c of r.cards.values()){ cardPos.set(r.seq + ':' + c.fp, {x: x + NW + 30, y: cy}); cy += CARDH + GAP; }
+      y = cy + 12;
+    }
+    if (!rs.length) y += NH + 30;
+    colBottom[n.depth] = y; maxX = Math.max(maxX, x + NW + 30 + CARDW + 60); maxY = Math.max(maxY, y);
+  }
+  // terminal marker
+  if (M.end){ const last = M.order[M.order.length-1], p = pos.get(last), dx = M.end.kind==='done' ? p.x + CW : p.x + NW + 30 + CARDW + 34; }
+  return {pos, cardPos, W: maxX + 200, H: maxY + 80};
+}
+
+/* ---------- render ---------- */
+let L;
+function el(cls, html, style){ const d = document.createElement('div'); d.className = cls; d.innerHTML = html; if (style) Object.assign(d.style, style); return d; }
+function build(){
+  const cv = $('#canvas'); cv.querySelectorAll('.node,.card').forEach(n => n.remove());
+  L = layout(); cv.style.width = L.W + 'px'; cv.style.height = L.H + 'px';
+  const svg = $('#svg'); svg.setAttribute('width', L.W); svg.setAttribute('height', L.H); svg.innerHTML = '';
+  const path = (cls, d, seq, id) => { const p = document.createElementNS('http://www.w3.org/2000/svg', 'path'); p.setAttribute('class', 'edge ' + cls); p.setAttribute('d', d); p.dataset.seq = seq; if (id) p.dataset.id = id; svg.appendChild(p); return p; };
+  const curve = (x1,y1,x2,y2) => { const mx = (x1+x2)/2; return `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`; };
+  for (const id of M.order){
+    const n = M.nodes.get(id), p = L.pos.get(id);
+    const depthTag = n.depth === 0 ? 'START' : 'STATE ' + n.depth;
+    const nd = el('node', `<div class="k">${depthTag} · ${id}</div><div>facts ${n.facts} · prog ${(+n.progress || 0).toFixed(2)}</div>`, {left:p.x+'px', top:p.y+'px'});
+    nd.dataset.seq = n.seq; nd.dataset.pick = 'n:' + id; cv.appendChild(nd);
+    if (n.parent){
+      const pr = M.rounds.find(r => r.node === n.parent && r.sel === n.viaFp), pc = pr && L.cardPos.get(pr.seq + ':' + n.viaFp);
+      if (pc) path('sel', curve(pc.x + CARDW, pc.y + CARDH/2, p.x, p.y + NH/2), n.seq);
+    }
+  }
+  for (const r of M.rounds){
+    const p = L.pos.get(r.node);
+    for (const c of r.cards.values()){
+      const cp = L.cardPos.get(r.seq + ':' + c.fp), cd = el('card', '', {left:cp.x+'px', top:cp.y+'px'});
+      cd.dataset.seq = r.seq; cd.dataset.pick = 'c:' + r.seq + ':' + c.fp; cd.dataset.round = r.seq; cd.dataset.fp = c.fp; cv.appendChild(cd);
+      path(c.fp === r.sel ? 'sel' : (c.status === 'pruned' ? 'dead' : ''), curve(p.x + NW, p.y + NH/2, cp.x, cp.y + CARDH/2), r.seq);
+    }
+    if (r.stalled){
+      const from = L.pos.get(r.node), to = L.pos.get(r.stalled);
+      const d = `M${from.x + NW/2},${from.y} C${from.x + NW/2},${from.y - 70} ${to.x + NW/2},${to.y - 70} ${to.x + NW/2},${to.y}`;
+      path('bt', d, r.stalledSeq);
+      const t = document.createElementNS('http://www.w3.org/2000/svg', 'text'); t.setAttribute('class', 'btlabel'); t.dataset.seq = r.stalledSeq;
+      t.setAttribute('x', (from.x + to.x) / 2 + NW/2 - 30); t.setAttribute('y', Math.min(from.y, to.y) - 62); t.textContent = '⟲ backtrack — branch pruned'; svg.appendChild(t);
+    }
+  }
+  if (M.end){
+    const last = M.order[M.order.length-1], p = L.pos.get(last), isDone = M.end.kind === 'done';
+    const rs = M.rounds.filter(r => r.node === last), lastRound = rs[rs.length-1];
+    let x = p.x + (isDone ? CW : NW + 30 + CARDW + 34), y = p.y;
+    if (!isDone && lastRound){ const cps = [...lastRound.cards.keys()].map(f => L.cardPos.get(lastRound.seq + ':' + f)); y = (cps[0].y + cps[cps.length-1].y + CARDH)/2 - NH/2; }
+    const ans = isDone ? esc(M.end.answer).slice(0, 70) : 'NOT SETTLED · ' + esc(M.end.reason);
+    const nd = el('node ' + (isDone ? 'goalnode' : 'stopnode'), `<div class="k" style="color:var(--${isDone?'sel':'bad'})">${isDone ? 'GOAL SETTLED' : 'HONEST STOP'}</div><div style="font-size:11px;overflow:hidden;height:30px">${ans}</div>`, {left:x+'px', top:y+'px'});
+    nd.dataset.seq = M.end.seq; nd.dataset.pick = 'end'; cv.appendChild(nd);
+    if (isDone){ const pr = M.rounds.find(r => r.node === last && r.sel); const pc = pr && L.cardPos.get(pr.seq + ':' + pr.sel); if (pc) path('sel', curve(pc.x + CARDW, pc.y + CARDH/2, x, y + NH/2), M.end.seq); }
+    L.W = Math.max(L.W, x + NW + 60); cv.style.width = L.W + 'px'; svg.setAttribute('width', L.W);
+  }
+}
+
+function paintCard(cd){
+  const r = M.rounds.find(x => x.seq == cd.dataset.round), c = r.cards.get(cd.dataset.fp);
+  const sawProbe = c.probeSeq && c.probeSeq <= cursor, sawEval = c.evalSeq && c.evalSeq <= cursor, sawSel = r.selSeq && r.selSeq <= cursor;
+  let st = 'open';
+  if (c.status === 'gated' && c.gateSeq <= cursor) st = 'gated';
+  else if (sawProbe && c.ok === false) st = 'failed';
+  else if (sawSel && c.fp === r.sel) st = 'selected';
+  else if (r.stalledSeq && r.stalledSeq <= cursor) st = 'pruned';
+  else if (sawEval) st = 'rejected';
+  else if (!sawProbe) st = 'probing';
+  cd.className = 'card ' + st + (cd.dataset.pick === picked ? ' focus' : '');
+  const glyph = {gated:'🔒 needs confirmation', failed:'✕ failed', selected:'● selected', pruned:'✕ pruned', rejected:'○ not best', probing:'… probing', open:''}[st];
+  const prog = sawEval ? c.progress : 0;
+  cd.innerHTML = `<div class="top"><span class="lbl">${esc(c.label)}</span></div><div class="why">${esc(c.why)}</div>
+    <div class="foot"><div class="sc"><i style="width:${Math.round(prog*100)}%"></i></div><span>${sawEval ? prog.toFixed(2) : '—'}</span><span>${sawProbe ? c.ms + 'ms' : ''}</span><span>${glyph}</span></div>`;
+}
+
+function paint(){
+  const cv = $('#canvas');
+  cv.querySelectorAll('.node,.card').forEach(n => {
+    const seq = +n.dataset.seq, vis = seq <= cursor;
+    n.classList.toggle('hid', !vis && !showFuture); n.classList.toggle('fut', !vis && showFuture);
+    if (n.classList.contains('card') && (vis || showFuture)) paintCard(n);
+    if (n.classList.contains('node')) n.classList.toggle('focus', n.dataset.pick === picked);
+  });
+  $('#svg').querySelectorAll('[data-seq]').forEach(p => { const vis = +p.dataset.seq <= cursor; p.style.opacity = vis ? 1 : (showFuture ? .08 : 0); });
+  // header, meters, eval bar
+  const ev = run.events, cur = ev.slice(0, cursor);
+  const calls = cur.filter(e => e.kind === 'candidates').length + new Set(cur.filter(e => e.kind === 'evaluation').map(e => e.at + ':' + Math.floor(e.seq / 1000) + ':' + roundOf(e.at, e.seq))).size;
+  const probes = cur.filter(e => e.kind === 'probe').length, bts = cur.filter(e => e.kind === 'backtrack').length;
+  const depth = Math.max(0, ...cur.filter(e => e.kind === 'state').map(e => M.nodes.get(e.node).depth));
+  const best = Math.max(0, ...cur.filter(e => e.kind === 'selected').map(e => e.progress));
+  const t = ev[Math.max(0, cursor - 1)]?.t_ms ?? 0;
+  const bar = (v, m) => `<span class="bar"><i style="width:${Math.min(100, v / m * 100)}%"></i></span>`;
+  $('#meters').innerHTML = `<span>MODEL CALLS <b>${calls}</b>/${BUDGET.calls}${bar(calls, BUDGET.calls)}</span><span>DEPTH <b>${depth}</b>/${BUDGET.depth}${bar(depth, BUDGET.depth)}</span><span>BACKTRACKS <b>${bts}</b>/${BUDGET.bt}${bar(bts, BUDGET.bt)}</span><span>PROBES <b>${probes}</b></span><span>ELAPSED <b>${(t/1000).toFixed(1)}s</b></span><span>PLY <b>${cur.filter(e=>e.kind==='selected').length}</b></span>`;
+  $('#evfill').style.height = Math.round(best * 100) + '%'; $('#evtxt').textContent = best.toFixed(2);
+  const finished = M.end && M.end.seq <= cursor, pill = $('#pill');
+  pill.className = 'pill ' + (finished ? (M.end.kind === 'done' ? 'ok' : 'no') : 'run');
+  pill.textContent = finished ? (M.end.kind === 'done' ? 'SETTLED' : 'NOT SETTLED') : (cursor >= ev.length ? 'REPLAY' : 'RUNNING');
+  $('#head').style.left = `calc(${(t / run.total) * 100}% - 1px)`;
+  document.querySelectorAll('#movelist li').forEach(li => li.classList.toggle('cur', +li.dataset.seq <= cursor && (!li.nextElementSibling || +li.nextElementSibling.dataset.seq > cursor)));
+  const e = ev[Math.max(0, cursor - 1)]; $('#log').textContent = e ? `#${e.seq} +${e.t_ms}ms ${e.kind} ${e.move || e.reason || (e.moves ? e.moves.length + ' candidates' : '') || ''}` : '';
+  inspect();
+}
+function roundOf(at, seq){ let k = 0; for (const r of M.rounds) if (r.node === at && r.seq < seq) k = r.seq; return k; }
+
+function inspect(){
+  const b = $('#inspbody'); let h = '';
+  const focusEnd = M.end && M.end.seq <= cursor && (!picked || picked === 'end');
+  const dl = rows => '<dl>' + rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('') + '</dl>';
+  if (picked && picked.startsWith('c:')){
+    const [, rs, fp] = picked.split(':'), r = M.rounds.find(x => x.seq == rs), c = r.cards.get(fp);
+    h = dl([['move', esc(c.label)], ['why', esc(c.why)], ['tool', `<span class="tag">${esc(c.tool)}</span>`], ['fingerprint', fp], ['at state', r.node], ['status', c.status],
+      ['probe', c.probeSeq ? `${c.ok ? 'ok' : 'FAILED'} · ${c.ms}ms · ${c.chars} chars` : '—'], ['progress', c.progress != null ? c.progress.toFixed(2) : '—'], ['judgement', esc(c.reason || '—')]]);
+    if (c.excerpt) h += `<b>OBSERVATION (real tool result)</b><pre>${esc(c.excerpt)}</pre>`;
+  } else if (picked && picked.startsWith('n:')){
+    const n = M.nodes.get(picked.slice(2));
+    const path = []; for (let x = n; x; x = M.nodes.get(x.parent)) path.unshift(x.id);
+    h = dl([['state', n.id], ['depth', n.depth], ['facts known', n.facts], ['progress', (+n.progress || 0).toFixed(2)], ['reached via', n.viaFp || '—'], ['path', path.join(' → ')]]);
+    h += '<p class="note">The engine owns this state: goal, facts learned from real observations, and a fingerprint set of moves that failed. The model never holds it.</p>';
+  } else if (focusEnd || picked === 'end'){
+    h = '';
+  } else h = '<p class="note">Click a state or a move. The tree fills in as the run replays; green is the chosen path, dashed amber is a backtrack, ✕ is a failed or pruned branch.</p>';
+  if (M.end && M.end.seq <= cursor){
+    const e = M.end;
+    h += e.kind === 'done'
+      ? `<div class="banner ok"><b>GOAL SETTLED · ${e.model_calls} model calls</b>${esc(e.answer)}<br><span class="note">trail: ${esc((e.trail || []).join(' → '))}</span></div>`
+      : `<div class="banner no"><b>NOT SETTLED · ${esc(e.reason)}</b>The engine stops honestly instead of guessing. Facts it did establish: ${(e.facts || []).length}.<br><span class="note">${esc((e.facts || []).map(f => f.split(' -> ')[0]).join(' · '))}</span></div>`;
+  }
+  b.innerHTML = h;
+}
+
+function applyScale(){ const cv = $('#canvas'); cv.style.transform = `scale(${scale})`; const z = $('#sizer'); z.style.width = (L.W * scale) + 'px'; z.style.height = (L.H * scale) + 'px'; }
+function fit(){ const st = $('#stage'); scale = Math.max(.25, Math.min(1, (st.clientWidth - 16) / L.W, (st.clientHeight - 16) / L.H)); applyScale(); }
+function zoom(f){ scale = Math.max(.3, Math.min(1.6, scale * f)); applyScale(); }
+/* ---------- move list, timeline, playback ---------- */
+function buildMoves(){
+  const ol = $('#movelist'); ol.innerHTML = ''; let ply = 0;
+  const add = (seq, n, txt, cls) => { const li = document.createElement('li'); li.dataset.seq = seq; li.className = cls || ''; li.innerHTML = `<span class="n">${n}</span><span class="t">${esc(txt)}</span>`; li.onclick = () => { stop(); cursor = seq; paint(); }; ol.appendChild(li); };
+  add(1, '·', 'start · ' + run.events[0].kind);
+  for (const e of run.events){
+    if (e.kind === 'selected'){ ply++; add(e.seq, ply + '.', `${e.move}  ✓ ${(+e.progress).toFixed(2)}`); }
+    else if (e.kind === 'backtrack') add(e.seq, '↩', 'backtrack → ' + e.node, 'bt');
+    else if (e.kind === 'needs_confirmation') add(e.seq, '🔒', e.move + ' (needs confirmation)', 'bt');
+    else if (e.kind === 'done') add(e.seq, '✔', 'settled: ' + String(e.answer).slice(0, 80), 'end-ok');
+    else if (e.kind === 'stopped') add(e.seq, '⛔', 'not settled: ' + e.reason, 'end-no');
+  }
+}
+function buildTimeline(){
+  const tl = $('#tl'); tl.querySelectorAll('.tick').forEach(x => x.remove());
+  for (const e of run.events){ const t = document.createElement('div'); t.className = 'tick ' + e.kind; t.style.left = (e.t_ms / run.total * 100) + '%'; t.title = `#${e.seq} ${e.kind}`; tl.appendChild(t); }
+  tl.setAttribute('aria-valuemax', run.events.length);
+}
+function seekFromX(x){ const r = $('#tl').getBoundingClientRect(), t = Math.max(0, Math.min(1, (x - r.left) / r.width)) * run.total; let c = 0; run.events.forEach((e, i) => { if (e.t_ms <= t) c = i + 1; }); stop(); cursor = Math.max(1, c); paint(); reveal(); }
+function reveal(){ const e = run.events[cursor - 1]; if (!e) return; const el = document.querySelector(`.card[data-round="${e.seq}"], .node[data-seq="${e.seq}"]`) || [...document.querySelectorAll('.node,.card')].filter(n => +n.dataset.seq <= cursor).pop(); if (el) el.scrollIntoView({block:'nearest', inline:'nearest', behavior:'smooth'}); }
+function step(d){ cursor = Math.max(1, Math.min(run.events.length, cursor + d)); paint(); reveal(); }
+function stop(){ playing = false; clearTimeout(timer); $('#bplay').textContent = run && cursor >= run.events.length ? '↺ replay' : '▶ play'; }
+function tick(){ if (!playing) return; if (cursor >= run.events.length){ stop(); return; } const a = run.events[cursor - 1], b = run.events[cursor], sp = +$('#speed').value;
+  const wait = Math.max(110, Math.min(900, ((b.t_ms - a.t_ms) / sp) * .55)); cursor++; paint(); reveal(); timer = setTimeout(tick, wait / (sp > 1 ? 1 : 1)); }
+function play(){ if (cursor >= run.events.length) cursor = 1; playing = true; $('#bplay').textContent = '❚❚ pause'; paint(); tick(); }
+function load(i){
+  stop(); run = RUNS[i]; run.total = Math.max(1, run.events[run.events.length - 1].t_ms);
+  M = buildModel(run.events); picked = null; $('#goal').innerHTML = `<b>GOAL</b>${esc(run.goal)}`; $('#goal').title = run.goal;
+  build(); fit(); buildMoves(); buildTimeline(); cursor = 1; paint(); location.hash = 'run=' + i; play();
+}
+/* ---------- wiring ---------- */
+RUNS.forEach((r, i) => { const o = document.createElement('option'); o.value = i; o.textContent = `${i + 1}. ${r.title}`; $('#runsel').appendChild(o); });
+$('#runsel').onchange = e => load(+e.target.value);
+$('#bplay').onclick = () => playing ? stop() : play(); $('#bprev').onclick = () => { stop(); step(-1); }; $('#bnext').onclick = () => { stop(); step(1); };
+$('#bfit').onclick = fit; $('#bzi').onclick = () => zoom(1.2); $('#bzo').onclick = () => zoom(1 / 1.2); addEventListener('resize', fit);
+$('#fut').onchange = e => { showFuture = e.target.checked; paint(); };
+$('#canvas').addEventListener('click', e => { const n = e.target.closest('[data-pick]'); picked = n ? n.dataset.pick : null; paint(); });
+const tl = $('#tl'); let drag = false; tl.onpointerdown = e => { drag = true; tl.setPointerCapture(e.pointerId); seekFromX(e.clientX); }; tl.onpointermove = e => drag && seekFromX(e.clientX); tl.onpointerup = () => drag = false;
+tl.onkeydown = e => { if (e.key === 'ArrowRight') { stop(); step(1); } if (e.key === 'ArrowLeft') { stop(); step(-1); } };
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+  if (e.key === ' '){ e.preventDefault(); playing ? stop() : play(); }
+  else if (e.key === 'ArrowRight'){ stop(); step(1); } else if (e.key === 'ArrowLeft'){ stop(); step(-1); }
+  else if (e.key === 'Home'){ stop(); cursor = 1; paint(); } else if (e.key === 'End'){ stop(); cursor = run.events.length; paint(); reveal(); }
+  else if (/^[1-9]$/.test(e.key) && RUNS[+e.key - 1]){ $('#runsel').value = +e.key - 1; load(+e.key - 1); }
+  else if (e.key === '0'){ fit(); } else if (e.key === '+' || e.key === '='){ zoom(1.2); } else if (e.key === '-'){ zoom(1 / 1.2); }
+  else if (e.key.toLowerCase() === 'f'){ $('#fut').checked = showFuture = !showFuture; paint(); }
+  else if (e.key === '?'){ $('#help').classList.toggle('on'); } else if (e.key === 'Escape'){ $('#help').classList.remove('on'); }
+});
+$('#help').onclick = () => $('#help').classList.remove('on');
+const start = Math.min(RUNS.length - 1, Math.max(0, +(location.hash.match(/run=(\d+)/)?.[1] ?? 0)));
+$('#runsel').value = start; load(start);
+</script>
+</body>
+</html>

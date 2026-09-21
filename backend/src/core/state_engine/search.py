@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Optional
 
@@ -37,8 +38,19 @@ class EngineBudget:
 
 @dataclass
 class EngineEvent:
-    kind: str  # state | candidates | probe | evaluation | selected | backtrack | needs_confirmation | done | stopped
+    """One step, as a plain record. This is the UI contract: states, moves, outcomes — never reasoning.
+
+    kinds: state | candidates | probe | evaluation | selected | backtrack | needs_confirmation | done | stopped
+    Tree ids: `state` carries `node` and `parent`; `selected`/`backtrack` name the node they move to.
+    """
+
+    kind: str
     data: dict[str, Any] = field(default_factory=dict)
+    seq: int = 0  # position in the run
+    t_ms: int = 0  # ms since the run started
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"seq": self.seq, "t_ms": self.t_ms, "kind": self.kind, **self.data}
 
 
 class StateEngine:
@@ -59,11 +71,43 @@ class StateEngine:
         self.budget = budget or EngineBudget()
 
     async def run(self, goal: Goal) -> AsyncIterator[EngineEvent]:
+        """`_steps` stamped with the run clock, a sequence number and the tree ids a UI needs."""
+        t0 = time.monotonic()
+        seq = 0
+        counter = 0
+        cur: Optional[str] = None
+        stack: list[str] = []
+        pending_parent: Optional[str] = None
+        async for ev in self._steps(goal):
+            if ev.kind == "state":
+                node = f"n{counter}"
+                counter += 1
+                ev.data.update(node=node, parent=pending_parent)
+                if pending_parent is not None:
+                    stack.append(pending_parent)
+                cur, pending_parent = node, None
+            elif ev.kind == "selected":
+                pending_parent = cur
+            elif ev.kind == "backtrack":
+                cur = stack.pop() if stack else cur
+                ev.data["node"] = cur
+            if ev.kind not in ("state", "backtrack"):
+                ev.data["at"] = cur
+            seq += 1
+            ev.seq, ev.t_ms = seq, int((time.monotonic() - t0) * 1000)
+            yield ev
+
+    async def _timed(self, move: Move) -> tuple[Observation, int]:
+        t = time.monotonic()
+        obs = await self.executor.run(move)
+        return obs, int((time.monotonic() - t) * 1000)
+
+    async def _steps(self, goal: Goal) -> AsyncIterator[EngineEvent]:
         b = self.budget
         state = AgentState(goal)
         history: list[AgentState] = []  # ancestors, for backtracking
         calls = backtracks = 0
-        yield EngineEvent("state", {"depth": 0, **state.to_dict()})
+        yield EngineEvent("state", {"depth": 0, "goal": goal.text, **state.to_dict()})
 
         while True:
             if state.depth >= b.max_depth or calls + 2 > b.max_model_calls:
@@ -77,7 +121,10 @@ class StateEngine:
                 yield self._stopped(f"proposer_error: {exc}", state, calls)
                 return
             calls += 1
-            yield EngineEvent("candidates", {"moves": [m.label() for m in moves]})
+            yield EngineEvent(
+                "candidates",
+                {"moves": [{"fp": m.fingerprint(), "label": m.label(), "tool": m.tool, "why": m.why} for m in moves]},
+            )
 
             runnable: list[Move] = []
             for m in moves:
@@ -85,7 +132,7 @@ class StateEngine:
                 if spec is None:
                     state = state.with_failed(m.fingerprint())  # not a real tool: never again
                 elif not spec.read_only:
-                    yield EngineEvent("needs_confirmation", {"move": m.label(), "why": m.why})
+                    yield EngineEvent("needs_confirmation", {"fp": m.fingerprint(), "move": m.label(), "why": m.why})
                 else:
                     runnable.append(m)
 
@@ -97,9 +144,16 @@ class StateEngine:
                 yield ev
                 continue
 
-            outcomes: list[Observation] = list(await asyncio.gather(*(self.executor.run(m) for m in runnable)))
-            for o in outcomes:
-                yield EngineEvent("probe", {"move": o.move.label(), "ok": o.ok, "chars": len(o.text)})
+            timed = await asyncio.gather(*(self._timed(m) for m in runnable))
+            outcomes: list[Observation] = [o for o, _ in timed]
+            for o, ms in timed:
+                yield EngineEvent(
+                    "probe",
+                    {
+                        "fp": o.move.fingerprint(), "move": o.move.label(), "ok": o.ok, "chars": len(o.text),
+                        "ms": ms, "excerpt": " ".join(o.text.split())[:320],
+                    },
+                )
 
             try:
                 evals = await self.evaluator.evaluate(state, outcomes)
@@ -108,7 +162,11 @@ class StateEngine:
                 return
             calls += 1
             for o, e in zip(outcomes, evals):
-                yield EngineEvent("evaluation", {"move": o.move.label(), "progress": e.progress, "done": e.done})
+                yield EngineEvent(
+                    "evaluation",
+                    {"fp": o.move.fingerprint(), "move": o.move.label(), "progress": e.progress, "done": e.done,
+                     "reason": e.reason},
+                )
 
             ranked = sorted(
                 (p for p in zip(outcomes, evals) if p[0].ok),
@@ -132,7 +190,10 @@ class StateEngine:
                 if o is not best_obs:
                     state = state.learn(o)
             state = state.apply(best_obs, best_eval)
-            yield EngineEvent("selected", {"move": best_obs.move.label(), "progress": best_eval.progress})
+            yield EngineEvent(
+                "selected",
+                {"fp": best_obs.move.fingerprint(), "move": best_obs.move.label(), "progress": best_eval.progress},
+            )
             yield EngineEvent("state", {"depth": state.depth, **state.to_dict()})
             if best_eval.done:
                 yield EngineEvent(

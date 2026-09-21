@@ -174,3 +174,37 @@ async def test_llm_evaluator_guards_failed_probes_and_answerless_done():
 async def test_registry_executor_reports_unknown_tool_as_a_failed_observation():
     o = await RegistryExecutor().run(Move("teleport", {}, ""))
     assert o.ok is False and "unknown tool" in o.text
+
+
+# ── The event contract a UI consumes (docs/prototypes/state-explorer) ───────
+
+
+@pytest.mark.asyncio
+async def test_events_carry_tree_ids_sequence_clock_and_excerpts():
+    a, b = mv(path="/a"), mv(path="/b")
+    prop = ScriptedProposer([a], [b])
+    evalr = ScriptedEvaluator({a.label(): Evaluation(0.3), b.label(): Evaluation(1.0, True, "ok", "settled")})
+    ev = await collect(engine(prop, FakeExecutor({a.label(): (True, "alpha  text")}), evalr))
+    assert [e.seq for e in ev] == list(range(1, len(ev) + 1))
+    assert all(ev[i].t_ms <= ev[i + 1].t_ms for i in range(len(ev) - 1))
+    states = [e for e in ev if e.kind == "state"]
+    assert [s.data["node"] for s in states] == ["n0", "n1", "n2"]
+    assert [s.data["parent"] for s in states] == [None, "n0", "n1"]
+    assert states[0].data["goal"] == GOAL.text
+    probe = next(e for e in ev if e.kind == "probe")
+    assert probe.data["excerpt"] == "alpha text" and probe.data["fp"] == a.fingerprint() and probe.data["at"] == "n0"
+    cand = next(e for e in ev if e.kind == "candidates")
+    assert cand.data["moves"][0]["fp"] == a.fingerprint() and "why" in cand.data["moves"][0]
+    assert ev[0].to_dict()["kind"] == "state" and ev[-1].to_dict()["answer"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_backtrack_event_names_the_node_it_returns_to():
+    a, b, c = mv(path="/a"), mv(path="/b"), mv(path="/c")
+    prop = ScriptedProposer([a], [b], [c])
+    evalr = ScriptedEvaluator({a.label(): Evaluation(0.4), b.label(): Evaluation(0.1), c.label(): Evaluation(1.0, True, "x")})
+    ev = await collect(engine(prop, FakeExecutor({}), evalr))
+    bt = next(e for e in ev if e.kind == "backtrack")
+    assert bt.data["node"] == "n0"
+    later = [e for e in ev if e.seq > bt.seq and e.kind == "candidates"]
+    assert later and later[0].data["at"] == "n0"  # the next fan hangs off the node we returned to
