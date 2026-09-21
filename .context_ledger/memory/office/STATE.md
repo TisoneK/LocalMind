@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-21T13:06:17Z_
+_Regenerated: 2026-09-21T13:38:12Z_
 
 ## Standing params
 - **Core:** 2.0.2 (locked, verified 2026-09-21)
@@ -27,8 +27,9 @@ _Regenerated: 2026-09-21T13:06:17Z_
 | B-2026-09-21-13 | Remove the two leftover worktrees `.claude/worktrees/buffy-s016` and `../LocalMind-collab-bootup-telemetry` (owner: stale; branches kept, neither to be merged — S016 is superseded by the Providers page, bootup-telemetry holds old `.context/` logs). Blocked on a `Bash(git worktree remove:*)` permission rule the owner adds themselves. (Kwame/S029) |
 | B-2026-09-21-14 | Test isolation: tests read the developer's `backend/.env` and `~/LocalMind/settings.json` — with `LOCALMIND_SHELL_ENABLED` off in `.env`, 4 loop/shell tests (`test_inspection_dedup` ×2, more) fail on this Mac and pass in a clean checkout or with `LOCALMIND_SHELL_ENABLED=true`. Make `tests/conftest.py` pin the shell flag (and ignore `.env`) so results do not depend on the machine. Ties B-2026-09-09-7. (Kwame/S029) |
 | B-2026-09-21-15 | Verdict lane, next slice (ADR-66 addendum): give the completion judge a third verdict, UNSUPPORTED — the reply states results the turn's evidence does not show (a claimed file, a number no tool returned) — and feed it the plan/todo state, not only the last 3 tool steps. Live-verify on a dead-source request before it may nudge; measure the false-nudge rate first (report-only). Then consider running the judge concurrently with the streamed reply so the ~0.9 s overlaps instead of adding. (Kwame/S029) |
-| B-2026-09-21-16 | Engine selector (ADR-71): a setting `engine` = classic | state (default classic) read at the chat entry point, surfaced in Settings, so a user picks the engine independently of provider/model; route a turn to `core/state_engine` and stream its `EngineEvent`s as the existing SSE shapes (states/moves/outcomes, no hidden reasoning). Not `Auto` yet. Live-verify both engines on the same task on DeepSeek; must not regress the classic path or the `Hi` zero-call boundary. (Kwame/S029) |
+| B-2026-09-21-16 | Engine selector (ADR-71; selecting State swaps the chat pane for the State Explorer, B-2026-09-21-19): a setting `engine` = classic | state (default classic) read at the chat entry point, surfaced in Settings, so a user picks the engine independently of provider/model; route a turn to `core/state_engine` and stream its `EngineEvent`s as the existing SSE shapes (states/moves/outcomes, no hidden reasoning). Not `Auto` yet. Live-verify both engines on the same task on DeepSeek; must not regress the classic path or the `Hi` zero-call boundary. (Kwame/S029) |
 | B-2026-09-21-17 | State engine benchmark: run Classic vs State on the same 20 tasks (read-only lookups, dead-end sources, multi-file questions) on deepseek-chat and one weaker model; compare correctness, model calls, wall-clock, honest-stop rate. The engine earns its place here or it does not. (Kwame/S029) |
+| B-2026-09-21-19 | State Explorer in the app (ADR-71 UI): port `docs/prototypes/state-explorer/` to a React surface shown INSTEAD of the chat pane when the State engine is selected (B-2026-09-21-16): a backend SSE route streaming `EngineEvent.to_dict()`, live tree that grows as events arrive, inspector, meters, rewind timeline, a gate card for `needs_confirmation`, keyboard nav, dark/light, a11y; persist a run's events so history can be replayed. NEEDS `npm install` in `frontend/` first (this Mac has no frontend deps, so tsc/eslint/vitest could not run); keep eslint warnings at 0 for new files (the gate budget is already exceeded, B-2026-09-21-11). Owner: unique, advanced, not a chat/IDE clone. (Kwame/S029) |
 
 _22 medium, 10 low priority row(s) — see tasks/backlog.md_
 
