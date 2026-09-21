@@ -363,3 +363,8 @@ never makes an entry eligible.
 - **Prevent next time:** for any agent-behavior question, capture the real request bodies as the model saw them (`features/stage-prompts/harness/`) BEFORE theorising; keep tests hermetic (never `Path.home()`); run experiments serially against a frozen snapshot worktree with fixed fixture data, never against a moving HEAD or a tree you rebase.
 - **Also (harness lessons, cost me two invalid rounds):** parallel workers trip z.ai's 1302 rate limit and every affected run silently becomes a "raw evidence" fallback; score gathered evidence AND the final answer separately.
 
+
+## 2026-09-21 — Kwame (S029) — worktree without a venv; paths to a shared checkout
+
+- **Cost:** the isolated worktree has no `backend/.venv`, so the first pytest run failed and the harness pointed at the wrong source until I symlinked the main tree's venv and set `PYTHONPATH=backend/src`; an early `sh ledger-collab` call sat 120 s in the background.
+- **Prevent next time:** a worktree-bootstrap line in the collab README (`ln -s <main>/backend/.venv backend/.venv`, `PYTHONPATH=$PWD/src`); the harness scripts should print which `core.__file__` they imported.

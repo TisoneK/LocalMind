@@ -280,3 +280,10 @@ stays here as a live trap.
 - **Prevent next time:** before the first edit of a NEW file, re-run `ledger-collab status` and extend the claim (a claim event is cheap); `ledger-collab check` could warn when a commit touches paths outside any live claim of its author.
 - **Status:** open (process; no code fix).
 
+
+## 2026-09-21 — Kwame (S029) — product edits before the claim, and a chat-lane that punts in Auto mode
+
+- **What happened:** (1) Same class as Imani's entry above: with peer Nia (S027) live, I edited product files before filing the claim (filed once the code was written and tested; scope: routing/prompt/detector files, none of Nia's UI). (2) The owner's transcript exposed a defect the code had written into its own prompts: the lightweight reply lane told the model to "switch to Agent mode" even in an Auto session where no such mode exists, and the runtime never passed `tool_calls` into the follow-up check, so `is_conversational_question`'s own "history has tool calls" guard could never fire.
+- **Why it hid:** the `CAPABILITY_NOTE` was written for explicit Chat mode and reused for Auto; the history dicts were built with role/content only; the tests fed hand-made history that included `tool_calls`.
+- **Prevent next time:** claim BEFORE the first edit when a peer row is live; when a guard reads a field, grep the call site for what it actually passes; word any user-facing hand-off by the configured mode, not by a global constant.
+- **Status:** fixed in code (see session entry); the claim lateness is process-only.

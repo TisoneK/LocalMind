@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260921T104815Z-Kwame-5bf91720",
+  "type": "claim",
+  "session": "S029",
+  "agent": "Kwame",
+  "created": "2026-09-21T10:48:15Z",
+  "issue": "agent-followup-routing",
+  "body": "Kwame (S028): routing + prompt fixes from the owner's transcript review. Filed late — edits began before this claim (logged as a flaw). Nia (S027) works on UI; none of these paths are frontend.",
+  "paths": ["backend/src/core/trivial_input.py", "backend/src/core/agent_runtime.py", "backend/src/core/agent/prompts.py", "backend/src/core/agent/text_tools.py", "backend/src/core/agent/loop.py", "backend/src/core/context_compactor.py", "tests/core/test_continues_prior_work.py", "tests/core/test_prose_commitment_detector.py", "scripts/lm_conversation_tests.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
