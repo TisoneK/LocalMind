@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-21T07:19:57Z_
+_Regenerated: 2026-09-21T07:24:41Z_
 
 ## Standing params
 - **Core:** 2.0.2 (locked, verified 2026-09-19)
@@ -15,7 +15,6 @@ _Regenerated: 2026-09-21T07:19:57Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-- **Imani** (S024) — Working — Recording a user preference (design decisions must be grounded in the actual design, limi…
 - **Nia** (S027) — Working — Human-style UI testing of the app — drive it in a browser, notice everything, fix what'…
 
 ## Current task
@@ -25,11 +24,11 @@ _Regenerated: 2026-09-21T07:19:57Z_
 | B-2026-09-21-2 | A real planner (ADR-68 follow-on): a dedicated, self-revising plan step so the agent re-plans when a source fails instead of relying on the model volunteering `todo_write`; make report/conditional steps of a request-derived sequence ("tell me…", "if that fails…") complete by their own action, not the end-of-turn sweep; keep failed steps failed. Live-verify on DeepSeek with a dead-source request. Owner said "the agent loop isn't powerful enough yet" (2026-09-21). Ties B-2026-09-15-17. |
 | B-2026-09-21-5 | Windows verification of S26's settings work (owner is on Windows; verified only by simulation on macOS): shell choice (PowerShell 7 vs 5, cmd `/d /s /c` quoting, Git Bash detection when installed outside the standard folders), packages-folder `PYTHONPATH` with spaces in the path, file-write stat verification, terminal input focus. Run the S26 live checklist on the owner's machine; fix what differs. |
 
-_20 medium, 10 low priority row(s) — see tasks/backlog.md_
+_21 medium, 10 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
-- flaws/log.md (protocol/.context_ledger friction): 14 entries, last added 2026-09-19
-- inefficiencies/log.md (project code/env friction): 17 entries, last added 2026-09-19
+- flaws/log.md (protocol/.context_ledger friction): 15 entries, last added 2026-09-21
+- inefficiencies/log.md (project code/env friction): 18 entries, last added 2026-09-21
 - plans/decisions.md (ADRs in force — respected, not relitigated): 10 entries, last added 2026-09-21
 
 ## Collaboration
