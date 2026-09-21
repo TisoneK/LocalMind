@@ -40,6 +40,7 @@ from api.routes import (
     observability,
     ollama,
     sessions,
+    state_engine,
     terminal,
     todos,
 )
@@ -372,6 +373,8 @@ def create_app() -> FastAPI:
     app.include_router(objectives.router, prefix="/api", tags=["objectives"])
     app.include_router(terminal.router, prefix="/api", tags=["terminal"])
     app.include_router(config.router, prefix="/api", tags=["settings"])
+    app.include_router(state_engine.router, prefix="/api", tags=["state-engine"])
+    app.include_router(state_engine.page_router, tags=["state-engine"])
 
     @app.get("/api/routing", tags=["models"])
     async def model_routing():

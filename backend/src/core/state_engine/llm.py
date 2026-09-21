@@ -24,16 +24,39 @@ async def _complete(adapter, prompt: str, max_chars: int = 4000) -> str:
     return text
 
 
+_DRIVE_PATH = re.compile(r"[A-Za-z]:\\[^\\]")  # C:\x — a drive path written with SINGLE backslashes
+_SINGLE_BACKSLASH = re.compile(r"(?<!\\)\\(?!\\)")
+_LONE_BACKSLASH = re.compile(r'\\(?!["\\/bfnrtu])')
+
+
 def parse_json(text: str) -> Optional[dict]:
-    """First JSON object in ``text`` (models wrap it in fences or prose)."""
+    """First JSON object in ``text`` (models wrap it in fences or prose).
+
+    Windows paths arrive as ``C:\\Users\\me\\notes`` with SINGLE backslashes. Some of those are invalid JSON
+    escapes (``\\U``) and some are valid but wrong (``\\n`` would silently become a newline), so when a drive path
+    with single backslashes is present every lone backslash is doubled first."""
     m = re.search(r"\{.*\}", text, re.DOTALL)
     if not m:
         return None
-    try:
-        obj = json.loads(m.group(0))
-    except json.JSONDecodeError:
-        return None
-    return obj if isinstance(obj, dict) else None
+    raw = m.group(0)
+    if _DRIVE_PATH.search(raw):
+        candidates = (_SINGLE_BACKSLASH.sub(r"\\\\", raw), raw)
+    else:
+        candidates = (raw, _LONE_BACKSLASH.sub(r"\\\\", raw))
+    for candidate in candidates:
+        try:
+            obj = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        return obj if isinstance(obj, dict) else None
+    return None
+    for candidate in (m.group(0), _LONE_BACKSLASH.sub(r"\\\\", m.group(0))):
+        try:
+            obj = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        return obj if isinstance(obj, dict) else None
+    return None
 
 
 class LLMMoveProposer:

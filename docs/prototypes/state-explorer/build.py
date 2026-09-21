@@ -15,7 +15,12 @@ for arg in sys.argv[1:]:
     events = [json.loads(l.replace(home, "~")) for l in open(path) if l.startswith("{")]
     goal = (next(e for e in events if e["kind"] == "state").get("goal") or given).replace(home, "~")
     runs.append({"title": title, "goal": goal, "events": events})
-(here / "index.html").write_text(
-    (here / "template.html").read_text().replace("__DATA__", json.dumps(runs, ensure_ascii=False).replace("</", "<\\/"))
+page = (here / "template.html").read_text().replace(
+    "__DATA__", json.dumps(runs, ensure_ascii=False).replace("</", "<\\/")
 )
-print("wrote index.html with", len(runs), "runs")
+(here / "index.html").write_text(page)
+# The backend serves the same page at /state-explorer (live mode needs it: same origin, no build step).
+served = here.parents[2] / "backend" / "src" / "api" / "static" / "state-explorer" / "index.html"
+served.parent.mkdir(parents=True, exist_ok=True)
+served.write_text(page)
+print("wrote index.html (+ backend static copy) with", len(runs), "runs")
