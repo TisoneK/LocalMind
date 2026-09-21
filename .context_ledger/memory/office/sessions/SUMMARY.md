@@ -30,17 +30,3 @@ records.
 - A removed summary line MUST have a corresponding permanent entry in
   agents/sessions.md — never delete the only record of a session.
 -->
-
----
-- **2026-09-14 — Session 3** — Njeri / qwen3.8-flash — context sync done: vendored core migrated 1.0.6 → 1.1.1 (roster Status columns, entrance check-in, door-triggered office close); kickoff.md + AGENTS.md regenerated with facts refilled. No product work.
-  Detail: .context_ledger/memory/office/reviews/2026-09-14-review-s3-sync.md
-
-- **2026-09-15 — Session 4** — Zuri / qwen3.8-flash — context-usage breakdown shipped: clickable occupancy meter shows per-category shares of the last model call (system prompt / tool schemas / history / tool results / ...), scaled to the provider total; live-verified on zai (bankofai quota-exhausted — owner action). Core synced 1.1.1→1.1.3. Discovered B-2026-09-15-1 (1438 legacy ledger-citation hits in product comments; Baraka/S005 took the sweep).
-  Detail: .context_ledger/memory/office/reviews/2026-09-15-review-s4-breakdown.md
-
-- **2026-09-16 — Session 5** — Baraka / qwen3.8-flash — ledger-vocabulary sweep of the product runtime surface: ~2,650 citation lines rewritten by hand into plain words (backend, frontend, scripts, migrations, app data, CHANGELOG; 2 test files renamed); ~540 remain in tests/docs/scripts per the updated backlog row. Exit-gate pytest failures bisected to pre-exist on main (documented Windows flaky family).
-  Detail: .context_ledger/memory/office/reviews/2026-09-16-review-s5-vocab-strip.md
-
----
-- **2026-09-19 — Session 21** — Zola / claude-sonnet-5 — dead-code scan shipped (`e498459b`): 6 orphan Pydantic models + 3 dead params removed, verified against the whole tree before touching anything; ruff clean, full suite 3308/3310 (2 pre-existing). Found a real bug via the scan, not just cleanup — `filters.py`'s `is_code_output` flag does nothing, so code-exec output never gets its documented exemption (`B-2026-09-19-2`). Also caught one false "orphan" in time: `ObjectivesPanel.tsx` is deliberately kept in tree per its own comment — reported, not deleted.
-  Detail: .context_ledger/memory/office/reviews/2026-09-19-review-s021-dead-code-scan.md

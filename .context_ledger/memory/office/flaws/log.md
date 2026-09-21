@@ -4,12 +4,21 @@ Friction caused by the `.context_ledger/` system or the protocol itself. See
 `README.md` in this directory for the split between `flaws/` and
 `inefficiencies/`.
 
-Append-only, but prunable to cold storage: once an entry is explicitly
-marked `RESOLVED` / `superseded` / fixed, move it **verbatim** into
-`archive.md` in this directory so startup reads only the live entries.
-`ledger-mem prune` reports which entries are archive-eligible (`--list`
-names them); age alone never makes an entry eligible — an unresolved flaw
-stays here as a live trap.
+Append-only, but compactable — the log never grows without bound:
+
+- **Resolved entries move verbatim** to cold storage: once an entry is
+  explicitly marked `RESOLVED` / `superseded` / fixed, cut it unchanged
+  into `archive.md` in this directory so startup reads only the live
+  entries. Age alone never makes an entry eligible — an unresolved flaw
+  stays here as a live trap.
+- **Repeats roll up:** when 3+ entries describe the same recurring
+  protocol trap, append ONE consolidated `Recurring` entry — the pattern,
+  how many times, the current workaround — and move the individual
+  entries verbatim into `archive.md`. The live log keeps the pattern, not
+  the repeats.
+
+`ledger-mem prune` reports log sizes, archive-eligible entries (`--list`
+names them), and roll-up candidates.
 
 <!-- TEMPLATE — copy below the last entry:
 ---
@@ -24,273 +33,38 @@ stays here as a live trap.
 -->
 
 ---
-## 2026-09-12 — Amani / glm-5.3-flash (S1) — office-001 close: two protocol asks carried live (re-seeded from the frozen flaws log)
+## 2026-09-21 — re-seeded at the office-002 close (carried, not observed here) — four still-open protocol traps
 
-- **Observed:** at the first `ledger-history close` (447 sessions,
-  2026-07-31 → 2026-09-12), two flaws in the frozen log were still OPEN and
-  would otherwise have vanished with the office. Re-seeded here so the next
-  sessions see them:
-  1. (Omari/S472) The collab topology defines no integration step for when the
-     main checkout is a peer's workspace — git refuses the same branch in two
-     worktrees and the isolation rule forbids touching the peer's tree. The
-     working derivation: `git fetch` → rebase your branch onto origin/main →
-     `git push origin <branch>` → `git push origin <branch>:main` (refspec
-     fast-forward of the remote only). The ask: state this in the edition or
-     the project override.
-  2. (Buffy/S472) The roster has no mechanical table-shape guard: a check-in
-     insertion that consumes the wrong newline still mangles the table while
-     "following the rule". The ask: `ledger-mem check` (or the pre-commit
-     registry) should lint the roster — check-in diff must read `1 0` on
-     `git diff --numstat`, every row must carry the header's pipe count, and
-     a row containing a second name/codename group is a hard fail.
-- **Suggested fix:** both are package/edition wording or checker additions;
-  owners are the next core maintainer pass.
-- **Status:** open (carried; not re-verified this session beyond the original
-  entries — read the full context in `history/office-001/flaws/log.md`).
+These four were open when office-002 closed; they are traps in the
+protocol itself, not facts about the past, so they carry live. Detail and
+evidence: `history/office-002/flaws/log.md`.
 
----
-## 2026-09-14 — Njeri / qwen3.8-flash (S003) — clean-session silence vs the bookkeeping gate's staleness teeth
-
-- **Flaw:** core 1.1.0's log compaction says "a clean session appends nothing" to the friction logs (both editions + schema), but this project's configured exit gate (`scripts/check-bookkeeping.sh`, itself an S296-era fix for bookkeeping drift) FAILS when the friction logs' newest date trails `sessions.md` — so a genuinely clean session is mechanically forced to append exactly what the compaction rule calls noise.
-- **Symptom:** S003's exit gate failed once on `STALE: inefficiencies/log.md ... flaws/log.md`; the checker's own hint ("an explicit '## date — none this session' counts") reconciles them only for the session that discovers it.
-- **Root cause:** the compaction rule and the staleness checker encode different definitions of "current" — one is content (only real friction earns a block), the other is a date watermark. Neither references the other.
-- **Suggested fix:** the package should state the reconciliation: either the editions note that projects whose bookkeeping gate watermarks by date require the explicit one-line clean entry (compaction's "appends nothing" means "no friction block", the watermark line still counts), or `check-bookkeeping.sh`'s shipped guidance should move into the schema so projects inherit the same reading.
-- **Status:** open
-
----
-## 2026-09-15 — Zuri / qwen3.8-flash (S004)
-
-- **Status:** none this session — no protocol/`.context_ledger` friction (the one-line clean entry is the bookkeeping-gate watermark, per the flaw logged 2026-09-14).
-
----
-## 2026-09-15 — Imani / qwen3.8-flash (S008) — the gates' `sh` commands have no teeth on a bare Windows PATH
-
-- **Observed:** every `sh scripts/...` line in gates.conf fails under the
-  `ledger-gates.cmd` launcher with "The term 'sh' is not recognized" on a
-  stock PowerShell 5.1 session (Git ships `sh.exe` in
-  `C:\Program Files\Git\bin` but that directory is not on PATH by default;
-  only `Git\cmd` is). The universal `git diff --cached --check` step
-  passes, so a first read of the output can mistake the rest for real
-  failures of the code under test.
-- **Fix applied in-session:** prepend the Git bin before any gate run
-  (PowerShell: set the PATH variable to Git's bin directory followed by the
-  existing value) — all steps then run and report honestly.
-- **Status:** open — the project's `.cmd` launchers (or gates.conf's own
-  comments) should state the PATH prerequisite so every Windows session
-  doesn't rediscover it. Candidate: the launcher prepends Git's bin itself
-  when it locates it via `where git`.
-
----
-## 2026-09-15 — Baraka / qwen3.8-flash (S005) — the shared index is a cross-session trap in a live-peer checkout; no gate checks WHAT is staged
-
-- **Flaw:** One session deep in a long edit (a 449-file manual sweep) committed with
-  `git commit -m` (no pathspec) while a CONCURRENT session's closeout files sat STAGED
-  in the shared index — the commit swept them in (product commit b49d16d1 carried
-  another session's roster removal, sessions.md entry, watermarks, review file,
-  backlog row). All content survived and pushed; attribution + the two-surface rule
-  broke. The `pre-commit` gate passed: `git diff --cached --check` validates
-  whitespace only — nothing checks that the staged set belongs to the committer or
-  that both surfaces never coexist in one commit.
-- **Symptom:** mixed-surface commit on main with another session's closeout.
-- **Root cause:** office state goes stale within minutes when peers are live in the
-  same checkout (exactly the S421 class; the standing rule to re-checkpoint before
-  each action was skipped across a long streak of same-file edits).
-- **Workaround applied this session:** correction note on the event trail (names the
-  peer + the swept paths, tells them not to re-commit); commit moves to an isolated
-  worktree for the rest of the sweep; `git diff --cached --stat` reviewed before
-  every commit from here on.
-- **Prevent next time:** the package's pre-commit should hard-fail a staged set that
-  mixes `.context_ledger/` with product paths (one check: `git diff --cached
-  --name-only` intersects both sets → fail with "commit the surfaces separately"),
-  and warn when staged paths match another live roster row's claimed scope.
-- **Status:** open (owners: next core maintainer pass)
-
----
-## 2026-09-15 — Tega / qwen3.8-flash (S009) — a collab claim event silently accepted a truncated paths list
-
-- **Observed:** my claim event (20260915T130934Z-Tega-3755ab45) described a
-  seven-file scope in its body but its structured `paths` list carried
-  exactly one entry — `backend/src/api/routes/sessions.py`. The emit
-  accepted it without complaint, so for the session's whole middle stretch
-  the office's machine-readable view of who holds which files under-reported
-  my claim (a peer reading only paths would not have known I was inside
-  models.py/db.py/client.ts).
-- **Root cause:** the emit was built by a PowerShell one-liner whose quoting
-  swallowed the comma-separated list after the first element; the tool
-  validates that `paths` parses, not that it covers the body.
-- **Fix applied in-session:** a correction event (47d644c9) records the full
-  shipped scope before the release.
-- **Status:** open — candidate hardening: `ledger-collab emit claim` should
-  warn when a claim's paths list is empty or covers a suspiciously small
-  fraction of the paths mentioned in its own body (a substring scan of the
-  body for path-shaped tokens is enough), so the truncation fails loud at
-  the door instead of mid-collision.
-
----
-## 2026-09-16 — Zawadi / Qwen3.8 Flash (Session 12) — check-in pushed after the supervisor had to ask
-
-- **Flaw:** the check-in-first rule (AGENTS.md rule 5, kickoff Step 2) was
-  followed in the wrong order: I read the office files and ran the full
-  worktree audit before committing and pushing my roster row. The
-  supervisor had to ask "Have you checked in!!!!!" before the row went up.
-- **Symptom:** for several minutes the board showed peers (S005, and
-  Chemi arriving concurrently) with no S012 row — and the race actually
-  bit: Chemi and I both took S012 because neither board showed us at the
-  moment we read it. It self-resolved (Chemi renumbered to S013), but a
-  silent collision is exactly what rule 5 exists to prevent.
-- **Root cause:** the startup read list is long and the audit work was
-  already in the user's request, so "gather context first" pulled me past
-  "the push claims the codename". The protocol says the startup read
-  comes AFTER the row is pushed; my order inverted it with no mechanical
-  nudge to catch it.
-- **Suggested fix:** the kickoff Step 2 order is already explicit — the
-  gap is sequencing for agents that batch reads: make the roster+sessions
-  two-file read the FIRST tool calls of the session and block all other
-  reads/searches/commands until the check-in commit is pushed. A
-  `ledger-gates checkpoint` that fails when HEAD's roster lacks a row for
-  the session doing the checking would catch it mechanically.
-- **Status:** open
-
----
-
-## 2026-09-16 — Chemi / Qwen3.8 Flash (S013)
-
-- **Status:** none this session — no protocol-level friction (one-line clean entry per the 2026-09-14 bookkeeping-watermark reconciliation; the heredoc/aliasing traps were tool- and code-level, logged in inefficiencies).
-
----
-
-## 2026-09-17 — Buffy / model unknown (Session 14) — current.md and the claim event written after product work had started
-
-- **Flaw:** the check-in was pushed on time (roster row first, before any
-  analysis — that half held), but the next two entry obligations were inverted:
-  `tasks/current.md` was still idle and no collaboration `claim` had been
-  emitted when the first product commit landed. Both were written only at
-  wrap-up, so for most of the session the office board showed a live roster row
-  with no declared task and no claimed scope on the event trail.
-- **Symptom:** session start looked compliant (row up, pushed, codename
-  claimed); the gap only appears when you look at what the *task* files said
-  during the work. The solo light path exists precisely to make in-flight scope
-  visible, and it was invisible here.
-- **Root cause:** the protocol front-loads one ceremony (the roster row) that it
-  calls out explicitly as "before anything else", but `current.md` + the claim
-  read as "step 3 setup" alongside a long read list, and with a solo, idle
-  office nothing forced them to be first. `ledger-gates checkpoint` — which the
-  rules say to run before each next action — reported tree/collab state but
-  never noticed that no task was set; nothing mechanical caught the inversion.
-- **Suggested fix:** make `ledger-gates checkpoint` (or the check-in commit
-  itself) fail loudly while `tasks/current.md` is idle in a session whose roster
-  row is live and whose codename has no open claim. That is the same
-  mechanical-nudge gap the Session 12 flaw asked for on check-in ordering.
-- **Status:** open
-
----
-
-## 2026-09-18 — Buffy / model unknown (Session 14, extended)
-
-- **Status:** none this session — no protocol/`.context_ledger` friction (the
-  Session 14 claim-ordering flaw was not repeated: the release + fresh claim
-  were emitted and pushed before any product work this run). One-line clean
-  entry per the 2026-09-14 bookkeeping-watermark reconciliation.
-
----
-
-## 2026-09-18 — Zola / claude-sonnet-5 (Session 16)
-
-- **Status:** none this session — no protocol/`.context_ledger` friction. One-line clean entry per the 2026-09-14 bookkeeping-watermark reconciliation.
-
----
-
-## 2026-09-18 — Juma / claude-sonnet-5 (Session 17)
-
-- **Status:** none this session — no protocol/`.context_ledger` friction (checked in before the deep read, moved to an isolated worktree the moment a peer's roster row appeared, additive-only roster edits both check-in and clock-out). The session's own friction was environment/tooling, not protocol — logged in `inefficiencies/log.md`.
-
----
-
-## 2026-09-19 — Amara / claude-sonnet-5 (Session 19) — closed B-2026-08-15-12 as done before live-testing it
-
-- **Flaw:** wrote 3 valid regression tests pinning `initialization.py`'s
-  classify-tier system, confirmed the full backend suite still passed, and
-  removed the backlog row as done — without live-testing the actual
-  production request path first. The verification bar in
-  `workflows/active.md` is explicit ("for ANY change to the agent loop...
-  LIVE-TEST it... before writing 'done'/'works'/'verified'") and this
-  session read it during kickoff, but treated "I only added tests, no
-  production code changed" as a reason it didn't apply, without checking
-  whether the tests' own premise (that the tiered system governs real
-  traffic) was still true.
-- **Symptom:** the ledger already carried a `chore(ledger): ... release`
-  event and a backlog-row deletion asserting the item was closed, before
-  any real request had ever been traced. The gap was invisible from the
-  diff alone — the tests passed, the code they pinned was real code — it
-  only surfaced because the user asked directly "did you live test" mid-turn.
-- **Root cause:** "no production code changed" was treated as sufficient
-  grounds to skip live-testing, when the actual question the verification
-  bar exists to answer is "does the reasoning behind calling this done
-  still hold against real traffic" — a claim about the SYSTEM's behavior,
-  not about whether a diff touched `core/agent/loop.py`. A row can be
-  closed on a false premise (dead code) with zero production edits and
-  green tests throughout.
-- **Suggested fix:** before marking any backlog row about agent/loop/tool
-  behavior "done," live-test the SPECIFIC user-facing symptom the row
-  describes (here: send the exact kind of trivial message the row's ~40s
-  complaint was about, through the real request path) even when the
-  session's own diff is test-only — a green regression suite proves the
-  code under test does what it claims, never that the code under test is
-  the code actually running.
-- **Status:** open (a mechanical catch — e.g. `ledger-gates` flagging a
-  backlog-row deletion in the same commit range as a "done" claim with no
-  accompanying live-test evidence in the session log — would close this,
-  same shape as the Session 12/14 check-in-ordering asks).
-
----
-## 2026-09-19 — Kofi / unknown (S025) — a peer-deferred gate-blocking item is orphaned when the claimant clocks out without clearing it
-
-- **Flaw:** Tariq's (S020) B-2026-09-15-15 shipped `73c4fb2d` with an unused
-  `PassiveMemory` import in `frontend/src/components/layout/CenterPanel.test.tsx`
-  — a hard eslint ERROR, so the exit gate's `eslint . --max-warnings 53` step is
-  red on it (the 52 warnings stay under budget; the single error is what fails).
-  Naledi (S022) and Amara (S023) each hit it at their own exit gate, correctly
-  declined to edit a peer's live claimed surface, and emitted `note` events
-  deferring it to Tariq. Tariq then clocked out (`d4511d10`: release event,
-  backlog row deleted, "shipped + live-verified") without clearing the deferred
-  item — and that clock-out commit was never even pushed. The deferral-to-claimant
-  pattern has no fallback: when the claimant leaves, the item is orphaned until a
-  later session trips over it (this one did, and finished it).
-- **Corroborates:** the S008 open flaw (the gates' `sh` commands have no teeth on
-  a bare Windows PATH). Tariq's session ran on a Windows desktop client, so a
-  `ledger-gates run exit` there would not have hard-blocked the red eslint step
-  even if it had been run; the clock-out proceeded regardless.
-- **Suggested fix:** a `release`/clock-out that deletes a backlog row should be
-  gated on the exit gate passing for the released scope on the *integrating*
-  machine (not the claimant's possibly-toothless local runner); or `ledger-collab
-  check` should surface unresolved `note`-deferrals against a claim's own paths
-  before the release closes it, so a deferred item can't be silently dropped at
-  clock-out.
-- **Status:** open (immediate symptom fixed this session — `b5548de5` removes the
-  unused import; eslint back to 0 errors / 52 warnings, under the gate budget).
-
-- **What happened (S26):** to satisfy "plan all steps up front" I shipped a canned Search/Read/Answer lookup plan, and steps ticked on narration before the tool ran. Both were plausible-looking but false; the owner's screenshot exposed them and they were replaced (ADR-68).
-- **Why it hid:** unit tests asserted the skeleton itself; no live dead-source run.
-- **Prevent next time:** a plan or status shown to the user must be derived from real outcomes; live-test the failure path, not just the happy path.
-
-## 2026-09-21 — Imani (S024) — product edits made before (or without) a claim, three times
-
-- **What happened:** with a peer live, the project override makes `claim` BEFORE the first product edit mandatory. I claimed narrow scopes (chat.py, then post-answer files) and then drifted into adjacent files — `tools/git_tool.py` + `tool_schemas.py`, `agent/loop.py` for the Thinker-request fix, and `loop.py` again for the turn bus — and noticed only after pushing; each time I filed a late `note`/claim. One prior claim even said "not loop.py". No collision resulted, but Kofi's session 28 also edited `agent_runtime.py` the same day.
-- **Why it hid:** claims were written per task slug, edits followed the bug wherever it led, and nothing compares `git diff --stat` paths with the live claim's `--paths`.
-- **Prevent next time:** before the first edit of a NEW file, re-run `ledger-collab status` and extend the claim (a claim event is cheap); `ledger-collab check` could warn when a commit touches paths outside any live claim of its author.
-- **Status:** open (process; no code fix).
-
-
-## 2026-09-21 — Kwame (S029) — product edits before the claim, and a chat-lane that punts in Auto mode
-
-- **What happened:** (1) Same class as Imani's entry above: with peer Nia (S027) live, I edited product files before filing the claim (filed once the code was written and tested; scope: routing/prompt/detector files, none of Nia's UI). (2) The owner's transcript exposed a defect the code had written into its own prompts: the lightweight reply lane told the model to "switch to Agent mode" even in an Auto session where no such mode exists, and the runtime never passed `tool_calls` into the follow-up check, so `is_conversational_question`'s own "history has tool calls" guard could never fire.
-- **Why it hid:** the `CAPABILITY_NOTE` was written for explicit Chat mode and reused for Auto; the history dicts were built with role/content only; the tests fed hand-made history that included `tool_calls`.
-- **Prevent next time:** claim BEFORE the first edit when a peer row is live; when a guard reads a field, grep the call site for what it actually passes; word any user-facing hand-off by the configured mode, not by a global constant.
-- **Status:** fixed in code (see session entry); the claim lateness is process-only.
-
-## 2026-09-21 — Kwame (S029) — shipped a phrase-list detector; the same failure came back within hours
-
-- **What happened:** I "fixed" promise-then-stop by matching phrases (lead-in + read verb). The owner's next chat ended "Let me actually check where your network says you are." — the adverb "actually" slipped past. I then widened the list, which broke six tests, before the owner asked why the agent can't check itself.
-- **Why it hid:** the unit tests used the exact strings I had just seen; a phrase list can only be right for wordings already observed. Memory already said to fix model-agnostically ([[feedback-fix-agent-model-env-agnostic]]).
-- **Prevent next time:** when a defect is "the model worded X differently", the check must be semantic (the model judging, or a state check), never a wording list. Live-test on a phrasing NOT used to write the fix.
-- **Status:** fixed (`completion_judge.py`).
+- **Flaw 1 — the gates have no teeth on a bare Windows PATH.** Every gate
+  step in `workflows/gates.conf` runs through `sh -c`, and on a Windows box
+  without a POSIX shell the step does not hard-fail — a red leg (a lint
+  error, a failing test) can pass silently and let a session clock out on a
+  red tree. It has already masked a real exit-gate failure at least once.
+- **Flaw 2 — a pathless `git commit` sweeps a peer's staged files into your
+  commit.** With two sessions in one checkout, `git commit -m` (no
+  pathspec) commits whatever the shared index holds, so a peer's
+  in-flight closeout rides into an unrelated commit; it has happened twice.
+  The standing workaround is the explicit-adds rule in
+  `memory/overrides/rules.md` — add only the paths you touched, never
+  `git add -A`, never `git commit -a`. Root cause: nothing checks *what* is
+  staged against the committing session's own claim.
+- **Flaw 3 — a collab `claim` event silently accepted a truncated paths
+  list.** The emitted event looked normal while covering fewer paths than
+  the session believed, so its scope was invisible to peers. Candidate
+  hardening: `ledger-collab emit claim` should echo the parsed paths back
+  (and refuse an empty or obviously truncated list).
+- **Flaw 4 — the deferral-to-claimant pattern has no fallback.** When a
+  session finds a gate-blocking problem inside a peer's live surface it
+  emits a `note` and leaves it; if that peer then clocks out without
+  clearing it, the item is orphaned until a later session trips over it —
+  which is exactly what happened. Suggested fix: a `release`/clock-out that
+  deletes a backlog row should be gated on the exit gate passing for the
+  released scope, or `ledger-collab check` should surface unresolved
+  `note`-deferrals against the claim's own paths before the release closes
+  it.
+- **Status:** open (owners: the next core-maintainer pass for 1 and 3; the
+  project's own gate runner for 2 and 4).

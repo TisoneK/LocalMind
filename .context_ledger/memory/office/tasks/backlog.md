@@ -1,62 +1,62 @@
-# Backlog (live queue — open work only)
+# Backlog (work queue — actionable items only)
 
-Open items for future sessions, **arranged by priority so the shape of
-the work is visible the moment the file opens**: one row per item, in
-its priority table. When an item is finished, **delete its row** — the
-backlog holds only open work, never completed rows. The completion
-record is the finishing session's `agents/sessions.md` entry and the
-commit itself; git history keeps every removed row, so deleting loses
-nothing. Never delete a row whose item is still open — a row vanishing
-from the diff without a matching session entry is a dropped handoff,
-not cleanup. (Legacy checkbox-format backlogs: `ledger-mem closeout`
-sweeps checked-off `- [x]` tombstones a session left behind — dry run
-by default; `--confirm` deletes.)
+The queue of work a session can pick up and **do**. One row per item, in
+its priority table. It is a queue, not a knowledge base: the test for a
+row is "can an agent start on this and finish it?" If the answer is no —
+it's a finding, an open question, an advisory "should we…?", a deferred
+"someday" idea — it belongs in [`parking-lot.md`](parking-lot.md), not
+here. Writing discoveries into the backlog is how a queue turns into a
+57-row document nobody can work from.
 
-Every row gets a stable **ID** — `B-<added YYYY-MM-DD>-<n>`, n = that
-date's next sequence in the file — and a **Summary** cell with enough
-context that a fresh agent can act on the item without any chat
-history; keep status qualifiers in the summary text ("partial",
-"done, pending sign-off", "deferred by owner", "advisory"). Priority
-is the table an item sits in — when unsure, Medium.
+**Done = delete the row. Stale = delete the row.** The backlog holds
+open, actionable work only. When an item is finished, delete its row —
+the completion record is the finishing session's `agents/sessions.md`
+entry and the commit, never a tombstone here. When an item stops
+mattering, delete it too; if it still carries information worth keeping,
+move it to the parking lot first. Git history keeps every removed row,
+so deleting loses nothing. (The one thing you must not do is delete a row
+whose work is genuinely still open and recorded nowhere else — a row
+vanishing from the diff with no session entry or promotion behind it is a
+dropped handoff, not cleanup. Legacy checkbox-format backlogs:
+`ledger-mem closeout` sweeps checked-off `- [x]` tombstones a session
+left behind — dry run by default; `--confirm` deletes.)
+
+**The queue is capped at ~20 rows** (`backlog_cap` in
+`workflows/history.conf`; `ledger-mem check` warns past it). Twenty is a
+working set, not a limit to fill. When you'd add a 21st actionable item,
+prune one first: the lowest-value open row goes to the parking lot
+(deferred, still valuable) or is deleted (no longer relevant) — never a
+row you can't justify dropping. A queue you can hold in your head beats
+a comprehensive one you can't.
+
+**Only actionable work, and context lives where the work is.** Every row
+gets a stable **ID** — `B-<added YYYY-MM-DD>-<n>`, n = that date's next
+sequence in the file — and a **Summary** cell that says what to *do*, not
+everything known about it. A fresh agent should be able to start from the
+one line; the deep context belongs in the linked issue, PR, ADR, or
+parking-lot finding the row points at, not packed into the cell. Keep
+status qualifiers short ("partial", "blocked on X"). Don't append
+research narrative to a row to "preserve" it — that's the parking lot's
+job.
+
+**Priority is the table an item sits in (High / Medium / Low), and it is
+dynamic.** Only the top of the queue really matters — when you start a
+session, the handful of High rows (roughly the top 3–5) are the work; the
+rest is context, and a row that has sat in Low for many sessions is a
+candidate for the parking lot, not a permanent resident. When unsure
+between two tables, pick the lower one; promoting a row later is cheap,
+and a backlog where everything is High says nothing.
 
 This backlog belongs to the **current office**. When the office closes,
 open items do not carry over implicitly — the closing session re-seeds
-into the new office's backlog only what still matters, and records the
-rest in the permanent record (`history/office-<NNN>.md`, "Open threads").
+into the new office's backlog **only items with an active owner or a
+clear next step**; everything else is recorded in the permanent record
+(`history/office-<NNN>.md`, "Open threads") or parked. A re-seeded row
+describes the work in plain words and never cites the old office's
+session numbers or codenames.
 
 Full spec: `.context_ledger/core/schemas/ledger-schema.md` →
-"The backlog: arrangement + workstream view".
-
-Provenance: re-rowed in place on 2026-09-12 by the session that closed
-office-001, per core 1.0.5 (this office's Session 1; the same session's
-pre-close record is frozen at `history/office-001/agents/sessions.md`) —
-existing B-IDs kept; the three legacy items that never had IDs got
-`B-2026-07-11-1`, `B-2026-07-11-2`, and `B-2026-08-31-1` (their dates' next
-sequences in the file). Finished rows deleted during the re-row are
-enumerated in that session's entry; the pre-re-row file remains in git
-history and in the closed office's frozen copy
-(`history/office-001/tasks/backlog.md`). Re-seeded into this office's
-backlog IN FULL at the close — owner directive 2026-09-12 ("keep the
-backlog copy to the new office"); the next office is free to prune rows
-whose items no longer matter, but nothing was culled at the re-seed.
-Note on references: Summary cells cite sessions by their office-001
-numbers — those records live in `history/office-001/agents/sessions.md`;
-this office's own records start at Session 1.
-
-Re-triaged 2026-09-16 by Chemi (S013) per the supervisor's directive:
-84 rows → the 20 actionable rows below + 59 knowledge/deferred/advisory
-rows moved to `tasks/parking-lot.md` as `P-2026-09-16-1`…`P-2026-09-16-59`
-(each tagged with its former `B-` ID; `B-2026-08-25-2` +
-`B-2026-08-25-10` merged into one row, `P-2026-09-16-26`). 5 rows
-deleted as done/stale: `B-2026-08-24-13`, `B-2026-08-24-14`,
-`B-2026-08-25-6` (shipped — commits `1b15c2f`, `6cc1aa7`, `3072074`;
-session entries on file); `B-2026-08-24-8` (a standing practice, not a
-task — codified in `workflows/active.md`'s verification bar);
-`B-2026-08-30-8` (the over-thinker half shipped `bd0641d`; the remaining
-detector gap — "remember <url>" lead-ins defeating the start-anchored
-write cues — is noted here rather than parked as a row). The full
-pre-triage text of every row (kept, moved, and deleted) remains in this
-file's git history.
+"The backlog: a capped work queue" and "The parking lot".
 
 ## Open Items
 
@@ -64,57 +64,43 @@ file's git history.
 
 | ID | Summary |
 |----|---------|
-| B-2026-09-21-2 | A real planner (ADR-68 follow-on; owner direction 2026-09-21: a STATE-DRIVEN agent — model the task as states and moves and simulate several moves ahead, like chess, instead of the model improvising each step; that also replaces per-symptom detectors such as the promise-then-stop nudge with 'is the goal state reached?'): a dedicated, self-revising plan step so the agent re-plans when a source fails instead of relying on the model volunteering `todo_write`; make report/conditional steps of a request-derived sequence ("tell me…", "if that fails…") complete by their own action, not the end-of-turn sweep; keep failed steps failed. Live-verify on DeepSeek with a dead-source request. Owner said "the agent loop isn't powerful enough yet" (2026-09-21). Ties B-2026-09-15-17. |
-| B-2026-09-21-5 | Windows verification of S26's settings work (owner is on Windows; verified only by simulation on macOS): shell choice (PowerShell 7 vs 5, cmd `/d /s /c` quoting, Git Bash detection when installed outside the standard folders), packages-folder `PYTHONPATH` with spaces in the path, file-write stat verification, terminal input focus. Run the S26 live checklist on the owner's machine; fix what differs. |
-| B-2026-09-21-12 | Act-don't-punt in the chat lane (Kwame/S029 follow-on to the routing fix): the lightweight reply lane still cannot act, so a message it classifies as conversational that turns out to need a tool ends in a punt ("Say 'go' and I'll do it"). Make it escalate IN THE SAME TURN — detect the punt/needs-action shape (or let the model emit a sentinel the runtime buffers on the first tokens) and re-run the message through the agent loop instead of ending the turn. Retire the user-facing Chat/Direct toggle only with a product decision (see P-2026-09-16-12). Live-verify on DeepSeek with `CONV-CONT-01` plus a standalone "check my disk" phrased as a question. |
-| B-2026-09-21-13 | Remove the two leftover worktrees `.claude/worktrees/buffy-s016` and `../LocalMind-collab-bootup-telemetry` (owner: stale; branches kept, neither to be merged — S016 is superseded by the Providers page, bootup-telemetry holds old `.context/` logs). Blocked on a `Bash(git worktree remove:*)` permission rule the owner adds themselves. (Kwame/S029) |
-| B-2026-09-21-14 | Test isolation: tests read the developer's `backend/.env` and `~/LocalMind/settings.json` — with `LOCALMIND_SHELL_ENABLED` off in `.env`, 4 loop/shell tests (`test_inspection_dedup` ×2, more) fail on this Mac and pass in a clean checkout or with `LOCALMIND_SHELL_ENABLED=true`. Make `tests/conftest.py` pin the shell flag (and ignore `.env`) so results do not depend on the machine. Ties B-2026-09-09-7. (Kwame/S029) |
-| B-2026-09-21-15 | Verdict lane, next slice (ADR-66 addendum): give the completion judge a third verdict, UNSUPPORTED — the reply states results the turn's evidence does not show (a claimed file, a number no tool returned) — and feed it the plan/todo state, not only the last 3 tool steps. Live-verify on a dead-source request before it may nudge; measure the false-nudge rate first (report-only). Then consider running the judge concurrently with the streamed reply so the ~0.9 s overlaps instead of adding. (Kwame/S029) |
-| B-2026-09-21-16 | Engine selector (ADR-71; selecting State swaps the chat pane for the State Explorer, B-2026-09-21-19): a setting `engine` = classic | state (default classic) read at the chat entry point, surfaced in Settings, so a user picks the engine independently of provider/model; route a turn to `core/state_engine` and stream its `EngineEvent`s as the existing SSE shapes (states/moves/outcomes, no hidden reasoning). Not `Auto` yet. Live-verify both engines on the same task on DeepSeek; must not regress the classic path or the `Hi` zero-call boundary. (Kwame/S029) |
-| B-2026-09-21-17 | State engine benchmark: run Classic vs State on the same 20 tasks (read-only lookups, dead-end sources, multi-file questions) on deepseek-chat and one weaker model; compare correctness, model calls, wall-clock, honest-stop rate. The engine earns its place here or it does not. (Kwame/S029) |
-| B-2026-09-21-19 | State Explorer in the app (ADR-71 UI) — BACKEND HALF SHIPPED 2026-09-21 (Kwame/S029: `GET /state-explorer` page, `GET /api/state-engine/info`, `POST /api/state-engine/run` SSE, live tree in the standalone page); REMAINING: port `docs/prototypes/state-explorer/` to a React surface shown INSTEAD of the chat pane when the State engine is selected (B-2026-09-21-16): a backend SSE route streaming `EngineEvent.to_dict()`, live tree that grows as events arrive, inspector, meters, rewind timeline, a gate card for `needs_confirmation`, keyboard nav, dark/light, a11y; persist a run's events so history can be replayed. NEEDS `npm install` in `frontend/` first (this Mac has no frontend deps, so tsc/eslint/vitest could not run); keep eslint warnings at 0 for new files (the gate budget is already exceeded, B-2026-09-21-11). Owner: unique, advanced, not a chat/IDE clone. (Kwame/S029) |
-| B-2026-09-21-20 | Windows verification of the State Explorer (owner is on Windows; built and live-tested on macOS only): `http://localhost:8000/state-explorer` loads; a live run streams on the owner's provider; `~` and `C:\\...` paths reach `dir_explorer`/`file_task`; the single-backslash JSON repair works on a real Windows model reply; Stop cancels; the page is included in the packaged Electron backend (`backend/src/api/static/`). (Kwame/S029) |
+| B-2026-09-21-1 | EXIT GATE BLOCKED: `scripts/ci-check.sh`'s frontend leg fails on `eslint . --max-warnings 53` — the recent UI work added React-effect warnings ("Calling setState synchronously within an effect", missing hook deps) so the count exceeds the budget (0 errors). Fix the warnings (preferred) or consciously raise `--max-warnings`; do not let a red exit gate become normal. Surfaces: `frontend/src/hooks/useLocalMind.ts`, `hooks/useWorkspaceData.ts`, `hooks/use-mobile.ts`, `components/chat/` (ChatInput, ChatMessage, TurnView, FilePreviewDialog, WelcomeScreen), `components/ui/` (sidebar, toggle, navigation-menu, form). Exact command: `sh .context_ledger/core/bin/ledger-gates run exit`. |
+| B-2026-09-21-2 | In-app State Explorer + engine selector (the state-driven engine, ADR-71 in `history/office-002/plans/decisions.md`): port the explorer into the app as its own interface (a game tree, move list, eval bar, inspector, meters, rewindable timeline — the owner's "geeky, not a chat" direction) and add the Classic/State engine setting so the engine becomes selectable in Settings. Reference implementations: the self-contained prototype `docs/prototypes/state-explorer/` and the backend-served page in `backend/src/api/static/state-explorer/`; slice-1 engine package `backend/src/core/state_engine/`; the `EngineEvent` record is the UI contract. In flight when office-002 closed — check whether it landed before starting. |
+| B-2026-09-21-3 | State engine slice 2 (ADR-71): write-capable moves — mark tools `read_only=False`, PREDICT their outcome with the model (labelled `predicted`, never learned as a fact), execute only after the ADR-67 confirmation flag, then verify by a read-back probe; beam > 1; persist the state so a turn can resume; per-provider concurrency budget before widening parallel probes. Extends `backend/src/core/state_engine/`. |
+| B-2026-09-21-4 | Benchmark the state engine against Classic (ADR-71 §8): both engines selectable and observable, same tasks, measurable comparison, only then a decision about an `Auto` engine. Ties to B-2026-09-21-2. |
+| B-2026-09-21-5 | Confirmable-refusal rollout (ADR-67): convert every tool that refuses or guesses to "refuse only on a verified fact, name the fact and the confirming flag" — start with delete (`confirm_delete`), the shell tool's destructive/mass-touch commands (replace the substring blocklist), and installs (`scope=system`); record confirming flags in the run trace. Composes with the consequence-tiered ladder work (resolve → verify → assess → confirm → execute → verify → reflect). |
 
 ### Medium Priority
 
 | ID | Summary |
 |----|---------|
-| B-2026-09-21-11 | EXIT GATE BLOCKED: `scripts/ci-check.sh` frontend eslint reports 59 warnings, the gate's `--max-warnings` is 53 (0 errors; backend 3557 passed; bookkeeping check passed). The extra warnings are React-effect lint in frontend files changed by peer sessions in the last day (`hooks/useLocalMind.ts`, `hooks/useWorkspaceData.ts`, `hooks/use-mobile.ts`, `components/chat/` ChatInput / ChatMessage / TurnView / FilePreviewDialog / WelcomeScreen, ui/ sidebar / toggle / navigation-menu / form): 'Calling setState synchronously within an effect' and missing hook dependencies. Owner/peer call: fix the warnings (preferred) or consciously raise `--max-warnings`; NOT touched by S024 (files are under active edit). Exact command: `sh .context_ledger/core/bin/ledger-gates run exit`. (found by Imani/S024 at clock-out, 2026-09-21) |
-| B-2026-09-21-1 | Confirmable-refusal rollout (ADR-67): audit every tool that refuses or guesses, then convert to "refuse only on a verified fact, name the fact and the confirming flag" — start with delete (`confirm_delete`), the shell tool's destructive/mass-touch commands (replace the substring blocklist, see -3 of B-2026-09-20), and installs (`scope=system`); record confirming flags in the run trace. Composes with B-2026-09-15-9 (its "confirm" rung). |
-| B-2026-09-21-3 | "Conversation too long" false positive (S26): the raw provider error behind a 3K-token chat on a 1M model was never captured. Reproduce on the owner's setup with the card's Technical details open; log the raw error server-side; find why the card said `Provider: unknown`; add the missing provider label. The `max_tokens` misclassification is fixed (`02e6f280`) but not proven to be that user's cause. |
-| B-2026-09-21-4 | Failover follow-ups (ADR-69): show cooldown/health per provider in the Providers page; a per-provider concurrency budget before more concurrent model-backed lanes; extend the failed-source memory to `browse`/`web_research` and scope it per session; a slower fallback model can hit the per-call timeout, so budget the chain. |
-| B-2026-09-21-6 | Native reasoning cost (also: several models reason in the third person — "The user is asking…" — so the Thought block reads like another party talking, owner report 2026-09-21; the same thinking-policy control is the lever, not a per-model prompt patch): deepseek-flash spent 2m 37s "thinking" a two-file task. The Thinker now has a budget (`e4c62cd6`) but the model's own thinking is only controllable via reasoning effort/thinking policy, which the DeepSeek adapter does not map. Find the supported control, set a per-turn-type default, and measure time and quality on 5 real tasks (trust over speed: judge verifiable work vs waste). |
-| B-2026-09-21-7 | Undo coverage and hygiene: undo covers `file_write` and `edit_file` only — add shell-written files and deletions; expire `<home>/undo` records (they hold whole file contents; no retention policy today); surface "Undo" for multiple writes in one turn (only the last diff is shown). |
-| B-2026-09-20-1 | Turn bus follow-on (ADR-66): post-turn services (reflection, fact extraction, title) as lanes behind `gate()` with `POST_TURN_LLM_BUDGET_S`; (the `done`-before-services half was shipped by Kofi, Session 28 — the bus work is only to register them as lanes behind `gate()` and keep the budget). Supersedes the open half of B-2026-09-19-5. Live-verify with the hung-reflection injection harness. (Imani/S024) |
-| B-2026-09-20-2 | Turn bus follow-on (ADR-66): silent READ-ONLY grounding `system_tool` lanes (path state before a write, read-back verify, git state) that publish facts and gate irreversible steps via `gate()`; would remove the extra 'check state first' model round trip (~2 of 5 act calls on a write task). Read-only by default (ADR-64); a silent mutation needs a named exception. (Imani/S024) |
-| B-2026-09-20-3 | Turn bus follow-on (ADR-66) — FIRST VERDICT LANE SHIPPED 2026-09-21 (Kwame/S029: `completion_judge`, see ADR-66 addendum; the Decider's safety/routing verdicts are still open): a Decider lane — safety classification (replace the substring blocklist in `tools/shell.py`), tier/routing verdicts — publishing verdict facts; and independent read-only tool calls as parallel lanes (models emit them one per iteration today). BEFORE either: a per-provider concurrency budget (z.ai 1302 at 3 parallel workers). (Imani/S024) |
-| B-2026-09-19-6 | Stage-aware, compact strict structured model input (feature `stage-prompts`) — RESUMED 2026-09-20 on DeepSeek (Imani/S024). CLARIFIED: the goal is input SELECTION per stage, not compaction. SHIPPED `561775f2` (later calls omit first-tool guidance; live 50/50 vs 50/50; -38% system prompt on later calls). NEXT: schema selection by capability/stage (40% of input), then workspace-state and Thinker/reflection gating — see manifest. SHIPPED `6155cb7c` (stale delegation text etc.; A/B 30/30 vs 28/30). Remaining levers + why each was held back: see manifest 'Decision + what shipped'. ROUND 2 (rule-preserving compression, 135 runs): NO quality loss (A 45/45, C 43/45, D 44/45); compact schemas (D) cut input 8-17% (p<=0.056); system prompt + schemas are 83% of all input (re-sent every act call). Remaining before shipping D: ADR-40 second-model check (Cerebras out of quota, 402) then productize prompts.py/tool_schemas.py edits. ROUND 1: FIRST ROUND: the trimmed compact prompt FAILS multi-part lookups (0/15 vs 13/15, p<0.001 — it narrates and stops; it dropped the load-bearing multi-part/act-not-announce rule) and is neutral on a write task (24% fewer input chars with compact schemas). Compaction must preserve every rule; rebuild and re-test (see manifest 'Next (revised)'). Byproduct fixed `28c7eaae`: older tool results were cut mid-list, final answers 5/15 -> 14/15. Original note: Idea: the full system prompt only on the cold-start act call; every later stage (continue / recover / answer) gets a small structured card (Stage, Goal, Done so far, one positive Decision, only the tools that decision needs). Groundwork shipped (stage cards `6899023a`; input-quality fixes; adapter empty-response root cause `d61d1d12`). Measured on glm-4.5-flash: system prompt -60%, tool schemas -31%, prompt tokens -32% to -39% per run, NO detectable quality change at n=4/5/5 — quality benefit UNPROVEN and not built (variants were emulated in a harness). Resume: rerun `features/stage-prompts/harness/` with N>=10 per variant on a non-throttled provider, clean finals only, more than one task shape; then build a stage-aware assembler behind a setting and live-verify tool selection (ADR-40) on two models. Constraints: ADR-41, ADR-46, ADR-53, ADR-61, ADR-64 (no silent prompt swaps). See `features/stage-prompts/manifest.md` + `office/reviews/2026-09-19-review-s024-decision-core-survey.md`. (filed by Imani/S024, 2026-09-19) |
-| B-2026-09-19-5 | PARTIAL (Imani/S024, `2a5b3877`): the hang half is DONE and live-verified — fact extraction + reflection now share `POST_TURN_LLM_BUDGET_S` (90 s, env `LOCALMIND_POST_TURN_BUDGET_S`), an exhausted service is cut off and reported as a `post_turn_timeout` obs event (injected hang: done at exactly the budget after the answer; normal run unchanged). NOT done, deliberately: delivering `done` BEFORE reflection — reflection emits the ADR-64 visible lesson events on the same stream and `done` order is the ADR-34 guardrail, so that needs an owner call (e.g. a dedicated post-turn SSE phase). Original finding: a post-answer LLM call (reflection or title refinement) can hang the turn for minutes: live glm-4.5-flash trace F1r1 — loop and final synthesis done at 12:21:11, then a z.ai request opened at 12:21:21 never returned until the server was killed at 12:30:25 (663 s total), and `done` waits on reflection (`agent_runtime.py` ~2121; measured 3.3 s on gemini, 31 s on glm even when healthy). Give post-answer calls a hard timeout and move reflection/title off the critical path (deliver `done` first, surface the lesson afterwards, ADR-64 visibility intact). Live-verify with the S024 trace harness (capture per-call timings). (found by Imani/S024, 2026-09-19) |
-| B-2026-09-15-6 | Pre-action recall: inject recalled stable facts into the turn context before answering fact questions (identity/location/preferences) — reads are ~16ms; ADR-62 gap 4. Live-verify. |
-| B-2026-09-15-9 | Consequence-tiered verification ladder for destructive/mutating requests: resolve-target → verify state → assess risk → CONFIRM → execute → verify → reflect; low-risk reads skip ceremony. Owner principles: "No action without verification. No destructive action without confirmation." Extends B-2026-08-25-12. |
-| B-2026-09-15-7 | Turn economy for verification-heavy tasks: resumable per-phase checkpoints, adaptive time/tool budgets, background continuation, tool batching, graceful completed/stopped-at/what-continues report at cap (not dying mid-sentence). Research doc §2 Arc E. |
-| B-2026-09-09-7 | Stabilise the tests/tools + acceptance-gate nondeterminism (failure set 7↔22 per run, blocks a reliable exit gate): make `verify.py:195` honor cwd injection (it stats repo-root `hello.py` residue today), hunt the cross-file state leak, THEN refresh `scripts/pytest-baseline.txt`. |
-| B-2026-09-15-19 | One-line CI fix: export `PYTHONUTF8=1` on the pytest step in `scripts/ci-check.sh` (~line 79) — five source-grepping tests UnicodeDecodeError on cp1252 Windows boxes otherwise (exit gate fails for environmental reasons). |
-| B-2026-09-19-1 | tests/tools Windows portability: raw Windows `tmp_path` backslashes are f-string-injected into JSON tool args (`Invalid \escape` on every such test) and temp-dir/disallowed-path gates fail on this box — the 13-test `test_find_path.py` cluster plus 11 others reproduce at every revision (24 full-suite failures at exit, S018 provenance-checked node-for-node against `d9751086`); blocks a clean exit gate alongside `B-2026-09-09-7`. |
-| B-2026-08-17-9 | OUTPUT tokens (partial): cut `FILE_READ_MAX_BYTES` 512KB → ~16-32KB for loop injection, add ONE per-tool cap at the `loop.py` ~2580 choke point, truncate re-injected cached obs on dedup hits. ADR-43 L4. |
-| B-2026-09-19-2 | `core/filters.py:138` `_filter_tool_injection`'s `is_code_output` flag is never read in the function body — `_filter_code_output()` (what `loop.py` actually calls for code-exec stdout/stderr) passes `is_code_output=True` for nothing, so code output gets the exact same filtering as everything else despite the docstring's claim it should skip code-pattern filters. Either implement the skip logic or remove the flag. Full detail: `reviews/2026-09-19-review-s021-dead-code-scan.md`. |
-| B-2026-09-19-3 | `api/routes/terminal.py:78` `TerminalSessionBridge` (bridges agent shell/code_exec calls into terminal sessions so CWD/history/tool-log are shared) is fully built but never called from anywhere — decide whether to wire `execute_in_session` into the agent loop's tool-dispatch path or remove the class. Full detail: `reviews/2026-09-19-review-s021-dead-code-scan.md`. |
-| B-2026-09-19-4 | `_tilde_display` (`core/context_builder.py`, shipped S023 / `8b892284`) joins the `~`-relative remainder with `os.sep`, so on Windows it renders `~\Dev\LocalMind`; its test `test_context_builder.py::test_tilde_display_normalizes_home_and_nested_paths` hardcodes the Unix `~/Dev/LocalMind` and fails on this box (1 of the 6 un-baselined full-suite failures at exit, alongside `B-2026-09-15-19`'s five). Decide the intended display separator (forward-slash for a stable prompt string vs. native) and make the function + test agree cross-platform. Found by S025; pre-existing on `origin/main`, not a regression. |
-
-
-| B-2026-09-21-18 | State engine slice 2 (ADR-71): write-capable moves — mark tools read_only=False, PREDICT their outcome with the model (labelled `predicted`, never learned as a fact), execute only after the confirmation flag (ADR-67) and verify by a read-back probe; beam > 1; persist the state so a turn can resume; tree visualization in the UI from `EngineEvent`s; per-provider concurrency budget before widening parallel probes (B-2026-09-20-3 / ADR-66 e). (Kwame/S029) |
+| B-2026-09-21-6 | Turn-bus follow-ons (ADR-66b): post-turn services (reflection, fact extraction, title) as lanes behind `gate()` with the existing post-turn budget; silent READ-ONLY grounding `system_tool` lanes (path state before a write, read-back verify, git state) whose verdicts gate irreversible steps; a Decider lane (safety classification replacing the shell substring blocklist, tier/routing verdicts); independent read-only tool calls as parallel lanes. FIRST: a per-provider concurrency budget (a provider rejected 3 parallel workers). Related: a very slow reflection still holds the trailing SSE connection open after `done` — consider a dedicated post-turn phase. |
+| B-2026-09-21-7 | Provider failover follow-ups (ADR-69): show cooldown/health per provider in the Providers page; a per-provider concurrency budget; extend the failed-source memory to `browse`/`web_research` and scope it per session; budget the fallback chain (a slower fallback model can hit the per-call timeout). |
+| B-2026-09-21-8 | Windows test portability + exit-gate reliability: raw Windows `tmp_path` backslashes are f-string-injected into JSON tool args (`Invalid \escape` — the 13-test `find_path` cluster plus ~11 others, ~24 full-suite failures at exit); temp-dir/disallowed-path gates fail on that box; and 5 source-grepping tests need `PYTHONUTF8=1` on the CI pytest step (~line 79 of `scripts/ci-check.sh`). THEN stabilise the nondeterministic families (failure set swings 7↔22) and refresh `scripts/pytest-baseline.txt` — it is a ratchet, not a mask. |
+| B-2026-09-21-9 | Windows verification of the state engine: the State Explorer page and the live SSE run route (`GET /state-explorer`, `POST /api/state-engine/run`) were verified on macOS only. Run them on the owner's Windows box (build-free by design) and fix whatever the platform surfaces. |
+| B-2026-09-21-10 | Pre-action recall (ADR-62 gap 4): inject recalled stable facts into the turn context BEFORE answering identity/location/preference questions — reads are ~16ms. The passive-context profile (ADR-66a) is the source. Live-verify. |
+| B-2026-09-21-11 | Multi-step planning wiring: route genuinely-complex requests through plan → execute → reflect at the tier-3 triage — the planner/`todo_write`/checklist machinery exists; the gap is routing. Ties to per-phase budgets (B-2026-09-21-17). |
+| B-2026-09-21-12 | Learning transfer: lessons persisted by the reflection loop must be RECALLED by relevance at decision time — a stable key-namespace in `vector_facts` plus recall on matching trigger patterns. Storage is not application. |
+| B-2026-09-21-13 | Skill-gap detection: diagnose repeated failure CATEGORIES and self-generate backlog rows (promotes lessons into named capability gaps). Shape to be settled at design time. |
+| B-2026-09-21-14 | Anti-sycophancy guard: agreement re-reasoned, never performed — concede only with evidence, defend when the user is wrong; prompt + Thinker contract, possibly a pre-concession check. Live-verify by replaying challenge turns. |
+| B-2026-09-21-15 | Memory edit path tolerance: `PATCH /api/memory/{id}` (behind `VectorStore.update_content`) needs the embedding index, so an edit against a store built by the plain-text fallback rolls back and answers 404. Mirror the delete half's best-effort behaviour, or refuse with the reason instead of "not found". |
+| B-2026-09-21-16 | "Conversation too long" false positive: the raw provider error behind a ~3K-token chat on a 1M-token model was never captured. Reproduce on the owner's setup with the failure card's Technical details open, log the raw error server-side, find why the card said `Provider: unknown`, and add the missing provider label. |
+| B-2026-09-21-17 | Turn economy for verification-heavy tasks: resumable per-phase checkpoints, adaptive time/tool budgets, background continuation, tool batching, and a graceful completed/stopped-at/what-continues report at the cap instead of dying mid-sentence. |
 
 ### Low Priority
 
 | ID | Summary |
 |----|---------|
-| B-2026-09-21-8 | Persist per-phase thinking segments so chats reloaded from history keep the split (today they show one block; only live turns are split). Store `{text, ms, afterTools}` in message metadata next to `thinking`. |
-| B-2026-09-21-9 | Provider model switches (S26) only affect the picker; decide whether hidden models must also be refused by the agent/router, and live-test the add/hide/default/delete flows on a real provider (only the DeepSeek view was clicked through). |
-| B-2026-09-21-10 | Settings/architecture tidy: give memory settings (embedding model) their own page; `useChat` is still one ~1,900-line SSE switch — extract a reducer with per-event handlers; the finished-turn header time (9.0 s) and the measured latency (9.9 s) differ by ~1 s, find the source. |
-| B-2026-09-15-1 | Ledger-vocabulary strip remainder (in progress — Baraka S005 released the claim 2026-09-16; runtime surface done): ~540 lines left in tests/, docs/, live-test script headers; method + state in `reviews/2026-09-16-review-s5-vocab-strip.md`. |
-| B-2026-09-15-17 | Multi-step planning WIRING: route genuinely-complex requests through plan → execute → reflect at the tier-3 triage (planner/todo_write/checklist machinery exists; the gap is routing). Ties -7 (per-phase budgets = checkpoint structure). |
-| B-2026-09-15-18 | Learning transfer: lessons persisted by -14 must be RECALLED by relevance at decision time — stable key-namespace in vector_facts + -6 recall on matching trigger patterns. Storage ≠ application. |
-| B-2026-09-15-16 | Skill-gap detection: diagnose repeated failure CATEGORIES and self-generate backlog rows (promotes -14's lessons into named capability gaps). Shape TBD at design time. Research doc §6.3. |
-| B-2026-09-15-10 | Anti-sycophancy guard: agreement re-reasoned, never performed — concede only with evidence, defend when the user is wrong; prompt + Thinker contract, possibly a pre-concession check. Live-verify by replaying challenge turns. |
-| B-2026-09-07-1 | Fast-path/conversational turns persist no workspace artifacts → Agent Workspace panel empty after reload. Either build minimal turn-shell artifacts on the fast-path epilog (`agent_runtime.py` ~1300) or render a "direct-answer turn" card frontend-only. Coordinate: shared surface with metrics work. |
-| B-2026-09-09-9 | Isolated server dies SILENTLY under provider 429 storms (no traceback, client sees "connection refused"): add a last-gasp crash surface (faulthandler wrapper), repro under a MOCKED 429 storm + client-abort, define the SSE contract for process death. Evidence: `scratch/server-death-evidence-s449.log`. |
+| B-2026-09-21-18 | Memory junk-row sweep: find rows whose whole content is an operation word (`list`, `store`, `recall`, `forget`, `facts`, `memory`) written by the bare-operation bug, report them, delete only on approval; `scripts/janitor.py` is the natural home. |
+| B-2026-09-21-19 | Ledger-vocabulary strip remainder: ~540 citation lines left in `tests/` (~384), `docs/` (~95) and live-test script headers (~50) — the runtime surface is already clean. Method and exact state: `history/office-002/reviews/2026-09-16-review-s5-vocab-strip.md`; hand-strip per line, never a blind script. |
+| B-2026-09-21-20 | Two dead-code decisions with evidence already gathered: `core/filters.py`'s `is_code_output` flag is never read in `_filter_tool_injection`'s body, so code output gets the same filtering as everything else despite the docstring (implement the skip or remove the flag); `api/routes/terminal.py`'s `TerminalSessionBridge` is fully built but never called — wire `execute_in_session` into the agent's tool dispatch or remove the class. Detail: `history/office-002/reviews/2026-09-19-review-s021-dead-code-scan.md`. |
+| B-2026-09-21-21 | Settings/architecture tidy: give memory settings (embedding model) their own page; extract `useChat`'s ~1,900-line SSE switch into a reducer with per-event handlers; find the ~1s gap between the finished-turn header time and the measured latency. |
+| B-2026-09-21-22 | Persist per-phase thinking segments so reloaded chats keep the split — store `{text, ms, afterTools}` in message metadata next to `thinking` (only live turns are split today). |
+| B-2026-09-21-23 | Frontend test health: 9 context-menu tests fail under jsdom (the Radix menu opens once per file); cause already narrowed — fix or document with the cause. |
+| B-2026-09-21-24 | Provider model-switch policy: provider model switches only affect the picker — decide whether hidden models must also be refused by the agent/router, and live-test the add/hide/default/delete flows on a real provider (only the DeepSeek view was clicked through). |
+
+<!-- TEMPLATE — add one ACTIONABLE row to the matching priority table
+     (a finding, question, or someday idea goes in parking-lot.md instead):
+| B-<YYYY-MM-DD>-<n> | <what to DO, one line, pointing at the issue/PR/
+      parking-lot finding for detail — not the full context> |
+-->
