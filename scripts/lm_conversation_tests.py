@@ -52,6 +52,21 @@ DEFAULT_SETTINGS = Path.home() / "LocalMind" / "settings.json"
 # A turn may carry `expect`: (description, regex|keyword) checks on that turn's
 # final text — OBSERVATIONS, not hard gates (the transcript is the real signal).
 CONVERSATIONS: list[dict] = [
+    # ── Set: continuation — a short "and?" after work must ACT, not deflect ──
+    {
+        "id": "CONV-CONT-01", "set": "continuation",
+        "name": "short follow-ups after a folder look must continue, not punt to a mode",
+        "turns": [
+            {"prompt": "Look at the top-level folders in ~/Code and tell me which one looks like a project."},
+            {"prompt": "and???", "expect": [
+                ("does not tell the user to switch modes", "!(agent|chat) mode"),
+                ("does not just promise", "!^(let me|i'll)\\b[^\\n]{0,80}$"),
+            ]},
+            {"prompt": "Whats wrong with you", "expect": [
+                ("does not tell the user to switch modes", "!(agent|chat) mode"),
+            ]},
+        ],
+    },
     # ── Set: context-retention — does it remember what it just said? ─────────
     {
         "id": "CONV-01", "set": "context-retention",

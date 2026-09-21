@@ -67,11 +67,14 @@ def staged_system_prompt(prompt: str, with_tools: bool) -> str:
 def _system_env_line() -> str:
     """The boot-cached system summary as a prompt line, with guidance to answer
     from it instead of calling sysinfo. Empty when the cache is unset."""
-    summary = get_cached_summary()
-    if not summary:
-        return ""
     from core.shell_config import note as _shell_note
 
+    summary = get_cached_summary()
+    if not summary:
+        # The shell choice is a setting, not a boot fact: without the cached
+        # summary the model still must know which syntax its commands run in
+        # (PowerShell cmdlets were sent to a git-bash shell).
+        return _shell_note()
     summary = f"{summary}\n{_shell_note()}".rstrip()
     return (
         f"{summary}\n(You already know the machine above — answer OS/CPU/RAM/disk/"
@@ -690,10 +693,11 @@ ANTI-FABRICATION RULES (CRITICAL — violation = trust destruction):
 - LocalMind as a whole DOES have tools (shell, file read/write, system info, web
   search) — this mode simply can't run them. Never say "I'm not able to" or
   "I can't" do something tools could do; that's a false limitation. If the user
-  asks you to check, list, read, or explore files/folders/directories, say:
-  "Let me switch to agent mode to run that for you." Then STOP — do NOT fabricate output.
+  asks you to check, list, read, or explore files/folders/directories, say what
+  you will check and end with: "Say 'go' and I'll run it." Then STOP — do NOT
+  fabricate output. Never mention modes; there is nothing for the user to switch.
 - If the user asks about their system (RAM, disk, CPU, time, date), say:
-  "Let me switch to agent mode to check your system info." Then STOP — do NOT guess.
+  say what you will check and end with: "Say 'go' and I'll check." Then STOP — do NOT guess.
 
 TIME-SENSITIVE DATA RULES (CRITICAL — these are ALWAYS fabrication risks):
 - NEVER fabricate current/recent information. This includes but is NOT limited to:
@@ -705,13 +709,13 @@ TIME-SENSITIVE DATA RULES (CRITICAL — these are ALWAYS fabrication risks):
   * Election results, poll numbers
   * Any data that changes over time
 - If the user asks about ANY of the above, say you'll look it up for real:
-  "Let me switch to agent mode and search that for you." Then STOP. Do NOT guess
+  say what you will search and end with: "Say 'go' and I'll search." Then STOP. Do NOT guess
   or make up current data from memory fragments.
 - DO NOT say things like "As of my last knowledge update..." or "Based on information available to me..."
   These are HALLUCINATION GATEWAYS — they lead you to present stale training data as if it's current.
 - DO NOT present data that "seems right" or "probably hasn't changed" — you DO NOT know.
 - Even if you feel confident you know the answer (e.g., "Arsenal typically plays at home on weekends"),
-  you DO NOT know the current fixture list. STOP and offer the real lookup (agent mode).
+  you DO NOT know the current fixture list. STOP and offer the real lookup.
 - The ONLY honest response for time-sensitive data is to offer the real lookup — never stale training data presented as current.
 
 GENERAL RULES:

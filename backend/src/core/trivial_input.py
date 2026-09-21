@@ -78,6 +78,38 @@ CAPABILITY_NOTE = (
     "of inventing a limitation. "
 )
 
+# Auto mode has no "other mode" to switch to: one loop decides per message
+# whether to act. A lightweight reply that ends up needing a tool must not send
+# the user off to a mode that does not exist for them (owner live-report: "Found
+# it and???" got a promise plus "flip me to Agent mode" in an Auto session).
+AUTO_CAPABILITY_NOTE = (
+    "You are LocalMind, a real AI agent running ON the user's machine with "
+    "actual tools (shell, file read/write/delete, code, web). NEVER claim you "
+    "lack access to the filesystem or that you 'can't' do something you could "
+    "do with a tool — that is false. There are no modes for the user to switch "
+    "between; never mention modes. This reply has no "
+    "tools, so if answering needs an action or live data, say in one sentence "
+    "what you will check and end with: Say 'go' and I'll do it. Never narrate "
+    "an action as if you were doing it. "
+)
+
+
+def active_capability_note() -> str:
+    """The capability note for the lightweight reply paths, by configured chat mode.
+
+    Only an explicit Chat ("direct") mode has an Agent mode to point at; in Auto
+    (and Agent) there is nothing to switch to, so the note must not mention one.
+    """
+    try:
+        from core.config import settings as _settings
+
+        if getattr(_settings, "localmind_chat_mode", "auto") == "direct":
+            return CAPABILITY_NOTE
+    except Exception:
+        pass
+    return AUTO_CAPABILITY_NOTE
+
+
 # ── Trivial input patterns ───────────────────────────────────────────────────
 # Each pattern is a regex that matches the ENTIRE message (anchored ^...$).
 # Conservative: only matches inputs that are obviously conversational.
@@ -785,7 +817,7 @@ def message_is_action_approval(message: str) -> bool:
 
 
 _AFFIRMATION_RE = re.compile(
-    r"^(?:yes|yeah|yep|yup|ok|okay|sure|please|please do|do it|go ahead|go on|proceed|"
+    r"^(?:yes|yeah|yep|yup|ok|okay|sure|please|please do|do it|go|go ahead|go on|proceed|"
     r"sounds good|that works|fine|alright|absolutely|definitely|of course|"
     r"yes please|yes go ahead|ok do it|sure go ahead|ok go ahead)$",
     re.IGNORECASE,
@@ -793,7 +825,8 @@ _AFFIRMATION_RE = re.compile(
 _OFFER_RE = re.compile(
     r"(want me to|would you like|shall i|should i|do you want|let me know if|ready when you are|"
     r"i can (?:do|run|check|install|try)|i'?ll (?:need|have) to|need your (?:ok|okay|approval|permission)|"
-    r"before i (?:do|run|install|proceed)|confirm)",
+    r"before i (?:do|run|install|proceed)|confirm|say ['\"]?(?:go|yes)\b|"
+    r"let me (?:check|look|search|run|open|read|list|find|fetch|browse))",
     re.IGNORECASE,
 )
 
@@ -816,6 +849,41 @@ def approves_pending_offer(message: str, history: Optional[list[dict]] = None) -
             continue
         text = str(h.get("content") or "").strip()
         return bool(text) and (text.endswith("?") or bool(_OFFER_RE.search(text[-400:])))
+    return False
+
+
+# The assistant's last words announce work it has not done yet ("Let me open
+# it", "I'll read the README", "Going in now"). A short reply to that is the
+# user saying "and?" — a signal to continue, never a fresh small-talk question.
+_PENDING_WORK_RE = re.compile(
+    r"(?:let me|let's|i'?ll|i will|i'?m going to|i am going to|going to|next,? i|"
+    r"now i|on it|going in|opening|reading|checking|looking|searching)\b[^.?!]{0,120}[.…:]?\s*$",
+    re.IGNORECASE,
+)
+_CONTINUE_MAX_WORDS = 8
+
+
+def continues_prior_work(message: str, history: Optional[list[dict]] = None) -> bool:
+    """A short message that follows an assistant turn which left work undone.
+
+    "Found it and???" / "Whats wrong with you" after "Found it — let me open it"
+    are shaped like conversational questions, so they took the no-tools reply
+    lane and got a promise instead of the action. The previous assistant turn
+    either ran tools (the task is mid-flight) or ended by announcing work; in
+    both cases a short follow-up belongs to the agent loop, which can act.
+    Bare thanks/greetings never reach here (they are decided as trivial first).
+    """
+    if not message or not history:
+        return False
+    if len(message.split()) > _CONTINUE_MAX_WORDS:
+        return False
+    for h in reversed(history):
+        if str(h.get("role", "")).lower() != "assistant":
+            continue
+        if h.get("tool_calls"):
+            return True
+        text = str(h.get("content") or "").strip()
+        return bool(text) and bool(_PENDING_WORK_RE.search(text[-200:]))
     return False
 
 
@@ -1108,7 +1176,7 @@ async def trivial_response(
         adapter,
         history,
         system_prompt=(
-            CAPABILITY_NOTE
+            active_capability_note()
             + "The user's message is a brief social gesture "
             f"({_kind}). Reply in kind — one short warm sentence; do not "
             "launch into a capability list. Ground the reply in the "
@@ -1183,7 +1251,7 @@ async def conversational_response(
         adapter,
         history,
         system_prompt=(
-            CAPABILITY_NOTE
+            active_capability_note()
             + "You are in a conversation with the user. "
             "Respond naturally and keep the flow going.\n"
             # Brevity contract for casual conversation: a wellbeing check or

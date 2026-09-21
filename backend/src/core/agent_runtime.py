@@ -1338,6 +1338,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         if file is None and _conversational_hint and _pre_init_override.mode is None:
             from core.trivial_input import (
                 approves_pending_offer,
+                continues_prior_work,
                 conversational_response,
                 is_conversational_question,
                 is_trivial_input,
@@ -1353,8 +1354,10 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             # Light history load for follow-up detection ("Like what?").
             try:
                 _hist = await asyncio.to_thread(self._store.get_history, session_id)
+                # tool_calls rides along: a follow-up right after a turn that
+                # ran tools is mid-task, not small talk (continues_prior_work).
                 _hist_dicts = [
-                    {"role": h.role.value, "content": h.content}
+                    {"role": h.role.value, "content": h.content, "tool_calls": getattr(h, "tool_calls", None)}
                     for h in _hist[-4:]
                     if h.content
                 ]
@@ -1375,7 +1378,10 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             _approves_offer = approves_pending_offer(message, _hist_dicts)
             _is_trivial = is_trivial_input(message, _hist_dicts) and not _approves_offer
             _is_conv = (
-                (not _is_trivial) and not _approves_offer and is_conversational_question(message, _hist_dicts)
+                (not _is_trivial)
+                and not _approves_offer
+                and not continues_prior_work(message, _hist_dicts)
+                and is_conversational_question(message, _hist_dicts)
             )
             if _is_trivial or _is_conv:
                 _path = "trivial" if _is_trivial else "conversational"

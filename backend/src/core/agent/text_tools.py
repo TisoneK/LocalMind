@@ -359,7 +359,10 @@ def _truncate_observation(obs: str, max_chars: int = OBS_LOG_MAX_CHARS) -> str:
     if len(obs) <= max_chars:
         return obs
     half = max_chars // 2
-    return obs[:half] + f"\n… [{len(obs) - max_chars} chars truncated] …\n" + obs[-half:]
+    return obs[:half] + (
+        f"\n… [{len(obs) - max_chars} chars truncated from the middle — you have NOT seen them; "
+        "say so, and re-read a narrower range or use search_tool_results] …\n"
+    ) + obs[-half:]
 
 
 # ── Tool-talk detection ────────────────────────────────────────────────────────
@@ -371,8 +374,8 @@ _TOOL_TALK_PATTERNS = [
     re.compile(r"please provide (me with |the )?tool results?", re.IGNORECASE),
     re.compile(r"i need (you to |the )?tool results?", re.IGNORECASE),
     re.compile(r"provide (me with |the )?results? of (the )?tool", re.IGNORECASE),
-    re.compile(r"i (will|would|need to|am going to) (use|call|invoke|run) (the )?(\w+) tool", re.IGNORECASE),
-    re.compile(r"let me (use|call|invoke|run) (the )?(\w+) tool", re.IGNORECASE),
+    re.compile(r"i (will|would|need to|am going to) (use|call|invoke|run|describe) (the )?(\w+) tool", re.IGNORECASE),
+    re.compile(r"let me (first )?(use|call|invoke|run|describe) (the )?(\w+) tool", re.IGNORECASE),
     re.compile(r"i('ll| will) (need to |try to )?(search|look up|execute|run|query)", re.IGNORECASE),
     re.compile(r"to answer (this|your) (question|request),? i (will|would|need to)", re.IGNORECASE),
     re.compile(r"<tool>|<action>|<function>", re.IGNORECASE),
@@ -415,6 +418,40 @@ _TOOL_TALK_PATTERNS = [
 ]
 
 _MAX_TOOL_TALK_RECOVERIES = 2
+
+
+# A final answer that ENDS by announcing a read/explore step it never took
+# ("Found it — C:\\Users\\x\\Tisone. Let me open it."). Unlike a state-changing
+# narration this can follow a turn where tools DID run, so the tool-name and
+# state-verb detectors both miss it; the user's only recourse was typing "and???".
+_UNFINISHED_INTENT_RE = re.compile(
+    r"(?:let me|let's|i'?ll|i will|i'?m going to|i am going to|going to|now i'?ll|next,? i'?ll)\s+"
+    r"(?:now\s+|first\s+|just\s+|go\s+ahead\s+and\s+)?"
+    r"(?:open|read|look|check|list|explore|dig|go|see|get|fetch|search|find|inspect|examine|"
+    r"view|browse|scan|pull|load|try|take a look)\b[^.?!]{0,100}[.…:]?\s*$",
+    re.IGNORECASE,
+)
+_UNFINISHED_OFFER_MARKERS = (
+    "let me know", "would you like", "if you'd like", "if you want", "want me to",
+    "shall i", "should i", "do you want", "just say", "say 'go'",
+)
+
+
+def ends_with_unfinished_intent(text: str) -> bool:
+    """True when a SHORT final answer ends by promising a read/explore step and stops.
+
+    Offers to the user ("let me know if you want me to open it") are excluded —
+    those defer, they do not commit. Callers nudge once to act, never loop.
+    """
+    if not text:
+        return False
+    stripped = text.strip()
+    if len(stripped) < 10 or len(stripped) > 600:
+        return False
+    lower = stripped.lower()
+    if any(m in lower for m in _UNFINISHED_OFFER_MARKERS):
+        return False
+    return bool(_UNFINISHED_INTENT_RE.search(stripped[-200:]))
 
 
 def _is_tool_talk(text: str) -> bool:

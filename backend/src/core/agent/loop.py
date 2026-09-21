@@ -130,6 +130,7 @@ from core.agent.text_tools import (
     _strip_minimax_tool_calls,
     _strip_minimax_tool_calls_stream,
     _truncate_observation,
+    ends_with_unfinished_intent,
 )
 from core.agent.tool_dispatch import dispatch_with_retry
 from core.agent.tool_schemas import TOOL_DEFINITIONS, tool_defs_for_call
@@ -7671,11 +7672,16 @@ class AgentLoop:
                 # still doesn't emit a tool_call on the next iteration, the
                 # one-shot guard below prevents an infinite nudge loop and
                 # the turn falls through to the honest-stop path.
-                if is_parent and not any(
-                    getattr(s, "tool_name", "") for s in getattr(trace, "steps", []) or []
-                ):
+                # Also fires AFTER tools ran when the answer ends by promising
+                # a read/explore step it never took ("…Let me open it.").
+                if is_parent:
                     _final_text = getattr(trace, "final_response", "") or ""
-                    if prose_commits_to_tool_action(_final_text):
+                    _no_tool_ran = not any(
+                        getattr(s, "tool_name", "") for s in getattr(trace, "steps", []) or []
+                    )
+                    if (
+                        _no_tool_ran and prose_commits_to_tool_action(_final_text)
+                    ) or ends_with_unfinished_intent(_final_text):
                         # One-shot: if we already nudged on this run, don't
                         # nudge again — fall through to accept (the model
                         # had its chance and still didn't emit a tool_call).
@@ -9515,7 +9521,8 @@ class AgentLoop:
                 content = msg.get("content", "")
                 if len(content) > 1500:
                     half = 750
-                    content = content[:half] + f"\n…[{len(content) - 1500} chars omitted]…\n" + content[-half:]
+                    _cut = f"\n…[{len(content) - 1500} chars omitted — not seen; say so if it matters]…\n"
+                    content = content[:half] + _cut + content[-half:]
                 clean_messages.append(
                     {
                         "role": "user",

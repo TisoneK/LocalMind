@@ -73,7 +73,10 @@ TOOL_RESULT_BUDGET_CHARS: int = 8000
 # Marker that identifies an already-stubbed result (idempotency).
 # Worded to signal the tool SUCCEEDED so a model doing verify-after-write
 # (the check-before-acting safety workflow) doesn't misread the omission as a failure.
-_STUB_MARKER = "…[tool succeeded — output truncated for length; the middle was omitted]…"
+_STUB_MARKER = (
+    "…[tool succeeded — output truncated for length; the middle was omitted and not seen"
+    " — say so if it matters, or re-read a narrower range]…"
+)
 # One-line notice replacing a DISCARDED result (task-aware, P0 off by default).
 # Deliberately outcome-NEUTRAL (a review finding): it must not imply the
 # tool succeeded or failed, so a verify-after-write model (the safety

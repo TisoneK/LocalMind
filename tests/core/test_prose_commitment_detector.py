@@ -304,3 +304,61 @@ async def test_gate_respects_iteration_cap():
 
     assert is_final is True
     assert len(loop_messages) == original_len
+
+
+# ── Unfinished read/explore intent (owner transcript 2026-09-21) ────────────
+# "Found it — C:\Users\x\Tisone. Let me open it." ended the turn AFTER a tool
+# ran; the owner had to type "and???". Also closes P-2026-09-16-4 / -43.
+
+from core.agent.text_tools import _is_tool_talk, ends_with_unfinished_intent  # noqa: E402
+
+_FOUND_IT = r"Found it — C:\Users\Lameck\Tisone. Let me open it."
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        _FOUND_IT,
+        "The folder exists. I'll read the README next.",
+        "Two matches. Going to look inside LocalMind now:",
+        "I'll get the hostname of this machine for you.",
+    ],
+)
+def test_unfinished_intent_positive(text):
+    assert ends_with_unfinished_intent(text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Found it at C:\\Users\\Lameck\\Tisone. Let me know if you want me to open it.",
+        "Paris is the capital of France.",
+        "I opened the file and read the README; it describes a local AI runtime.",
+        "",
+        "x" * 700 + " Let me open it.",
+    ],
+)
+def test_unfinished_intent_negative(text):
+    assert ends_with_unfinished_intent(text) is False
+
+
+def test_tool_talk_catches_describe():
+    assert _is_tool_talk("Let me describe the shell tool first.") is True
+    assert _is_tool_talk("I will describe the shell tool to the user.") is True
+
+
+@pytest.mark.asyncio
+async def test_gate_reprompts_after_tool_ran_when_answer_only_promises():
+    from core.agent.loop import AgentLoop
+
+    loop = AgentLoop(adapter=None)
+    trace = _make_trace_with_final_response(_FOUND_IT, has_tool_step=True)
+    loop_messages = [{"role": "user", "content": "find Tisone"}]
+
+    suffix, is_final = await loop._acceptance_gate_at_final_answer(
+        trace=trace, iteration=1, effective_max_iter=10, loop_messages=loop_messages,
+        observation_log="", active_adapter=None, intent=None, obs=None, is_parent=True,  # type: ignore[arg-type]
+    )
+
+    assert is_final is False
+    assert any("[TOOL COMMITMENT]" in str(m.get("content", "")) for m in loop_messages)
