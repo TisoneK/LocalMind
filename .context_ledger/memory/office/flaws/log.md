@@ -68,3 +68,24 @@ evidence: `history/office-002/flaws/log.md`.
   it.
 - **Status:** open (owners: the next core-maintainer pass for 1 and 3; the
   project's own gate runner for 2 and 4).
+
+---
+## 2026-09-21 — Mosi / deepseek-flash (ZCode, S001) — the fresh office inherits executable bits from the core templates
+
+- **Flaw:** `ledger-history close` opens the new office from
+  `core/templates/memory/office/`, and eight of those template files ship mode
+  0755 (`agents/sessions.md`, `tasks/backlog.md`, `tasks/current.md`,
+  `plans/decisions.md`, `flaws/log.md`, `flaws/README.md`,
+  `inefficiencies/log.md`, `reviews/README.md`), so every close introduces a
+  spurious `100644 → 100755` mode change on plain markdown notes.
+- **Symptom:** the closing commit's diff carries eight mode-only changes, and
+  every later edit to those files shows mode churn in the diff; the rest of the
+  repository's memory files are 0644, so the office files look executable for no
+  reason.
+- **Root cause:** the template tree's own file modes were never normalized when
+  it was packaged into core (only the office templates are affected —
+  `agents/roster.md` and the `sessions/` files are 0644).
+- **Suggested fix:** normalize the template tree to 0644 in the package, or have
+  `ledger-history close` copy content and set 0644 explicitly.
+- **Status:** open (owner: the next core-maintainer pass); the mode churn in
+  this repo was corrected in the same commit that logged this.
