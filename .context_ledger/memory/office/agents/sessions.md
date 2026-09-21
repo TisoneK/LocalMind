@@ -444,3 +444,12 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** the frontend UI was not driven in a browser (only the SSE contract live-tested); the trailing stream stays open until services finish, so a very slow reflection still holds the connection (not the input).
 - **Coordination:** solo edit of `agent_runtime.py` and `useLocalMind.ts` on main; peers Imani/Wanjiru/Nia on the roster were not in these files (did not check claims — should have).
 - **Report:** none separate — this entry + chat summary.
+
+## 2026-09-21 — Session 26 — agentic UI, provider resilience, honest plans, settings (Wanjiru)
+
+- **Agent:** Wanjiru | **Model:** claude-sonnet-5 | **Platform:** macOS (Darwin 24.6), Claude desktop app | **Role:** engineer | **Core:** 2.0.2
+- **Task:** owner-directed series: transparent provider-limit failover; Retry/Edit/Undo; command palette, welcome and splash; stats and tooltips; per-phase thinking; Providers page and Settings pages; package-env and shell settings; agent honesty (dynamic plans, failed-source memory, verification by stat, `file_write` guard).
+- **Shipped:** see CHANGELOG (one entry per change) and `git log`; ADR-67..70 record the decisions; research note `docs/research/2026-09-21-tool-refusals-plans-and-recovery.md`.
+- **Verification:** live on isolated stacks (deepseek / deepseek-chat, never :8000 or the owner's home). Last full run: backend 3425 passed, frontend 562 passed, lint 0 errors.
+- **Open items (backlog B-2026-09-21-1..10):** confirmable-refusal rollout, self-revising planner, Windows verification (only simulated here), raw "too long" error never captured, persisted thinking segments, undo coverage/expiry.
+- **Coordination:** own worktree `collab/S026/wanjiru`, pushed straight to main; no collisions.

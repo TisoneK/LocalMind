@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-20T01:14:10Z_
+_Regenerated: 2026-09-21T07:19:57Z_
 
 ## Standing params
 - **Core:** 2.0.2 (locked, verified 2026-09-19)
@@ -16,22 +16,22 @@ _Regenerated: 2026-09-20T01:14:10Z_
 
 ## Office — who's in, right now
 - **Imani** (S024) — Working — Recording a user preference (design decisions must be grounded in the actual design, limi…
-- **Wanjiru** (S026) — Working — Agentic UI redesign — event-driven turn model, live turn view, plan pill, right rail
 - **Nia** (S027) — Working — Human-style UI testing of the app — drive it in a browser, notice everything, fix what'…
 
 ## Current task
 (idle — no task recorded)
 
 ## Backlog — High priority (the top of the queue)
-(none)
+| B-2026-09-21-2 | A real planner (ADR-68 follow-on): a dedicated, self-revising plan step so the agent re-plans when a source fails instead of relying on the model volunteering `todo_write`; make report/conditional steps of a request-derived sequence ("tell me…", "if that fails…") complete by their own action, not the end-of-turn sweep; keep failed steps failed. Live-verify on DeepSeek with a dead-source request. Owner said "the agent loop isn't powerful enough yet" (2026-09-21). Ties B-2026-09-15-17. |
+| B-2026-09-21-5 | Windows verification of S26's settings work (owner is on Windows; verified only by simulation on macOS): shell choice (PowerShell 7 vs 5, cmd `/d /s /c` quoting, Git Bash detection when installed outside the standard folders), packages-folder `PYTHONPATH` with spaces in the path, file-write stat verification, terminal input focus. Run the S26 live checklist on the owner's machine; fix what differs. |
 
-_12 medium, 7 low priority row(s) — see tasks/backlog.md_
+_20 medium, 10 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 14 entries, last added 2026-09-19
 - inefficiencies/log.md (project code/env friction): 17 entries, last added 2026-09-19
-- plans/decisions.md (ADRs in force — respected, not relitigated): 5 entries, last added 2026-09-19
+- plans/decisions.md (ADRs in force — respected, not relitigated): 10 entries, last added 2026-09-21
 
 ## Collaboration
-- 118 event(s) on file; most recent: `20260920T011410Z-claude-sonnet-5-s026-894b34f4.json`
+- 124 event(s) on file; most recent: `20260920T134406Z-claude-sonnet-5-s024-2a2b46d5.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`

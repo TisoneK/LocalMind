@@ -352,3 +352,6 @@ never makes an entry eligible.
 - **Why it hid:** each had passing unit tests against mocks that set the state directly; none drove a real multi-tool, multi-chat conversation. `getattr(obj, "wrong_name", None)` returns a silent default, which turns a typo into a permanently false condition.
 - **Fixed:** `ba405dc9` (attribute name + loop test that fails on the old code), `5e45c7dc` (migration 012 + per-chat scoping), `2a734a46`/`b3d8b272` (plans from `lookup_plan` at the runtime seam).
 - **Prevent next time:** drive a real multi-turn conversation on the isolated stack before calling agent behavior done (as `system/live-testing.md` says); prefer attribute access or a typed accessor over `getattr(..., default)` for fields that must exist.
+
+- **What happened (S26):** the `file_write` placeholder guard went through three iterations (length check, phrase-cue regex, then the fact-only redesign) because each patched the symptom. The root question (a tool cannot know intent) was asked by the owner, not by me first.
+- **Prevent next time:** when a guard is refused-then-patched twice, stop and ask what fact the tool can actually verify (ADR-67).
