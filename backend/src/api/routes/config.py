@@ -52,6 +52,8 @@ class SettingsResponse(BaseModel):
     startup_session: str = "new"
     # Chat mode — "auto" | "agent" | "direct".
     chat_mode: str = "auto"
+    # Agent engine — "classic" | "state" (experimental, ADR-71).
+    engine: str = "classic"
     # Configurable operation permissions.
     permissions: dict = {
         "file_read": True,
@@ -137,6 +139,29 @@ async def set_chat_mode(req: ChatModeRequest):
     _data["chat_mode"] = val
     settings._secure_write_json(_path, _data)
     return {"chat_mode": val, "message": f"Chat mode set to {val}"}
+
+
+class EngineRequest(BaseModel):
+    """Body for POST /api/settings/engine."""
+    engine: str  # "classic" | "state"
+
+
+@router.post("/settings/engine")
+async def set_engine(req: EngineRequest):
+    """Persist the agent engine: "classic" (default) or "state" (experimental, read-only, ADR-71).
+
+    Independent of the provider and model. Chat keeps working on either; the UI shows the
+    State Explorer instead of the chat pane while "state" is selected.
+    """
+    val = req.engine.strip().lower()
+    if val not in ("classic", "state"):
+        raise HTTPException(status_code=400, detail="engine must be 'classic' or 'state'")
+    settings.localmind_engine = val
+    _path = settings._runtime_settings_path()
+    _data = settings._load_json_file(_path)
+    _data["engine"] = val
+    settings._secure_write_json(_path, _data)
+    return {"engine": val, "message": f"Engine set to {val}"}
 
 
 class ShellRequest(BaseModel):
@@ -427,6 +452,7 @@ async def get_settings():
         startup_session=getattr(settings, "localmind_startup_session", "new"),
         # Chat mode
         chat_mode=getattr(settings, "localmind_chat_mode", "auto"),
+        engine=getattr(settings, "localmind_engine", "classic"),
         # Operation permissions
         permissions=dict(getattr(settings, "localmind_permissions", {})),
     )

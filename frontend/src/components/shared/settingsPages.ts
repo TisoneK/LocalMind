@@ -21,7 +21,7 @@ export const PAGES: SettingsPage[] = [
   { id: 'providers', label: 'Providers & keys', blurb: 'Which AI service to use, and the keys to reach it.', group: 'Models' },
   { id: 'models', label: 'Models', blurb: 'The model that answers, and how it reasons.', group: 'Models' },
   { id: 'local', label: 'Local models', blurb: 'Ollama, running on this machine.', group: 'Models' },
-  { id: 'agent', label: 'Agent', blurb: 'What the agent may do, and where its installs go.', group: 'Agent' },
+  { id: 'agent', label: 'Agent', blurb: 'Which engine answers, what it may do, and where its installs go.', group: 'Agent' },
   { id: 'terminal', label: 'Terminal', blurb: 'The shell commands run in.', group: 'Agent' },
 ];
 
@@ -42,6 +42,7 @@ export const SECTION_PAGE: Record<string, PageId> = {
   Reasoning: 'models',
   'Local model (Ollama)': 'local',
   'Ollama Server URL': 'local',
+  'Agent engine': 'agent',
   Permissions: 'agent',
   'Best-of-N Editor': 'agent',
   'Package installs': 'agent',

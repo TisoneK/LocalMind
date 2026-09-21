@@ -56,6 +56,11 @@ def isolate_env(monkeypatch):
     from core.config import settings as _settings
 
     monkeypatch.setattr(_settings, "localmind_chat_mode", "auto", raising=False)
+    # Same hermeticity for the engine and the shell tool: the developer's runtime settings.json /
+    # backend/.env must not decide the result (with the shell tool off in .env, loop/shell tests that
+    # run commands failed on one machine and passed on another — B-2026-09-21-14).
+    monkeypatch.setattr(_settings, "localmind_engine", "classic", raising=False)
+    monkeypatch.setattr(_settings, "localmind_shell_enabled", True, raising=False)
 
 
 @pytest.fixture

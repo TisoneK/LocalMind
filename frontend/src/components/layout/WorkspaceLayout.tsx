@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { LeftPanel } from './LeftPanel';
 import { CommandPalette } from './CommandPalette';
 import { CenterPanel } from './CenterPanel';
+import { StateExplorer } from '@/components/engine/StateExplorer';
 import { RightPanel } from './RightPanel';
 import { TitleBar } from './TitleBar';
 import { ToolExecutionEvent, ActionItem } from '@/types';
@@ -28,6 +29,9 @@ export function WorkspaceLayout() {
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   // Chat mode state ("auto" | "agent" | "direct").
   const [chatMode, setChatMode] = useState<string>('auto');
+  // Agent engine ("classic" | "state"). "state" replaces the chat pane with the State Explorer — the
+  // engine works a goal as a search over states, so showing it as a conversation would misrepresent it.
+  const [engine, setEngine] = useState<string>('classic');
   const [leftPanelWidth, setLeftPanelWidth] = useState(280);
   const [rightPanelWidth, setRightPanelWidth] = useState(320);
   const [isResizingLeft, setIsResizingLeft] = useState(false);
@@ -109,6 +113,7 @@ export function WorkspaceLayout() {
     // Load persisted chat mode from backend settings.
     localmindClient.getSettings().then((s) => {
       if (s.chat_mode) setChatMode(s.chat_mode);
+      if (s.engine) setEngine(s.engine);
     }).catch(() => {});
   }, []);
 
@@ -445,6 +450,16 @@ export function WorkspaceLayout() {
     return () => window.removeEventListener('localmind:chat-mode-changed', onMode);
   }, []);
 
+  // Choosing the engine in Settings swaps what the center of the app is; apply it without a reload.
+  useEffect(() => {
+    const onEngine = (e: Event) => {
+      const next = (e as CustomEvent<{ engine?: string }>).detail?.engine;
+      if (next === 'classic' || next === 'state') setEngine(next);
+    };
+    window.addEventListener('localmind:engine-changed', onEngine);
+    return () => window.removeEventListener('localmind:engine-changed', onEngine);
+  }, []);
+
   // The Chat→Agent gate (in ChatMessage) dispatches this when
   // the user accepts. Switch to Agent mode (persist to backend) THEN resend the
   // original message as an agent turn — the await ensures the backend has the
@@ -505,6 +520,9 @@ export function WorkspaceLayout() {
 
       {/* Center Panel - flex: 1 */}
       <div className="flex-1 min-w-0 min-h-0">
+        {engine === 'state' ? (
+          <StateExplorer />
+        ) : (
         <CenterPanel
           messages={messages}
           title={sessions.find((x) => x.id === currentSessionId)?.title}
@@ -533,6 +551,7 @@ export function WorkspaceLayout() {
           passiveMemories={passiveMemories}
           fileDiffs={fileDiffs}
         />
+        )}
       </div>
 
       {/* Right Panel - 320px, collapsible */}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Server, Loader2, CheckCircle2, AlertCircle, FileEdit, Palette, Sun, Moon, Monitor, Brain, Cpu, Database, RotateCcw, MessageSquarePlus, Download, Shield, Zap } from 'lucide-react';
+import { X, Server, Loader2, CheckCircle2, AlertCircle, FileEdit, Palette, Sun, Moon, Monitor, Brain, Cpu, Database, RotateCcw, MessageSquarePlus, Download, Shield, Zap, GitBranch } from 'lucide-react';
 import { localmindClient } from '@/lib/localmind/client';
 import { Progress } from '@/components/ui/progress';
 import { PAGES, GROUPS, SECTION_PAGE, type PageId } from './settingsPages';
@@ -9,6 +9,7 @@ import { PackageEnvChoice } from '@/components/panels/PackageEnvChoice';
 import { ShellChoice } from './ShellChoice';
 import { ProvidersPage } from './ProvidersPage';
 import { ChatModeChoice } from './ChatModeChoice';
+import { EngineChoice } from './EngineChoice';
 import { ShortcutsList } from './ShortcutsList';
 import { useTheme, THEMES, type CustomTheme, type ModePref } from '@/hooks/useTheme';
 
@@ -1106,6 +1107,20 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
             </h3>
             <p className="mb-3 text-xs text-brand-green-muted">How messages are handled by default. You can also change it from the message box.</p>
             <ChatModeChoice />
+          </section>
+
+          {/* ── Agent engine ── */}
+          <section hidden={page !== SECTION_PAGE['Agent engine']}>
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
+              <GitBranch className="h-4 w-4 text-brand-green" />
+              Agent engine
+            </h3>
+            <p className="mb-3 text-xs text-brand-green-muted">
+              How a goal is worked. Classic is the parent agent you have been using. State is experimental: it keeps the
+              state itself and shows its search as a game tree in place of the chat — it only looks and reads, never changes
+              anything.
+            </p>
+            <EngineChoice />
           </section>
 
           {/* ── Keyboard shortcuts ── */}

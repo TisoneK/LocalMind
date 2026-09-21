@@ -326,6 +326,11 @@ class Settings(BaseSettings):
     # (always full agent loop), “direct” (no tools, lightweight chat).
     localmind_chat_mode: str = "auto"
 
+    # Agent engine — "classic" (the parent agent, default) or "state" (the experimental
+    # state-driven engine, ADR-71). Independent of provider/model. Only the UI acts on
+    # it: State swaps the chat pane for the State Explorer.
+    localmind_engine: str = "classic"
+
     # Where `pip install` goes: "localmind" (a folder LocalMind owns) or "system" (the Python on PATH).
     localmind_package_env: str = "localmind"
 
@@ -508,6 +513,12 @@ class Settings(BaseSettings):
                     logger.info(f"[config] Set chat_mode to {val}")
                 else:
                     logger.warning(f"[config] Ignoring invalid chat_mode: {data['chat_mode']!r}")
+            if "engine" in data:
+                val = str(data["engine"]).strip().lower()
+                if val in ("classic", "state"):
+                    self.localmind_engine = val
+                else:
+                    logger.warning(f"[config] Ignoring invalid engine: {data['engine']!r}")
             # Operation permissions
             if "permissions" in data:
                 perms = data["permissions"]

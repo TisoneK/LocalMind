@@ -34,6 +34,7 @@ import type {
   SessionFileEntry,
 } from '@/types';
 import { createSSEParser } from './sse';
+import type { EngineEvent, RunMeta } from './stateEngine';
 import type { CapabilitiesResponseWire } from './capabilities-response';
 
 // ─── Client-side intent hint ──────
@@ -230,6 +231,14 @@ interface PersistedSettings {
 
 // A connection is one model endpoint — a preset provider or a user-defined
 // OpenAI-compatible service. Mirrors backend/src/core/connections.py.
+export interface StateEngineInfo {
+  experimental: boolean;
+  read_only: boolean;
+  provider: string;
+  model: string;
+  tools: { name: string; description: string }[];
+}
+
 export interface ConnectionCapabilities {
   streaming: boolean;
   context_window: number;
@@ -1325,6 +1334,8 @@ class LocalMindClient {
     startup_session?: string;
     // Chat mode ("auto" | "agent" | "direct").
     chat_mode?: string;
+    // Agent engine ("classic" | "state" — experimental, read-only).
+    engine?: string;
     // Configurable operation permissions.
     permissions?: Record<string, boolean>;
   }> {
@@ -1337,6 +1348,60 @@ class LocalMindClient {
       method: 'POST',
       body: JSON.stringify({ chat_mode: chatMode }),
     });
+  }
+
+  /** Choose the agent engine: "classic" (default) or "state" (the experimental state-driven engine). */
+  async setEngine(engine: 'classic' | 'state'): Promise<{ engine: string; message: string }> {
+    return this.request('/api/settings/engine', {
+      method: 'POST',
+      body: JSON.stringify({ engine }),
+    });
+  }
+
+  /** Which provider/model the state engine will use, and the read-only tools it may probe with. */
+  async getStateEngineInfo(): Promise<StateEngineInfo> {
+    return this.request('/api/state-engine/info');
+  }
+
+  /**
+   * Stream one state-engine run: `onMeta` once, then `onEvent` for every engine event. Resolves when the run
+   * ends; aborting `signal` cancels it on the backend too (the request is dropped).
+   */
+  async runStateEngine(
+    goal: string,
+    handlers: { onMeta: (meta: RunMeta) => void; onEvent: (event: EngineEvent) => void },
+    signal?: AbortSignal
+  ): Promise<void> {
+    const res = await fetch(`${this.baseUrl}/api/state-engine/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ goal }),
+      signal,
+    });
+    if (!res.ok || !res.body) {
+      throw new Error(res.status === 422 ? 'The goal must be between 3 and 2000 characters.' : `The engine returned HTTP ${res.status}.`);
+    }
+    const parser = createSSEParser(
+      (data) => {
+        let payload: { kind?: string };
+        try {
+          payload = JSON.parse(data);
+        } catch {
+          return; // a malformed frame is skipped, never fatal
+        }
+        if (payload.kind === 'meta') handlers.onMeta(payload as unknown as RunMeta);
+        else handlers.onEvent(payload as unknown as EngineEvent);
+      },
+      () => {}
+    );
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      parser.push(decoder.decode(value, { stream: true }));
+    }
+    parser.flush();
   }
 
   /** Update operation permissions. */
