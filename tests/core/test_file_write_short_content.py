@@ -48,7 +48,7 @@ def _allow(tmp_path):
     return patcher
 
 
-async def _run_write(tmp_path, request, content, target_name="short.txt"):
+async def _run_write(tmp_path, request, content, target_name="short.txt", extra_args=None):
     """Drive the real loop once: the model calls file_write(content), then answers."""
     from adapters.ollama import ToolCallResult
     from core.agent.loop import AgentLoop
@@ -63,7 +63,7 @@ async def _run_write(tmp_path, request, content, target_name="short.txt"):
         if seen["n"] == 1:
             return ToolCallResult(
                 tool_name="file_write",
-                tool_args={"path": str(target), "content": content},
+                tool_args={"path": str(target), "content": content, **(extra_args or {})},
                 raw_content="Writing",
             )
 
@@ -135,3 +135,15 @@ async def test_a_stub_that_would_replace_a_real_file_is_refused(tmp_path):
     target, calls = await _run_write(tmp_path, "Update the notes in {path}", "ok", target_name="notes.txt")
     assert target.read_text(encoding="utf-8").startswith("real notes")
     assert "REJECTED" in next(c for c in calls if c.data.get("status") == "failed").data.get("output", "")
+
+
+@pytest.mark.asyncio
+async def test_the_model_can_confirm_a_deliberate_overwrite_with_a_signal(tmp_path):
+    """The refusal to replace a real file with a stub is a question, not a wall: overwrite=true answers it."""
+    original = tmp_path / "flag.txt"
+    original.write_text("old contents that are long enough to matter", encoding="utf-8")
+    target, calls = await _run_write(
+        tmp_path, "Reset the flag in {path}", "0", target_name="flag.txt", extra_args={"overwrite": True}
+    )
+    assert target.read_text(encoding="utf-8") == "0"
+    assert not any(c.data.get("status") == "failed" for c in calls)

@@ -5187,6 +5187,7 @@ class AgentLoop:
                         # new file holding it is harmless (and undoable), so it is written.
                         if not _content.strip() or (
                             _would_clobber_with_stub(_path, _content)
+                            and not tool_args.get("overwrite")  # the model's explicit "I mean it"
                             and not _content_requested_by_user(
                                 _content, _user_message_text(loop_messages, limit=None)
                             )
@@ -5203,7 +5204,8 @@ class AgentLoop:
                                     else f"{_path!r} already holds a real file and {_content.strip()[:30]!r} would "
                                     "replace it with a few characters. "
                                 )
-                                + "Provide the actual file content in the 'content' field.]"
+                                + "Provide the actual file content in the 'content' field, or set "
+                                "overwrite=true if replacing the file with exactly this is what is intended.]"
                             )
                             last_tool_failed = True
                             consecutive_failures += 1

@@ -116,7 +116,9 @@ class TestToolDescriptionCreateShape:
             if td["function"]["name"] == "file_write":
                 params = td["function"]["parameters"]
                 assert params["required"] == ["path", "content"]
-                assert set(params["properties"]) == {"path", "content"}
+                # `overwrite` is the model's optional confirmation for replacing a real file with a
+                # stub; only path and content are ever required.
+                assert set(params["properties"]) == {"path", "content", "overwrite"}
                 break
         else:
             raise AssertionError("file_write missing from TOOL_DEFINITIONS")

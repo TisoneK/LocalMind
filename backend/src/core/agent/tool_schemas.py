@@ -342,6 +342,10 @@ TOOL_DEFINITIONS: list[dict] = [
                 "properties": {
                     "path": {"type": "string"},
                     "content": {"type": "string"},
+                    "overwrite": {
+                        "type": "boolean",
+                        "description": "Set true to confirm you really mean to replace an existing file with this very short content.",  # noqa: E501
+                    },
                 },
                 "required": ["path", "content"],
             },
