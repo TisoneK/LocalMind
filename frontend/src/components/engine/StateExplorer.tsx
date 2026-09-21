@@ -66,7 +66,7 @@ const STORE = 'localmind:state-runs';
 const KEEP_RUNS = 10;
 
 /** The budget the engine will actually be given: whole numbers, inside the bounds the backend published. */
-export function clampBudget(b: Budget, limits: Record<keyof Budget, [number, number]>): Budget {
+function clampBudget(b: Budget, limits: Record<keyof Budget, [number, number]>): Budget {
   const out = { ...b };
   for (const k of Object.keys(BUDGET_LABEL) as (keyof Budget)[]) {
     const [lo, hi] = limits[k];
