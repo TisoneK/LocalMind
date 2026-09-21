@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-21T12:23:20Z_
+_Regenerated: 2026-09-21T12:49:40Z_
 
 ## Standing params
 - **Core:** 2.0.2 (locked, verified 2026-09-21)
@@ -26,6 +26,7 @@ _Regenerated: 2026-09-21T12:23:20Z_
 | B-2026-09-21-12 | Act-don't-punt in the chat lane (Kwame/S029 follow-on to the routing fix): the lightweight reply lane still cannot act, so a message it classifies as conversational that turns out to need a tool ends in a punt ("Say 'go' and I'll do it"). Make it escalate IN THE SAME TURN — detect the punt/needs-action shape (or let the model emit a sentinel the runtime buffers on the first tokens) and re-run the message through the agent loop instead of ending the turn. Retire the user-facing Chat/Direct toggle only with a product decision (see P-2026-09-16-12). Live-verify on DeepSeek with `CONV-CONT-01` plus a standalone "check my disk" phrased as a question. |
 | B-2026-09-21-13 | Remove the two leftover worktrees `.claude/worktrees/buffy-s016` and `../LocalMind-collab-bootup-telemetry` (owner: stale; branches kept, neither to be merged — S016 is superseded by the Providers page, bootup-telemetry holds old `.context/` logs). Blocked on a `Bash(git worktree remove:*)` permission rule the owner adds themselves. (Kwame/S029) |
 | B-2026-09-21-14 | Test isolation: tests read the developer's `backend/.env` and `~/LocalMind/settings.json` — with `LOCALMIND_SHELL_ENABLED` off in `.env`, 4 loop/shell tests (`test_inspection_dedup` ×2, more) fail on this Mac and pass in a clean checkout or with `LOCALMIND_SHELL_ENABLED=true`. Make `tests/conftest.py` pin the shell flag (and ignore `.env`) so results do not depend on the machine. Ties B-2026-09-09-7. (Kwame/S029) |
+| B-2026-09-21-15 | Verdict lane, next slice (ADR-66 addendum): give the completion judge a third verdict, UNSUPPORTED — the reply states results the turn's evidence does not show (a claimed file, a number no tool returned) — and feed it the plan/todo state, not only the last 3 tool steps. Live-verify on a dead-source request before it may nudge; measure the false-nudge rate first (report-only). Then consider running the judge concurrently with the streamed reply so the ~0.9 s overlaps instead of adding. (Kwame/S029) |
 
 _21 medium, 10 low priority row(s) — see tasks/backlog.md_
 
