@@ -52,6 +52,14 @@ DEFAULT_SETTINGS = Path.home() / "LocalMind" / "settings.json"
 # A turn may carry `expect`: (description, regex|keyword) checks on that turn's
 # final text — OBSERVATIONS, not hard gates (the transcript is the real signal).
 CONVERSATIONS: list[dict] = [
+    # ── Set: continuation — a SHORT tool-backed answer passes the completion judge lane ──
+    {
+        "id": "CONV-JUDGE-01", "set": "continuation",
+        "name": "short answer after a tool run is judged on the bus (bus_fact completion_judge)",
+        "turns": [
+            {"prompt": "How many top-level entries are in ~/Code/LocalMind/docs? Answer with just the number."},
+        ],
+    },
     # ── Set: continuation — a short "and?" after work must ACT, not deflect ──
     {
         "id": "CONV-CONT-01", "set": "continuation",
@@ -306,7 +314,8 @@ def boot_server(port: int, log_file: Path) -> subprocess.Popen:
         {
             "LOCALMIND_PORT": str(port),
             "LOCALMIND_HOME": str(TRACEHOME),
-            "LOCALMIND_ADAPTER": "bankofai",
+            # An explicit LOCALMIND_ADAPTER in the caller's env wins (bankofai is the default).
+            "LOCALMIND_ADAPTER": os.environ.get("LOCALMIND_ADAPTER", "bankofai"),
             "LOCALMIND_SHELL_ENABLED": "true",
             "PYTHONPATH": str(BACKEND / "src"),
         }

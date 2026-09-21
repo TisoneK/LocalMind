@@ -58,7 +58,7 @@ from core.agent.agent_filters import (
     _filter_system_leaks,
     _filter_tool_injection,
 )
-from core.agent.completion_judge import reply_leaves_work_pending
+from core.agent.completion_judge import reply_is_pending
 from core.agent.constants import (
     AGENT_ALLOWED_TOOLS,
     AGENT_INTENTS,
@@ -7148,6 +7148,7 @@ class AgentLoop:
                         gate_replan_count=_gate_replan_count,
                         gate_force_tool=_gate_force_tool,
                         tools_withheld=_answer_only_call_used,
+                        bus=_bus,
                     )
                     if not _gate_final:
                         _gate_replan_count += 1
@@ -7318,6 +7319,7 @@ class AgentLoop:
                     gate_replan_count=_gate_replan_count,
                     gate_force_tool=_gate_force_tool,
                     tools_withheld=_answer_only_call_used,
+                    bus=_bus,
                 )
                 if not _gate_final:
                     _gate_replan_count += 1
@@ -7599,6 +7601,8 @@ class AgentLoop:
         gate_replan_count: int = 0,
         # Mutable flag for gate→loop zero-tool force signal
         gate_force_tool: list[bool] | None = None,
+        # The turn bus: the completion judge runs as a lane on it (ADR-66).
+        bus: Optional[TurnBus] = None,
         # True when the reply being gated came from an
         # answer-only call (tool schemas withheld). Changes the recovery
         # for post-evidence narration from SYNTHESIZE to FORCE_TOOL.
@@ -7691,8 +7695,13 @@ class AgentLoop:
                             for m in (loop_messages or [])
                             if isinstance(m, dict)
                         )
-                        and await reply_leaves_work_pending(
-                            active_adapter, reformulated_message or _user_message_text(loop_messages) or "", _final_text
+                        and await reply_is_pending(
+                            bus,
+                            active_adapter,
+                            reformulated_message or _user_message_text(loop_messages) or "",
+                            _final_text,
+                            step=iteration,
+                            steps=getattr(trace, "steps", None),
                         )
                     ):
                         # One-shot: if we already nudged on this run, don't

@@ -399,3 +399,61 @@ async def test_gate_accepts_when_judge_says_done_and_nudges_only_once():
         observation_log="", active_adapter=adapter, intent=None, obs=None, is_parent=True,  # type: ignore[arg-type]
     )
     assert adapter.calls == 0  # already nudged: no second judge call, no second nudge
+
+
+# ── The judge is a lane on the turn bus (ADR-66) ────────────────────────────
+
+from core.agent.completion_judge import SOURCE, evidence_digest, reply_is_pending  # noqa: E402
+from core.agent.turn_bus import TurnBus  # noqa: E402
+
+
+@pytest.mark.asyncio
+async def test_verdict_is_published_as_a_fact_with_provenance():
+    seen = []
+    bus = TurnBus(on_fact=lambda f, stale: seen.append((f.source, f.kind, stale)))
+    assert await reply_is_pending(bus, _Verdict("PENDING"), "am I in Nairobi?", _PROMISE, step=3) is True
+    fact = bus.latest("verdict", source=SOURCE, step=3)
+    assert fact.value["verdict"] == "pending" and fact.grounded_in == ("reply@step3",)
+    assert (SOURCE, "verdict", False) in seen  # emitted for the bus_fact obs event
+
+
+@pytest.mark.asyncio
+async def test_failed_judge_is_an_unjudged_verdict_not_a_pending_one():
+    bus = TurnBus()
+    assert await reply_is_pending(bus, _Verdict(boom=True), "q", _PROMISE, step=1) is False
+    assert bus.latest("verdict", source=SOURCE, step=1).value["verdict"] == "unjudged"
+
+
+@pytest.mark.asyncio
+async def test_verdict_about_a_replaced_plan_is_stale_and_never_applied():
+    bus = TurnBus()
+
+    class _ReplansMidJudge(_Verdict):
+        async def chat(self, messages, temperature=0.0, intent="chat"):
+            bus.replan()  # the plan is replaced while the judge is thinking
+            async for c in super().chat(messages, temperature, intent):
+                yield c
+
+    assert await reply_is_pending(bus, _ReplansMidJudge("PENDING"), "q", _PROMISE, step=2) is False
+    assert bus.facts(kind="verdict") == []  # stale: on record, not current
+    assert len(bus.facts(kind="verdict", include_stale=True)) == 1
+
+
+@pytest.mark.asyncio
+async def test_judge_sees_the_evidence_gathered_this_turn():
+    steps = [
+        SimpleNamespace(tool_name="web_fetch", tool_failed=True, observation="HTTP 403 blocked"),
+        SimpleNamespace(tool_name="", tool_failed=False, observation=""),
+    ]
+    assert "web_fetch [FAILED]: HTTP 403 blocked" in evidence_digest(steps)
+    assert evidence_digest([]) == ""
+
+    class _Capture(_Verdict):
+        async def chat(self, messages, temperature=0.0, intent="chat"):
+            self.prompt = messages[0]["content"]
+            async for c in super().chat(messages, temperature, intent):
+                yield c
+
+    adapter = _Capture("DONE")
+    await reply_is_pending(TurnBus(), adapter, "weather?", "It is 22 C.", steps=steps)
+    assert "web_fetch [FAILED]" in adapter.prompt
