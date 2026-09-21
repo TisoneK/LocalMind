@@ -51,12 +51,13 @@ def _provider_and_model() -> tuple[str, str]:
 
 
 def _make_engine(budget):
-    """Build the engine on the active provider. A seam so tests can substitute a scripted one."""
+    """Build the engine on the active provider, through LocalMind's adapter. A seam so tests can
+    substitute a scripted engine."""
     from adapters import get_adapter
-    from core.state_engine import StateEngine
+    from state_agent.adapters.localmind import build_engine
 
     provider, model = _provider_and_model()
-    return StateEngine(get_adapter(provider, model), budget=budget)
+    return build_engine(get_adapter(provider, model), budget)
 
 
 def _sse(payload: dict) -> str:
@@ -75,7 +76,7 @@ async def state_explorer_page():
 
 @router.get("/state-engine/info")
 async def state_engine_info():
-    from core.state_engine.catalog import DEFAULT_CATALOG
+    from state_agent.adapters.localmind import LOCALMIND_ACTIONS
 
     provider, model = _provider_and_model()
     return {
@@ -83,7 +84,7 @@ async def state_engine_info():
         "read_only": True,
         "provider": provider,
         "model": model,
-        "tools": [{"name": t.name, "description": t.description} for t in DEFAULT_CATALOG.values()],
+        "tools": [{"name": t.name, "description": t.description} for t in LOCALMIND_ACTIONS.values()],
         # What a run costs and what it may be told to spend: the UI's search controls come from here.
         "budget": dict(_DEFAULT_BUDGET),
         "budget_limits": {
@@ -97,7 +98,7 @@ async def state_engine_info():
 
 @router.post("/state-engine/run")
 async def state_engine_run(req: RunRequest, request: Request):
-    from core.state_engine import EngineBudget, Goal
+    from state_agent import EngineBudget, Goal
 
     budget = EngineBudget(
         max_depth=req.max_depth, max_branches=req.max_branches,

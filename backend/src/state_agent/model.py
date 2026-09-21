@@ -1,27 +1,32 @@
-"""The model's two jobs: propose moves, and judge outcomes. It never owns the state."""
+"""The model's two jobs: propose actions, and judge outcomes. It never owns the state.
+
+Both are written against a ``ModelPort`` — anything that can answer a prompt with text:
+
+    class ModelPort(Protocol):
+        async def complete(self, prompt: str, *, max_chars: int = 4000) -> str: ...
+
+The port is the whole model dependency of the engine. An adapter supplies one (LocalMind supplies its own
+provider adapters; a test supplies a scripted string; a CLI supplies whatever it talks to).
+"""
 from __future__ import annotations
 
 import json
 import re
-from typing import Optional
+from typing import Optional, Protocol, Sequence, runtime_checkable
 
-from core.state_engine.catalog import ToolSpec, render_catalog
-from core.state_engine.state import AgentState, Evaluation, Move, Observation
+from state_agent.protocols import Action, ActionSpec, Evaluation, Observation, render_action_specs
+from state_agent.state import AgentState
 
-# The executor bounds a tool result at 3000 chars; the evaluator must see (nearly) all of it —
-# a 900-char view hid the answer in a 24-entry listing and every outcome scored 0 (live, 2026-09-21).
+# The environment bounds a probe result; the evaluator must see (nearly) all of it — a 900-char view hid
+# the answer inside a 24-entry listing and every outcome scored 0 (live, 2026-09-21).
 _EVAL_VIEW_CHARS = 2800
 
 
-async def _complete(adapter, prompt: str, max_chars: int = 4000) -> str:
-    text = ""
-    async for chunk in adapter.chat([{"role": "user", "content": prompt}], temperature=0.2, intent="chat"):
-        if getattr(chunk, "error", None):
-            raise RuntimeError(str(chunk.error))
-        text += getattr(chunk, "text", "") or ""
-        if len(text) > max_chars:
-            break
-    return text
+@runtime_checkable
+class ModelPort(Protocol):
+    """One prompt in, text out. The engine's entire model dependency."""
+
+    async def complete(self, prompt: str, *, max_chars: int = 4000) -> str: ...
 
 
 _DRIVE_PATH = re.compile(r"[A-Za-z]:\\[^\\]")  # C:\x — a drive path written with SINGLE backslashes
@@ -50,50 +55,45 @@ def parse_json(text: str) -> Optional[dict]:
             continue
         return obj if isinstance(obj, dict) else None
     return None
-    for candidate in (m.group(0), _LONE_BACKSLASH.sub(r"\\\\", m.group(0))):
-        try:
-            obj = json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
-        return obj if isinstance(obj, dict) else None
-    return None
 
 
 class LLMMoveProposer:
-    def __init__(self, adapter, catalog: dict[str, ToolSpec]) -> None:
-        self._adapter, self._catalog = adapter, catalog
+    """Asks the model for a few different next actions, dropping anything already ruled out."""
 
-    async def propose(self, state: AgentState, n: int, avoid: set[str]) -> list[Move]:
+    def __init__(self, model: ModelPort, specs: dict[str, ActionSpec]) -> None:
+        self._model, self._specs = model, specs
+
+    async def propose(self, state: AgentState, n: int, avoid: set[str]) -> list[Action]:
         prompt = (
             "You plan the next steps toward a goal. Propose up to "
-            f"{n} DIFFERENT next moves, each using one tool. Prefer moves that reveal "
-            "the most about the goal. Do not repeat a move already tried.\n\n"
-            f"{state.render()}\n\nTOOLS:\n{render_catalog(self._catalog)}\n\n"
+            f"{n} DIFFERENT next actions, each using one available action. Prefer actions that reveal "
+            "the most about the goal. Do not repeat an action already tried.\n\n"
+            f"{state.render()}\n\nACTIONS:\n{render_action_specs(self._specs)}\n\n"
             'Reply with JSON only: {"moves": [{"tool": "<name>", "args": {...}, "why": "<short>"}]}'
         )
-        obj = parse_json(await _complete(self._adapter, prompt)) or {}
-        moves: list[Move] = []
+        obj = parse_json(await self._model.complete(prompt)) or {}
+        moves: list[Action] = []
         for raw in obj.get("moves", []) if isinstance(obj.get("moves"), list) else []:
             if not isinstance(raw, dict) or not isinstance(raw.get("tool"), str):
                 continue
             args = raw.get("args") if isinstance(raw.get("args"), dict) else {}
-            mv = Move(raw["tool"].strip(), args, str(raw.get("why", ""))[:120])
+            mv = Action(raw["tool"].strip(), args, str(raw.get("why", ""))[:120])
             if mv.fingerprint() not in avoid and all(mv.fingerprint() != m.fingerprint() for m in moves):
                 moves.append(mv)
         return moves[:n]
 
 
 class LLMEvaluator:
-    def __init__(self, adapter) -> None:
-        self._adapter = adapter
+    """Scores a whole fan of outcomes in ONE call, with the deterministic guards the search relies on."""
 
-    async def evaluate(self, state: AgentState, outcomes: list[Observation]) -> list[Evaluation]:
-        """Score every probed outcome in ONE call: how far does the state it would give
-        get us to the goal, and does it settle the goal (with an answer grounded in it)?"""
-        blocks = [
-            f"[{i}] {o.move.label()} -> {'ok' if o.ok else 'FAILED'}\n{o.text[:_EVAL_VIEW_CHARS]}"
-            for i, o in enumerate(outcomes)
-        ]
+    def __init__(self, model: ModelPort) -> None:
+        self._model = model
+
+    async def evaluate(self, state: AgentState, outcomes: Sequence[Observation]) -> list[Evaluation]:
+        blocks = []
+        for i, o in enumerate(outcomes):
+            mark = " (PREDICTED, not real)" if o.predicted else ""
+            blocks.append(f"[{i}] {o.move.label()} -> {'ok' if o.ok else 'FAILED'}{mark}\n{o.text[:_EVAL_VIEW_CHARS]}")
         prompt = (
             f"{state.render()}\n\nCandidate outcomes (real tool results):\n" + "\n\n".join(blocks) + "\n\n"
             "For EACH outcome give progress 0..1 = the share of what the goal needs that is known once this outcome "
@@ -102,7 +102,7 @@ class LLMEvaluator:
             "answer in `answer`, using only facts shown above.\n"
             'Reply with JSON only: {"evals": [{"i": 0, "progress": 0.0, "done": false, "answer": "", "reason": ""}]}'
         )
-        obj = parse_json(await _complete(self._adapter, prompt)) or {}
+        obj = parse_json(await self._model.complete(prompt)) or {}
         by_i: dict[int, Evaluation] = {}
         for raw in obj.get("evals", []) if isinstance(obj.get("evals"), list) else []:
             try:
@@ -115,10 +115,11 @@ class LLMEvaluator:
         out = []
         for i, o in enumerate(outcomes):
             ev = by_i.get(i, Evaluation())
-            # Deterministic guards: a failed probe never counts; "done" needs a grounded answer.
+            # Deterministic guards: a failed probe never counts; "done" needs a grounded answer and a real
+            # (not predicted) outcome.
             if not o.ok:
                 ev = Evaluation(0.0, False, "", ev.reason or "probe failed")
-            elif ev.done and not ev.answer.strip():
-                ev = Evaluation(ev.progress, False, "", "done without an answer")
+            elif ev.done and (not ev.answer.strip() or o.predicted):
+                ev = Evaluation(ev.progress, False, "", "done without a grounded answer")
             out.append(ev)
         return out

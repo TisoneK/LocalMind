@@ -1,14 +1,10 @@
-"""The state-driven engine (experimental, beside the parent): search behavior with scripted stubs."""
+"""The engine's search behavior, with scripted stubs — no environment, no LocalMind, no model."""
 from __future__ import annotations
-
-from types import SimpleNamespace
 
 import pytest
 
-from core.state_engine import AgentState, EngineBudget, Evaluation, Goal, Move, Observation, StateEngine
-from core.state_engine.catalog import DEFAULT_CATALOG, ToolSpec
-from core.state_engine.executor import RegistryExecutor
-from core.state_engine.llm import LLMEvaluator, LLMMoveProposer, parse_json
+from state_agent import ActionSpec, AgentState, EngineBudget, Evaluation, Goal, Move, Observation, StateEngine
+from state_agent.model import LLMEvaluator, LLMMoveProposer, parse_json
 
 GOAL = Goal("find the project name")
 
@@ -39,6 +35,36 @@ class FakeExecutor:
         return Observation(move, ok, text)
 
 
+CATALOG = {
+    s.name: s
+    for s in (
+        ActionSpec("dir_explorer", "look in a folder", '{"path": "..."}'),
+        ActionSpec("file_read", "read a file", '{"path": "..."}'),
+        ActionSpec("file_write", "write a file", '{"path": "...", "content": "..."}', read_only=False),
+        ActionSpec("shell", "run a command", '{"command": "..."}', read_only=False),
+    )
+}
+
+
+class ScriptedEnvironment:
+    """The smallest environment the engine needs: a tool table and a probe."""
+
+    name = "scripted"
+
+    def __init__(self, executor, catalog=None):
+        self._executor, self._catalog = executor, catalog or CATALOG
+
+    def tools(self):
+        return self._catalog
+
+    def is_read_only(self, action):
+        spec = self._catalog.get(action.tool)
+        return None if spec is None else spec.read_only
+
+    async def probe(self, action):
+        return await self._executor.run(action)
+
+
 class ScriptedEvaluator:
     def __init__(self, table):  # {label: Evaluation}
         self.table = table
@@ -53,7 +79,7 @@ async def collect(engine, goal=GOAL):
 
 def engine(proposer, executor, evaluator, catalog=None, **budget):
     return StateEngine(
-        None, catalog=catalog or DEFAULT_CATALOG, executor=executor, proposer=proposer,
+        ScriptedEnvironment(executor, catalog), proposer=proposer,
         evaluator=evaluator, budget=EngineBudget(**budget) if budget else None,
     )
 
@@ -89,11 +115,9 @@ async def test_failed_probes_are_not_progress_and_the_stop_is_honest():
 
 @pytest.mark.asyncio
 async def test_a_move_that_is_not_read_only_is_never_executed():
-    cat = dict(DEFAULT_CATALOG)
-    cat["file_write"] = ToolSpec("file_write", "write a file", "{}", read_only=False)
     w = Move("file_write", {"path": "/x", "content": "y"}, "create it")
     ex = FakeExecutor({})
-    ev = await collect(engine(ScriptedProposer([w]), ex, ScriptedEvaluator({}), catalog=cat))
+    ev = await collect(engine(ScriptedProposer([w]), ex, ScriptedEvaluator({})))
     assert ex.ran == []
     assert any(e.kind == "needs_confirmation" for e in ev)
 
@@ -138,12 +162,15 @@ def test_parse_json_survives_fences_and_prose():
     assert parse_json("no json here") is None
 
 
-class _Adapter:
-    def __init__(self, text):
-        self.text = text
+class _Port:
+    """A model port that returns whatever the test tells it to."""
 
-    async def chat(self, messages, temperature=0.2, intent="chat"):
-        yield SimpleNamespace(text=self.text, error=None)
+    def __init__(self, text):
+        self.text, self.prompts = text, []
+
+    async def complete(self, prompt, *, max_chars=4000):
+        self.prompts.append(prompt)
+        return self.text
 
 
 @pytest.mark.asyncio
@@ -152,9 +179,9 @@ async def test_llm_proposer_parses_dedupes_and_respects_avoid():
     text = ('{"moves": [{"tool": "dir_explorer", "args": {"path": "/a"}, "why": "1"},'
             ' {"tool": "dir_explorer", "args": {"path": "/a"}, "why": "dup"},'
             ' {"tool": "file_task", "args": {"path": "/b"}, "why": "2"}, "junk"]}')
-    got = await LLMMoveProposer(_Adapter(text), DEFAULT_CATALOG).propose(AgentState(GOAL), 3, set())
+    got = await LLMMoveProposer(_Port(text), CATALOG).propose(AgentState(GOAL), 3, set())
     assert [m.tool for m in got] == ["dir_explorer", "file_task"]
-    got = await LLMMoveProposer(_Adapter(text), DEFAULT_CATALOG).propose(AgentState(GOAL), 3, {a.fingerprint()})
+    got = await LLMMoveProposer(_Port(text), CATALOG).propose(AgentState(GOAL), 3, {a.fingerprint()})
     assert [m.tool for m in got] == ["file_task"]
 
 
@@ -164,7 +191,7 @@ async def test_llm_evaluator_guards_failed_probes_and_answerless_done():
     text = ('{"evals": [{"i": 0, "progress": 0.7, "done": true, "answer": "yes"},'
             ' {"i": 1, "progress": 0.9, "done": true, "answer": "lie"},'
             ' {"i": 2, "progress": 0.8, "done": true, "answer": ""}]}')
-    e = await LLMEvaluator(_Adapter(text)).evaluate(AgentState(GOAL), [ok, bad, noans])
+    e = await LLMEvaluator(_Port(text)).evaluate(AgentState(GOAL), [ok, bad, noans])
     assert (e[0].done, e[0].answer) == (True, "yes")
     assert (e[1].progress, e[1].done) == (0.0, False)  # a failed probe never counts, whatever the model says
     assert e[2].done is False  # "done" needs a grounded answer
@@ -172,8 +199,10 @@ async def test_llm_evaluator_guards_failed_probes_and_answerless_done():
 
 @pytest.mark.asyncio
 async def test_registry_executor_reports_unknown_tool_as_a_failed_observation():
-    o = await RegistryExecutor().run(Move("teleport", {}, ""))
-    assert o.ok is False and "unknown tool" in o.text
+    prop = ScriptedProposer([mv(tool="teleport", path="/x")])
+    ev = await collect(engine(prop, FakeExecutor({}), ScriptedEvaluator({})))
+    assert not any(e.kind == "probe" for e in ev)  # never probed...
+    assert ev[-1].kind == "stopped" and ev[-1].data["reason"] in ("no_moves", "budget")
 
 
 # ── The event contract a UI consumes (docs/prototypes/state-explorer) ───────

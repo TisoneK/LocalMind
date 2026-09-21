@@ -14,9 +14,9 @@ explorer and the Classic/State engine selector are the current work.
 
 ## Shipped (on main)
 
-- **Slice 1 — the engine package** `backend/src/core/state_engine/` (state,
+- **Slice 1 — the engine package** `backend/src/state_agent/` (state,
   catalog, executor, LLM proposer/evaluator, search loop, `python -m
-  core.state_engine`): immutable `AgentState` rebuilt from real observations,
+  state_agent`): immutable `AgentState` rebuilt from real observations,
   compact rendering with no chat history, per-move fingerprints so a failed
   move is never re-proposed, beam-of-one with backtracking (the entry move into
   a dead end is pruned), a hard budget with an honest `stopped` that says the
@@ -39,6 +39,16 @@ explorer and the Classic/State engine selector are the current work.
   game-tree UI (tree canvas, PGN-style move list, eval bar, inspector, meters,
   rewindable timeline, keyboard nav, light/dark) replaying four real captured
   runs.
+
+## The engine stands alone (2026-09-21, later the same day)
+
+The owner's direction: *the engine is the product; LocalMind is where it is being experimented with.* The
+engine therefore lives in its own package with no knowledge of LocalMind — `state_agent/protocols.py`
+holds the contracts (Action, Observation, Evaluation, Environment, Simulator, Proposer, Evaluator,
+TerminalCondition, ModelPort), `state.py` the immutable state, `search.py` the loop and its terminal
+conditions, `model.py` the model's two jobs against a model port, and `state_agent/adapters/localmind.py`
+the only file that knows about LocalMind (tools, provider, web route, CLI). `tests/state_agent/test_boundary.py`
+is the structural guarantee. Other environments are meant to be added as adapters, not by touching the engine.
 
 ## Next
 

@@ -8,9 +8,8 @@ from fastapi.testclient import TestClient
 
 from api.app import create_app
 from api.routes import state_engine as route
-from core.state_engine import Evaluation, Move, Observation
-from core.state_engine.llm import parse_json
-from core.state_engine.search import StateEngine
+from state_agent import ActionSpec, Evaluation, Move, Observation, StateEngine
+from state_agent.model import parse_json
 
 
 class _Proposer:
@@ -18,9 +17,19 @@ class _Proposer:
         return [Move("dir_explorer", {"operation": "list", "path": "/x"}, "look")]
 
 
-class _Executor:
-    async def run(self, move):
-        return Observation(move, True, "a.txt b.txt")
+class _Environment:
+    """The narrowest environment the route test can pass to a real engine."""
+
+    name = "stub"
+
+    def tools(self):
+        return {"dir_explorer": ActionSpec("dir_explorer", "look in a folder")}
+
+    def is_read_only(self, action):
+        return True
+
+    async def probe(self, action):
+        return Observation(action, True, "a.txt b.txt")
 
 
 class _Evaluator:
@@ -34,7 +43,7 @@ def client(monkeypatch):
     monkeypatch.setattr(
         route, "_make_engine",
         lambda budget: StateEngine(
-            None, executor=_Executor(), proposer=_Proposer(), evaluator=_Evaluator(), budget=budget
+            _Environment(), proposer=_Proposer(), evaluator=_Evaluator(), budget=budget
         ),
     )
     return TestClient(create_app())
