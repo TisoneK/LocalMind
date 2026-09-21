@@ -37,6 +37,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Kwame | S029 | claude-sonnet-5 | In-app State Explorer (React) + engine selector setting (Classic/State) | Working | Checked back in |
+| Mosi | S030 | deepseek-flash (ZCode) | In-app State Explorer + engine selector (Classic/State) — the state-driven engine | Working | Door worker: closing the full office (28/20) first, then signing the fresh board; took over S029's in-flight work (its session cold since 07:18 today, the work left uncommitted in this tree) |
 
 **Clock out when your session ends**: remove your row in the closing
 `chore(ledger):` commit. The board shows who is in the office *now*;
