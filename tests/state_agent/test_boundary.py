@@ -16,7 +16,11 @@ import re
 
 import pytest
 
-ENGINE_ROOT = pathlib.Path(__file__).resolve().parents[2] / "backend" / "src" / "state_agent"
+# Locate the engine that is actually imported, not a checkout layout: this test must hold in the host
+# application AND in the engine's own repository (where the package sits next to tests/).
+import state_agent  # noqa: E402
+
+ENGINE_ROOT = pathlib.Path(state_agent.__file__).resolve().parent
 CORE_FILES = sorted(p for p in ENGINE_ROOT.rglob("*.py") if "adapters" not in p.parts)
 
 # Top-level names that belong to LocalMind, not to the engine.
