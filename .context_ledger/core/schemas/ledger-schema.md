@@ -91,7 +91,8 @@ core/
 │   ├── ai-engineering-protocol.md         # CLOUD/SANDBOX agents' edition — same shape
 │   └── playbooks/        # task-shaped guidance, loaded only per kickoff.md's Phase 4 table:
 │       ├── code-review.md, functional-testing.md, ux-review.md,
-│       │   performance-review.md, security-review.md, pitfalls.md
+│       │   performance-review.md, security-review.md
+│       │   (Common Pitfalls stays inline in each edition -- no pitfalls.md here)
 ├── roles/               # mission overlays: reviewer, security-auditor, docs-agent, feature-engineer
 ├── schemas/
 │   ├── ledger-schema.md         # this file

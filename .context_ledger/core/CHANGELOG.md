@@ -10,6 +10,70 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 2.0.3 — 2026-09-19
+
+**A supervisor audit of the whole 2.0.0 token-optimization pass, not just
+the one collision 2.0.2 fixed.** The check-in regression 2.0.2 patched
+was a symptom of a broader pattern in 2.0.0: content that got moved or
+condensed on the assumption that routing would reliably carry weak
+agents to it, and in a couple of cases content that was cut with no
+replacement at all. Four fixes, found by diffing 2.0.0/2.0.1/2.0.2
+directly against the last v1 release (1.2.0) rather than trusting each
+release's own account of itself:
+
+- **A shipped broken reference.** `kickoff.md`'s Phase 4 routing table
+  told a session that hit a snag to read `core/rules/playbooks/pitfalls.md`
+  — a file that has never existed. Common Pitfalls stayed inline in each
+  edition on purpose (2.0.0's own changelog says so), but the table was
+  never corrected to match, and neither 2.0.1 nor 2.0.2 — both live-tested
+  bug-fix releases — caught it. Fixed in `kickoff.md` (template + this
+  repo's own copy) and in `ledger-schema.md`'s directory diagram, which
+  listed the same phantom file.
+- **Two v1 rules were deleted outright, not deduplicated.** "`.context_ledger/`
+  reflects what was true when written — if it contradicts the codebase,
+  the codebase wins" and "small and current beats big and stale — session
+  entries run ~10 lines, not transcripts" existed in v1's edition `### Rules`
+  list and had zero equivalent anywhere in 2.0.0 through 2.0.2 (confirmed by
+  grep across the whole vendored core, not just the obvious spots). The
+  second one isn't hypothetical: this office's own `sessions.md` entries
+  for Sessions 11–14 are dense multi-paragraph blocks, not ~10-line
+  summaries — the bloat the rule existed to prevent. Both restored as
+  items 11–12 of what was "The Ten Binding Rules" in both editions
+  (renamed to "The Binding Rules" since the count is no longer ten and
+  hard-coding it was never load-bearing).
+- **The weak-agent floor only got the one line that had already caused an
+  incident.** 2.0.2 restored check-in to `AGENTS.md`/`CLAUDE.md` after it
+  regressed into a real collision, but left ~8 other rules 2.0.0 cut from
+  the same files exposed to the identical failure mode (a session that
+  reads only the floor file and never reliably chains into `kickoff.md`).
+  The most consequential of those — the door-triggered close at
+  `office_size` sessions (a session could now read a full, stale board and
+  never find out), no-secrets-in-tracked-files, the two-surface commit
+  split, and "not done until pushed" — are now restated directly in both
+  floor files, same treatment 2.0.2 gave check-in: short, load-bearing,
+  not the full v1 ceremony.
+- **Playbook extraction quietly changed a guarantee, not just a file
+  layout.** The playbook content itself was verified byte-faithful to what
+  it replaced — that part of 2.0.0 was clean. But v1's edition read the
+  Code Review Checklist unconditionally, every session; 2.0.0's routing
+  table made it conditional on the agent correctly self-classifying its
+  own task as "a new feature or a substantial review," and its default row
+  for an ordinary product-code change was "(nothing more)." Changed in
+  `kickoff.md`'s table and both editions' own Playbooks index:
+  `code-review.md` is back to unconditional for any product-code task,
+  however small; the other four stay conditional on task shape.
+
+No file moves, no memory-layout changes — everything above is a content
+restoration or a reference fix inside files 2.0.0–2.0.2 already ship.
+
+- **Migration:** `ledger-sync update` picks this up automatically. If a
+  project customized `AGENTS.md`/`CLAUDE.md` since 2.0.0, this update
+  overwrites them again (regenerated, never hand-patched) — move
+  project-specific text into `memory/overrides/rules.md` first if it must
+  survive.
+
+---
+
 ## 2.0.2 — 2026-09-19
 
 **A real collision, reported directly: sessions were fighting during

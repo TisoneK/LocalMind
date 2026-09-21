@@ -213,13 +213,13 @@ only the playbooks your task's shape actually calls for:
 
 | Your task… | Also read |
 |---|---|
-| Touches only product code, no `.context_ledger/core/` changes | (nothing more) |
-| Is a UI/UX change | `core/rules/playbooks/ux-review.md` |
-| Touches security-sensitive code | `core/rules/playbooks/security-review.md` |
-| Is a new feature or a substantial review | `code-review.md` + `functional-testing.md` |
-| Touches performance-sensitive code | `performance-review.md` |
+| Touches product code at all, however small | `core/rules/playbooks/code-review.md` — the baseline checklist, not optional (this row replaces "nothing more": v1 read it unconditionally for every session and that guarantee is worth keeping even after the extraction) |
+| Is a UI/UX change | + `core/rules/playbooks/ux-review.md` |
+| Touches security-sensitive code | + `core/rules/playbooks/security-review.md` |
+| Is a new feature or a substantial review | + `functional-testing.md` |
+| Touches performance-sensitive code | + `core/rules/playbooks/performance-review.md` |
 | Touches `.context_ledger/core/` itself, or spans multiple sessions | every playbook — read the edition in full |
-| Hit a snag partway through | `pitfalls.md` (Common Pitfalls) |
+| Hit a snag partway through | the edition's own **Common Pitfalls** section — it stayed inline, so this row does not point at a separate playbook file |
 
 Also read any role overlay from `.context_ledger/core/roles/` and the
 project's `memory/overrides/rules.md` (overrides beat the edition, except

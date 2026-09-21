@@ -28,11 +28,11 @@ session starts by reading it and ends by updating it — that's how each
 agent knows what every prior agent did, on which system, with which
 model, and what went wrong before.
 
-## The Ten Binding Rules (if your context is fading, keep THESE)
+## The Binding Rules (if your context is fading, keep THESE)
 
 > The full protocol below is binding, top to bottom. But long sessions
 > erode recall, and the rules below are the ones whose violation costs
-> the most. If you can hold only ten things, hold these:
+> the most. If you can hold only these things, hold these:
 
 1. **Check in at the roster the moment you're through the door — before the deep read, before any analysis, before product work; keep your row current until the session ends.** (Step 3 — sign first, then read the rest of memory; Steps 15–17 at wrap-up. Sign in with Status `Working` and a status detail naming where you are; edit your own row's Status cells as the work moves — `Done` + what shipped, or `Blocked` + the blocker — so the next live worker can coordinate with you at a glance. The push claims your codename: whoever's check-in commit lands first keeps the number. An empty board does not prove you're alone — a live row you didn't write means a peer is here, and the two of you coordinate from minute zero, not after both of you have finished reading.)
 2. **Two zones under `.context_ledger/`:** `core/` is the vendored protocol — **read-only, never write one byte there** (it updates only as a whole tree via `core/bin/ledger-sync`); `memory/` is this project's writable memory. Nothing needs to be cloned or fetched to run a session — the protocol travels inside the repo.
@@ -44,6 +44,8 @@ model, and what went wrong before.
 8. **Never guess your model version or today's date** — system prompt / `date -u +%F`, or record `unknown`.
 9. **Phase 1 runs for every session**, however small the task. (Pitfall #28)
 10. **Re-read the Exit checklist right before finishing** — that's the moment your memory of it is weakest and the cost of skipping it highest.
+11. **`.context_ledger/` reflects what was true when written, not what's true now.** If it contradicts the codebase, the codebase wins — fix the `.context_ledger/` entry (append a correction; don't build on the stale claim).
+12. **Small and current beats big and stale.** Session entries run ~10 lines, not transcripts — detail belongs in a report, not the duty log. A bloated entry is next session's context tax.
 
 ---
 
@@ -595,7 +597,7 @@ invent formats.
 
 The binding rules on append-only logs, secrets, commit prefixes, friction
 logging, and session-data disposability are already stated once each — the
-Ten Binding Rules above, `.context_ledger/core/schemas/ledger-schema.md`'s
+Binding Rules above, `.context_ledger/core/schemas/ledger-schema.md`'s
 `bindingRules`, and this document's own Common Pitfalls; find them there
 rather than a fourth restatement here. Every writable memory file's exact
 entry template lives in an HTML comment at that file's own top — read it
@@ -766,13 +768,13 @@ Treat this as a production project. Think like an owner, not a contractor.
 > Task-shaped guidance, loaded only when kickoff.md's Phase 4 table says
 > your task calls for it — not part of the always-relevant core above.
 > Common Pitfalls (below) stays inline: it's cross-referenced by number
-> from the Ten Binding Rules and is itself frequently the answer when
+> from the Binding Rules and is itself frequently the answer when
 > something goes wrong, so it earns its place in the always-read core.
 
 | Playbook | Read it when… |
 |---|---|
-| `playbooks/code-review.md` | the task is a new feature or a substantial review |
-| `playbooks/functional-testing.md` | same — has a Local-agent subsection for you |
+| `playbooks/code-review.md` | **any task that touches product code, however small** — v1 read this checklist unconditionally every session; extracting it into a playbook didn't relax that, it just stopped forcing everyone to also read the other four |
+| `playbooks/functional-testing.md` | the task is a new feature or a substantial review — has a Local-agent subsection for you |
 | `playbooks/ux-review.md` | the task is a UI/UX change |
 | `playbooks/performance-review.md` | the task touches performance-sensitive code |
 | `playbooks/security-review.md` | the task touches security-sensitive code |
