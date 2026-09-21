@@ -208,3 +208,33 @@ async def test_backtrack_event_names_the_node_it_returns_to():
     assert bt.data["node"] == "n0"
     later = [e for e in ev if e.seq > bt.seq and e.kind == "candidates"]
     assert later and later[0].data["at"] == "n0"  # the next fan hangs off the node we returned to
+
+
+@pytest.mark.asyncio
+async def test_a_state_carries_what_it_knows_so_a_ui_can_read_the_search():
+    """The state is the point of this engine: the explorer shows its facts, what it ruled out, and its path."""
+    a, b = mv(path="/a"), mv(path="/b")
+    prop = ScriptedProposer([a], [b])
+    evalr = ScriptedEvaluator({a.label(): Evaluation(0.3), b.label(): Evaluation(1.0, True, "ok", "settled")})
+    ev = await collect(engine(prop, FakeExecutor({a.label(): (True, "alpha  text")}), evalr))
+    states = [e for e in ev if e.kind == "state"]
+
+    first = states[0].data
+    assert first["fact_list"] == [] and first["trail"] == []  # nothing learned before the first move
+    last = states[-1].data
+    assert last["facts"] == len(last["fact_list"]) == 2  # one real observation per applied move
+    assert a.label() in last["fact_list"][0] and "alpha text" in last["fact_list"][0]
+    assert last["trail"] == [a.label(), b.label()]  # the path of applied moves, in the same words the model sees
+
+
+@pytest.mark.asyncio
+async def test_a_failed_probe_is_remembered_as_failed_even_when_the_round_succeeds():
+    a, missing, good = mv(path="/a"), mv(path="/missing"), mv(path="/good")
+    prop = ScriptedProposer([a], [missing, good])
+    evalr = ScriptedEvaluator({a.label(): Evaluation(0.2), good.label(): Evaluation(1.0, True, "ok", "settled")})
+    ex = FakeExecutor({a.label(): (True, "a"), missing.label(): (False, "no such path"), good.label(): (True, "good")})
+    ev = await collect(engine(prop, ex, evalr))
+    states = [e for e in ev if e.kind == "state"]
+    assert missing.fingerprint() in states[-1].data["failed_fps"]  # not lost just because something worked
+    assert states[-1].data["failed"] == 1
+    assert good.fingerprint() not in states[-1].data["failed_fps"]

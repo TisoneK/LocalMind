@@ -7,8 +7,11 @@ import {
   NODE_W,
   cardKey,
   cardStatusAt,
+  cardVisible,
+  onSpine,
   type Card,
   type CardStatus,
+  type Layers,
   type Layout,
   type Model,
   type Point,
@@ -22,6 +25,13 @@ interface Props {
   cursor: number;
   picked: string | null;
   onPick: (id: string) => void;
+  /** Which kinds of move to draw (a big tree can be read one layer at a time). */
+  layers: Layers;
+  /** Draw only the chosen path: the states and moves the engine actually committed to. */
+  spineOnly: boolean;
+  /** The fingerprint the pointer is over, so a whole move can be traced by eye. */
+  hoverFp: string | null;
+  onHover: (fp: string | null) => void;
 }
 
 const curve = (x1: number, y1: number, x2: number, y2: number) => {
@@ -49,13 +59,15 @@ const GLYPH: Record<CardStatus, string> = {
   gated: '🔒 needs confirmation',
 };
 
-function CardView({ card, round, cursor, picked, pos, onPick }: {
+function CardView({ card, round, cursor, picked, pos, onPick, hovered, onHover }: {
   card: Card;
   round: Round;
   cursor: number;
   picked: string | null;
   pos: Point;
   onPick: (id: string) => void;
+  hovered: boolean;
+  onHover: (fp: string | null) => void;
 }) {
   const id = `c:${round.seq}:${card.fp}`;
   const status = cardStatusAt(card, round, cursor);
@@ -70,10 +82,12 @@ function CardView({ card, round, cursor, picked, pos, onPick }: {
       data-testid={`card-${status}`}
       aria-label={`${card.label} — ${GLYPH[status] || 'proposed'}`}
       onClick={() => onPick(id)}
+      onMouseEnter={() => onHover(card.fp)}
+      onMouseLeave={() => onHover(null)}
       style={{ left: pos.x, top: pos.y, width: CARD_W, height: CARD_H }}
       className={`absolute overflow-hidden rounded-lg border bg-brand-bg-panel px-2.5 py-1.5 text-left transition-opacity ${CARD_STYLE[status]} ${
         shown ? '' : 'pointer-events-none opacity-0'
-      } ${picked === id ? 'outline outline-2 outline-offset-2 outline-brand-blue' : ''}`}
+      } ${picked === id ? 'outline outline-2 outline-offset-2 outline-brand-blue' : ''} ${hovered && picked !== id ? 'ring-1 ring-brand-blue' : ''}`}
     >
       <div className={`truncate text-xs ${status === 'failed' ? 'text-brand-red line-through' : 'text-brand-green-soft'}`}>{card.label}</div>
       <div className="truncate text-[11px] text-brand-green-muted">{card.why}</div>
@@ -92,17 +106,30 @@ function CardView({ card, round, cursor, picked, pos, onPick }: {
   );
 }
 
-export function StateTree({ model, layout, cursor, picked, onPick }: Props) {
+export function StateTree({ model, layout, cursor, picked, onPick, layers, spineOnly, hoverFp, onHover }: Props) {
   const nodePos = (id: string) => layout.nodes.get(id) as Point;
   const cardPos = (r: Round, fp: string) => layout.cards.get(cardKey(r, fp)) as Point;
   const vis = (seq: number) => (seq <= cursor ? 1 : 0);
   const endSeq = model.end?.seq ?? Infinity;
 
+  // What this view draws: the chosen path only when asked, and never a layer the user switched off. A card
+  // still being probed is always drawn — the run has not decided about it yet, and hiding it would lie.
+  const spineFps = new Set(spineOnly ? model.rounds.map((r) => r.sel).filter((fp): fp is string => !!fp) : []);
+  const showCard = (r: Round, c: Card): boolean => {
+    if (spineOnly) return spineFps.has(c.fp);
+    if (!layers.moves) return false;
+    const status = cardStatusAt(c, r, cursor);
+    return status === 'probing' || status === 'gated' || status === 'selected' || cardVisible(status, layers);
+  };
+  const shownCards = model.rounds.flatMap((r) => r.cards.filter((c) => showCard(r, c)).map((c) => ({ r, c })));
+  const shownFps = new Set(shownCards.map(({ r, c }) => `${r.seq}:${c.fp}`));
+  const nodeShown = (id: string) => !spineOnly || onSpine(model, id);
+
   return (
     <div className="relative" style={{ width: layout.width, height: layout.height }} data-testid="state-tree">
       <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={layout.width} height={layout.height} aria-hidden="true">
         {model.rounds.map((r) =>
-          r.cards.map((c) => {
+          r.cards.filter((c) => shownFps.has(`${r.seq}:${c.fp}`)).map((c) => {
             const p = nodePos(r.node);
             const cp = cardPos(r, c.fp);
             const chosen = c.fp === r.sel;
@@ -111,8 +138,8 @@ export function StateTree({ model, layout, cursor, picked, onPick }: Props) {
                 key={`e-${cardKey(r, c.fp)}`}
                 d={curve(p.x + NODE_W, p.y + NODE_H / 2, cp.x, cp.y + CARD_H / 2)}
                 fill="none"
-                className={chosen ? 'stroke-brand-green' : 'stroke-brand-border-strong'}
-                strokeWidth={chosen ? 2.2 : 1.2}
+                className={chosen ? 'stroke-brand-green' : hoverFp === c.fp ? 'stroke-brand-blue' : 'stroke-brand-border-strong'}
+                strokeWidth={chosen ? 2.2 : hoverFp === c.fp ? 1.8 : 1.2}
                 strokeDasharray={c.status === 'pruned' ? '2 4' : undefined}
                 style={{ opacity: vis(r.seq) }}
               />
@@ -121,7 +148,7 @@ export function StateTree({ model, layout, cursor, picked, onPick }: Props) {
         )}
         {model.nodes.map((n) => {
           const pr = model.rounds.find((r) => r.node === n.parent && r.sel === n.viaFp);
-          if (!pr || !n.viaFp) return null;
+          if (!pr || !n.viaFp || !shownFps.has(`${pr.seq}:${n.viaFp}`) || !nodeShown(n.id)) return null;
           const cp = cardPos(pr, n.viaFp);
           const p = nodePos(n.id);
           return (
@@ -132,6 +159,7 @@ export function StateTree({ model, layout, cursor, picked, onPick }: Props) {
           if (!r.stalled || !r.stalledSeq) return null;
           const from = nodePos(r.node);
           const to = nodePos(r.stalled);
+          if (!nodeShown(r.node) || !nodeShown(r.stalled)) return null;
           return (
             <g key={`b-${r.seq}`} style={{ opacity: vis(r.stalledSeq) }}>
               <path
@@ -156,7 +184,7 @@ export function StateTree({ model, layout, cursor, picked, onPick }: Props) {
         })()}
       </svg>
 
-      {model.nodes.map((n) => {
+      {model.nodes.filter((n) => nodeShown(n.id)).map((n) => {
         const p = nodePos(n.id);
         const id = `n:${n.id}`;
         return (
@@ -178,9 +206,9 @@ export function StateTree({ model, layout, cursor, picked, onPick }: Props) {
         );
       })}
 
-      {model.rounds.map((r) => r.cards.map((c) => (
-        <CardView key={cardKey(r, c.fp)} card={c} round={r} cursor={cursor} picked={picked} pos={cardPos(r, c.fp)} onPick={onPick} />
-      )))}
+      {shownCards.map(({ r, c }) => (
+        <CardView key={cardKey(r, c.fp)} card={c} round={r} cursor={cursor} picked={picked} pos={cardPos(r, c.fp)} onPick={onPick} hovered={hoverFp === c.fp} onHover={onHover} />
+      ))}
 
       {model.end && layout.end && (
         <button

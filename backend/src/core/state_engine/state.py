@@ -11,6 +11,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 _FACT_CHARS = 320
+_UI_FACTS = 12  # how many facts a state carries to the UI (the model sees the last 8)
 
 
 @dataclass(frozen=True)
@@ -112,4 +113,15 @@ class AgentState:
         return "\n".join(lines)
 
     def to_dict(self) -> dict[str, Any]:
-        return {"facts": len(self.facts), "failed": len(self.failed), "progress": self.progress, "depth": self.depth}
+        return {
+            "facts": len(self.facts),
+            "failed": len(self.failed),
+            "progress": self.progress,
+            "depth": self.depth,
+            # What the state actually holds, for the UI: the real observations (the same bounded text the
+            # model is shown — never reasoning), the fingerprints of the moves this state has ruled out,
+            # and the path of applied moves that reached it. All bounded; a UI can read the search.
+            "fact_list": [f[:_FACT_CHARS] for f in self.facts[-_UI_FACTS:]],
+            "failed_fps": list(self.failed),
+            "trail": list(self.trail),
+        }

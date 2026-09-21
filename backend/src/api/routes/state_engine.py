@@ -26,13 +26,21 @@ router = APIRouter()
 
 _PAGE = Path(__file__).resolve().parent.parent / "static" / "state-explorer" / "index.html"
 
+# The search bounds an engine run will accept. Kept here (not inline in the model) so /info can publish
+# exactly what the UI is allowed to offer — the explorer lets the user widen or narrow the search.
+_MAX_DEPTH = 10
+_MAX_BRANCHES = 5
+_MAX_MODEL_CALLS = 40
+_MAX_BACKTRACKS = 5
+_DEFAULT_BUDGET = {"max_depth": 6, "max_branches": 3, "max_model_calls": 16, "max_backtracks": 2}
+
 
 class RunRequest(BaseModel):
     goal: str = Field(min_length=3, max_length=2000)
-    max_depth: int = Field(default=6, ge=1, le=10)
-    max_branches: int = Field(default=3, ge=1, le=5)
-    max_model_calls: int = Field(default=16, ge=2, le=40)
-    max_backtracks: int = Field(default=2, ge=0, le=5)
+    max_depth: int = Field(default=6, ge=1, le=_MAX_DEPTH)
+    max_branches: int = Field(default=3, ge=1, le=_MAX_BRANCHES)
+    max_model_calls: int = Field(default=16, ge=2, le=_MAX_MODEL_CALLS)
+    max_backtracks: int = Field(default=2, ge=0, le=_MAX_BACKTRACKS)
 
 
 def _provider_and_model() -> tuple[str, str]:
@@ -76,6 +84,14 @@ async def state_engine_info():
         "provider": provider,
         "model": model,
         "tools": [{"name": t.name, "description": t.description} for t in DEFAULT_CATALOG.values()],
+        # What a run costs and what it may be told to spend: the UI's search controls come from here.
+        "budget": dict(_DEFAULT_BUDGET),
+        "budget_limits": {
+            "max_depth": [1, _MAX_DEPTH],
+            "max_branches": [1, _MAX_BRANCHES],
+            "max_model_calls": [2, _MAX_MODEL_CALLS],
+            "max_backtracks": [0, _MAX_BACKTRACKS],
+        },
     }
 
 

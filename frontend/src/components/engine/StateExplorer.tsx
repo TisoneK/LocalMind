@@ -1,26 +1,37 @@
 /**
  * State Explorer — the interface of the state-driven engine (experimental, ADR-71).
  *
- * The engine is not a chat: it holds a state, fans out candidate moves, really probes the read-only ones, keeps
- * the best and backtracks from dead ends. So this pane shows a game tree — states, moves and outcomes, never
- * hidden reasoning — with a PGN-style move list, an eval bar, an inspector with the real observation behind each
- * move, budget meters and a rewindable timeline. It replaces the chat pane while the State engine is selected.
+ * The engine is not a chat: it holds a state, fans out candidate moves, really probes the read-only ones,
+ * keeps the best and backtracks from dead ends. So this pane is an instrument for reading a search — a game
+ * tree of states, moves and outcomes (never hidden reasoning) with a PGN-style move list, an eval bar, an
+ * inspector that shows the real observation behind each move, budget meters, a rewindable timeline — plus
+ * the controls a search needs: the budget (depth, branches, model calls, backtracks), layers to read a big
+ * tree one kind of move at a time, a spine view, run history persisted across reloads, side-by-side
+ * comparison, and the evidence out as JSON or Markdown. It replaces the chat pane while State is selected.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { localmindClient, type StateEngineInfo } from '@/lib/localmind/client';
 import {
+  ALL_LAYERS,
   buildModel,
   layoutModel,
   metersAt,
+  progressCurve,
+  runToJson,
+  runToMarkdown,
+  summarize,
   type EngineEvent,
+  type Layers,
   type Model,
   type RunMeta,
 } from '@/lib/localmind/stateEngine';
 import { StateTree } from './StateTree';
+import { Inspector } from './Inspector';
+import { RunCompare } from './RunCompare';
 import { SAMPLE_EVENTS, SAMPLE_GOAL } from './sampleRun';
 
-interface Run {
+export interface Run {
   id: string;
   title: string;
   goal: string;
@@ -30,8 +41,51 @@ interface Run {
   aborted: boolean;
 }
 
-const DEFAULT_BUDGET = { max_depth: 6, max_branches: 3, max_model_calls: 16, max_backtracks: 2 };
+export interface Budget {
+  max_depth: number;
+  max_branches: number;
+  max_model_calls: number;
+  max_backtracks: number;
+}
+
+const DEFAULT_BUDGET: Budget = { max_depth: 6, max_branches: 3, max_model_calls: 16, max_backtracks: 2 };
+const BUDGET_LIMITS: Record<keyof Budget, [number, number]> = {
+  max_depth: [1, 10],
+  max_branches: [1, 5],
+  max_model_calls: [2, 40],
+  max_backtracks: [0, 5],
+};
+const BUDGET_LABEL: Record<keyof Budget, string> = {
+  max_depth: 'depth',
+  max_branches: 'branches',
+  max_model_calls: 'model calls',
+  max_backtracks: 'backtracks',
+};
 const SAMPLE: Run = { id: 'sample', title: 'Sample · find a README', goal: SAMPLE_GOAL, events: SAMPLE_EVENTS, live: false, aborted: false };
+const STORE = 'localmind:state-runs';
+const KEEP_RUNS = 10;
+
+/** The budget the engine will actually be given: whole numbers, inside the bounds the backend published. */
+export function clampBudget(b: Budget, limits: Record<keyof Budget, [number, number]>): Budget {
+  const out = { ...b };
+  for (const k of Object.keys(BUDGET_LABEL) as (keyof Budget)[]) {
+    const [lo, hi] = limits[k];
+    out[k] = Math.max(lo, Math.min(hi, Math.round(Number(b[k]) || lo)));
+  }
+  return out;
+}
+
+/** Runs survive a reload (the sample excepted — it ships with the app). */
+function loadRuns(): Run[] {
+  try {
+    const raw = window.localStorage.getItem(STORE);
+    if (!raw) return [SAMPLE];
+    const saved = JSON.parse(raw) as Run[];
+    return [SAMPLE, ...saved.filter((r) => r && Array.isArray(r.events) && r.events.length > 0)].slice(0, KEEP_RUNS + 1);
+  } catch {
+    return [SAMPLE];
+  }
+}
 
 function Meter({ label, value, max }: { label: string; value: string | number; max?: number }) {
   return (
@@ -47,17 +101,27 @@ function Meter({ label, value, max }: { label: string; value: string | number; m
   );
 }
 
+const chip = (on: boolean) =>
+  `rounded-full border px-2 py-0.5 transition-colors ${on ? 'border-brand-green text-brand-green' : 'border-brand-border text-brand-green-muted hover:text-brand-green-soft'}`;
+
 export function StateExplorer() {
-  const [runs, setRuns] = useState<Run[]>([SAMPLE]);
-  const [activeId, setActiveId] = useState('sample');
+  const [runs, setRuns] = useState<Run[]>(loadRuns);
+  const [activeId, setActiveId] = useState(SAMPLE.id);
   const [pin, setPin] = useState<number | null>(null); // null = follow the latest event
   const [playing, setPlaying] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
+  const [hoverFp, setHoverFp] = useState<string | null>(null);
+  const [layers, setLayers] = useState<Layers>(ALL_LAYERS);
+  const [spineOnly, setSpineOnly] = useState(false);
   const [userScale, setUserScale] = useState<number | null>(null);
   const [stage, setStage] = useState({ w: 800, h: 480 });
   const [goalText, setGoalText] = useState('');
   const [info, setInfo] = useState<StateEngineInfo | null>(null);
   const [offline, setOffline] = useState(false);
+  const [budget, setBudget] = useState<Budget>(DEFAULT_BUDGET);
+  const [showSearch, setShowSearch] = useState(false);
+  const [comparing, setComparing] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -67,16 +131,21 @@ export function StateExplorer() {
   const model: Model = useMemo(() => buildModel(run.events), [run.events]);
   const layout = useMemo(() => layoutModel(model), [model]);
   const meters = useMemo(() => metersAt(run.events, model, cursor), [run.events, model, cursor]);
-  const budget = run.meta?.budget ?? DEFAULT_BUDGET;
+  const curve = useMemo(() => progressCurve(run.events, cursor), [run.events, cursor]);
+  const limits = info?.budget_limits ?? BUDGET_LIMITS;
   const finished = !!model.end && model.end.seq <= cursor;
   const runTotalMs = run.events.length ? Math.max(1, run.events[run.events.length - 1].t_ms) : 1;
 
-  // What the backend will use (provider/model). A failure means there is no backend to run live against.
+  // What the backend will use (provider/model) and what a run may be told to spend.
   useEffect(() => {
     let live = true;
     localmindClient
       .getStateEngineInfo()
-      .then((i) => live && setInfo(i))
+      .then((i) => {
+        if (!live) return;
+        setInfo(i);
+        if (i.budget) setBudget(i.budget);
+      })
       .catch(() => live && setOffline(true));
     return () => {
       live = false;
@@ -84,6 +153,16 @@ export function StateExplorer() {
   }, []);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  // Keep finished runs (the sample is code, not data).
+  useEffect(() => {
+    try {
+      const keep = runs.filter((r) => r.id !== SAMPLE.id && !r.live && r.events.length > 0).slice(-KEEP_RUNS);
+      window.localStorage.setItem(STORE, JSON.stringify(keep));
+    } catch {
+      /* a full or unavailable localStorage must never break a run */
+    }
+  }, [runs]);
 
   // Fit the tree to the pane; resizing refits (unless the user zoomed by hand).
   useEffect(() => {
@@ -99,7 +178,7 @@ export function StateExplorer() {
   // Follow the newest element while a run is streaming or playing.
   useEffect(() => {
     const el = stageRef.current;
-    if (!el) return;
+    if (!el || spineOnly) return;
     let latest: HTMLElement | null = null;
     let best = -1;
     el.querySelectorAll<HTMLElement>('[data-seq]').forEach((n) => {
@@ -110,7 +189,7 @@ export function StateExplorer() {
       }
     });
     (latest as HTMLElement | null)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-  }, [cursor, activeId]);
+  }, [cursor, activeId, spineOnly]);
 
   // Replay: step through the events at roughly the pace they happened.
   useEffect(() => {
@@ -144,9 +223,10 @@ export function StateExplorer() {
     setPin(null);
     setPicked(null);
     setUserScale(null);
+    setComparing(false);
   };
 
-  const startLive = async (goal: string) => {
+  const startLive = async (goal: string, withBudget: Budget = budget) => {
     const id = `live-${Date.now()}`;
     const ctl = new AbortController();
     abortRef.current = ctl;
@@ -161,7 +241,8 @@ export function StateExplorer() {
           onMeta: (meta) => patch((r) => ({ ...r, meta })),
           onEvent: (e) => patch((r) => ({ ...r, events: [...r.events, e] })),
         },
-        ctl.signal
+        ctl.signal,
+        clampBudget(withBudget, limits)
       );
     } catch (err) {
       if ((err as Error).name === 'AbortError') patch((r) => ({ ...r, aborted: true }));
@@ -185,6 +266,48 @@ export function StateExplorer() {
     if (g.length >= 3 && !busy) void startLive(g);
   };
 
+  const flash = (msg: string) => {
+    setNotice(msg);
+    window.setTimeout(() => setNotice(null), 2600);
+  };
+  const exportJson = () => {
+    try {
+      const blob = new Blob([runToJson(run)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `state-run-${run.id}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      flash('Saved the run as JSON.');
+    } catch {
+      flash('Could not save the file here.');
+    }
+  };
+  const copySummary = async () => {
+    try {
+      await navigator.clipboard.writeText(runToMarkdown(run));
+      flash('Run summary copied.');
+    } catch {
+      flash('Clipboard unavailable.');
+    }
+  };
+  const rerun = () => {
+    if (!busy) void startLive(run.goal);
+  };
+  const dropRun = () => {
+    if (run.id === SAMPLE.id || run.live) return;
+    setRuns((rs) => rs.filter((r) => r.id !== run.id));
+    select(rs_next(activeId) ?? SAMPLE.id);
+    setNotice('Run removed.');
+  };
+  const rs_next = (_id: string) => runs.find((r) => r.id !== run.id && r.id !== SAMPLE.id)?.id;
+  const clearRuns = () => {
+    setRuns([SAMPLE]);
+    setActiveId(SAMPLE.id);
+    setPin(null);
+  };
+
   const onKey = (e: KeyboardEvent) => {
     const tag = (e.target as HTMLElement).tagName;
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
@@ -192,8 +315,8 @@ export function StateExplorer() {
       e.preventDefault();
       if (playing) pause();
       else play();
-    } else if (e.key === 'ArrowRight') step(1);
-    else if (e.key === 'ArrowLeft') step(-1);
+    } else if (e.key === 'ArrowRight' || e.key === 'l' || e.key === 'j') step(1);
+    else if (e.key === 'ArrowLeft' || e.key === 'h' || e.key === 'k') step(-1);
     else if (e.key === 'Home') jump(1);
     else if (e.key === 'End') {
       setPlaying(false);
@@ -201,6 +324,9 @@ export function StateExplorer() {
     } else if (e.key === '0') setUserScale(null);
     else if (e.key === '+' || e.key === '=') setUserScale(Math.min(1.6, scale * 1.2));
     else if (e.key === '-') setUserScale(Math.max(0.3, scale / 1.2));
+    else if (e.key === 's') setSpineOnly((v) => !v);
+    else if (e.key === 'c') setComparing((v) => !v);
+    else if (e.key === 'e') exportJson();
   };
 
   const pill = finished
@@ -215,6 +341,7 @@ export function StateExplorer() {
 
   const moves = run.events.filter((e) => ['selected', 'backtrack', 'needs_confirmation', 'done', 'stopped'].includes(e.kind));
   let ply = 0;
+  const summary = summarize(run);
 
   return (
     <section
@@ -255,21 +382,126 @@ export function StateExplorer() {
           ) : (
             <button type="submit" disabled={offline || goalText.trim().length < 3} className="rounded-md border border-brand-green px-3 py-1.5 text-brand-green disabled:opacity-50">▶ run live</button>
           )}
+          <button
+            type="button"
+            aria-expanded={showSearch}
+            onClick={() => setShowSearch((v) => !v)}
+            className="rounded-md border border-brand-border-strong px-2.5 py-1.5"
+            title="How hard the engine may search"
+          >
+            ⚙ search
+          </button>
           <span className="hidden text-brand-green-muted md:inline" data-testid="engine-note">
             {offline ? 'Live runs need the LocalMind backend.' : info ? `${info.provider} · ${info.model} · ${info.tools.length} read-only tools` : ''}
           </span>
         </form>
+
+        {showSearch && (
+          <div className="flex basis-full flex-wrap items-end gap-x-4 gap-y-2 rounded-md border border-brand-border bg-brand-bg-panel-alt px-3 py-2" data-testid="search-panel">
+            {(Object.keys(BUDGET_LABEL) as (keyof Budget)[]).map((k) => (
+              <label key={k} className="flex flex-col gap-1">
+                <span className="text-[11px] text-brand-green-muted">{BUDGET_LABEL[k]}</span>
+                <span className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    aria-label={BUDGET_LABEL[k]}
+                    min={limits[k][0]}
+                    max={limits[k][1]}
+                    value={budget[k]}
+                    disabled={busy}
+                    // Typing is not fought with: the field takes what you type and the bound is applied when
+                    // you leave it (and again before the run is sent).
+                    onChange={(e) => {
+                      const v = Math.max(0, Math.min(999, Math.floor(Number(e.target.value) || 0)));
+                      setBudget((b) => ({ ...b, [k]: v }));
+                    }}
+                    onBlur={() => setBudget((b) => clampBudget(b, limits))}
+                    className="w-16 rounded-md border border-brand-border-strong bg-brand-bg-panel px-2 py-1"
+                  />
+                  <span className="text-brand-green-faint">≤ {limits[k][1]}</span>
+                </span>
+              </label>
+            ))}
+            <span className="ml-auto flex items-center gap-2">
+              <button type="button" onClick={() => setBudget(DEFAULT_BUDGET)} className="rounded-md border border-brand-border-strong px-2 py-1">reset</button>
+              <button
+                type="button"
+                onClick={rerun}
+                disabled={busy || offline || !run.goal}
+                className="rounded-md border border-brand-green px-2 py-1 text-brand-green disabled:opacity-50"
+                title="Run the active run's goal again with these settings"
+              >
+                ↻ re-run this goal
+              </button>
+              <span className="text-[11px] text-brand-green-faint">applies to the next run</span>
+            </span>
+          </div>
+        )}
       </header>
 
-      <div className="flex flex-wrap gap-x-5 gap-y-1 border-b border-brand-border bg-brand-bg-panel-alt px-4 py-1.5" data-testid="meters">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-brand-border bg-brand-bg-panel-alt px-4 py-1.5" data-testid="meters">
         <Meter label="MODEL CALLS" value={meters.calls} max={budget.max_model_calls} />
         <Meter label="DEPTH" value={meters.depth} max={budget.max_depth} />
         <Meter label="BACKTRACKS" value={meters.backtracks} max={budget.max_backtracks} />
         <Meter label="PROBES" value={meters.probes} />
         <Meter label="ELAPSED" value={`${(meters.elapsedMs / 1000).toFixed(1)}s`} />
         <Meter label="PLY" value={meters.plies} />
+        {/* The run's curve: the best progress after each applied move. */}
+        <span className="ml-auto flex items-center gap-2" title="Best progress after each applied move">
+          <span className="text-brand-green-muted">CURVE</span>
+          <svg width="90" height="16" aria-hidden="true">
+            {curve.length > 1 && (
+              <>
+                <polyline
+                  fill="none"
+                  className="stroke-brand-green"
+                  strokeWidth="1.5"
+                  points={curve.map((p, i) => `${(i / (curve.length - 1)) * 88 + 1},${15 - Math.max(0, Math.min(1, p)) * 13}`).join(' ')}
+                />
+                <polyline
+                  fill="none"
+                  className="stroke-brand-green"
+                  strokeOpacity="0.18"
+                  strokeWidth="1.5"
+                  points={`1,15 ${curve.map((p, i) => `${(i / (curve.length - 1)) * 88 + 1},${15 - Math.max(0, Math.min(1, p)) * 13}`).join(' ')} 89,15`}
+                />
+              </>
+            )}
+          </svg>
+          <b className="text-brand-green-soft">{meters.best.toFixed(2)}</b>
+        </span>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 border-b border-brand-border bg-brand-bg-panel px-4 py-1.5">
+        <span className="text-brand-green-muted">LAYERS</span>
+        <button type="button" aria-pressed={layers.moves} onClick={() => setLayers((l) => ({ ...l, moves: !l.moves }))} className={chip(layers.moves)}>moves</button>
+        <button type="button" aria-pressed={layers.failed} onClick={() => setLayers((l) => ({ ...l, failed: !l.failed }))} className={chip(layers.failed)}>failed</button>
+        <button type="button" aria-pressed={layers.rejected} onClick={() => setLayers((l) => ({ ...l, rejected: !l.rejected }))} className={chip(layers.rejected)}>not best</button>
+        <button type="button" aria-pressed={layers.pruned} onClick={() => setLayers((l) => ({ ...l, pruned: !l.pruned }))} className={chip(layers.pruned)}>pruned</button>
+        <span className="mx-1 h-4 w-px bg-brand-border" />
+        <button type="button" aria-pressed={spineOnly} onClick={() => setSpineOnly((v) => !v)} className={chip(spineOnly)} title="Show only the path the engine actually took (s)">
+          chosen path only
+        </button>
+        <span className="mx-1 h-4 w-px bg-brand-border" />
+        <button type="button" aria-pressed={comparing} onClick={() => setComparing((v) => !v)} className={chip(comparing)} title="Compare two runs (c)">compare runs</button>
+        <span className="ml-auto flex items-center gap-2">
+          {notice && <span className="text-brand-amber" data-testid="notice">{notice}</span>}
+          <button type="button" onClick={exportJson} className="rounded-md border border-brand-border-strong px-2 py-0.5" title="Save the raw events (e)">⤓ json</button>
+          <button type="button" onClick={copySummary} className="rounded-md border border-brand-border-strong px-2 py-0.5" title="Copy a plain summary of the run">⧉ summary</button>
+          {run.id !== SAMPLE.id && !run.live && (
+            <button type="button" onClick={dropRun} className="rounded-md border border-brand-border-strong px-2 py-0.5" title="Forget this run">✕ forget</button>
+          )}
+          {runs.length > 1 && (
+            <button type="button" onClick={clearRuns} className="rounded-md border border-brand-border-strong px-2 py-0.5" title="Forget every stored run">clear all</button>
+          )}
+        </span>
+      </div>
+
+      {comparing ? (
+        <div className="min-h-0 flex-1">
+          <RunCompare runs={runs} onClose={() => setComparing(false)} />
+        </div>
+      ) : (
       <div className="flex min-h-0 flex-1">
         <aside className="hidden w-56 shrink-0 overflow-auto border-r border-brand-border bg-brand-bg-panel xl:block" aria-label="Move list">
           <h3 className="sticky top-0 border-b border-brand-border bg-brand-bg-panel px-3 py-2 text-[11px] font-semibold tracking-[0.14em] text-brand-green-muted">MOVE LIST</h3>
@@ -308,16 +540,17 @@ export function StateExplorer() {
         <div ref={stageRef} className="relative min-w-0 flex-1 overflow-auto bg-brand-bg-base" aria-label="State tree">
           <div style={{ width: layout.width * scale, height: layout.height * scale }} className="relative">
             <div style={{ transform: `scale(${scale})`, transformOrigin: '0 0' }} className="absolute left-0 top-0">
-              <StateTree model={model} layout={layout} cursor={cursor} picked={picked} onPick={setPicked} />
+              <StateTree model={model} layout={layout} cursor={cursor} picked={picked} onPick={setPicked} layers={layers} spineOnly={spineOnly} hoverFp={hoverFp} onHover={setHoverFp} />
             </div>
           </div>
         </div>
 
         <aside className="hidden w-80 shrink-0 overflow-auto border-l border-brand-border bg-brand-bg-panel lg:block" aria-label="Inspector">
           <h3 className="sticky top-0 border-b border-brand-border bg-brand-bg-panel px-3 py-2 text-[11px] font-semibold tracking-[0.14em] text-brand-green-muted">INSPECTOR</h3>
-          <Inspector model={model} picked={picked} cursor={cursor} />
+          <Inspector events={run.events} model={model} picked={picked} cursor={cursor} onPick={setPicked} />
         </aside>
       </div>
+      )}
 
       <footer className="grid gap-2 border-t border-brand-border bg-brand-bg-panel px-4 py-2">
         <div className="relative h-6" data-testid="timeline">
@@ -345,7 +578,10 @@ export function StateExplorer() {
             <button type="button" onClick={() => setUserScale(null)} className="rounded-md border border-brand-border-strong px-2 py-1">fit</button>
             <button type="button" aria-label="Zoom in" onClick={() => setUserScale(Math.min(1.6, scale * 1.2))} className="rounded-md border border-brand-border-strong px-2 py-1">+</button>
           </span>
-          <span className="ml-auto text-[11px] text-brand-green-faint">Space play · ←/→ step · Home/End · 0 fit · ± zoom</span>
+          <span className="text-brand-green-muted" data-testid="run-summary">
+            {summary.calls} calls · {summary.probes} probes · {summary.plies} plies · {summary.tools.length} tools
+          </span>
+          <span className="ml-auto text-[11px] text-brand-green-faint">Space play · ←/→ step · j/k · Home/End · 0 fit · ± zoom · s path · c compare · e export</span>
         </div>
         <p className="text-[11px] text-brand-green-faint">
           The engine only looks and reads — it never changes anything. Experimental. Runs use your current provider and model.
@@ -366,78 +602,3 @@ const TICK: Record<EngineEvent['kind'], string> = {
   done: 'bg-brand-green',
   stopped: 'bg-brand-red',
 };
-
-function Inspector({ model, picked, cursor }: { model: Model; picked: string | null; cursor: number }) {
-  const rows = (pairs: [string, string][]) => (
-    <dl className="grid grid-cols-[82px_1fr] gap-x-2 gap-y-1">
-      {pairs.map(([k, v]) => (
-        <div key={k} className="contents">
-          <dt className="text-brand-green-muted">{k}</dt>
-          <dd className="break-words">{v}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-  let body: React.ReactNode = (
-    <p className="text-brand-green-muted">Click a state or a move. Green is the chosen path, dashed amber a backtrack, ✕ a failed or pruned branch.</p>
-  );
-  if (picked?.startsWith('c:')) {
-    const [, rs, fp] = picked.split(':');
-    const round = model.rounds.find((r) => String(r.seq) === rs);
-    const c = round?.cards.find((x) => x.fp === fp);
-    if (round && c) {
-      body = (
-        <>
-          {rows([
-            ['move', c.label],
-            ['why', c.why],
-            ['tool', c.tool],
-            ['fingerprint', c.fp],
-            ['at state', round.node],
-            ['status', c.status],
-            ['probe', c.probeSeq ? `${c.ok ? 'ok' : 'FAILED'} · ${c.ms}ms · ${c.chars} chars` : '—'],
-            ['progress', c.progress != null ? c.progress.toFixed(2) : '—'],
-            ['judgement', c.reason || '—'],
-          ])}
-          {c.excerpt && (
-            <>
-              <b className="mt-3 block text-brand-green-muted">OBSERVATION (real tool result)</b>
-              <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md border border-brand-border bg-brand-bg-panel-alt p-2">{c.excerpt}</pre>
-            </>
-          )}
-        </>
-      );
-    }
-  } else if (picked?.startsWith('n:')) {
-    const n = model.nodes.find((x) => x.id === picked.slice(2));
-    if (n) {
-      const path: string[] = [];
-      for (let x: typeof n | undefined = n; x; x = model.nodes.find((y) => y.id === x?.parent)) path.unshift(x.id);
-      body = (
-        <>
-          {rows([['state', n.id], ['depth', String(n.depth)], ['facts known', String(n.facts)], ['progress', n.progress.toFixed(2)], ['reached via', n.viaFp ?? '—'], ['path', path.join(' → ')]])}
-          <p className="mt-3 text-brand-green-muted">The engine owns this state — the goal, facts learned from real observations, and the moves that failed. The model never holds it.</p>
-        </>
-      );
-    }
-  }
-  const end = model.end && model.end.seq <= cursor ? model.end : null;
-  return (
-    <div className="p-3">
-      {body}
-      {end && (
-        <div className={`mt-4 rounded-lg border p-2.5 ${end.kind === 'done' ? 'border-brand-green' : 'border-brand-red'}`} data-testid="end-banner">
-          <b className="mb-1 block">{end.kind === 'done' ? `GOAL SETTLED · ${end.model_calls} model calls` : `NOT SETTLED · ${end.reason}`}</b>
-          {end.kind === 'done' ? (
-            <>
-              {end.answer}
-              <div className="mt-1 text-brand-green-muted">trail: {(end.trail ?? []).join(' → ')}</div>
-            </>
-          ) : (
-            <>The engine stops honestly instead of guessing. Facts it established: {Array.isArray(end.facts) ? end.facts.length : 0}.</>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}

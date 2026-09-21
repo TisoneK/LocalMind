@@ -57,6 +57,18 @@ def test_info_reports_provider_and_read_only_tools(client):
     assert not {"shell", "file_write", "code_exec"} & {t["name"] for t in body["tools"]}
 
 
+def test_info_publishes_the_search_budget_and_its_bounds(client):
+    """The explorer's search controls come from these numbers instead of hard-coding their own."""
+    body = client.get("/api/state-engine/info").json()
+    assert set(body["budget"]) == {"max_depth", "max_branches", "max_model_calls", "max_backtracks"}
+    for key, default in body["budget"].items():
+        low, high = body["budget_limits"][key]
+        assert low <= default <= high
+        assert client.post("/api/state-engine/run", json={"goal": "list the folder", key: high}).status_code == 200
+        assert client.post("/api/state-engine/run", json={"goal": "list the folder", key: high + 1}).status_code == 422
+        assert client.post("/api/state-engine/run", json={"goal": "list the folder", key: low - 1}).status_code == 422
+
+
 def test_run_streams_meta_then_engine_events_ending_settled(client):
     r = client.post("/api/state-engine/run", json={"goal": "list the folder", "max_depth": 3})
     assert r.headers["content-type"].startswith("text/event-stream")

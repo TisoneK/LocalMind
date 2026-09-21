@@ -189,6 +189,11 @@ class StateEngine:
             for o in outcomes:
                 if o is not best_obs:
                     state = state.learn(o)
+                if not o.ok:
+                    # A probe that really failed is remembered as failed HERE too, not only on a backtrack:
+                    # the same move would fail again at the next state, and the point of fingerprinting is
+                    # that it is not proposed twice.
+                    state = state.with_failed(o.move.fingerprint())
             state = state.apply(best_obs, best_eval)
             yield EngineEvent(
                 "selected",

@@ -237,6 +237,10 @@ export interface StateEngineInfo {
   provider: string;
   model: string;
   tools: { name: string; description: string }[];
+  /** The search a run gets when you do not say otherwise. */
+  budget?: { max_depth: number; max_branches: number; max_model_calls: number; max_backtracks: number };
+  /** What a run may be told to spend, per setting: [min, max]. */
+  budget_limits?: Record<'max_depth' | 'max_branches' | 'max_model_calls' | 'max_backtracks', [number, number]>;
 }
 
 export interface ConnectionCapabilities {
@@ -1365,17 +1369,19 @@ class LocalMindClient {
 
   /**
    * Stream one state-engine run: `onMeta` once, then `onEvent` for every engine event. Resolves when the run
-   * ends; aborting `signal` cancels it on the backend too (the request is dropped).
+   * ends; aborting `signal` cancels it on the backend too (the request is dropped). `budget` widens or
+   * narrows the search — omit it and the backend's defaults apply.
    */
   async runStateEngine(
     goal: string,
     handlers: { onMeta: (meta: RunMeta) => void; onEvent: (event: EngineEvent) => void },
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    budget?: { max_depth?: number; max_branches?: number; max_model_calls?: number; max_backtracks?: number }
   ): Promise<void> {
     const res = await fetch(`${this.baseUrl}/api/state-engine/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ goal }),
+      body: JSON.stringify({ goal, ...(budget ?? {}) }),
       signal,
     });
     if (!res.ok || !res.body) {
