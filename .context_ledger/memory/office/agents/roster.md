@@ -52,7 +52,6 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Mosi | S001 | deepseek-flash (ZCode) | In-app State Explorer + engine selector (Classic/State) — the state-driven engine (ADR-71) | Working | Door worker: ran the office-002 close and opened this office; now continuing the state-engine UI/selector work left in flight (its earlier session went cold with the work uncommitted in the tree) |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,

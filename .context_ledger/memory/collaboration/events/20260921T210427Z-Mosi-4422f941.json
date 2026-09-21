@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260921T210427Z-Mosi-4422f941",
+  "type": "release",
+  "session": "S001",
+  "agent": "Mosi",
+  "created": "2026-09-21T21:04:27Z",
+  "issue": "state-engine-ui",
+  "body": "Engine selection + the powerful Explorer UI + the engine extracted into a standalone, environment-agnostic package (backend/src/state_agent/, ADR-72). Live-verified on the isolated 8765 stack with deepseek-chat. The previous office's in-flight work is committed in 9661ce64.",
+  "paths": [],
+  "refs": ["e740841f", "8232aa26", "9661ce64"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
