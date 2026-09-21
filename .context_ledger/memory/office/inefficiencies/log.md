@@ -39,3 +39,12 @@ names them), and roll-up candidates.
 - **Upstream:** candidate  ← add this line ONLY for protocol-level friction
   worth a core fix; omit entirely for project-local friction.
 -->
+
+---
+## 2026-09-21 — none this session (Mosi / S001)
+
+No project-code or environment friction worth a trap: the engine's extraction needed only mechanical moves,
+and the isolated 8765 harness behaved (boot healthy in a few seconds, real probes 0-5 ms, clean shutdown).
+The one tool-layer trap re-hit was the long-standing one — a compound shell command whose `cd` and redirected
+log path disagreed, so the first `grep` looked for a log that was written elsewhere; splitting the command
+and using absolute paths (the pattern already in the log) is the fix.

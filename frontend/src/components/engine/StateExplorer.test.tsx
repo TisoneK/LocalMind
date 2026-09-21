@@ -71,6 +71,8 @@ const LIVE_EVENTS: EngineEvent[] = [
   { seq: 9, t_ms: 2100, kind: 'done', at: 'n1', answer: 'Three: notes.md and two more.', trail: ['dir_explorer(~)'], model_calls: 2, settled: true },
 ];
 
+type Handlers = { onMeta: (m: RunMeta) => void; onEvent: (e: EngineEvent) => void };
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockClient.getStateEngineInfo.mockResolvedValue(INFO);
@@ -103,7 +105,7 @@ describe('StateExplorer', () => {
     let handlers: { onMeta: (m: RunMeta) => void; onEvent: (e: EngineEvent) => void } | null = null;
     let finish: (() => void) | null = null;
     mockClient.runStateEngine.mockImplementation(
-      (_goal: string, h: typeof handlers) =>
+      (_goal: string, h: Handlers) =>
         new Promise<void>((resolve) => {
           handlers = h;
           finish = resolve;
@@ -156,11 +158,7 @@ describe('StateExplorer', () => {
   });
 
   it('lets you set how hard the engine searches, and re-run a goal with those settings', async () => {
-    let handlers: { onMeta: (m: RunMeta) => void; onEvent: (e: EngineEvent) => void } | null = null;
-    mockClient.runStateEngine.mockImplementation((_g: string, h: typeof handlers) => {
-      handlers = h;
-      return Promise.resolve();
-    });
+    mockClient.runStateEngine.mockImplementation(() => Promise.resolve()); // the run itself is not what this test checks
     render(<StateExplorer />);
     await screen.findByTestId('engine-note');
 
@@ -208,7 +206,7 @@ describe('StateExplorer', () => {
 
   it('shows what a state knows, what it ruled out, and how it got there', async () => {
     let handlers: { onMeta: (m: RunMeta) => void; onEvent: (e: EngineEvent) => void } | null = null;
-    mockClient.runStateEngine.mockImplementation((_g: string, h: typeof handlers) => {
+    mockClient.runStateEngine.mockImplementation((_g: string, h: Handlers) => {
       handlers = h;
       return new Promise<void>(() => {});
     });

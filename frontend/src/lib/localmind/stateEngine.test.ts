@@ -279,8 +279,6 @@ describe('reading one state', () => {
 });
 
 describe('layers and the spine', () => {
-  const m = buildModel(RICH);
-
   it('hides a kind of move when its layer is off, but never a move still being probed', () => {
     expect(cardVisible('rejected', { ...ALL_LAYERS, rejected: false })).toBe(false);
     expect(cardVisible('failed', { ...ALL_LAYERS, failed: false })).toBe(false);
