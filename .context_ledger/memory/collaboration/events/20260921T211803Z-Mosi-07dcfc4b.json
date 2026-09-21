@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260921T211803Z-Mosi-07dcfc4b",
+  "type": "release",
+  "session": "S001",
+  "agent": "Mosi",
+  "created": "2026-09-21T21:18:03Z",
+  "issue": "state-agent-simulator",
+  "body": "Simulator slice shipped: an action that must not be performed is predicted (labelled, never a fact, never settling); a predicted outcome no longer reaches the state as a transition; the UI marks predictions; live-verified that a write goal creates no file.",
+  "paths": [],
+  "refs": ["ca6dcde6"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

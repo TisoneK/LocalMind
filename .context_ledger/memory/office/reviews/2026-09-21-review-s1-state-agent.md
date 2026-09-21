@@ -47,11 +47,25 @@ are clean, `eslint` reports 0 errors.
 live-verified). Windows remains unverified. The exit gate is still blocked by the pre-existing frontend
 warning budget (59 warnings against 53 — the row the office has carried for days; 0 errors).
 
+## Added after the first pass: the Simulator
+
+The engine could act but could not *reason about acting*: an action that changes something was refused and
+the search stopped there. It now predicts such an action instead (given what the state already knows), so a
+goal that needs a write can be searched and planned with nothing written. A prediction is labelled as one
+in the event stream, on the tree card and in the inspector, is never learned as a fact, and can never settle
+a goal; if only predictions can advance, the run stops with `needs_action` naming the action and what it
+would produce. Live proof on the isolated stack: a goal that asked for a file to be written ran a real
+search (6 probes, a backtrack), predicted the write twice, created **no file**, and stopped not-settled.
+Building it also caught a genuine hole — a prediction was reaching the state as a transition — which is now
+fixed and covered by tests.
+
 ## Still open
 
 - The Explorer's browser pass, and Windows, per above.
-- The engine's next slices: a real `Simulator` (predict an action that must not be performed, then execute
-  behind the confirmation), a second `Environment` as the proof the boundary holds, beam > 1, persistent
-  state. These are backlog rows in the fresh office.
+- The engine's next slices: **executing** a confirmed action behind the ADR-67 confirmation (the write is
+  currently only planned and predicted, never performed), a second `Environment` as the proof the adapter
+  boundary holds, beam > 1, persistent state. The `needs_action` stop is unit-tested but was not observed
+  live (the live run's real probes failed first, so it stopped `no_progress`). These are backlog rows in
+  the fresh office.
 - The office's own high-priority row: the exit gate's warning budget — fix the warnings or consciously
   raise the number, but do not let a red gate become normal.

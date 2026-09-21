@@ -14,5 +14,5 @@ entry and backlog before starting.
 
 - **Session:** 2026-09-21 — Mosi / deepseek-flash (ZCode)
 - **Feature:** state-engine
-- **Task:** finish the in-app State Explorer + the Classic/State engine selector; make the Explorer a real instrument; extract the engine into a standalone, environment-agnostic package (ADR-72)
+- **Task:** the engine selection + Explorer, the standalone-engine extraction (ADR-72), and the Simulator slice (predict an action that must not be performed)
 - **Status:** done
