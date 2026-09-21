@@ -52,6 +52,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
+| Mosi | S001 | deepseek-flash (ZCode) | State Agent: the Simulator slice — predicted outcomes for actions that must not be performed | Working | Re-checked in after clock-out; engine + adapter + Explorer shipped earlier this session (ADR-72), now extending the engine's own design |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
