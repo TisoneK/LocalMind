@@ -37,6 +37,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Nia | S027 | unknown (Qoder harness) | Human-style UI testing of the app — drive it in a browser, notice everything, fix what's found | Working | Checked in |
+| Kwame | S028 | claude-sonnet-5 | Reviewing a pasted LocalMind chat transcript for agent failures and improvements | Working | Checked in |
 
 **Clock out when your session ends**: remove your row in the closing
 `chore(ledger):` commit. The board shows who is in the office *now*;
