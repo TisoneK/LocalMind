@@ -287,3 +287,10 @@ stays here as a live trap.
 - **Why it hid:** the `CAPABILITY_NOTE` was written for explicit Chat mode and reused for Auto; the history dicts were built with role/content only; the tests fed hand-made history that included `tool_calls`.
 - **Prevent next time:** claim BEFORE the first edit when a peer row is live; when a guard reads a field, grep the call site for what it actually passes; word any user-facing hand-off by the configured mode, not by a global constant.
 - **Status:** fixed in code (see session entry); the claim lateness is process-only.
+
+## 2026-09-21 — Kwame (S029) — shipped a phrase-list detector; the same failure came back within hours
+
+- **What happened:** I "fixed" promise-then-stop by matching phrases (lead-in + read verb). The owner's next chat ended "Let me actually check where your network says you are." — the adverb "actually" slipped past. I then widened the list, which broke six tests, before the owner asked why the agent can't check itself.
+- **Why it hid:** the unit tests used the exact strings I had just seen; a phrase list can only be right for wordings already observed. Memory already said to fix model-agnostically ([[feedback-fix-agent-model-env-agnostic]]).
+- **Prevent next time:** when a defect is "the model worded X differently", the check must be semantic (the model judging, or a state check), never a wording list. Live-test on a phrasing NOT used to write the fix.
+- **Status:** fixed (`completion_judge.py`).

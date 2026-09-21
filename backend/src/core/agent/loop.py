@@ -58,6 +58,7 @@ from core.agent.agent_filters import (
     _filter_system_leaks,
     _filter_tool_injection,
 )
+from core.agent.completion_judge import reply_leaves_work_pending
 from core.agent.constants import (
     AGENT_ALLOWED_TOOLS,
     AGENT_INTENTS,
@@ -130,7 +131,6 @@ from core.agent.text_tools import (
     _strip_minimax_tool_calls,
     _strip_minimax_tool_calls_stream,
     _truncate_observation,
-    ends_with_unfinished_intent,
 )
 from core.agent.tool_dispatch import dispatch_with_retry
 from core.agent.tool_schemas import TOOL_DEFINITIONS, tool_defs_for_call
@@ -7673,15 +7673,28 @@ class AgentLoop:
                 # one-shot guard below prevents an infinite nudge loop and
                 # the turn falls through to the honest-stop path.
                 # Also fires AFTER tools ran when the answer ends by promising
-                # a read/explore step it never took ("…Let me open it.").
+                # a next step it never took ("…Let me open it."): the model
+                # judges its own reply (completion_judge), not a phrase list.
                 if is_parent:
                     _final_text = getattr(trace, "final_response", "") or ""
                     _no_tool_ran = not any(
                         getattr(s, "tool_name", "") for s in getattr(trace, "steps", []) or []
                     )
-                    if (
-                        _no_tool_ran and prose_commits_to_tool_action(_final_text)
-                    ) or ends_with_unfinished_intent(_final_text):
+                    _commits = _no_tool_ran and prose_commits_to_tool_action(_final_text)
+                    if _commits or (
+                        # The agent judges its own short reply (no phrase list):
+                        # only when it has not been nudged yet, so a turn pays for
+                        # at most one judge call and one nudge.
+                        iteration + 1 < effective_max_iter
+                        and not any(
+                            "[TOOL COMMITMENT]" in str(m.get("content", ""))
+                            for m in (loop_messages or [])
+                            if isinstance(m, dict)
+                        )
+                        and await reply_leaves_work_pending(
+                            active_adapter, reformulated_message or _user_message_text(loop_messages) or "", _final_text
+                        )
+                    ):
                         # One-shot: if we already nudged on this run, don't
                         # nudge again — fall through to accept (the model
                         # had its chance and still didn't emit a tool_call).

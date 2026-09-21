@@ -306,40 +306,54 @@ async def test_gate_respects_iteration_cap():
     assert len(loop_messages) == original_len
 
 
-# ── Unfinished read/explore intent (owner transcript 2026-09-21) ────────────
-# "Found it — C:\Users\x\Tisone. Let me open it." ended the turn AFTER a tool
-# ran; the owner had to type "and???". Also closes P-2026-09-16-4 / -43.
+# ── The agent judges its own short reply (owner transcript 2026-09-21) ─────
+# "…Let me open it." / "…Let me actually check where your network says you are."
+# ended turns; a phrase list missed the second wording, so the MODEL decides
+# (core/agent/completion_judge.py). Also closes P-2026-09-16-43.
 
-from core.agent.text_tools import _is_tool_talk, ends_with_unfinished_intent  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
 
-_FOUND_IT = r"Found it — C:\Users\Lameck\Tisone. Let me open it."
+from core.agent.completion_judge import reply_leaves_work_pending  # noqa: E402
+from core.agent.text_tools import _is_tool_talk  # noqa: E402
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
-        _FOUND_IT,
-        "The folder exists. I'll read the README next.",
-        "Two matches. Going to look inside LocalMind now:",
-        "I'll get the hostname of this machine for you.",
-    ],
+class _Verdict:
+    """Adapter stub: answers the judge with a fixed word, or raises."""
+
+    def __init__(self, word="", boom=False):
+        self.word, self.boom, self.calls = word, boom, 0
+
+    async def chat(self, messages, temperature=0.0, intent="chat"):
+        self.calls += 1
+        if self.boom:
+            raise RuntimeError("provider down")
+        yield SimpleNamespace(text=self.word, error=None)
+
+
+_PROMISE = (
+    "Fair challenge — I've been assuming it from your locale. "
+    "Let me actually check where your network says you are."
 )
-def test_unfinished_intent_positive(text):
-    assert ends_with_unfinished_intent(text) is True
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
-        "Found it at C:\\Users\\Lameck\\Tisone. Let me know if you want me to open it.",
-        "Paris is the capital of France.",
-        "I opened the file and read the README; it describes a local AI runtime.",
-        "",
-        "x" * 700 + " Let me open it.",
-    ],
-)
-def test_unfinished_intent_negative(text):
-    assert ends_with_unfinished_intent(text) is False
+@pytest.mark.asyncio
+async def test_judge_pending_and_done():
+    assert await reply_leaves_work_pending(_Verdict("PENDING"), "am I in Nairobi?", _PROMISE) is True
+    assert await reply_leaves_work_pending(_Verdict("DONE"), "am I in Nairobi?", "Yes — Nairobi.") is False
+
+
+@pytest.mark.asyncio
+async def test_judge_never_blocks():
+    assert await reply_leaves_work_pending(_Verdict(boom=True), "q", _PROMISE) is False
+    assert await reply_leaves_work_pending(None, "q", _PROMISE) is False
+
+
+@pytest.mark.asyncio
+async def test_judge_skips_long_or_question_replies_without_a_call():
+    adapter = _Verdict("PENDING")
+    assert await reply_leaves_work_pending(adapter, "q", "x" * 700) is False
+    assert await reply_leaves_work_pending(adapter, "q", "Which folder do you mean?") is False
+    assert adapter.calls == 0
 
 
 def test_tool_talk_catches_describe():
@@ -348,17 +362,40 @@ def test_tool_talk_catches_describe():
 
 
 @pytest.mark.asyncio
-async def test_gate_reprompts_after_tool_ran_when_answer_only_promises():
+async def test_gate_reprompts_after_tool_ran_when_judge_says_pending():
     from core.agent.loop import AgentLoop
 
     loop = AgentLoop(adapter=None)
-    trace = _make_trace_with_final_response(_FOUND_IT, has_tool_step=True)
-    loop_messages = [{"role": "user", "content": "find Tisone"}]
+    trace = _make_trace_with_final_response(_PROMISE, has_tool_step=True)
+    loop_messages = [{"role": "user", "content": "am I in Nairobi?"}]
 
     suffix, is_final = await loop._acceptance_gate_at_final_answer(
         trace=trace, iteration=1, effective_max_iter=10, loop_messages=loop_messages,
-        observation_log="", active_adapter=None, intent=None, obs=None, is_parent=True,  # type: ignore[arg-type]
+        observation_log="", active_adapter=_Verdict("PENDING"), intent=None, obs=None, is_parent=True,  # type: ignore[arg-type]
     )
 
     assert is_final is False
     assert any("[TOOL COMMITMENT]" in str(m.get("content", "")) for m in loop_messages)
+
+
+@pytest.mark.asyncio
+async def test_gate_accepts_when_judge_says_done_and_nudges_only_once():
+    from core.agent.loop import AgentLoop
+
+    loop = AgentLoop(adapter=None)
+    trace = _make_trace_with_final_response("Yes — Nairobi, per your IP.", has_tool_step=True)
+    msgs = [{"role": "user", "content": "am I in Nairobi?"}]
+    _, done = await loop._acceptance_gate_at_final_answer(
+        trace=trace, iteration=1, effective_max_iter=10, loop_messages=msgs,
+        observation_log="", active_adapter=_Verdict("DONE"), intent=None, obs=None, is_parent=True,  # type: ignore[arg-type]
+    )
+    assert done is True
+
+    nudged = [{"role": "user", "content": "[TOOL COMMITMENT] act"}]
+    adapter = _Verdict("PENDING")
+    trace = _make_trace_with_final_response(_PROMISE, has_tool_step=True)
+    await loop._acceptance_gate_at_final_answer(
+        trace=trace, iteration=1, effective_max_iter=10, loop_messages=nudged,
+        observation_log="", active_adapter=adapter, intent=None, obs=None, is_parent=True,  # type: ignore[arg-type]
+    )
+    assert adapter.calls == 0  # already nudged: no second judge call, no second nudge

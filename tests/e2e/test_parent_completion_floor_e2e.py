@@ -46,6 +46,12 @@ class _ReplanAdapter:
         self.replan_calls = []
 
     async def chat(self, messages, temperature=0.1, intent=None):
+        if "Decide ONE thing" in str(messages[-1].get("content", "")):
+            # The completion judge (core/agent/completion_judge.py) also reads a
+            # short final answer through this adapter — it is not a replan call.
+            yield StreamChunk(text="DONE", done=False)
+            yield StreamChunk(text="", done=True)
+            return
         self.replan_calls.append(messages)
         yield StreamChunk(text=self.plan_text, done=False)
         yield StreamChunk(text="", done=True)
