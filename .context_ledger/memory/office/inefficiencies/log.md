@@ -355,3 +355,11 @@ never makes an entry eligible.
 
 - **What happened (S26):** the `file_write` placeholder guard went through three iterations (length check, phrase-cue regex, then the fact-only redesign) because each patched the symptom. The root question (a tool cannot know intent) was asked by the owner, not by me first.
 - **Prevent next time:** when a guard is refused-then-patched twice, stop and ask what fact the tool can actually verify (ADR-67).
+
+## 2026-09-21 — Imani (S024) — bugs that no log or unit test showed, found only by tapping the HTTP layer; and a test that scanned the real home
+
+- **What happened:** capturing the exact request/response bodies of real turns (an httpx tap in a harness outside the repo) exposed five defects that logs and 2800+ passing tests had never shown: the user message sent to the model twice (`bddf663a`); the Thinker handed a recovery nudge as "the user's request" (`90cda747`); glm's reasoning-mode stream (lone newline as content, then the tool call) dropped by the adapter, causing 2-3 wasted ~25 s "empty response" recoveries per turn (`d61d1d12`); older tool results cut mid-list so final answers were right only 5/15 (`28c7eaae`); the `git` tool ignoring its `path` (`e024a05a`). Separately `test_bare_call_defaults_to_recent` scanned the REAL home folder and hung the whole suite once a worktree with `node_modules` sat under it (`81923e83`).
+- **Cost:** hours of guessing from logs before the tap; the suite hang looked like a code regression.
+- **Prevent next time:** for any agent-behavior question, capture the real request bodies as the model saw them (`features/stage-prompts/harness/`) BEFORE theorising; keep tests hermetic (never `Path.home()`); run experiments serially against a frozen snapshot worktree with fixed fixture data, never against a moving HEAD or a tree you rebase.
+- **Also (harness lessons, cost me two invalid rounds):** parallel workers trip z.ai's 1302 rate limit and every affected run silently becomes a "raw evidence" fallback; score gathered evidence AND the final answer separately.
+
