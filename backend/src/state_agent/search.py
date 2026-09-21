@@ -188,7 +188,7 @@ class StateEngine:
 
             # Which of these can this environment run? An action it does not have is remembered as failed;
             # one that is not read-only is predicted when a simulator is configured, otherwise surfaced for
-            # confirmation (refuse only on a verified fact — ADR-67 in LocalMind, general here).
+            # confirmation (refuse only on a fact you verified yourself).
             runnable: list[Action] = []
             predicted: dict[str, Observation] = {}
             for m in actions:

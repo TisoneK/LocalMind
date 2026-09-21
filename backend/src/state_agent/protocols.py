@@ -12,7 +12,7 @@ environment. That is the whole boundary:
                                           │
                                  TerminalCondition decides when it is over
 
-Everything above is data or a Protocol. Importing LocalMind here is a bug, and
+Everything above is data or a Protocol. Importing a host application here is a bug, and
 `tests/state_agent/test_boundary.py` fails the build if it ever happens.
 """
 from __future__ import annotations
@@ -40,9 +40,8 @@ class Goal:
 class ActionSpec:
     """One thing an environment can be asked to do, as the engine needs to describe it to a model.
 
-    ``read_only`` is the safety boundary (ADR-67 in LocalMind, general here): an action that is not
-    read-only is never performed as a probe — it is predicted by a Simulator when one is configured, and
-    otherwise surfaced for confirmation.
+    ``read_only`` is the safety boundary: an action that is not read-only is never performed as a probe —
+    it is predicted by a Simulator when one is configured, and otherwise surfaced for confirmation.
     """
 
     name: str

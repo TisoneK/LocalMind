@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import ast
 import pathlib
+import re
 
 import pytest
 
@@ -78,3 +79,31 @@ def test_every_core_module_imports_without_localmind_on_the_path(module):
         importlib.import_module(module)
     finally:
         sys.modules.update(saved)
+
+
+# Host *vocabulary* is as much a dependency as a host import: it drags the engine's readers (and its prompts)
+# into another project's record system. And host *configuration* would make the engine's behaviour depend on
+# where it happens to be running. Both are checked over the core's entire text, docstrings included.
+
+LEDGER_VOCABULARY = re.compile(r"\bADR-\d+|\bB-\d{4}-\d{2}-\d{2}-\d+|\.context_ledger|\bS\d{3}\b|\bSession \d+\b")
+
+
+def test_the_engine_core_cites_no_host_record_system():
+    offenders: dict[str, list[str]] = {}
+    for path in CORE_FILES:
+        hits = [f"{i}: {m.group(0)}" for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+                for m in [LEDGER_VOCABULARY.search(line)] if m]
+        if hits:
+            offenders[path.name] = hits
+    assert not offenders, f"the engine core cites a host's records: {offenders}"
+
+
+def test_the_engine_core_reads_no_configuration_of_its_own():
+    """No environment variables, no config files: a host passes everything in through the constructor."""
+    offenders: dict[str, list[str]] = {}
+    for path in CORE_FILES:
+        text = path.read_text(encoding="utf-8")
+        hits = [name for name in ("os.environ", "getenv", "environ[") if name in text]
+        if hits:
+            offenders[path.name] = hits
+    assert not offenders, f"the engine core reads ambient configuration: {offenders}"

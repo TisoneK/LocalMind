@@ -5,8 +5,8 @@ Both are written against a ``ModelPort`` — anything that can answer a prompt w
     class ModelPort(Protocol):
         async def complete(self, prompt: str, *, max_chars: int = 4000) -> str: ...
 
-The port is the whole model dependency of the engine. An adapter supplies one (LocalMind supplies its own
-provider adapters; a test supplies a scripted string; a CLI supplies whatever it talks to).
+The port is the whole model dependency of the engine. A host supplies one (over its own provider client,
+a stdlib HTTP call, or a scripted string in a test).
 """
 from __future__ import annotations
 
