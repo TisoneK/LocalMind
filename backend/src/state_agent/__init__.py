@@ -49,6 +49,7 @@ from state_agent.search import (
     NothingImproves,
     StateEngine,
 )
+from state_agent.simulator import LLMSimulator
 from state_agent.state import AgentState
 
 __all__ = [
@@ -62,5 +63,5 @@ __all__ = [
     # terminal conditions
     "DEFAULT_TERMINAL_CONDITIONS", "BudgetExhausted", "NoRunnableActions", "NothingImproves",
     # model layer
-    "ModelPort", "LLMMoveProposer", "LLMEvaluator", "parse_json",
+    "ModelPort", "LLMMoveProposer", "LLMEvaluator", "LLMSimulator", "parse_json",
 ]

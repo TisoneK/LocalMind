@@ -392,7 +392,11 @@ export function StateExplorer() {
             ⚙ search
           </button>
           <span className="hidden text-brand-green-muted md:inline" data-testid="engine-note">
-            {offline ? 'Live runs need the LocalMind backend.' : info ? `${info.provider} · ${info.model} · ${info.tools.length} read-only tools` : ''}
+            {offline
+              ? 'Live runs need the LocalMind backend.'
+              : info
+                ? `${info.provider} · ${info.model} · ${info.tools.filter((t) => t.read_only !== false).length} read-only${info.tools.some((t) => t.read_only === false) ? ` · ${info.tools.filter((t) => t.read_only === false).length} simulated` : ''} tools`
+                : ''}
           </span>
         </form>
 

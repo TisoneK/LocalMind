@@ -63,7 +63,12 @@ def test_info_reports_provider_and_read_only_tools(client):
     body = client.get("/api/state-engine/info").json()
     assert body["read_only"] is True and (body["provider"], body["model"]) == ("stub", "stub-model")
     assert {"dir_explorer", "file_task"} <= {t["name"] for t in body["tools"]}
-    assert not {"shell", "file_write", "code_exec"} & {t["name"] for t in body["tools"]}
+    assert not {"shell", "code_exec"} & {t["name"] for t in body["tools"]}
+    # The one action that changes something is published as NOT read-only, so a caller can tell what the
+    # engine may safely do from what it may only predict.
+    by_name = {t["name"]: t for t in body["tools"]}
+    assert by_name["file_write"]["read_only"] is False
+    assert by_name["dir_explorer"]["read_only"] is True
 
 
 def test_info_publishes_the_search_budget_and_its_bounds(client):

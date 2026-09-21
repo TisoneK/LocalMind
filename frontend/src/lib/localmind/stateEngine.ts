@@ -43,6 +43,8 @@ export interface EngineEvent {
   move?: string;
   why?: string;
   ok?: boolean;
+  /** A simulated outcome: the action was NOT performed. */
+  predicted?: boolean;
   chars?: number;
   ms?: number;
   excerpt?: string;
@@ -71,6 +73,8 @@ export interface Card {
   status: CardStatus;
   probeSeq?: number;
   ok?: boolean;
+  /** A simulated outcome: the action was NOT performed. */
+  predicted?: boolean;
   ms?: number;
   chars?: number;
   excerpt?: string;
@@ -148,7 +152,7 @@ export function buildModel(events: readonly EngineEvent[]): Model {
       }
       case 'probe': {
         const c = roundAt(e.at)?.cards.find((x) => x.fp === e.fp);
-        if (c) Object.assign(c, { probeSeq: e.seq, ok: e.ok, ms: e.ms, chars: e.chars, excerpt: e.excerpt });
+        if (c) Object.assign(c, { probeSeq: e.seq, ok: e.ok, predicted: e.predicted, ms: e.ms, chars: e.chars, excerpt: e.excerpt });
         break;
       }
       case 'evaluation': {

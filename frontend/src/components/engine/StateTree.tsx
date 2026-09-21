@@ -99,7 +99,7 @@ function CardView({ card, round, cursor, picked, pos, onPick, hovered, onHover }
           />
         </div>
         <span>{scored ? progress.toFixed(2) : '—'}</span>
-        <span>{probed ? `${card.ms ?? 0}ms` : ''}</span>
+        <span>{probed ? (card.predicted ? '◌ predicted' : `${card.ms ?? 0}ms`) : ''}</span>
         <span className={status === 'selected' ? 'text-brand-green' : status === 'failed' ? 'text-brand-red' : ''}>{GLYPH[status]}</span>
       </div>
     </button>

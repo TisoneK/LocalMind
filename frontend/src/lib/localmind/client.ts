@@ -236,7 +236,7 @@ export interface StateEngineInfo {
   read_only: boolean;
   provider: string;
   model: string;
-  tools: { name: string; description: string }[];
+  tools: { name: string; description: string; read_only?: boolean }[];
   /** The search a run gets when you do not say otherwise. */
   budget?: { max_depth: number; max_branches: number; max_model_calls: number; max_backtracks: number };
   /** What a run may be told to spend, per setting: [min, max]. */

@@ -77,10 +77,10 @@ async def collect(engine, goal=GOAL):
     return [e async for e in engine.run(goal)]
 
 
-def engine(proposer, executor, evaluator, catalog=None, **budget):
+def engine(proposer, executor, evaluator, catalog=None, simulator=None, **budget):
     return StateEngine(
         ScriptedEnvironment(executor, catalog), proposer=proposer,
-        evaluator=evaluator, budget=EngineBudget(**budget) if budget else None,
+        evaluator=evaluator, simulator=simulator, budget=EngineBudget(**budget) if budget else None,
     )
 
 
@@ -267,3 +267,85 @@ async def test_a_failed_probe_is_remembered_as_failed_even_when_the_round_succee
     assert missing.fingerprint() in states[-1].data["failed_fps"]  # not lost just because something worked
     assert states[-1].data["failed"] == 1
     assert good.fingerprint() not in states[-1].data["failed_fps"]
+
+
+# ─── The Simulator: predicting an action that must not be performed ──────────
+
+
+class ScriptedSimulator:
+    """Predicts whatever the test says, and remembers what it was asked about."""
+
+    def __init__(self, ok=True, text="would create notes.md with three lines"):
+        self.ok, self.text, self.asked = ok, text, []
+
+    async def predict(self, state, action):
+        self.asked.append(action.label())
+        return Observation(action, self.ok, self.text, predicted=True)
+
+
+def _write_move():
+    return Move("file_write", {"path": "/tmp/notes.md", "content": "one\ntwo\nthree"}, "write the notes")
+
+
+@pytest.mark.asyncio
+async def test_a_simulated_action_is_predicted_and_never_performed():
+    w = _write_move()
+    ex, sim = FakeExecutor({w.label(): (True, "should not run")}), ScriptedSimulator()
+    ev = await collect(
+        engine(ScriptedProposer([w]), ex, ScriptedEvaluator({w.label(): Evaluation(0.8)}), simulator=sim)
+    )
+    assert ex.ran == []                     # the environment was never touched
+    assert sim.asked == [w.label()]         # ... and the simulator was asked instead
+    probe = next(e for e in ev if e.kind == "probe")
+    assert probe.data["predicted"] is True and probe.data["ok"] is True
+    assert not any(e.kind == "needs_confirmation" for e in ev)  # a simulator replaces the refusal
+
+
+@pytest.mark.asyncio
+async def test_without_a_simulator_a_write_is_still_only_offered_for_confirmation():
+    w = _write_move()
+    ex = FakeExecutor({})
+    ev = await collect(engine(ScriptedProposer([w]), ex, ScriptedEvaluator({})))
+    assert ex.ran == [] and any(e.kind == "needs_confirmation" for e in ev)
+
+
+@pytest.mark.asyncio
+async def test_a_prediction_is_never_learned_as_a_fact():
+    w = _write_move()
+    sim = ScriptedSimulator()
+    states = [e for e in await collect(
+        engine(ScriptedProposer([w]), FakeExecutor({}), ScriptedEvaluator({w.label(): Evaluation(0.8)}), simulator=sim)
+    ) if e.kind == "state"]
+    # The prediction was scored and selected, but nothing about it entered the state's knowledge.
+    assert all(s.data["fact_list"] == [] for s in states)
+    assert states[-1].data["facts"] == 0
+    assert states[-1].data["progress"] == 0.0  # ... and it did not move progress either
+
+
+@pytest.mark.asyncio
+async def test_a_prediction_can_never_settle_the_goal():
+    w = _write_move()
+    sim = ScriptedSimulator()
+    ev = await collect(
+        engine(ScriptedProposer([w]), FakeExecutor({}),
+               # the evaluator is fooled into saying "done" about the prediction
+               ScriptedEvaluator({w.label(): Evaluation(1.0, True, "notes.md was written", "settled")}),
+               simulator=sim, max_backtracks=0)
+    )
+    assert ev[-1].kind == "stopped" and ev[-1].data["settled"] is False
+    assert ev[-1].data["reason"] == "needs_action"          # it says what only a real action could finish
+    assert "file_write" in ev[-1].data["needs"]
+    assert ev[-1].data["predicted"]["result"] == "would create notes.md with three lines"
+    assert not any(e.kind == "done" for e in ev)
+
+
+@pytest.mark.asyncio
+async def test_a_failed_prediction_is_reported_honestly_and_the_action_remembers_it():
+    w = _write_move()
+    sim = ScriptedSimulator(ok=False, text="the path is not writable")
+    ev = await collect(
+        engine(ScriptedProposer([w]), FakeExecutor({}), ScriptedEvaluator({}), simulator=sim, max_backtracks=0)
+    )
+    probe = next(e for e in ev if e.kind == "probe")
+    assert probe.data["ok"] is False and probe.data["predicted"] is True
+    assert "not writable" in probe.data["excerpt"]

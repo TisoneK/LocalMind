@@ -247,8 +247,19 @@ class StateEngine:
                 key=lambda p: (p[1].done, p[1].progress),
                 reverse=True,
             )
-            best_done = bool(ranked and ranked[0][1].done)
-            best_progress = ranked[0][1].progress if ranked else 0.0
+            # A predicted outcome may be scored and compared — it must never BE the transition. The world
+            # did not change: only a real probe becomes knowledge, moves the state, or settles a goal.
+            ranked_real = [p for p in ranked if not p[0].predicted]
+            predicted_only = [p for p in ranked if p[0].predicted]
+            best_done = bool(ranked_real and ranked_real[0][1].done)
+            best_progress = ranked_real[0][1].progress if ranked_real else 0.0
+
+            if not ranked_real and predicted_only:
+                # Everything worth doing here would have to be performed, and this engine performs only
+                # read-only actions. That is an honest stop — and it names the action it would need.
+                obs, val = predicted_only[0]
+                yield self._needs_action(obs, val, state, calls)
+                return
 
             if not ranked or (not best_done and best_progress <= state.progress):
                 # Nothing beats where we stand: keep what the real probes taught, then back up.
@@ -265,7 +276,7 @@ class StateEngine:
                 yield ev
                 continue
 
-            best_obs, best_eval = ranked[0]
+            best_obs, best_eval = ranked_real[0]
             history.append(state)
             for o in outcomes:
                 if o is not best_obs:
@@ -324,6 +335,20 @@ class StateEngine:
             return state, history, backtracks, None
         parent = state.retreat_to(history[-1])
         return parent, history[:-1], backtracks + 1, EngineEvent("backtrack", {"to_depth": parent.depth})
+
+    @staticmethod
+    def _needs_action(obs: Observation, evaluation, state: AgentState, calls: int) -> EngineEvent:
+        """The honest end of a run whose goal needs an action this engine may not perform: name it, with the
+        predicted outcome, and say plainly that the goal is NOT settled."""
+        return EngineEvent(
+            "stopped",
+            {
+                "reason": "needs_action", "settled": False, "facts": list(state.facts), "trail": list(state.trail),
+                "model_calls": calls,
+                "needs": obs.move.label(), "needs_why": obs.move.why,
+                "predicted": {"ok": obs.ok, "result": obs.text, "progress": evaluation.progress},
+            },
+        )
 
     @staticmethod
     def _stopped(reason: str, state: AgentState, calls: int) -> EngineEvent:

@@ -85,7 +85,7 @@ export function Inspector({ events, model, picked, cursor, onPick }: Props) {
                   {round.node}
                 </button>,
               ],
-              ['probe', card.probeSeq ? `${card.ok ? 'ok' : 'FAILED'} · ${card.ms}ms · ${card.chars} chars` : '—'],
+              ['probe', card.probeSeq ? (card.predicted ? `PREDICTED (not performed) · ${card.ok ? 'would work' : 'would fail'}` : `${card.ok ? 'ok' : 'FAILED'} · ${card.ms}ms · ${card.chars} chars`) : '—'],
               ['score', card.progress != null ? card.progress.toFixed(2) : '—'],
               ['judgement', card.reason || '—'],
             ]}

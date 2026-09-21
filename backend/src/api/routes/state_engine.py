@@ -84,7 +84,10 @@ async def state_engine_info():
         "read_only": True,
         "provider": provider,
         "model": model,
-        "tools": [{"name": t.name, "description": t.description} for t in LOCALMIND_ACTIONS.values()],
+        "tools": [
+            {"name": t.name, "description": t.description, "read_only": t.read_only}
+            for t in LOCALMIND_ACTIONS.values()
+        ],
         # What a run costs and what it may be told to spend: the UI's search controls come from here.
         "budget": dict(_DEFAULT_BUDGET),
         "budget_limits": {

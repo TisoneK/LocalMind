@@ -16,6 +16,7 @@ from typing import Optional
 from state_agent.model import LLMEvaluator, LLMMoveProposer, ModelPort
 from state_agent.protocols import Action, ActionSpec, Observation
 from state_agent.search import EngineBudget, StateEngine
+from state_agent.simulator import LLMSimulator
 
 # ─── The environment: what the engine may do here ───────────────────────────
 # READ-ONLY by construction. An action missing from this table is not an action in this environment; an
@@ -32,6 +33,11 @@ LOCALMIND_ACTIONS: dict[str, ActionSpec] = {
         ActionSpec("web_fetch", "Fetch and read one web page.", '{"url": "<https url>"}'),
         ActionSpec("sysinfo", "Machine facts: time, OS, CPU, RAM, disk, network.", '{"query": "<what>"}'),
         ActionSpec("calculate", "Evaluate an arithmetic expression exactly.", '{"expression": "<expr>"}'),
+        # Not read-only: the engine may PROPOSE it and have its outcome PREDICTED, but never performs it
+        # (it surfaces needs_confirmation when no simulator is configured). This is what lets a goal that
+        # needs something written be planned without anything being written.
+        ActionSpec("file_write", "Write or overwrite one file with given content. NOT read-only — simulated.",
+                   '{"path": "<file>", "content": "<text>"}', read_only=False),
     )
 }
 
@@ -103,10 +109,23 @@ def make_model_port(adapter) -> ModelPort:
     return LocalMindModel(adapter)
 
 
-def build_engine(adapter, budget: Optional[EngineBudget] = None, *, environment=None, simulator=None) -> StateEngine:
-    """A ready engine on LocalMind's tools + provider. The seam the API and the CLI both use."""
+def build_engine(
+    adapter,
+    budget: Optional[EngineBudget] = None,
+    *,
+    environment=None,
+    simulator=None,
+    simulate: bool = True,
+) -> StateEngine:
+    """A ready engine on LocalMind's tools + provider. The seam the API and the CLI both use.
+
+    ``simulate`` (default on) means an action that must not be performed is PREDICTED rather than merely
+    refused, so a goal that needs a write can be planned without anything being written.
+    """
     env = environment or LocalMindEnvironment(adapter)
     port = make_model_port(adapter)
+    if simulator is None and simulate:
+        simulator = LLMSimulator(port)
     return StateEngine(
         env,
         proposer=LLMMoveProposer(port, env.tools()),
