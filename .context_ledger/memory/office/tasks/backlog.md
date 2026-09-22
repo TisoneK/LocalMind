@@ -97,6 +97,7 @@ Full spec: `.context_ledger/core/schemas/ledger-schema.md` →
 | B-2026-09-21-21 | Settings/architecture tidy: give memory settings (embedding model) their own page; extract `useChat`'s ~1,900-line SSE switch into a reducer with per-event handlers; find the ~1s gap between the finished-turn header time and the measured latency. |
 | B-2026-09-21-22 | Persist per-phase thinking segments so reloaded chats keep the split — store `{text, ms, afterTools}` in message metadata next to `thinking` (only live turns are split today). |
 | B-2026-09-21-23 | Frontend test health: 9 context-menu tests fail under jsdom (the Radix menu opens once per file); cause already narrowed — fix or document with the cause. |
+| B-2026-09-21-25 | LocalMind becomes a CONSUMER of the engine instead of its home: `ti-matrix` (private, `~/Code/ti-matrix`, remote wired) now owns the engine — pin it as a dependency or vendor it, keep `api/routes/state_engine.py` + the in-app Explorer as the engine's first hosted UI (its Studio), and let the office's ledger stop tracking engine-internal work. Blocked only on the owner creating the empty GitHub repo (the `gh` CLI is absent here) before the first push. |
 | B-2026-09-21-24 | Provider model-switch policy: provider model switches only affect the picker — decide whether hidden models must also be refused by the agent/router, and live-test the add/hide/default/delete flows on a real provider (only the DeepSeek view was clicked through). |
 
 <!-- TEMPLATE — add one ACTIONABLE row to the matching priority table

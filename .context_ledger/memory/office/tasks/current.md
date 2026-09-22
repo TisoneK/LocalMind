@@ -14,5 +14,5 @@ entry and backlog before starting.
 
 - **Session:** 2026-09-21 — Mosi / deepseek-flash (ZCode)
 - **Feature:** state-engine
-- **Task:** the engine selection + Explorer, the standalone-engine extraction (ADR-72), and the Simulator slice (predict an action that must not be performed)
+- **Task:** the engine selection + Explorer, the standalone-engine extraction (ADR-72), the Simulator slice, the boundary audit, and the extraction of Prototype 0 into its own repository (`ti-matrix`)
 - **Status:** done
