@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-21T21:18:07Z_
+_Regenerated: 2026-09-22T04:13:49Z_
 
 ## Standing params
 - **Core:** 2.0.3 (locked, verified 2026-09-21)
@@ -18,7 +18,7 @@ _Regenerated: 2026-09-21T21:18:07Z_
 (office empty — no live roster rows)
 
 ## Current task
-- **2026-09-21 — Mosi / deepseek-flash (ZCode)** — the engine selection + Explorer, the standalone-engine extraction (ADR-72), and the Simulator slice (predict an action that must not be per… — *done*
+- **2026-09-21 — Mosi / deepseek-flash (ZCode)** — the engine selection + Explorer, the standalone-engine extraction (ADR-72), the Simulator slice, the boundary audit, and the extraction of … — *done*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-09-21-1 | EXIT GATE BLOCKED: `scripts/ci-check.sh`'s frontend leg fails on `eslint . --max-warnings 53` — the recent UI work added React-effect warnings ("Calling setState synchronously within an effect", missing hook deps) so the count exceeds the budget (0 errors). Fix the warnings (preferred) or consciously raise `--max-warnings`; do not let a red exit gate become normal. Surfaces: `frontend/src/hooks/useLocalMind.ts`, `hooks/useWorkspaceData.ts`, `hooks/use-mobile.ts`, `components/chat/` (ChatInput, ChatMessage, TurnView, FilePreviewDialog, WelcomeScreen), `components/ui/` (sidebar, toggle, navigation-menu, form). Exact command: `sh .context_ledger/core/bin/ledger-gates run exit`. |
@@ -27,7 +27,7 @@ _Regenerated: 2026-09-21T21:18:07Z_
 | B-2026-09-21-4 | Benchmark the state engine against Classic (ADR-71 §8): both engines selectable and observable, same tasks, measurable comparison, only then a decision about an `Auto` engine. Ties to B-2026-09-21-2. |
 | B-2026-09-21-5 | Confirmable-refusal rollout (ADR-67): convert every tool that refuses or guesses to "refuse only on a verified fact, name the fact and the confirming flag" — start with delete (`confirm_delete`), the shell tool's destructive/mass-touch commands (replace the substring blocklist), and installs (`scope=system`); record confirming flags in the run trace. Composes with the consequence-tiered ladder work (resolve → verify → assess → confirm → execute → verify → reflect). |
 
-_12 medium, 7 low priority row(s) — see tasks/backlog.md_
+_12 medium, 8 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 2 entries, last added 2026-09-21
