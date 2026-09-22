@@ -52,6 +52,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
+| Mosi | S001 | deepseek-flash (ZCode) | Ti Matrix (the engine's own repo): public, MIT, package renamed, host integration removed | Working | Row kept live — the session is not over until the owner releases it |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
