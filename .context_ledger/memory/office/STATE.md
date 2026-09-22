@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-22T04:13:49Z_
+_Regenerated: 2026-09-22T06:07:38Z_
 
 ## Standing params
 - **Core:** 2.0.3 (locked, verified 2026-09-21)
@@ -15,7 +15,7 @@ _Regenerated: 2026-09-22T04:13:49Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-(office empty — no live roster rows)
+- **Mosi** (S001) — Working — Ti Matrix (the engine's own repo): public, MIT, package renamed, host integration removed
 
 ## Current task
 - **2026-09-21 — Mosi / deepseek-flash (ZCode)** — the engine selection + Explorer, the standalone-engine extraction (ADR-72), the Simulator slice, the boundary audit, and the extraction of … — *done*
