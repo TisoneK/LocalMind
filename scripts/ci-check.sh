@@ -80,7 +80,10 @@ PYTEST_IDS="$PYTEST_OUT.actual"
 BASE_IDS="$PYTEST_OUT.base"
 trap 'rm -f "$PYTEST_OUT" "$PYTEST_IDS" "$BASE_IDS"' EXIT
 set +e
-"$VENV_PYTHON" -m pytest tests -q > "$PYTEST_OUT" 2>&1
+# PYTHONUTF8: several source-grepping tests read files with the platform's
+# default encoding; on Windows that is cp1252 and a UTF-8 source line kills
+# them (UnicodeDecodeError, not a code failure).
+PYTHONUTF8=1 "$VENV_PYTHON" -m pytest tests -q > "$PYTEST_OUT" 2>&1
 pytest_status=$?
 set -e
 cat "$PYTEST_OUT"
@@ -127,14 +130,15 @@ echo "── eslint (frontend) ────────────────�
 # Ratchet cap. S296: wiring ci-check.sh into the context-gates exit gate
 # revealed the warning count had silently drifted 56 → 71 (the old 65 cap was
 # never enforced because ci-check wasn't gated). Cap set to the TRUE current
-# baseline with ZERO headroom so it cannot grow further; the pre-existing 71
-# (mostly no-explicit-any in SSE parsing) are backlogged to ratchet DOWN. Any
-# NEW warning fails the gate — lower this number as debt is paid, never raise it.
+# baseline with ZERO headroom so it cannot grow further; the pre-existing
+# warnings were backlogged to ratchet DOWN. Any NEW warning fails the gate —
+# lower this number as debt is paid, never raise it.
 # Errors 9 → 0 (conditional useEnterMotion fixed, dead imports/blocks
 # removed) and warnings 84 → 53 (backend wire types in client.ts replace the
-# SSE/session/history/objective `any`s; intent-typed casts dropped); cap
+# SSE/session/history/objective `any`s; intent-typed casts dropped); the
+# hooks-rule/any sweep then took warnings 53 → 0 (2026-10-26), and the cap
 # follows the true baseline down.
-(cd frontend && npx eslint . --max-warnings 53)
+(cd frontend && npx eslint . --max-warnings 0)
 
 echo
 echo "All CI checks passed ✅"
