@@ -179,9 +179,13 @@ async def test_loop_sends_intent_scoped_tools_to_adapter():
     # The param is the scoped CORE surface + describe_tool
     # (long-tail tools in the scope are NOT pre-loaded; the model loads one
     # with describe_tool when it needs it).
+    # Goal tools are unioned into every intent scope by the round driver.
+    from core.agent.constants import GOAL_TOOL_NAMES
     from core.agent.tool_schemas import CORE_TOOL_NAMES
 
-    assert names == (INTENT_TOOL_SCOPES[Intent.SHELL] & CORE_TOOL_NAMES) | {"describe_tool"}, names
+    assert names == (
+        (INTENT_TOOL_SCOPES[Intent.SHELL] & CORE_TOOL_NAMES) | {"describe_tool"} | GOAL_TOOL_NAMES
+    ), names
     assert any(c.done for c in emitted)
 
 

@@ -188,6 +188,7 @@ from tools import (
     file_writer,  # noqa: E402, F401 -- FILE_WRITE (secondary intent)
     find_path,  # noqa: E402, F401 -- FIND_PATH (name-match search, path-only, capped)
     git_tool,  # noqa: E402, F401 -- GIT (structured git operations)
+    goal,  # noqa: E402, F401 -- get_goal/update_goal (durable same-session goal)
     grep_search,  # noqa: E402, F401 -- GREP_SEARCH (grep-like text search)
     json_tool,  # noqa: E402, F401 -- JSON (bounded JSON parse/query)
     memory_tool,  # noqa: E402, F401 -- registers MEMORY_OP

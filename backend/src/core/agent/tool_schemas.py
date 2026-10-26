@@ -110,6 +110,10 @@ CORE_TOOL_NAMES: frozenset[str] = frozenset(
         # Combined ~470 tok/call saved; shell handles <20s commands and
         # code_exec handles arithmetic if the model hasn't loaded calculator.
         "todo_write",  # agent-driven live UI todo checklist — always available
+        # Goal tools stay in core: the round driver depends on the model being
+        # able to read and close the durable goal on every continuation turn.
+        "get_goal",
+        "update_goal",
         # Browse promoted from the long tail to CORE.
         # The describe_tool round-trip loaded ~3k chars of browse schema
         # EVERY turn a browse task ran — it blew the context window and timed the
@@ -705,6 +709,40 @@ TOOL_DEFINITIONS: list[dict] = [
                     },
                 },
                 "required": ["todos"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_goal",
+            "description": "Read this chat's durable goal (objective, phase, rounds started/cap, blocker, whether continuation is armed). Returns {goal: null} when none. Call before update_goal and copy goal_id + revision.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_goal",
+            "description": "Create or mutate this chat's durable long-running goal. Actions: create (objective, optional max_goal_rounds), edit, pause, resume, complete, blocked (needs blocked_reason), clear. Non-create actions need goal_id + revision from get_goal. Built-in rounds: during an automatic goal round only complete/blocked are allowed; blocked only after the same condition persisted for 3+ rounds. Mark complete only when the objective is actually achieved.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["create", "edit", "pause", "resume", "complete", "blocked", "clear"],
+                    },
+                    "objective": {"type": "string"},
+                    "max_goal_rounds": {"type": "integer"},
+                    "goal_id": {"type": "string"},
+                    "revision": {"type": "integer"},
+                    "blocked_reason": {"type": "string"},
+                },
+                "required": ["action"],
             },
         },
     },

@@ -83,6 +83,8 @@ class Intent(str, Enum):
     BEST_OF_N_EDIT = "best_of_n_edit"  # N candidate edits → selector → apply winner
     DESCRIBE_TOOL = "describe_tool"  # load a long-tail tool's full schema on demand
     TODO_WRITE = "todo_write"  # agent-driven live UI todo checklist (create/update/mark)
+    GET_GOAL = "get_goal"  # read the durable same-session goal
+    UPDATE_GOAL = "update_goal"  # create/edit/pause/resume/complete/block/clear the goal
     WEB_RESEARCH = "web_research"  # adaptive web acquisition (search + fetch + browser)
     SEARCH_TOOL_RESULTS = "search_tool_results"  # read back a large stored tool result
 

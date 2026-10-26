@@ -48,16 +48,20 @@ def test_lean_catalog_size_budget() -> None:
     dir_explorer joined the core surface (~1,750 chars — a necessary new core
     tool: three-operation bounded folder inspection with find-vs-inspect
     disambiguation prose, lean to the bone like system_search's, not prose
-    creep). The lower bound guards against an accidental empty/truncated
+    creep); bumped to 23,300 after get_goal/update_goal joined the core surface
+    (~1,150 chars — the goal-round driver needs both on every continuation
+    turn, so an on-demand describe_tool round-trip would cost an iteration per
+    round; the schemas stay lean, with update_goal carrying the action
+    contract). The lower bound guards against an accidental empty/truncated
     catalog.
     """
     size = _catalog_chars()
-    assert 9_000 < size < 22_700, f"catalog size {size} outside the lean budget"
+    assert 9_000 < size < 23_300, f"catalog size {size} outside the lean budget"
 
 
 def test_all_tools_keep_callable_structure() -> None:
     """Every def keeps the OpenAI function-calling contract intact."""
-    assert len(TOOL_DEFINITIONS) == 35  # +dir_explorer (bounded folder inspection)
+    assert len(TOOL_DEFINITIONS) == 37  # +get_goal/update_goal (durable goal rounds)
     for td in TOOL_DEFINITIONS:
         assert td["type"] == "function"
         fn = td["function"]

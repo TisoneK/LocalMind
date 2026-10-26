@@ -64,6 +64,7 @@ from core.agent.constants import (
     AGENT_INTENTS,
     CLARIFICATION_THRESHOLD,
     DIRECT_RETRIEVAL_INTENTS,
+    GOAL_TOOL_NAMES,
     INTENT_TOOL_SCOPES,
     MAX_ITERATIONS,
     MAX_WALL_CLOCK_SECS,
@@ -2456,7 +2457,7 @@ class AgentLoop:
         # that step; intersecting it with the intent scope could silently
         # drop a tool the graph expects.
         if effective_allowed is None:
-            intent_scope = INTENT_TOOL_SCOPES.get(intent, AGENT_ALLOWED_TOOLS)
+            intent_scope = INTENT_TOOL_SCOPES.get(intent, AGENT_ALLOWED_TOOLS) | GOAL_TOOL_NAMES
             scoped_tools = frozenset(scoped_tools or AGENT_ALLOWED_TOOLS).intersection(intent_scope)
         # When the shell tool is DISABLED (Settings UI toggle /
         # LOCALMIND_SHELL_ENABLED=false), remove it from the model's tool

@@ -262,9 +262,16 @@ AGENT_ALLOWED_TOOLS: frozenset[str] = frozenset(
         "best_of_n_edit",  # N candidate edits → selector → apply winner
         "describe_tool",  # load a long-tail tool's full schema on demand
         "todo_write",  # agent-driven live UI todo checklist (universal)
+        "get_goal",  # durable same-session goal (universal — round driver)
+        "update_goal",  # goal mutations (universal — round driver)
         "search_tool_results",  # read back a large stored tool result
     }
 )
+
+# Tools the round driver needs on EVERY intent scope: a continuation round
+# may arise from any kind of turn, and the model must be able to read/close
+# the goal there. Kept separate so the per-intent scopes stay readable.
+GOAL_TOOL_NAMES: frozenset[str] = frozenset({"get_goal", "update_goal"})
 
 # ── Per-intent tool scoping ──────────────────────────────────────────────────
 # The 21.9K-prompt-token bug: the agent loop sent ALL 24 tool definitions
