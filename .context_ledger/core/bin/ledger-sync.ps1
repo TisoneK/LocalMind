@@ -1,6 +1,15 @@
 #!/usr/bin/env pwsh
 # ledger-sync.ps1 -- Windows/PowerShell port of core/bin/ledger-sync.
 #
+# SOURCE ENCODING - pure ASCII, on purpose. Windows PowerShell 5.1 decodes a
+# BOM-less script with the *system codepage*, not UTF-8, so a non-ASCII byte
+# here can fail the parse there (an em-dash decodes to U+201D, which the
+# parser reads as a string terminator) while pwsh 7 parses it fine. Emit a
+# character the sh port writes as a literal from its code point instead -
+# [char]0x2014 em-dash, [char]0x2026 ellipsis - so both ports emit the same
+# bytes. Enforced by `ledger-sync verify` and tests/run-tests.sh; rationale
+# in core/CHANGELOG.md (2.0.4).
+#
 # The POSIX sh script (core/bin/ledger-sync) is the reference implementation
 # and runs on macOS/Linux. This port covers the commands a Windows agent hits
 # inside a session; it is byte-compatible with the sh script's MANIFEST.sha256
@@ -261,10 +270,19 @@ function Cmd-Status {
 # that shipped unable to run. This edition ParseFiles every ps1 port natively
 # and, when a POSIX sh is on PATH (Git Bash on Windows), `sh -n`s every sh
 # port; the sh edition is the mirror image (its ps1 half is skipped where no
-# PowerShell engine exists). Returns $true clean, $false broken.
+# PowerShell engine exists). The encoding guard (core 2.0.4) is engine-free:
+# ParseFile here runs under *this* engine, so on pwsh 7 it would accept a
+# non-ASCII port that Windows PowerShell 5.1 cannot decode (it reads a
+# BOM-less script with the system codepage; an em-dash becomes U+201D, a
+# string terminator). Ports stay pure ASCII. Returns $true clean, $false bad.
 function Parse-Ports { param([string]$dir)
   $bad = $false
   foreach ($f in (Get-ChildItem -LiteralPath (Join-Path $dir 'bin') -Filter 'ledger-*.ps1' -File)) {
+    $bytes = [IO.File]::ReadAllBytes($f.FullName)
+    if (@($bytes | Where-Object { $_ -gt 126 -or ($_ -lt 32 -and $_ -ne 9 -and $_ -ne 10 -and $_ -ne 13) }).Count -gt 0) {
+      Err ("ps1 encoding: {0} holds non-ASCII bytes -- Windows PowerShell 5.1 will mis-decode it; keep the port pure ASCII" -f $f.Name)
+      $bad = $true
+    }
     $tok = $null; $errs = $null
     [void][System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$tok, [ref]$errs)
     if ($errs -and $errs.Count -gt 0) {
@@ -478,7 +496,7 @@ function Cmd-Rename {
     $p = Join-Path $PROJECT_DIR $f
     if (Test-Path -LiteralPath $p -PathType Leaf) {
       $t = Get-Content -Encoding UTF8 -LiteralPath $p -Raw
-      # WriteAllText UTF-8 without a BOM — Set-Content writes ANSI on
+      # WriteAllText UTF-8 without a BOM - Set-Content writes ANSI on
       # Windows PowerShell 5.1 and would mangle every em-dash in these files.
       [IO.File]::WriteAllText($p, ($t -replace '\.context/', '.context_ledger/' -replace '\.context\b', '.context_ledger'), (New-Object System.Text.UTF8Encoding $false))
     }

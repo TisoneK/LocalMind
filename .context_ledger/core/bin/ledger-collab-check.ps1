@@ -1,5 +1,14 @@
 #!/usr/bin/env pwsh
 # ledger-collab-check.ps1 -- Windows integration-readiness validator.
+#
+# SOURCE ENCODING - pure ASCII, on purpose. Windows PowerShell 5.1 decodes a
+# BOM-less script with the *system codepage*, not UTF-8, so a non-ASCII byte
+# here can fail the parse there (an em-dash decodes to U+201D, which the
+# parser reads as a string terminator) while pwsh 7 parses it fine. Emit a
+# character the sh port writes as a literal from its code point instead -
+# [char]0x2014 em-dash, [char]0x2026 ellipsis - so both ports emit the same
+# bytes. Enforced by `ledger-sync verify` and tests/run-tests.sh; rationale
+# in core/CHANGELOG.md (2.0.4).
 
 [CmdletBinding()]
 param(
@@ -104,7 +113,7 @@ function Has-NonEventRef { param([IO.FileInfo]$File)
 }
 function Claim-Closed { param([string]$Id)
   # Split into named booleans: `Cmd a -or Cmd b` inside an if() does not
-  # evaluate as two command calls in expression mode — every other call site
+  # evaluate as two command calls in expression mode - every other call site
   # parenthesizes; this one now does too.
   $released = Referenced-By-Type $Id 'release'
   $handedOff = Referenced-By-Type $Id 'handoff'

@@ -10,6 +10,55 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 2.0.4 — 2026-09-23
+
+**Windows sessions could not pass their exit gate at all.** 2.0.3 shipped
+PowerShell ports that fail to parse on a stock Windows box, and
+`ledger-sync verify` treats an unparseable port as a core integrity
+failure (exit 3) — so every gate that calls it failed there. Reported from
+a consumer project that hit it while migrating to 2.0.3.
+
+- **`ledger-state.ps1` did not parse on any engine.** Its `Get-Field`
+  built a regex as `"...\*\*$Label:\*\*..."`; the parser reads `$Label:`
+  as a scope-qualified variable reference (`$env:`-style) and rejects the
+  whole file — Windows PowerShell 5.1 and pwsh 7 alike. Now `${Label}`.
+- **Non-ASCII bytes in a port are a latent 5.1 parse failure.** Windows
+  PowerShell 5.1 decodes a BOM-less script with the *system codepage*,
+  not UTF-8, so a literal em-dash (E2 80 94) arrives as U+201D — which
+  the parser reads as a string terminator and fails the rest of the file,
+  while pwsh 7 parses the very same bytes fine. That asymmetry is how a
+  release ships broken: the authoring host had no PowerShell to try, and
+  a pwsh-only host cannot reproduce the failure. All seven ports are now
+  pure ASCII; text that needs a non-ASCII character builds it from its
+  code point (`[char]0x2014`, `[char]0x2026`), so a port still emits
+  exactly the bytes its sh twin emits. The rule sits at the top of every
+  port and is enforced (below).
+- **`parse_ports` now checks every engine on PATH, not just the first.**
+  It ran the ps1 half through `powershell` when present, else `pwsh` — so
+  on a Windows box carrying both, a port that only pwsh could parse passed
+  verification and then failed at runtime, because the `.cmd` launchers
+  deliberately target 5.1 (it ships with every Windows 10+ install). A
+  port must now parse under *every* engine found; `verify` prints which
+  engines and versions it used, so a failure is diagnosable at a glance.
+- **An engine-free encoding guard, in both editions.** `verify` fails a
+  `bin/*.ps1` carrying a non-ASCII byte, with the sh and ps1 editions
+  agreeing on the verdict — so the release this bug came from would have
+  been caught by `verify` on the authoring machine, whatever its OS.
+- **A pre-existing divergence between the ports, fixed in passing.**
+  `ledger-state.ps1` wrote a plain hyphen where the sh port writes an
+  em-dash in five places — the Core block's drift note among them — so
+  STATE.md differed by punctuation depending on which port generated it.
+  Both ports now produce byte-identical STATE.md, and a test pins it.
+
+Package tests: 63 green, four of them new — every engine on PATH parses
+every port; the sh port's encoding guard fires on a non-ASCII byte; the
+shipped ports are ASCII; sh and ps1 write the same STATE.md. Verified on
+Windows under both engines (5.1.26100.9444 and 7.6.6): `ledger-sync
+verify` exits 0 under each, and the `.cmd` launcher path (5.1) runs the
+gates again.
+
+---
+
 ## 2.0.3 — 2026-09-19
 
 **A supervisor audit of the whole 2.0.0 token-optimization pass, not just

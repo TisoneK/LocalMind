@@ -223,8 +223,12 @@ cmd_status() {
 # that shipped unable to run. Each edition verifies what its host can run:
 # this one `sh -n`s every sh port in bin/ and, when a PowerShell engine is on
 # PATH (always on Windows; pwsh on POSIX), runs Parser::ParseFile over every
-# ps1 port. Without a PS engine the ps1 half is skipped -- the manifest plus a
-# PS-hosted verify still cover it. Returns 0 clean, 3 broken.
+# ps1 port under EVERY engine it finds -- not just the first -- because the
+# .cmd launchers target Windows PowerShell 5.1 while pwsh 7 is the modern
+# engine, and a port must parse under both. Without a PS engine the ps1 half
+# is skipped -- the manifest plus a PS-hosted verify still cover it.
+# The ps1 encoding guard below is engine-free on purpose: it is the only half
+# that also holds on a host with no PowerShell at all. Returns 0 clean, 3 broken.
 parse_ports() { # $1 = a core dir
   _rc=0
   for _f in "$1"/bin/*; do
@@ -237,8 +241,24 @@ parse_ports() { # $1 = a core dir
         ;;
     esac
   done
-  _ps=$(command -v powershell || command -v pwsh) || _ps=""
-  if [ -z "$_ps" ]; then
+  # Encoding guard (core 2.0.4): Windows PowerShell 5.1 decodes a BOM-less
+  # script with the *system codepage*, not UTF-8, so a non-ASCII byte in a
+  # port is a latent parse failure there -- an em-dash (E2 80 94) decodes to
+  # U+201D, which the parser reads as a string terminator and fails the whole
+  # file on a stock Windows box while pwsh 7 parses it fine. Ports stay pure
+  # ASCII; text that needs a character builds it from its code point.
+  for _f in "$1"/bin/*.ps1; do
+    [ -e "$_f" ] || continue
+    if [ "$(LC_ALL=C tr -d '\11\12\15\40-\176' < "$_f" | wc -c | tr -d ' ')" != "0" ]; then
+      err "ps1 encoding: $(basename "$_f") holds non-ASCII bytes — Windows PowerShell 5.1 will mis-decode it; keep the port pure ASCII"
+      _rc=3
+    fi
+  done
+  _engines=""
+  for _cand in powershell pwsh; do
+    if command -v "$_cand" >/dev/null 2>&1; then _engines="${_engines:+$_engines }$_cand"; fi
+  done
+  if [ -z "$_engines" ]; then
     say "ps1 parse check skipped — no PowerShell engine on PATH (the manifest + a PS-hosted verify still cover the ps1 ports)"
     return "$_rc"
   fi
@@ -248,16 +268,26 @@ parse_ports() { # $1 = a core dir
     if command -v cygpath >/dev/null 2>&1; then _w=$(cygpath -w "$_f"); else _w=$_f; fi
     _list="${_list:+$_list;}$_w"
   done
-  if [ -n "$_list" ] && ! LEDGER_PARSE_FILES="$_list" "$_ps" -NoProfile -ExecutionPolicy Bypass -Command '
-    $bad = 0
-    foreach ($f in $env:LEDGER_PARSE_FILES -split ";") {
-      $tok = $null; $errs = $null
-      [void][System.Management.Automation.Language.Parser]::ParseFile($f, [ref]$tok, [ref]$errs)
-      if ($errs -and $errs.Count -gt 0) { foreach ($e in $errs) { [Console]::Error.WriteLine($f + ": " + $e.Message) }; $bad = 1 }
-    }
-    exit $bad'; then
-    err "ps1 parse: a port cannot be parsed by the engine above"
-    _rc=3
+  _checked=""
+  for _ps in $_engines; do
+    _ver=$("$_ps" -NoProfile -ExecutionPolicy Bypass -Command '$PSVersionTable.PSVersion.ToString()' 2>/dev/null | head -n 1)
+    [ -n "$_ver" ] || _ver='version unknown'
+    if [ -n "$_list" ] && ! LEDGER_PARSE_FILES="$_list" "$_ps" -NoProfile -ExecutionPolicy Bypass -Command '
+      $bad = 0
+      foreach ($f in $env:LEDGER_PARSE_FILES -split ";") {
+        $tok = $null; $errs = $null
+        [void][System.Management.Automation.Language.Parser]::ParseFile($f, [ref]$tok, [ref]$errs)
+        if ($errs -and $errs.Count -gt 0) { foreach ($e in $errs) { [Console]::Error.WriteLine($f + ": " + $e.Message) }; $bad = 1 }
+      }
+      exit $bad'; then
+      err "ps1 parse: a port cannot be parsed by $_ps $_ver (parser errors above)"
+      _rc=3
+    else
+      _checked="${_checked:+$_checked, }$_ps $_ver"
+    fi
+  done
+  if [ -n "$_checked" ]; then
+    say "ps1 parse: OK ($_checked)"
   fi
   return "$_rc"
 }

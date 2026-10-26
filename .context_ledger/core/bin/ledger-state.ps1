@@ -5,6 +5,16 @@
 # so kickoff Phase 3 reads one ~30-60 line file instead of 8+ separate ones.
 # STATE.md is a DERIVED VIEW, never hand-edited - see ledger-state (sh) for
 # the full rationale; this port must stay behaviorally identical.
+#
+# SOURCE ENCODING - pure ASCII, on purpose. Windows PowerShell 5.1 decodes a
+# BOM-less script with the *system codepage*, not UTF-8, so a non-ASCII byte
+# here can fail the parse there (an em-dash decodes to U+201D, which the
+# parser reads as a string terminator) while pwsh 7 parses it fine. Emit a
+# character the sh port writes as a literal from its code point instead -
+# [char]0x2014 em-dash, [char]0x2026 ellipsis - so both ports emit the same
+# bytes (see $EmDash/$Ellipsis below; STATE.md is byte-identical to the sh
+# port's). Enforced by `ledger-sync verify` and tests/run-tests.sh;
+# rationale in core/CHANGELOG.md (2.0.4).
 
 [CmdletBinding()]
 param(
@@ -26,9 +36,13 @@ $memoryDir = Join-Path $ledgerDir 'memory'
 $officeDir = Join-Path $memoryDir 'office'
 $outFile = Join-Path $officeDir 'STATE.md'
 
+# See SOURCE ENCODING above: these stand in for the literals the sh port uses.
+$EmDash = [char]0x2014
+$Ellipsis = [char]0x2026
+
 function Usage {
   @(
-    'ledger-state - regenerate the memory/office/STATE.md session digest',
+    "ledger-state $EmDash regenerate the memory/office/STATE.md session digest",
     '',
     '  generate   read the underlying memory files and (re)write STATE.md.',
     '             Safe to run any time; it never touches anything but',
@@ -57,13 +71,15 @@ function Get-Field { param([string]$Path, [string]$Label)
   foreach ($line in (Get-Lines $Path)) {
     if (-not $intpl -and $line -match '^<!--') { if ($line -notmatch '-->') { $intpl = $true }; continue }
     if ($intpl) { if ($line -match '-->') { $intpl = $false }; continue }
-    if ($line -match "^\s*[-*]\s*\*\*$Label:\*\*\s*(.*)$") { $val = $Matches[1] }
+    # ${Label} not $Label: the following ':' would parse as a scope qualifier
+    # (like $env:), which no PowerShell engine accepts.
+    if ($line -match "^\s*[-*]\s*\*\*${Label}:\*\*\s*(.*)$") { $val = $Matches[1] }
   }
   return $val
 }
 
 function Truncate-Line { param([string]$Text, [int]$Max)
-  if ($Text.Length -gt $Max) { return $Text.Substring(0, $Max - 1) + '…' }
+  if ($Text.Length -gt $Max) { return $Text.Substring(0, $Max - 1) + $Ellipsis }
   return $Text
 }
 
@@ -79,11 +95,11 @@ function CoreBlock {
     }
   }
   if ($locked -ne '' -and $locked -ne $installed) {
-    $drift = " - MISMATCH vs core.lock ($locked, verified $verified): run ``ledger-sync verify``"
+    $drift = " $EmDash MISMATCH vs core.lock ($locked, verified $verified): run ``ledger-sync verify``"
   } elseif ($locked -ne '') {
     $drift = " (locked, verified $verified)"
   } else {
-    $drift = ' (never locked - run `ledger-sync verify`)'
+    $drift = ' (never locked ' + $EmDash + ' run `ledger-sync verify`)'
   }
   Say "- **Core:** $installed$drift"
 }
@@ -114,9 +130,9 @@ function RosterBlock {
     $status = if ($c.Count -ge 6) { $c[5].Trim() } else { '' }
     $rows += [pscustomobject]@{ Name = $name; Code = $code; Status = $status; Doing = $doing }
   }
-  if ($rows.Count -eq 0) { Say '(office empty - no live roster rows)'; return }
+  if ($rows.Count -eq 0) { Say "(office empty $EmDash no live roster rows)"; return }
   foreach ($r in $rows) {
-    Say "- **$($r.Name)** ($($r.Code)) — $($r.Status) — $(Truncate-Line $r.Doing 90)"
+    Say "- **$($r.Name)** ($($r.Code)) $EmDash $($r.Status) $EmDash $(Truncate-Line $r.Doing 90)"
   }
 }
 
@@ -126,8 +142,8 @@ function CurrentTaskBlock {
   $task = Get-Field $f 'Task'
   $status = Get-Field $f 'Status'
   $session = Get-Field $f 'Session'
-  if ($task -eq '') { Say '(idle - no task recorded)'; return }
-  Say "- **$session** — $(Truncate-Line $task 140) — *$status*"
+  if ($task -eq '') { Say "(idle $EmDash no task recorded)"; return }
+  Say "- **$session** $EmDash $(Truncate-Line $task 140) $EmDash *$status*"
 }
 
 function BacklogBlock {
@@ -145,7 +161,7 @@ function BacklogBlock {
   }
   if ($high.Count -eq 0) { Say '(none)' } else { $high | ForEach-Object { Say $_ } }
   Say ''
-  Say "_$mn medium, $ln low priority row(s) — see tasks/backlog.md_"
+  Say "_$mn medium, $ln low priority row(s) $EmDash see tasks/backlog.md_"
 }
 
 # style: 'date' (## YYYY-MM-DD ...) or 'adr' (## ADR-N: ... (YYYY-MM-DD))
@@ -172,7 +188,7 @@ function LogDigest { param([string]$Rel, [string]$Label, [string]$Style)
 
 function CollabBlock {
   $dir = Join-Path $memoryDir 'collaboration/events'
-  if (-not (Test-Path -LiteralPath $dir)) { Say '(no collaboration/events - collaboration never used)'; return }
+  if (-not (Test-Path -LiteralPath $dir)) { Say "(no collaboration/events $EmDash collaboration never used)"; return }
   $files = @(Get-ChildItem -LiteralPath $dir -Filter '*.json' -File -ErrorAction SilentlyContinue | Sort-Object Name)
   if ($files.Count -eq 0) { Say '(no events yet)'; return }
   $lastFile = $files[-1].Name
@@ -181,11 +197,11 @@ function CollabBlock {
 }
 
 function Invoke-Generate {
-  if (-not (Test-Path -LiteralPath $officeDir)) { Die 'no memory/office/ directory - is this a bootstrapped project?' }
+  if (-not (Test-Path -LiteralPath $officeDir)) { Die "no memory/office/ directory $EmDash is this a bootstrapped project?" }
   $lines = New-Object System.Collections.Generic.List[string]
-  $lines.Add('# STATE — session digest')
+  $lines.Add("# STATE $EmDash session digest")
   $lines.Add('')
-  $lines.Add('<!-- GENERATED by `ledger-state generate` — never hand-edit. Regenerated')
+  $lines.Add('<!-- GENERATED by `ledger-state generate` ' + $EmDash + ' never hand-edit. Regenerated')
   $lines.Add('at check-in and at exit. This is a DERIVED VIEW for fast orientation;')
   $lines.Add('open the file a line points at when your task needs more than the')
   $lines.Add('line gives you. Full reading order: ledger-schema.md. -->')
@@ -201,19 +217,19 @@ function Invoke-Generate {
   Capture { CoreBlock }
   Capture { StandingParams }
   $lines.Add('')
-  $lines.Add('## Office — who''s in, right now')
+  $lines.Add("## Office $EmDash who's in, right now")
   Capture { RosterBlock }
   $lines.Add('')
   $lines.Add('## Current task')
   Capture { CurrentTaskBlock }
   $lines.Add('')
-  $lines.Add('## Backlog — High priority (the top of the queue)')
+  $lines.Add("## Backlog $EmDash High priority (the top of the queue)")
   Capture { BacklogBlock }
   $lines.Add('')
-  $lines.Add('## Logs at a glance — open only if your task touches these')
+  $lines.Add("## Logs at a glance $EmDash open only if your task touches these")
   Capture { LogDigest 'flaws/log.md' 'flaws/log.md (protocol/.context_ledger friction)' 'date' }
   Capture { LogDigest 'inefficiencies/log.md' 'inefficiencies/log.md (project code/env friction)' 'date' }
-  Capture { LogDigest 'plans/decisions.md' 'plans/decisions.md (ADRs in force — respected, not relitigated)' 'adr' }
+  Capture { LogDigest 'plans/decisions.md' "plans/decisions.md (ADRs in force $EmDash respected, not relitigated)" 'adr' }
   $lines.Add('')
   $lines.Add('## Collaboration')
   Capture { CollabBlock }

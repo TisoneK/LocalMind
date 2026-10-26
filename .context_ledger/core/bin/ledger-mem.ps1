@@ -1,6 +1,15 @@
 #!/usr/bin/env pwsh
 # ledger-mem.ps1 - Windows port of ledger-mem (memory-registry hygiene).
 #
+# SOURCE ENCODING - pure ASCII, on purpose. Windows PowerShell 5.1 decodes a
+# BOM-less script with the *system codepage*, not UTF-8, so a non-ASCII byte
+# here can fail the parse there (an em-dash decodes to U+201D, which the
+# parser reads as a string terminator) while pwsh 7 parses it fine. Emit a
+# character the sh port writes as a literal from its code point instead -
+# [char]0x2014 em-dash, [char]0x2026 ellipsis - so both ports emit the same
+# bytes. Enforced by `ledger-sync verify` and tests/run-tests.sh; rationale
+# in core/CHANGELOG.md (2.0.4).
+#
 # Update-in-place files hold ONE entry per key: correct an entry by editing
 # its row/block, never by appending a second one (its prior value is in git
 # history). This is the opposite of the append-only logs. 'check' flags
@@ -408,8 +417,12 @@ function Invoke-PruneApply {
     if ($movedCount -gt 0) {
       if (-not (Test-Path -LiteralPath $archive)) {
         $title = Get-ArchiveTitle $rel
+        # [char]0x2014, not a literal: this file is pure ASCII on purpose so
+        # Windows PowerShell 5.1 (which decodes a BOM-less script with the
+        # system codepage) parses it on any locale - an em-dash byte pair
+        # decodes to U+201D, which the parser reads as a string terminator.
         $header = @(
-          "# $title — archive (verbatim moves from log.md)",
+          "# $title $([char]0x2014) archive (verbatim moves from log.md)",
           '',
           'Entries below were explicitly marked `RESOLVED` / `superseded` / fixed in',
           "the live log and moved here verbatim (no edits), per the log's pruning",

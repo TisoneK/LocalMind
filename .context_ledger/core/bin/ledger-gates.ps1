@@ -1,6 +1,15 @@
 #!/usr/bin/env pwsh
 # ledger-gates.ps1 -- Windows lifecycle gates for project agents.
 #
+# SOURCE ENCODING - pure ASCII, on purpose. Windows PowerShell 5.1 decodes a
+# BOM-less script with the *system codepage*, not UTF-8, so a non-ASCII byte
+# here can fail the parse there (an em-dash decodes to U+201D, which the
+# parser reads as a string terminator) while pwsh 7 parses it fine. Emit a
+# character the sh port writes as a literal from its code point instead -
+# [char]0x2014 em-dash, [char]0x2026 ellipsis - so both ports emit the same
+# bytes. Enforced by `ledger-sync verify` and tests/run-tests.sh; rationale
+# in core/CHANGELOG.md (2.0.4).
+#
 # Commands:
 #   init
 #   checkpoint [--session ID --issue ID]
