@@ -1,8 +1,9 @@
 /**
  * useTheme — the runtime theme switcher (multi-palette).
  *
- * Six palettes shipped in globals.css, selected by `data-theme`
- * (graphite | iris | warm) and `data-mode` (light | dark) on <html>. This
+ * Five palettes shipped in globals.css, selected by `data-theme`
+ * (graphite-blue | graphite | iris | warm | custom) and `data-mode`
+ * (light | dark) on <html>. This
  * hook is the single source of truth for the user's choice: it persists to
  * localStorage, applies the attributes to <html>, and — for mode 'system' —
  * tracks the OS preference live. A tiny inline script in index.html applies
@@ -21,7 +22,7 @@
 
 import { useSyncExternalStore } from 'react';
 
-export type ThemeName = 'harness' | 'graphite' | 'iris' | 'warm' | 'custom';
+export type ThemeName = 'graphite-blue' | 'graphite' | 'iris' | 'warm' | 'custom';
 export type ModePref = 'light' | 'dark' | 'system';
 
 export interface CustomTheme {
@@ -42,15 +43,15 @@ export interface ThemeState {
 }
 
 export const THEMES: { id: ThemeName; label: string; blurb: string; swatch: string }[] = [
-  { id: 'harness', label: 'Harness', blurb: 'DeepSeek Harness — graphite, hairline borders, one blue accent', swatch: '#5686fe' },
-  { id: 'graphite', label: 'Graphite', blurb: 'Neutral slate, emerald accent', swatch: '#34d399' },
+  { id: 'graphite-blue', label: 'Graphite Blue', blurb: 'Flat graphite ramp, hairline borders, one blue accent', swatch: '#5686fe' },
+  { id: 'graphite', label: 'Graphite Green', blurb: 'Neutral slate, emerald accent', swatch: '#34d399' },
   { id: 'iris', label: 'Midnight Iris', blurb: 'Deep ink, indigo and teal', swatch: '#818cf8' },
   { id: 'warm', label: 'Warm Ink', blurb: 'Warm charcoal, gold and sage', swatch: '#f0b429' },
   { id: 'custom', label: 'Custom', blurb: 'Your own palette, defined in Settings', swatch: 'linear-gradient(45deg,#34d399,#818cf8,#f0b429)' },
 ];
 
 const STORAGE_KEY = 'localmind-theme';
-const THEME_IDS: ThemeName[] = ['harness', 'graphite', 'iris', 'warm', 'custom'];
+const THEME_IDS: ThemeName[] = ['graphite-blue', 'graphite', 'iris', 'warm', 'custom'];
 const MODE_IDS: ModePref[] = ['light', 'dark', 'system'];
 
 const hasWindow = typeof window !== 'undefined';
@@ -76,14 +77,14 @@ function parseCustom(raw: unknown): CustomTheme | null {
 }
 
 function load(): ThemeState {
-  const fallback: ThemeState = { theme: 'harness', mode: 'dark', custom: null, tone: 1 };
+  const fallback: ThemeState = { theme: 'graphite-blue', mode: 'dark', custom: null, tone: 1 };
   if (!hasWindow) return fallback;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as Partial<ThemeState>;
     return {
-      theme: THEME_IDS.includes(parsed.theme as ThemeName) ? (parsed.theme as ThemeName) : 'harness',
+      theme: THEME_IDS.includes(parsed.theme as ThemeName) ? (parsed.theme as ThemeName) : 'graphite-blue',
       mode: MODE_IDS.includes(parsed.mode as ModePref) ? (parsed.mode as ModePref) : 'dark',
       custom: parseCustom(parsed.custom),
       tone: typeof parsed.tone === 'number' && parsed.tone >= 0.5 && parsed.tone <= 1.5 ? parsed.tone : 1,
@@ -197,7 +198,7 @@ export function useTheme() {
     setTheme: (theme: ThemeName) => setState({ theme }),
     setMode: (mode: ModePref) => setState({ mode }),
     setCustomTheme: (custom: CustomTheme) => setState({ theme: 'custom', custom }),
-    clearCustomTheme: () => setState({ theme: 'harness', custom: null }),
+    clearCustomTheme: () => setState({ theme: 'graphite-blue', custom: null }),
     setTone: (tone: number) => setState({ tone: Math.min(1.5, Math.max(0.5, tone)) }),
   };
 }

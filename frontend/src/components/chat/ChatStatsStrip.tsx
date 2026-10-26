@@ -1,11 +1,10 @@
 /**
- * The Harness-style conversation reading under the composer.
+ * The conversation reading under the composer.
  *
  * Left: what the agent is doing right now ("Deep diving for 4m 16s…" while a
  * turn is open; the keyboard hint at rest) plus the durable goal's round
  * meter when one is current. Right: the durable turn/step count with speed,
- * token total and cache hit — the same reading the Harness app's stats strip
- * carries. Turns are requests; steps are model iterations.
+ * token total and cache hit. Turns are requests; steps are model iterations.
  */
 
 import type { GoalState, PerformanceMetrics, SessionStats } from '@/types';

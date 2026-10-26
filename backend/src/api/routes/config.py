@@ -44,7 +44,7 @@ class SettingsResponse(BaseModel):
     reasoning_effort: str = ""
     # UI appearance (theme/mode/custom palette/tone),
     # persisted in settings.json by POST /api/settings/appearance.
-    theme: str = "graphite"
+    theme: str = "graphite-blue"
     mode: str = "dark"
     custom_theme: Optional[dict] = None
     tone: float = 1.0
@@ -266,7 +266,7 @@ class AppearanceRequest(BaseModel):
     surface, text}; `tone` is the UI brightness multiplier (1 = unchanged).
     """
 
-    theme: Optional[str] = None  # graphite | iris | warm | custom
+    theme: Optional[str] = None  # graphite-blue | graphite | iris | warm | custom
     mode: Optional[str] = None  # light | dark | system
     custom_theme: Optional[dict] = None
     tone: Optional[float] = None  # 0.5–1.5
@@ -282,7 +282,7 @@ async def set_appearance(req: AppearanceRequest):
     via GET /api/settings on startup and re-applies them, so appearance is
     durable across launches (mirrors the adapter/model persistence flow).
     """
-    valid_themes = ("graphite", "iris", "warm", "custom")
+    valid_themes = ("graphite-blue", "graphite", "iris", "warm", "custom")
     valid_modes = ("light", "dark", "system")
 
     path = settings._runtime_settings_path()
@@ -321,7 +321,7 @@ async def set_appearance(req: AppearanceRequest):
 
     settings._secure_write_json(path, data)
     return {
-        "theme": data.get("theme", "graphite"),
+        "theme": data.get("theme", "graphite-blue"),
         "mode": data.get("mode", "dark"),
         "custom_theme": data.get("custom_theme"),
         "tone": data.get("tone", 1.0),
@@ -444,7 +444,7 @@ async def get_settings():
         reasoning_effort=settings.localmind_reasoning_effort,
         # Appearance from settings.json (theme/mode/custom
         # palette/tone) so the UI restores the persisted choice on launch.
-        theme=appearance.get("theme", "graphite"),
+        theme=appearance.get("theme", "graphite-blue"),
         mode=appearance.get("mode", "dark"),
         custom_theme=appearance.get("custom_theme"),
         tone=float(appearance.get("tone", 1.0) or 1.0),
@@ -463,13 +463,13 @@ def _read_appearance():
     try:
         data = settings._load_json_file(settings._runtime_settings_path())
         return {
-            "theme": data.get("theme", "graphite"),
+            "theme": data.get("theme", "graphite-blue"),
             "mode": data.get("mode", "dark"),
             "custom_theme": data.get("custom_theme"),
             "tone": float(data.get("tone", 1.0) or 1.0),
         }
     except Exception:
-        return {"theme": "graphite", "mode": "dark", "custom_theme": None, "tone": 1.0}
+        return {"theme": "graphite-blue", "mode": "dark", "custom_theme": None, "tone": 1.0}
 
 
 @router.post("/settings/thinking")

@@ -633,8 +633,8 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                 ))}
                 <button
                   onClick={() => {
-                    setTheme('graphite');
-                    persistAppearance({ theme: 'graphite', mode });
+                    setTheme('graphite-blue');
+                    persistAppearance({ theme: 'graphite-blue', mode });
                   }}
                   className="text-[11px] text-brand-green-muted hover:text-brand-green-soft"
                 >

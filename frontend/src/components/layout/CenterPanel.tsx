@@ -95,7 +95,7 @@ interface CenterPanelProps {
   chatMode?: string;
   /** Callback to change chat mode. */
   onChatModeChange?: (mode: 'auto' | 'agent' | 'direct') => void;
-  /** Durable session totals: turns, steps, tokens, cache hit (Harness stats strip). */
+  /** Durable session totals: turns, steps, tokens, cache hit (stats strip). */
   sessionStats?: SessionStats | null;
   /** The open turn's provider metrics while streaming. */
   lastMetrics?: PerformanceMetrics | null;

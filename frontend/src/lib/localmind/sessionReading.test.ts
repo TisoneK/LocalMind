@@ -82,7 +82,7 @@ describe('buildSessionReading', () => {
 });
 
 describe('formatCompactTokens', () => {
-  it('uses the Harness compact units', () => {
+  it('uses the compact units', () => {
     expect(formatCompactTokens(0)).toBe('0');
     expect(formatCompactTokens(831)).toBe('831');
     expect(formatCompactTokens(831_000)).toBe('831K');

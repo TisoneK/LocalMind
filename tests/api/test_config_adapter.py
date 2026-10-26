@@ -263,6 +263,19 @@ async def test_set_appearance_persists_theme_mode_custom_tone(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_set_appearance_persists_graphite_blue(monkeypatch):
+    """The default palette id persists as a first-class API value."""
+    from api.routes.config import AppearanceRequest, set_appearance
+
+    fake, calls = _fake_settings_for_appearance()
+    monkeypatch.setattr(config_mod, "settings", fake)
+
+    result = await set_appearance(AppearanceRequest(theme="graphite-blue", mode="dark"))
+    assert result["theme"] == "graphite-blue"
+    assert calls["writes"][-1]["theme"] == "graphite-blue"
+
+
+@pytest.mark.asyncio
 async def test_set_appearance_rejects_invalid_theme_tone(monkeypatch):
     from fastapi import HTTPException
 

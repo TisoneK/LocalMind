@@ -1,13 +1,12 @@
 <!DOCTYPE html>
 <!--
-  LocalMind ships five palettes (harness | graphite | iris | warm | custom) in
-  light and dark (multi-palette; the earlier dark-only
-  decision was reversed). The inline script below applies the user's stored
-  choice to <html> before first paint so there is no theme flash; useTheme.ts
-  is the runtime source of truth. Default = harness dark (the DeepSeek
-  Harness skin).
+  LocalMind ships five palettes (graphite-blue | graphite | iris | warm |
+  custom) in light and dark (multi-palette; the earlier dark-only decision
+  was reversed). The inline script below applies the user's stored choice to
+  <html> before first paint so there is no theme flash; useTheme.ts is the
+  runtime source of truth. Default = Graphite Blue dark.
 -->
-<html lang="en" data-theme="harness" data-mode="dark">
+<html lang="en" data-theme="graphite-blue" data-mode="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -18,7 +17,7 @@
           var el = document.documentElement;
           var raw = localStorage.getItem('localmind-theme');
           var s = raw ? JSON.parse(raw) : null;
-          var theme = s && ['harness', 'graphite', 'iris', 'warm', 'custom'].indexOf(s.theme) >= 0 ? s.theme : 'harness';
+          var theme = s && ['graphite-blue', 'graphite', 'iris', 'warm', 'custom'].indexOf(s.theme) >= 0 ? s.theme : 'graphite-blue';
           var mode = s && ['light', 'dark', 'system'].indexOf(s.mode) >= 0 ? s.mode : 'dark';
           if (mode === 'system') {
             mode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';

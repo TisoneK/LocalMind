@@ -11,14 +11,21 @@ describe('useTheme', () => {
     localStorage.clear();
   });
 
-  it('ships the Harness palette first — the DeepSeek Harness skin is the default', () => {
-    expect(THEMES[0].id).toBe('harness');
+  it('ships the Graphite Blue palette first — it is the default', () => {
+    expect(THEMES[0].id).toBe('graphite-blue');
   });
 
-  it('applies the Harness theme', () => {
+  it('applies the Graphite Blue theme', () => {
     const { result } = renderHook(() => useTheme());
-    act(() => result.current.setTheme('harness'));
-    expect(document.documentElement.getAttribute('data-theme')).toBe('harness');
+    act(() => result.current.setTheme('graphite-blue'));
+    expect(document.documentElement.getAttribute('data-theme')).toBe('graphite-blue');
+  });
+
+  it('ignores an unrecognised persisted id — the choice stays as it is', () => {
+    const { result } = renderHook(() => useTheme());
+    act(() => result.current.setTheme('iris'));
+    act(() => restoreAppearance({ theme: 'neon' }));
+    expect(result.current.theme).toBe('iris');
   });
 
   it('resolveMode passes explicit modes through unchanged', () => {
@@ -80,13 +87,13 @@ describe('useTheme', () => {
     expect(stored.custom).toEqual(custom);
   });
 
-  it('clearing the custom theme removes the inline palette and returns to Harness', () => {
+  it('clearing the custom theme removes the inline palette and returns to Graphite Blue', () => {
     const { result } = renderHook(() => useTheme());
     act(() => {
       result.current.setCustomTheme({ name: 'X', accent: '#f00', background: '#000', surface: '#111', text: '#fff' });
       result.current.clearCustomTheme();
     });
-    expect(result.current.theme).toBe('harness');
+    expect(result.current.theme).toBe('graphite-blue');
     expect(document.documentElement.style.getPropertyValue('--acc')).toBe('');
   });
 

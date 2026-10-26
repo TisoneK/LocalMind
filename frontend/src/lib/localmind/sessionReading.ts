@@ -1,9 +1,9 @@
 /**
  * The conversation's turn/step reading — the numbers under the composer.
  *
- * Ported from DeepSeek Harness's `session-stats` contract: a TURN is one user
- * request; a STEP is one entered model iteration inside it (tool calls happen
- * inside a step, they do not add steps). The session totals are durable
+ * The turn/step contract: a TURN is one user request; a STEP is one entered
+ * model iteration inside it (tool calls happen inside a step, they do not add
+ * steps). The session totals are durable
  * (SessionStats); the open turn's live figures come from the streaming
  * metrics, so the strip keeps counting while the agent works.
  *
@@ -73,7 +73,7 @@ export function buildSessionReading(
 }
 
 /**
- * Compact token count in the Harness style: 831K, 19.4M, 1.2B.
+ * Compact token count: 831K, 19.4M, 1.2B.
  * @param value - token count.
  * @returns short human reading.
  */

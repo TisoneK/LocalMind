@@ -95,8 +95,9 @@
    (--acc*, --s-*, --t-*, --line*, --warn/--danger/--info/--alt, --code-text).
    Each theme × mode below sets ONLY the anchors, so every component AND
    shadcn/ui retheme automatically. Applied via
-   <html data-theme="graphite|iris|warm" data-mode="light|dark">.
-   No attributes = graphite dark (the default). The ANSI palette
+   <html data-theme="graphite-blue|graphite|iris|warm|custom" data-mode="light|dark">.
+   No attributes = graphite dark (CSS fallback; the shipped default is
+   Graphite Blue). The ANSI palette
    (--brand-gh-*) and scrollbars vary by MODE only, not by theme.
    ═══════════════════════════════════════════════════════════════════════ */
 :root {
@@ -258,14 +259,13 @@
   --code-text: #2a2317;
 }
 
-/* ── Harness · dark ──────────────────────────────────────
-   The DeepSeek Harness skin. Neutral-bluish graphite ramp, a single
-   DeepSeek-blue accent, hairline borders and flat surfaces — the calm,
-   low-chrome look of the Harness desktop app. Tokens mirror the semantic
-   aliases in deepseek-harness/packages/client/ui-theme (MIT).
+/* ── Graphite Blue · dark ────────────────────────────────
+   The flagship skin. Neutral graphite ramp, a single blue accent, hairline
+   borders and flat surfaces — a calm, low-chrome look built for long
+   reading and writing sessions.
    The chat canvas is DARKER than the rails here (app = base, panels = one
-   step up), the inverse of Graphite. */
-:root[data-theme="harness"][data-mode="dark"] {
+   step up), the inverse of Graphite Green. */
+:root[data-theme="graphite-blue"][data-mode="dark"] {
   --s-deep: #0f1013; --s-0: #121214; --s-base: #151517; --s-1: #1b1b1c; --s-2: #232324; --s-3: #2c2c2e;
   --t-primary: #f4f5f7; --t-secondary: #cfd3d6; --t-muted: #a2a6ad; --t-faint: #6d7178;
   --line: #2a2a2d; --line-soft: #232326; --line-strong: #3a3a3e;
@@ -275,8 +275,8 @@
   --code-text: #e6e8eb;
 }
 
-/* ── Harness · light ───────────────────────────────────── */
-:root[data-theme="harness"][data-mode="light"] {
+/* ── Graphite Blue · light ─────────────────────────────── */
+:root[data-theme="graphite-blue"][data-mode="light"] {
   --s-deep: #eceef1; --s-0: #f4f5f7; --s-base: #ffffff; --s-1: #f9fafb; --s-2: #f2f4f7; --s-3: #e9ecef;
   --t-primary: #0f1115; --t-secondary: #61666b; --t-muted: #81858c; --t-faint: #a2a6ad;
   --line: #e5e7eb; --line-soft: #eef0f2; --line-strong: #d1d5db;
@@ -286,10 +286,10 @@
   --code-text: #1f2328;
 }
 
-/* Harness surface mapping: the transcript is the ground, rails and composer
-   are layers above it (see the dark ramp above). Also swaps the bundled UI
-   font for the Harness text stack and tightens the corner radius. */
-:root[data-theme="harness"] {
+/* Graphite Blue surface mapping: the transcript is the ground, rails and
+   composer are layers above it (see the dark ramp above). Also swaps the
+   bundled UI font for the system text stack and tightens the corner radius. */
+:root[data-theme="graphite-blue"] {
   --brand-bg-app: var(--s-base);
   --brand-bg-panel: var(--s-1);
   --brand-bg-panel-alt: var(--s-1);
