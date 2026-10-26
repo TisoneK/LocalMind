@@ -52,7 +52,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Mosi | S001 | deepseek-flash (ZCode) | Ti Matrix (the engine's own repo): public, MIT, package renamed, host integration removed | Working | Row kept live — the session is not over until the owner releases it |
+| Nadia | S002 | deepseek-flash | Owner continuation of the same session: dependency-audit + eslint fixes, then the goal-round deep-dive turn (B-2026-10-26-1) | Working | Re-checked in — fixes phase complete, deep-dive next |
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
 what is in flight and at which stage, and what is blocked — and so how

@@ -13,6 +13,6 @@ entry and backlog before starting.
 -->
 
 - **Session:** 2026-10-26 — Nadia / deepseek-flash
-- **Feature:** theming-multi-palette
-- **Task:** the DeepSeek Harness skin (dark + light, DSH tokens + surface mapping, Harness default for fresh installs) and the Harness turn/step reading — `ChatStatsStrip` (`N turns · M steps · tok/s · tokens · cache hit`, `Deep diving for …`), `Plan n/m` in TurnView; goal-rounds deep-dive behavior filed for the next slice (`B-2026-10-26-1`)
-- **Status:** done
+- **Feature:** goal-rounds
+- **Task:** dependency-audit + eslint fixes (B-2026-09-21-1 exit gate, dependabot alerts), then the goal-round deep-dive turn (B-2026-10-26-1): durable same-session goal, idle continuation driver, get_goal/update_goal tools, round meter; more concepts harvested from the public Harness repo afterwards
+- **Status:** working

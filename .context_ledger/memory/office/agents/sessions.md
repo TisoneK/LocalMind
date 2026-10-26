@@ -67,3 +67,7 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Coordination:** solo in the main checkout; the only live row (Mosi S001) is a month-stale macOS row, no uncommitted peer work. No claims needed.
 - **Report:** `.context_ledger/memory/office/reviews/2026-10-26-review-s2-harness-skin.md`
 - **Close:** filed `B-2026-10-26-1` (goal rounds) and `B-2026-10-26-2` (shell parity) in `tasks/backlog.md`; the backlog cap (20) was already exceeded before this session, so the prune its check prescribes was done — seven long-tail rows (B-2026-09-21-13/18/19/20/22/23/24) moved verbatim into `parking-lot.md` Deferred work (27 → 20). `tasks/current.md` set to this session's task as `done`; roster row removed (clock-out).
+
+**Re-check-in — same session at the owner's direction ("fix all, remove any false working sessions"):**
+- **The board was untruthful and the owner said to fix it:** Mosi S001's row — a month-stale macOS session held `Working` as "kept live until the owner releases it" — was released by the owner in this instruction and its row removed. The collaboration `events/` trail is append-only history (last event 2026-09-10), so no live peer existed; the office was empty before this re-check-in.
+- **Scope of this extension:** the audit fixes first (dependabot's 27 flagged vulnerabilities on the default branch; the 59 eslint warnings that keep the exit gate red), then the goal-round deep-dive turn (`B-2026-10-26-1`), then harvest further backlog rows from the public Harness repo.

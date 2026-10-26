@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-26T09:18:53Z_
+_Regenerated: 2026-10-26T09:24:01Z_
 
 ## Standing params
 - **Core:** 2.0.3 (locked, verified 2026-09-21)
@@ -15,10 +15,10 @@ _Regenerated: 2026-10-26T09:18:53Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-- **Mosi** (S001) — Working — Ti Matrix (the engine's own repo): public, MIT, package renamed, host integration removed
+- **Nadia** (S002) — Working — Owner continuation of the same session: dependency-audit + eslint fixes, then the goal-ro…
 
 ## Current task
-- **2026-10-26 — Nadia / deepseek-flash** — the DeepSeek Harness skin (dark + light, DSH tokens + surface mapping, Harness default for fresh installs) and the Harness turn/step readin… — *done*
+- **2026-10-26 — Nadia / deepseek-flash** — dependency-audit + eslint fixes (B-2026-09-21-1 exit gate, dependabot alerts), then the goal-round deep-dive turn (B-2026-10-26-1): durable… — *working*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-09-21-1 | EXIT GATE BLOCKED: `scripts/ci-check.sh`'s frontend leg fails on `eslint . --max-warnings 53` — the recent UI work added React-effect warnings ("Calling setState synchronously within an effect", missing hook deps) so the count exceeds the budget (0 errors). Fix the warnings (preferred) or consciously raise `--max-warnings`; do not let a red exit gate become normal. Surfaces: `frontend/src/hooks/useLocalMind.ts`, `hooks/useWorkspaceData.ts`, `hooks/use-mobile.ts`, `components/chat/` (ChatInput, ChatMessage, TurnView, FilePreviewDialog, WelcomeScreen), `components/ui/` (sidebar, toggle, navigation-menu, form). Exact command: `sh .context_ledger/core/bin/ledger-gates run exit`. |
