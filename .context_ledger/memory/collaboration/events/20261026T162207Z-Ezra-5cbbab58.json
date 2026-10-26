@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261026T162207Z-Ezra-5cbbab58",
+  "type": "note",
+  "session": "S004",
+  "agent": "Ezra",
+  "created": "2026-10-26T16:22:07Z",
+  "issue": "sandbox-bringup",
+  "body": "Sandbox bring-up complete and verified: clone, backend venv + pip install -e '.[dev]', npm install (914 pkgs, 0 vulns), frontend build green, backend server.py smoke (health 200, engine_ready/parent_ready true; no Ollama in sandbox — provider unreachable is expected). Orientation Phases 0-4 done. Standing by for the owner's next task; no product paths claimed.",
+  "paths": [],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
