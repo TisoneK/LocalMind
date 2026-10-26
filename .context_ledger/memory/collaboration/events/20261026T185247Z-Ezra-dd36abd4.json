@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261026T185247Z-Ezra-dd36abd4",
+  "type": "note",
+  "session": "S004",
+  "agent": "Ezra",
+  "created": "2026-10-26T18:52:47Z",
+  "issue": "theme-identity",
+  "body": "Retroactive scope record for arrival safety (the claim/release light path was skipped for this work — gap logged in office/flaws/log.md 2026-10-26): theme re-identity paths were frontend/src/hooks/useTheme.ts (+test), index.html, src/globals.css, backend/src/api/routes/config.py (+test_config_adapter.py), sessionReading.ts (+test), ChatStatsStrip.tsx, CenterPanel.tsx, CHANGELOG.md; shipped and pushed as c4b5d8f8 + 145b9561 (rebased), exit gate green, live-verified. Scope is released; nothing active.",
+  "paths": [],
+  "refs": ["c4b5d8f8"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

@@ -144,3 +144,11 @@ re-seeded into the new office explicitly, and nothing else carries over.
   `memory/user/preferences.md` (identity + closeout discipline bullets), the
   ruling in `system/ui-architecture.md`, and the review report's open-items
   section reflects the resolution.
+- **Addendum 2 — the collision question (owner):** "if you were pushing
+  really then your work would have been colliding with another agent's work"
+  — correct, proven (dry-run of the pre-rebase commit → non-FF rejection) and
+  sharpened into the standing rule: the push is the peer alarm, and the
+  claim/release light path (skipped for this work — the real gap) makes scopes
+  visible before pushes. Retroactive scope `note` emitted to
+  `collaboration/events/`; rule recorded in `memory/user/preferences.md` and
+  `office/flaws/log.md`.

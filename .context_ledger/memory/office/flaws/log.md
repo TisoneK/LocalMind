@@ -146,3 +146,17 @@ evidence: `history/office-002/flaws/log.md`.
   written, everything pushed together.
 - **Standing rule going forward:** every commit pushes immediately; the board
   and the session log update in the same breath as the work, not at exit.
+- **Follow-up — the owner stress-tested the rule** ("If you were pushing
+  really then your work would have been colliding with another agent's
+  work"): correct, and provable. A dry-run of the pre-rebase commit against
+  main is rejected non-fast-forward (`! [rejected] … (fetch first)`), and the
+  remote moved twice more the same day (Dara/S003's composer fix + ledger
+  records; `e8a37e98` → `5ea4bef3` while this follow-up was being written).
+  The deeper gap this exposed: the session never ran the collaboration light
+  path — no `claim` at task start, no `release` at close (the README makes
+  claim+release mandatory even for solo sessions, "the point is arrival
+  safety") — so the theme scope was invisible to any agent walking in
+  mid-work, and a collision would have been discovered inside a rejection
+  instead of avoided on the board. Retroactive scope `note` emitted to
+  `collaboration/events/`; going forward: claim → work → release, fetch
+  before every push, never force over a peer.
