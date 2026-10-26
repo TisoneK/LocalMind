@@ -52,30 +52,62 @@ describe('ChatInput', () => {
       />,
     );
 
-    // Streaming: textarea disabled, abort button shown, send button hidden.
-    expect(screen.getByPlaceholderText(/Message LocalMind, or describe a task/i)).toBeDisabled();
+    // Streaming: the composer stays typable so it can also steer, the send
+    // button is replaced by abort, and no steer action shows while empty.
+    expect(screen.getByRole('textbox')).not.toBeDisabled();
     expect(screen.getByTitle('Stop generating')).toBeInTheDocument();
-    expect(screen.queryByTitle(/Send/i)).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Send message')).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/Steer the agent/i)).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByTitle('Stop generating'));
     expect(onAbort).toHaveBeenCalledTimes(1);
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it('steers with an injected message while streaming', async () => {
+  it('steers from the main composer while streaming', async () => {
     const onSteer = vi.fn();
+    const onAbort = vi.fn();
     render(
       <ChatInput
         onSend={() => {}}
-        onAbort={() => {}}
+        onAbort={onAbort}
         onSteer={onSteer}
         isStreaming={true}
       />,
     );
 
-    const steer = screen.getByPlaceholderText(/Steer the agent at the next step/i);
-    await userEvent.type(steer, 'please focus on the tests{enter}');
+    // One input field: steering happens in the same composer.
+    expect(screen.getAllByRole('textbox')).toHaveLength(1);
+    const box = screen.getByPlaceholderText(/Steer the agent at the next step/i);
+    await userEvent.type(box, 'please focus on the tests');
+
+    await userEvent.click(screen.getByTitle(/Steer the agent/i));
+
     expect(onSteer).toHaveBeenCalledWith('please focus on the tests');
+    expect(onAbort).not.toHaveBeenCalled();
+    expect(box).toHaveValue('');
+  });
+
+  it('steers on Enter while streaming without aborting', async () => {
+    const onSteer = vi.fn();
+    const onAbort = vi.fn();
+    const onSend = vi.fn();
+    render(
+      <ChatInput
+        onSend={onSend}
+        onAbort={onAbort}
+        onSteer={onSteer}
+        isStreaming={true}
+      />,
+    );
+
+    const box = screen.getByRole('textbox');
+    await userEvent.type(box, 'go left{enter}');
+
+    expect(onSteer).toHaveBeenCalledWith('go left');
+    expect(onAbort).not.toHaveBeenCalled();
+    expect(onSend).not.toHaveBeenCalled();
+    expect(box).toHaveValue('');
   });
 });
 

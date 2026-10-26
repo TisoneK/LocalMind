@@ -46,7 +46,6 @@ interface ChatInputProps {
 
 export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onChatModeChange, prefill, onEditSend, onEditCancel, footer }: ChatInputProps) {
   const [input, setInput] = useState('');
-  const [steerInput, setSteerInput] = useState('');
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [editing, setEditing] = useState(false);
@@ -118,45 +117,24 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onC
     onAbort();
   };
 
+  // While a turn is open, the same composer steers the agent at the next
+  // step boundary instead of aborting and re-running. The backend drains the
+  // message at the next loop iteration.
   const handleSteer = () => {
-    const msg = steerInput.trim();
+    const msg = input.trim();
     if (!msg || !onSteer) return;
     onSteer(msg);
-    setSteerInput('');
+    setInput('');
+    setEditing(false);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
   };
 
   return (
     <div className="border-t border-brand-border bg-brand-bg-base">
       {/* Input area */}
       <div className="mx-auto w-full max-w-3xl px-4 pt-3 pb-2" data-testid="composer-column">
-        {/* Steering without aborting — while the agent
-            is running, inject a message at the next step boundary instead of
-            abort + re-run. The backend drains it at the next loop iteration. */}
-        {isStreaming && onSteer && (
-          <div className="flex items-center gap-2 mb-2 bg-brand-bg-chat-input border border-brand-border rounded-lg px-3 py-1.5 focus-within:border-brand-green/40 transition-colors">
-            <Navigation className="h-3 w-3 text-brand-green shrink-0" />
-            <input
-              value={steerInput}
-              onChange={(e) => setSteerInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleSteer();
-                }
-              }}
-              placeholder="Steer the agent at the next step… (no abort)"
-              className="flex-1 bg-transparent text-[11px] text-brand-green-soft placeholder:text-brand-green-muted outline-none font-mono"
-            />
-            <button
-              onClick={handleSteer}
-              disabled={!steerInput.trim()}
-              className="p-1 rounded transition-colors disabled:opacity-40 text-brand-green hover:bg-brand-border"
-              title="Inject steering message at next step"
-            >
-              <Send className="h-3 w-3" />
-            </button>
-          </div>
-        )}
         {editing && (
           <div className="mb-1.5 flex items-center gap-1.5 text-[10.5px] text-brand-amber" data-testid="editing-banner">
             <Pencil className="h-3 w-3" aria-hidden />
@@ -174,14 +152,23 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onC
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={chatMode === 'direct' ? 'Message LocalMind — chat mode, no tools…' : 'Message LocalMind, or describe a task to run…'}
+              placeholder={
+                isStreaming
+                  ? 'Steer the agent at the next step… (no abort)'
+                  : chatMode === 'direct'
+                    ? 'Message LocalMind — chat mode, no tools…'
+                    : 'Message LocalMind, or describe a task to run…'
+              }
               className="flex-1 bg-transparent text-[13px] text-brand-green-soft placeholder:text-brand-green-muted resize-none outline-none min-h-[22px] max-h-[160px] font-sans leading-relaxed"
               rows={1}
-              disabled={isStreaming}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  handleSend();
+                  if (isStreaming) {
+                    if (onSteer) handleSteer();
+                  } else {
+                    handleSend();
+                  }
                 } else if (e.key === 'Escape' && editing) {
                   e.preventDefault();
                   cancelEdit();
@@ -242,15 +229,26 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onC
               </div>
             )}
 
-            {/* Send / Abort */}
+            {/* Send / Steer / Abort */}
             {isStreaming ? (
-              <button
-                onClick={handleAbort}
-                className="rounded-full p-2 bg-brand-red text-white hover:bg-brand-red/80 transition-colors"
-                title="Stop generating"
-              >
-                <Square className="h-3.5 w-3.5" />
-              </button>
+              <>
+                {onSteer && input.trim() && (
+                  <button
+                    onClick={handleSteer}
+                    className="rounded-full p-2 bg-brand-green text-white hover:bg-brand-green/80 transition-colors"
+                    title="Steer the agent — inject at the next step (it keeps running)"
+                  >
+                    <Navigation className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                <button
+                  onClick={handleAbort}
+                  className="rounded-full p-2 bg-brand-red text-white hover:bg-brand-red/80 transition-colors"
+                  title="Stop generating"
+                >
+                  <Square className="h-3.5 w-3.5" />
+                </button>
+              </>
             ) : (
               <button
                 onClick={handleSend}
