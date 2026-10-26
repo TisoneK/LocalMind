@@ -258,6 +258,52 @@
   --code-text: #2a2317;
 }
 
+/* ── Harness · dark ──────────────────────────────────────
+   The DeepSeek Harness skin. Neutral-bluish graphite ramp, a single
+   DeepSeek-blue accent, hairline borders and flat surfaces — the calm,
+   low-chrome look of the Harness desktop app. Tokens mirror the semantic
+   aliases in deepseek-harness/packages/client/ui-theme (MIT).
+   The chat canvas is DARKER than the rails here (app = base, panels = one
+   step up), the inverse of Graphite. */
+:root[data-theme="harness"][data-mode="dark"] {
+  --s-deep: #0f1013; --s-0: #121214; --s-base: #151517; --s-1: #1b1b1c; --s-2: #232324; --s-3: #2c2c2e;
+  --t-primary: #f4f5f7; --t-secondary: #cfd3d6; --t-muted: #a2a6ad; --t-faint: #6d7178;
+  --line: #2a2a2d; --line-soft: #232326; --line-strong: #3a3a3e;
+  --acc: #5686fe; --acc-bright: #7aaaff; --acc-soft: #b7c8fe; --acc-strong: #4176e6;
+  --warn: #f59e0b; --warn-bright: #f7ad31; --warn-soft: #fef5e7;
+  --danger: #f25a5a; --info: #7aaaff; --alt: #9aa0a8; --alt-soft: #cfd3d6;
+  --code-text: #e6e8eb;
+}
+
+/* ── Harness · light ───────────────────────────────────── */
+:root[data-theme="harness"][data-mode="light"] {
+  --s-deep: #eceef1; --s-0: #f4f5f7; --s-base: #ffffff; --s-1: #f9fafb; --s-2: #f2f4f7; --s-3: #e9ecef;
+  --t-primary: #0f1115; --t-secondary: #61666b; --t-muted: #81858c; --t-faint: #a2a6ad;
+  --line: #e5e7eb; --line-soft: #eef0f2; --line-strong: #d1d5db;
+  --acc: #4176e6; --acc-bright: #5686fe; --acc-soft: #3b6bd6; --acc-strong: #2f5cc0;
+  --warn: #dd8629; --warn-bright: #f59e0b; --warn-soft: #8a5410;
+  --danger: #ec1313; --info: #2563eb; --alt: #54606e; --alt-soft: #3c4a58;
+  --code-text: #1f2328;
+}
+
+/* Harness surface mapping: the transcript is the ground, rails and composer
+   are layers above it (see the dark ramp above). Also swaps the bundled UI
+   font for the Harness text stack and tightens the corner radius. */
+:root[data-theme="harness"] {
+  --brand-bg-app: var(--s-base);
+  --brand-bg-panel: var(--s-1);
+  --brand-bg-panel-alt: var(--s-1);
+  --brand-bg-chat-input: var(--s-3);
+  --brand-bg-rail: var(--s-1);
+  --brand-bg-code: var(--s-1);
+  --brand-bg-table: var(--s-1);
+  --sidebar: var(--s-1);
+  --font-geist-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-geist-mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas,
+    'Liberation Mono', Menlo, Courier, 'PingFang SC', 'Microsoft YaHei', monospace;
+}
+
 /* ── Custom theme ──────────────────────────────────────── */
 /* The user's palette is applied inline on <html> as the core anchors
    (--acc, --s-base, --s-1, --s-2, --t-primary). Everything else is derived

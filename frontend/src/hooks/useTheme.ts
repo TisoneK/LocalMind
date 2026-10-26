@@ -21,7 +21,7 @@
 
 import { useSyncExternalStore } from 'react';
 
-export type ThemeName = 'graphite' | 'iris' | 'warm' | 'custom';
+export type ThemeName = 'harness' | 'graphite' | 'iris' | 'warm' | 'custom';
 export type ModePref = 'light' | 'dark' | 'system';
 
 export interface CustomTheme {
@@ -42,6 +42,7 @@ export interface ThemeState {
 }
 
 export const THEMES: { id: ThemeName; label: string; blurb: string; swatch: string }[] = [
+  { id: 'harness', label: 'Harness', blurb: 'DeepSeek Harness — graphite, hairline borders, one blue accent', swatch: '#5686fe' },
   { id: 'graphite', label: 'Graphite', blurb: 'Neutral slate, emerald accent', swatch: '#34d399' },
   { id: 'iris', label: 'Midnight Iris', blurb: 'Deep ink, indigo and teal', swatch: '#818cf8' },
   { id: 'warm', label: 'Warm Ink', blurb: 'Warm charcoal, gold and sage', swatch: '#f0b429' },
@@ -49,7 +50,7 @@ export const THEMES: { id: ThemeName; label: string; blurb: string; swatch: stri
 ];
 
 const STORAGE_KEY = 'localmind-theme';
-const THEME_IDS: ThemeName[] = ['graphite', 'iris', 'warm', 'custom'];
+const THEME_IDS: ThemeName[] = ['harness', 'graphite', 'iris', 'warm', 'custom'];
 const MODE_IDS: ModePref[] = ['light', 'dark', 'system'];
 
 const hasWindow = typeof window !== 'undefined';
@@ -75,14 +76,14 @@ function parseCustom(raw: unknown): CustomTheme | null {
 }
 
 function load(): ThemeState {
-  const fallback: ThemeState = { theme: 'graphite', mode: 'dark', custom: null, tone: 1 };
+  const fallback: ThemeState = { theme: 'harness', mode: 'dark', custom: null, tone: 1 };
   if (!hasWindow) return fallback;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as Partial<ThemeState>;
     return {
-      theme: THEME_IDS.includes(parsed.theme as ThemeName) ? (parsed.theme as ThemeName) : 'graphite',
+      theme: THEME_IDS.includes(parsed.theme as ThemeName) ? (parsed.theme as ThemeName) : 'harness',
       mode: MODE_IDS.includes(parsed.mode as ModePref) ? (parsed.mode as ModePref) : 'dark',
       custom: parseCustom(parsed.custom),
       tone: typeof parsed.tone === 'number' && parsed.tone >= 0.5 && parsed.tone <= 1.5 ? parsed.tone : 1,
@@ -196,7 +197,7 @@ export function useTheme() {
     setTheme: (theme: ThemeName) => setState({ theme }),
     setMode: (mode: ModePref) => setState({ mode }),
     setCustomTheme: (custom: CustomTheme) => setState({ theme: 'custom', custom }),
-    clearCustomTheme: () => setState({ theme: 'graphite', custom: null }),
+    clearCustomTheme: () => setState({ theme: 'harness', custom: null }),
     setTone: (tone: number) => setState({ tone: Math.min(1.5, Math.max(0.5, tone)) }),
   };
 }

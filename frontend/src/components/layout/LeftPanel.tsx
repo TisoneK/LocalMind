@@ -235,7 +235,7 @@ export function LeftPanel({
   ];
 
   return (
-    <div className="h-full flex flex-col bg-brand-bg-app border-r border-brand-border">
+    <div className="h-full flex flex-col bg-brand-bg-panel border-r border-brand-border">
       {/* Header */}
       <div className="px-3 py-3 border-b border-brand-border">
         <ModelSelector
@@ -249,10 +249,10 @@ export function LeftPanel({
       <div className="px-3 py-2">
         <button
           onClick={onNewChat}
-          className="flex items-center gap-2 w-full px-3 py-1.5 rounded-md bg-brand-green/10 border border-brand-green/20 text-brand-green text-[11px] font-medium hover:bg-brand-green/20 transition-colors"
+          className="flex items-center gap-2 w-full px-3 py-2 rounded-lg bg-brand-bg-panel-alt border border-brand-border-strong text-brand-green-soft text-[12px] font-medium hover:bg-brand-border/60 hover:text-brand-green transition-colors"
         >
           <Plus className="h-3.5 w-3.5" />
-          New Chat
+          New Session
           <span className="ml-auto text-[9px] opacity-60">⌘N</span>
         </button>
       </div>

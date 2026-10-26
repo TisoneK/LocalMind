@@ -14,7 +14,7 @@ describe('ChatInput', () => {
       />,
     );
 
-    const textarea = screen.getByPlaceholderText(/Ask LocalMind to build, debug, or explain/i);
+    const textarea = screen.getByPlaceholderText(/Message LocalMind, or describe a task/i);
     await userEvent.type(textarea, 'hello world{enter}');
 
     expect(onSend).toHaveBeenCalledTimes(1);
@@ -22,7 +22,7 @@ describe('ChatInput', () => {
     // the message (the Chat/Agent/Auto mode picker replaces the intent hint).
     expect(onSend).toHaveBeenCalledWith('hello world');
     // Input is cleared after send.
-    expect(screen.getByPlaceholderText(/Ask LocalMind to build, debug, or explain/i)).toHaveValue('');
+    expect(screen.getByPlaceholderText(/Message LocalMind, or describe a task/i)).toHaveValue('');
   });
 
   it('does not send an empty or whitespace message', async () => {
@@ -35,7 +35,7 @@ describe('ChatInput', () => {
       />,
     );
 
-    const textarea = screen.getByPlaceholderText(/Ask LocalMind to build, debug, or explain/i);
+    const textarea = screen.getByPlaceholderText(/Message LocalMind, or describe a task/i);
     await userEvent.type(textarea, '   {enter}');
     expect(onSend).not.toHaveBeenCalled();
   });
@@ -53,7 +53,7 @@ describe('ChatInput', () => {
     );
 
     // Streaming: textarea disabled, abort button shown, send button hidden.
-    expect(screen.getByPlaceholderText(/Ask LocalMind to build, debug, or explain/i)).toBeDisabled();
+    expect(screen.getByPlaceholderText(/Message LocalMind, or describe a task/i)).toBeDisabled();
     expect(screen.getByTitle('Stop generating')).toBeInTheDocument();
     expect(screen.queryByTitle(/Send/i)).not.toBeInTheDocument();
 

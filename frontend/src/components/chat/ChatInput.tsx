@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type ReactNode } from 'react';
 import {
   Send,
   ChevronDown,
@@ -39,9 +39,12 @@ interface ChatInputProps {
   onEditSend?: (message: string) => void;
   /** Called when editing ends without sending. */
   onEditCancel?: () => void;
+  /** Replaces the default keyboard hints under the composer (the chat's
+   *  turn/step stats strip rides here). */
+  footer?: ReactNode;
 }
 
-export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onChatModeChange, prefill, onEditSend, onEditCancel }: ChatInputProps) {
+export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onChatModeChange, prefill, onEditSend, onEditCancel, footer }: ChatInputProps) {
   const [input, setInput] = useState('');
   const [steerInput, setSteerInput] = useState('');
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
@@ -156,10 +159,7 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onC
             </button>
           </div>
         )}
-        <div className="relative flex items-end gap-2 bg-brand-bg-rail border border-brand-border rounded-lg px-3 py-2 focus-within:border-brand-green/30 transition-colors">
-          {/* Prompt symbol */}
-          <span className="text-brand-green text-sm font-mono pb-0.5 shrink-0">&gt;</span>
-
+        <div className="relative flex items-end gap-2 bg-brand-bg-chat-input border border-brand-border rounded-xl px-3 py-2.5 focus-within:border-brand-green/40 transition-colors">
           {/* Textarea — wrapped in the right-click edit menu
               (Cut / Copy / Paste / Select all) */}
           <InputContextMenu textareaRef={textareaRef} value={input} onChange={setInput}>
@@ -167,8 +167,8 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onC
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={chatMode === 'direct' ? 'Ask LocalMind anything (Chat mode — no tools)...' : 'Ask LocalMind to build, debug, or explain...'}
-              className="flex-1 bg-transparent text-[12px] text-brand-green-soft placeholder:text-brand-green-muted resize-none outline-none min-h-[20px] max-h-[120px] font-mono leading-relaxed"
+              placeholder={chatMode === 'direct' ? 'Message LocalMind — chat mode, no tools…' : 'Message LocalMind, or describe a task to run…'}
+              className="flex-1 bg-transparent text-[13px] text-brand-green-soft placeholder:text-brand-green-muted resize-none outline-none min-h-[22px] max-h-[160px] font-sans leading-relaxed"
               rows={1}
               disabled={isStreaming}
               onKeyDown={(e) => {
@@ -190,11 +190,11 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onC
               <div className="relative" ref={modeMenuRef}>
                 <button
                   onClick={() => setModeMenuOpen(!modeMenuOpen)}
-                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] transition-colors disabled:opacity-40 ${
+                  className={`flex items-center gap-1 rounded-full border border-brand-border px-2 py-0.5 text-[10px] transition-colors disabled:opacity-40 ${
                     chatMode === 'direct'
-                      ? 'text-brand-amber hover:text-brand-amber/80 hover:bg-brand-border'
+                      ? 'text-brand-amber hover:bg-brand-border'
                       : chatMode === 'agent'
-                        ? 'text-blue-400 hover:text-blue-300 hover:bg-brand-border'
+                        ? 'text-brand-blue hover:bg-brand-border'
                         : 'text-brand-green-muted hover:text-brand-green-soft hover:bg-brand-border'
                   }`}
                   disabled={isStreaming}
@@ -239,7 +239,7 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onC
             {isStreaming ? (
               <button
                 onClick={handleAbort}
-                className="p-1.5 rounded bg-brand-red text-white hover:bg-brand-red/80 transition-colors"
+                className="rounded-full p-2 bg-brand-red text-white hover:bg-brand-red/80 transition-colors"
                 title="Stop generating"
               >
                 <Square className="h-3.5 w-3.5" />
@@ -248,10 +248,10 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onC
               <button
                 onClick={handleSend}
                 disabled={!input.trim()}
-                className={`p-1.5 rounded transition-colors ${
+                className={`rounded-full p-2 transition-colors ${
                   input.trim()
-                    ? 'bg-brand-green text-brand-bg-base hover:bg-brand-green/80'
-                    : 'bg-brand-border text-brand-green-muted'
+                    ? 'bg-brand-green text-white hover:bg-brand-green/80'
+                    : 'bg-brand-border text-brand-green-faint'
                 }`}
                 title="Send message"
               >
@@ -262,20 +262,22 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onC
         </div>
       </div>
 
-      {/* Footer hints */}
-      <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-4 pb-2">
-        <div className="flex items-center gap-3">
-          <span className="text-[9px] text-brand-green-muted">
-            <kbd className="px-1 py-0.5 rounded bg-brand-border text-brand-green-muted">Enter</kbd>
-            {' '}to send
-          </span>
-          <span className="text-[9px] text-brand-green-muted">
-            <kbd className="px-1 py-0.5 rounded bg-brand-border text-brand-green-muted mr-0.5">Shift</kbd>
-            <kbd className="px-1 py-0.5 rounded bg-brand-border text-brand-green-muted">Enter</kbd>
-            {' '}new line
-          </span>
+      {/* Footer: the chat's stats strip when provided, keyboard hints otherwise */}
+      {footer ?? (
+        <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-4 pb-2">
+          <div className="flex items-center gap-3">
+            <span className="text-[9px] text-brand-green-muted">
+              <kbd className="px-1 py-0.5 rounded bg-brand-border text-brand-green-muted">Enter</kbd>
+              {' '}to send
+            </span>
+            <span className="text-[9px] text-brand-green-muted">
+              <kbd className="px-1 py-0.5 rounded bg-brand-border text-brand-green-muted mr-0.5">Shift</kbd>
+              <kbd className="px-1 py-0.5 rounded bg-brand-border text-brand-green-muted">Enter</kbd>
+              {' '}new line
+            </span>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

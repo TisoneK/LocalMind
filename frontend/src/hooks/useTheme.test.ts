@@ -4,11 +4,21 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { restoreAppearance, useTheme, resolveMode } from './useTheme';
+import { restoreAppearance, useTheme, resolveMode, THEMES } from './useTheme';
 
 describe('useTheme', () => {
   beforeEach(() => {
     localStorage.clear();
+  });
+
+  it('ships the Harness palette first — the DeepSeek Harness skin is the default', () => {
+    expect(THEMES[0].id).toBe('harness');
+  });
+
+  it('applies the Harness theme', () => {
+    const { result } = renderHook(() => useTheme());
+    act(() => result.current.setTheme('harness'));
+    expect(document.documentElement.getAttribute('data-theme')).toBe('harness');
   });
 
   it('resolveMode passes explicit modes through unchanged', () => {
@@ -70,13 +80,13 @@ describe('useTheme', () => {
     expect(stored.custom).toEqual(custom);
   });
 
-  it('clearing the custom theme removes the inline palette and returns to graphite', () => {
+  it('clearing the custom theme removes the inline palette and returns to Harness', () => {
     const { result } = renderHook(() => useTheme());
     act(() => {
       result.current.setCustomTheme({ name: 'X', accent: '#f00', background: '#000', surface: '#111', text: '#fff' });
       result.current.clearCustomTheme();
     });
-    expect(result.current.theme).toBe('graphite');
+    expect(result.current.theme).toBe('harness');
     expect(document.documentElement.style.getPropertyValue('--acc')).toBe('');
   });
 

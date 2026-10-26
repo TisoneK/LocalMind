@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <!--
-  LocalMind ships three palettes (graphite | iris | warm) in light and dark
-  (multi-palette; the earlier dark-only
+  LocalMind ships five palettes (harness | graphite | iris | warm | custom) in
+  light and dark (multi-palette; the earlier dark-only
   decision was reversed). The inline script below applies the user's stored
   choice to <html> before first paint so there is no theme flash; useTheme.ts
-  is the runtime source of truth. Default = graphite dark.
+  is the runtime source of truth. Default = harness dark (the DeepSeek
+  Harness skin).
 -->
-<html lang="en" data-theme="graphite" data-mode="dark">
+<html lang="en" data-theme="harness" data-mode="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -17,7 +18,7 @@
           var el = document.documentElement;
           var raw = localStorage.getItem('localmind-theme');
           var s = raw ? JSON.parse(raw) : null;
-          var theme = s && ['graphite', 'iris', 'warm', 'custom'].indexOf(s.theme) >= 0 ? s.theme : 'graphite';
+          var theme = s && ['harness', 'graphite', 'iris', 'warm', 'custom'].indexOf(s.theme) >= 0 ? s.theme : 'harness';
           var mode = s && ['light', 'dark', 'system'].indexOf(s.mode) >= 0 ? s.mode : 'dark';
           if (mode === 'system') {
             mode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -47,12 +48,12 @@
       <!-- Shown until the app mounts (React replaces #root's children). If the app never mounts
            - a script failed to load or crashed at startup - the watchdog below says so instead of
            leaving a blank window. -->
-      <div id="boot" style="display:flex;height:100vh;align-items:center;justify-content:center;flex-direction:column;gap:14px;font:13px system-ui,sans-serif;color:#7f8c86;background:#0e1211">
-        <style>@keyframes lm-pulse{0%,100%{box-shadow:0 0 0 0 rgba(74,222,128,.25)}50%{box-shadow:0 0 0 14px rgba(74,222,128,0)}}</style>
-        <div style="width:56px;height:56px;border-radius:16px;border:1px solid rgba(74,222,128,.3);background:linear-gradient(135deg,rgba(74,222,128,.2),rgba(74,222,128,.05));display:flex;align-items:center;justify-content:center;animation:lm-pulse 1.8s ease-in-out infinite">
-          <div style="width:22px;height:22px;border:2px solid #4ade80;border-radius:6px;opacity:.9"></div>
+      <div id="boot" style="display:flex;height:100vh;align-items:center;justify-content:center;flex-direction:column;gap:14px;font:13px system-ui,sans-serif;color:#a2a6ad;background:#151517">
+        <style>@keyframes lm-pulse{0%,100%{box-shadow:0 0 0 0 rgba(86,134,254,.22)}50%{box-shadow:0 0 0 14px rgba(86,134,254,0)}}</style>
+        <div style="width:56px;height:56px;border-radius:16px;border:1px solid rgba(255,255,255,.12);background:linear-gradient(135deg,rgba(86,134,254,.16),rgba(86,134,254,.04));display:flex;align-items:center;justify-content:center;animation:lm-pulse 1.8s ease-in-out infinite">
+          <div style="width:22px;height:22px;border:2px solid #7aaaff;border-radius:6px;opacity:.9"></div>
         </div>
-        <div style="font-weight:600;letter-spacing:.02em;color:#c9d4cf">LocalMind</div>
+        <div style="font-weight:600;letter-spacing:.02em;color:#f4f5f7">LocalMind</div>
         <div id="boot-msg">Starting…</div>
       </div>
     </div>
@@ -61,7 +62,7 @@
         var boot = document.getElementById('boot');
         if (!boot) return; // the app mounted
         var msg = document.getElementById('boot-msg');
-        msg.innerHTML = 'The interface did not start. <a href="#" onclick="location.reload();return false" style="color:#4ade80">Reload</a>';
+        msg.innerHTML = 'The interface did not start. <a href="#" onclick="location.reload();return false" style="color:#7aaaff">Reload</a>';
       }, 10000);
       window.addEventListener('error', function (e) {
         var boot = document.getElementById('boot');
