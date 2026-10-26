@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-26T16:15:58Z_
+_Regenerated: 2026-10-26T16:34:47Z_
 
 ## Standing params
 - **Core:** 2.0.4 (locked, verified 2026-10-26)
@@ -15,7 +15,7 @@ _Regenerated: 2026-10-26T16:15:58Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-- **Ezra** (S004) — Working — Environment steward: clone/install verification done, standing by for owner's task
+- **Ezra** (S004) — Working — Environment steward: sandbox bring-up (clone/install/build/smoke) verified; standing by f…
 
 ## Current task
 - **2026-10-26 — Dara / deepseek-flash** — the goal-round deep-dive turn (B-2026-10-26-1): durable same-session goal, continuation driver, get_goal/update_goal tools, round meter, wr… — *done*
@@ -30,9 +30,9 @@ _12 medium, 3 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 3 entries, last added 2026-10-26
-- inefficiencies/log.md (project code/env friction): 2 entries, last added 2026-10-26
+- inefficiencies/log.md (project code/env friction): 3 entries, last added 2026-10-26
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-21
 
 ## Collaboration
-- 129 event(s) on file; most recent: `20260921T211803Z-Mosi-07dcfc4b.json`
+- 130 event(s) on file; most recent: `20261026T162207Z-Ezra-5cbbab58.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`

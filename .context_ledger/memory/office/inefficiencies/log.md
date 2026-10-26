@@ -73,3 +73,22 @@ and using absolute paths (the pattern already in the log) is the fix.
   loop, cover the "last action was a tool" shape — iteration-head-only hooks
   silently skip the terminal turn — and give shared-method mocks an explicit
   caller discriminator instead of relying on call order.
+
+---
+## 2026-10-26 — Dara / deepseek-flash (S003) — dev stack attaches Electron to a foreign server on :3000
+- **Problem:** `npm start` died with "Timed out waiting for http://localhost:3000" while
+  Vite had printed `ready` on that port. The owner's bobly-tide backend already held
+  `0.0.0.0:3000`/`[::]:3000`; on Windows Vite's bind still succeeds alongside a wildcard
+  listener (SO_REUSEADDR) — even with `strictPort: true` — so Vite reported ready while
+  connections to :3000 reached bobly-tide's 404. `wait-on` then polled the wrong server.
+- **Cost:** ~30 minutes of reproduction (Vite on a spare port, HEAD vs GET, listener
+  inspection, process tree).
+- **Cause:** port collision with an unrelated local service plus a permissive Windows
+  bind; readiness was checked by port, not by server identity.
+- **Workaround / fix:** owner-directed — stopped bobly-tide's process tree
+  (`cmd → tsx → node src/main.ts`), freeing :3000; `npm start` then reached Electron and
+  the UI rendered. Moving LocalMind to 5173 with a Vite-only probe
+  (`/@vite/client`) was prepared and reverted by owner preference.
+- **Prevent next time:** when Vite says ready but Electron times out, check the port's
+  owner (`netstat -ano`) before touching the frontend; a port alone cannot prove the
+  responding app is Vite on Windows.
