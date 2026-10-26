@@ -69,8 +69,8 @@ function MarkdownPreBlock({ children, ..._props }: React.ComponentPropsWithoutRe
   let codeText = '';
   let rawCode = '';
 
-  if (React.isValidElement(children) && (children.props as any)) {
-    const codeProps = children.props as any;
+  if (React.isValidElement(children)) {
+    const codeProps = (children.props ?? {}) as { className?: string; children?: React.ReactNode };
     if (codeProps.className) {
       const match = /language-(\w+)/.exec(codeProps.className);
       lang = match ? match[1] : '';
@@ -174,9 +174,10 @@ function MarkdownInlineCode({ children, ...props }: React.ComponentPropsWithoutR
 function MarkdownLink({ href, children, ...props }: React.ComponentPropsWithoutRef<'a'>) {
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    if ((window as any).electronAPI?.openExternal) {
-      (window as any).electronAPI.openExternal(href);
-    } else {
+    const electron = (window as unknown as { electronAPI?: { openExternal?: (url: string) => void } }).electronAPI;
+    if (href && electron?.openExternal) {
+      electron.openExternal(href);
+    } else if (href) {
       window.open(href, '_blank', 'noopener,noreferrer');
     }
   }, [href]);
@@ -357,7 +358,7 @@ export function MarkdownContent({ text }: { text: string }) {
         remarkPlugins={[remarkGfm]}
         components={{
           // Code handling: distinguish inline vs block
-          code: ({ node: _node, inline, className, children, ...props }: any) => {
+          code: ({ node: _node, inline, className, children, ...props }: React.ComponentPropsWithoutRef<'code'> & { node?: unknown; inline?: boolean }) => {
             const match = /language-(\w+)/.exec(className || '');
             // If it has a language class or contains a newline, it's a block code
             if (!inline && (match || String(children).includes('\n'))) {
@@ -370,19 +371,19 @@ export function MarkdownContent({ text }: { text: string }) {
             // Inline code
             return <MarkdownInlineCode {...props}>{children}</MarkdownInlineCode>;
           },
-          pre: MarkdownPreBlock as any,
+          pre: MarkdownPreBlock,
           a: MarkdownLink,
           table: MarkdownTable,
           thead: MarkdownTableHead,
           tr: MarkdownTableRow,
-          th: ({ children, ...props }: any) => <MarkdownTableCell isHeader {...props}>{children}</MarkdownTableCell>,
-          td: ({ children, ...props }: any) => <MarkdownTableCell {...props}>{children}</MarkdownTableCell>,
-          h1: ({ children, ...props }: any) => <MarkdownHeading level={1} {...props}>{children}</MarkdownHeading>,
-          h2: ({ children, ...props }: any) => <MarkdownHeading level={2} {...props}>{children}</MarkdownHeading>,
-          h3: ({ children, ...props }: any) => <MarkdownHeading level={3} {...props}>{children}</MarkdownHeading>,
-          h4: ({ children, ...props }: any) => <MarkdownHeading level={4} {...props}>{children}</MarkdownHeading>,
-          h5: ({ children, ...props }: any) => <MarkdownHeading level={4} {...props}>{children}</MarkdownHeading>,
-          h6: ({ children, ...props }: any) => <MarkdownHeading level={4} {...props}>{children}</MarkdownHeading>,
+          th: ({ children, ...props }: React.ComponentPropsWithoutRef<'th'>) => <MarkdownTableCell isHeader {...props}>{children}</MarkdownTableCell>,
+          td: ({ children, ...props }: React.ComponentPropsWithoutRef<'td'>) => <MarkdownTableCell {...props}>{children}</MarkdownTableCell>,
+          h1: ({ children, ...props }: React.ComponentPropsWithoutRef<'h1'>) => <MarkdownHeading level={1} {...props}>{children}</MarkdownHeading>,
+          h2: ({ children, ...props }: React.ComponentPropsWithoutRef<'h2'>) => <MarkdownHeading level={2} {...props}>{children}</MarkdownHeading>,
+          h3: ({ children, ...props }: React.ComponentPropsWithoutRef<'h3'>) => <MarkdownHeading level={3} {...props}>{children}</MarkdownHeading>,
+          h4: ({ children, ...props }: React.ComponentPropsWithoutRef<'h4'>) => <MarkdownHeading level={4} {...props}>{children}</MarkdownHeading>,
+          h5: ({ children, ...props }: React.ComponentPropsWithoutRef<'h5'>) => <MarkdownHeading level={4} {...props}>{children}</MarkdownHeading>,
+          h6: ({ children, ...props }: React.ComponentPropsWithoutRef<'h6'>) => <MarkdownHeading level={4} {...props}>{children}</MarkdownHeading>,
           ul: MarkdownUl,
           ol: MarkdownOl,
           li: MarkdownLi,

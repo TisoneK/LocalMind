@@ -347,7 +347,7 @@ function PermissionGate({ pending, onResolved }: { pending: PendingWrite; onReso
   const handleConfirm = async () => {
     setStatus('writing');
     try {
-      const API_BASE = (window as any).__LOCALMIND_API__ || 'http://localhost:8000';
+      const API_BASE = (window as unknown as { __LOCALMIND_API__?: string }).__LOCALMIND_API__ || 'http://localhost:8000';
       const res = await fetch(`${API_BASE}/api/confirm-write`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
