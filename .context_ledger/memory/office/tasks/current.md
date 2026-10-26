@@ -12,7 +12,7 @@ entry and backlog before starting.
 - **Status:** done | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-09-21 — Mosi / deepseek-flash (ZCode)
-- **Feature:** state-engine
-- **Task:** the engine selection + Explorer, the standalone-engine extraction (ADR-72), the Simulator slice, the boundary audit, and the extraction of Prototype 0 into its own repository (`ti-matrix`)
+- **Session:** 2026-10-26 — Nadia / deepseek-flash
+- **Feature:** theming-multi-palette
+- **Task:** the DeepSeek Harness skin (dark + light, DSH tokens + surface mapping, Harness default for fresh installs) and the Harness turn/step reading — `ChatStatsStrip` (`N turns · M steps · tok/s · tokens · cache hit`, `Deep diving for …`), `Plan n/m` in TurnView; goal-rounds deep-dive behavior filed for the next slice (`B-2026-10-26-1`)
 - **Status:** done
