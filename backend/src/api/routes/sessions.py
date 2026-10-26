@@ -337,6 +337,16 @@ async def list_session_files(session_id: str):
         raise HTTPException(status_code=500, detail=f"Failed to list session files: {exc}")
 
 
+@router.get("/sessions/{session_id}/goal")
+async def get_session_goal(session_id: str):
+    """The chat's durable goal (null when none is current)."""
+    from core.goal_rounds import goal_view
+    from storage.goals import get_goal_store
+
+    goal = get_goal_store(settings.localmind_db_path).get(session_id)
+    return {"goal": goal_view(goal, session_id)}
+
+
 @router.delete("/sessions/{session_id}")
 async def delete_session(session_id: str):
     """Delete a session and all its messages.
@@ -375,6 +385,20 @@ async def delete_session(session_id: str):
 
         logging.getLogger(__name__).warning(
             "[sessions] engine cleanup failed for %s: %s", session_id[:8], e
+        )
+
+    # The durable goal belongs to the session too.
+    try:
+        from core.goal_rounds import disarm
+        from storage.goals import get_goal_store
+
+        disarm(session_id)
+        get_goal_store(settings.localmind_db_path).clear(session_id)
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "[sessions] goal cleanup failed for %s: %s", session_id[:8], e
         )
 
     return {"deleted": session_id}

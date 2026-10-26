@@ -40,8 +40,10 @@ from core.agent.loop import answer_is_internal_scaffold
 from core.config import settings
 from core.engine import Engine
 from core.error_normalizer import SOURCE_INTERNAL, normalize_error
+from core.goal_rounds import note_human_steer, process_with_goal_rounds
 from core.obs import ObsCollector
 from core.title_generator import generate_title_smart, refine_title_async
+from storage.goals import get_goal_store
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -617,6 +619,7 @@ async def _event_stream(
     disconnect=None,
 ):
     obs = ObsCollector()
+    goal_store = get_goal_store(settings.localmind_db_path)
     file_path_written = None
     file_name_written = None
     # set when the acceptance gate ended the turn with unmet
@@ -657,6 +660,11 @@ async def _event_stream(
     # the first real model event; the immediate obs_event (agent_runtime_start)
     # is the wire-level acknowledgement for slow/cold clients and proxies.
     _response_chunks: list[str] = []
+    # Goal rounds: each continuation is a fresh engine turn. Response chunks
+    # and "did this turn finish" are scoped to the FINAL round, so an early
+    # round's limitation or partial text cannot leak into the final turn's
+    # persistence and todo finalization.
+    _final_round_obs_start = 0
 
     # ── Stage 1: write heuristic placeholder title immediately ────────────
     # This ensures the sidebar shows something before the LLM title arrives.
@@ -674,9 +682,11 @@ async def _event_stream(
     obs.attach_wake(asyncio.get_running_loop(), _obs_wake)
     try:
         async for chunk in _with_keepalives(
-            _engine.process(
+            process_with_goal_rounds(
+                _engine,
                 message=message,
                 session_id=session_id,
+                goal_store=goal_store,
                 file=file_bytes,
                 filename=filename,
                 content_type=content_type,
@@ -939,6 +949,16 @@ async def _event_stream(
                     yield extra
 
             if hasattr(chunk, "metadata") and chunk.metadata:
+                if "goal" in chunk.metadata:
+                    goal_round = chunk.metadata.get("goal_round")
+                    if goal_round:
+                        # A new continuation turn begins: scope the transport's
+                        # accumulators to it and surface the round boundary.
+                        _final_round_obs_start = len(obs.history())
+                        _response_chunks = []
+                        yield _sse({"type": "goal_round", "goal_round": goal_round})
+                    yield _sse({"type": "goal", "goal": chunk.metadata.get("goal")})
+                    _last_sent_time = time.monotonic()
                 obs_evt = chunk.metadata.get("obs_event")
                 if obs_evt:
                     yield _sse(obs_evt.to_sse_dict())
@@ -1018,6 +1038,10 @@ async def _event_stream(
             # 3. Emit done AFTER text (so all content is already sent)
             if chunk.done:
                 done_payload: dict = {"type": "done"}
+                if hasattr(chunk, "metadata") and chunk.metadata and "goal" in chunk.metadata:
+                    # Final goal snapshot, so the composer meter settles with
+                    # the turn instead of waiting for a refetch.
+                    done_payload["goal"] = chunk.metadata.get("goal")
                 # The loop accumulates the turn's provider-reported usage
                 # (per-call totals + last-call occupancy + llm_calls) and
                 # attaches it to the final chunk. Forward it here so the
@@ -1098,7 +1122,7 @@ async def _event_stream(
         # only preserved partial evidence, or the iteration limit — otherwise
         # the panel reads a false 100% (live: a rate-limited turn created 1 of
         # 3 files yet showed every todo complete).
-        _incomplete_turn = _turn_did_not_finish(obs.history())
+        _incomplete_turn = _turn_did_not_finish(obs.history()[_final_round_obs_start:])
 
         # Capture a structured observation before the destructive SSE flush.
         # The snapshot uses read-only collector access, so every event below
@@ -1293,6 +1317,9 @@ async def steer_session(session_id: str, message: str = Body(..., embed=True)):
             status_code=409,
             detail="Steering queue full — wait for the agent to finish a step and retry",
         )
+    # A human message arrived during a goal-driven turn: the round driver
+    # yields at the next idle point instead of auto-continuing over it.
+    note_human_steer(session_id)
     return {"accepted": True}
 
 
