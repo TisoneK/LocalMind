@@ -48,3 +48,28 @@ and the isolated 8765 harness behaved (boot healthy in a few seconds, real probe
 The one tool-layer trap re-hit was the long-standing one — a compound shell command whose `cd` and redirected
 log path disagreed, so the first `grep` looked for a log that was written elsewhere; splitting the command
 and using absolute paths (the pattern already in the log) is the fix.
+
+---
+## 2026-10-26 — Dara / deepseek-flash (S003)
+- **Problem:** A background Thinker consult started after a turn's LAST
+  successful tool call ran completely silent: its prose queued on
+  `_BackgroundConsult` and was discarded when the final answer ended the
+  turn. The drain points existed only at iteration heads and tool
+  boundaries, and the terminal turn has neither.
+- **Cost:** roughly an hour of diagnosis, including instrumenting the loop
+  and comparing against a clean HEAD worktree to separate "my change broke
+  it" from "this shape was never covered".
+- **Cause:** the final-answer path consumes the model stream without any
+  consult drain; on top of that, the test's mock `adapter.chat` is shared by
+  the planner (`intent="chat"`), the forced-final-answer rescue (no intent)
+  and the Thinker (`intent="analyze"`), so a naive mock answers the wrong
+  caller and hides the real contract.
+- **Workaround / fix:** drain the in-flight consult once the final-answer
+  stream loop ends, before the buffered answer is committed (analysis is
+  still absorbed for a possible replan); the test now filters on
+  `intent == "analyze"`, terminates its prose paragraph, and yields a few
+  `sleep(0)` ticks so a background task can run on the Windows event loop.
+- **Prevent next time:** whenever a stream feature is hooked into the agent
+  loop, cover the "last action was a tool" shape — iteration-head-only hooks
+  silently skip the terminal turn — and give shared-method mocks an explicit
+  caller discriminator instead of relying on call order.

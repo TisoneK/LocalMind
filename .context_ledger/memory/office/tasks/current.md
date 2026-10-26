@@ -12,7 +12,7 @@ entry and backlog before starting.
 - **Status:** done | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-10-26 — Nadia / deepseek-flash
+- **Session:** 2026-10-26 — Dara / deepseek-flash
 - **Feature:** goal-rounds
-- **Task:** dependency-audit + eslint fixes (B-2026-09-21-1 exit gate, dependabot alerts), then the goal-round deep-dive turn (B-2026-10-26-1): durable same-session goal, idle continuation driver, get_goal/update_goal tools, round meter; more concepts harvested from the public Harness repo afterwards
-- **Status:** working
+- **Task:** the goal-round deep-dive turn (B-2026-10-26-1): durable same-session goal, continuation driver, get_goal/update_goal tools, round meter, write-capable rounds behind ADR-67 — after the dependency audit and the lint sweep to zero
+- **Status:** done

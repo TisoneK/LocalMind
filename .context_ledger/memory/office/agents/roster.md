@@ -52,7 +52,6 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Dara | S003 | deepseek-flash | Frontend lint sweep to zero (39 problems: hooks rules, any, unused, parse error) + the tester's deep-dive turn on B-2026-10-26-1; released Nadia's stale Working row (S002 clocked out in a31e0c1c) | Working | Checked in — lint sweep starting, then task deep-dive |
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
 what is in flight and at which stage, and what is blocked — and so how

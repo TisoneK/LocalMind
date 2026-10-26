@@ -89,3 +89,36 @@ evidence: `history/office-002/flaws/log.md`.
   `ledger-history close` copy content and set 0644 explicitly.
 - **Status:** open (owner: the next core-maintainer pass); the mode churn in
   this repo was corrected in the same commit that logged this.
+
+---
+## 2026-10-26 — Dara / deepseek-flash (S003) — resuming a stalled peer has no ledger path, and the Windows baseline is incomplete
+
+- **Flaw 1 — the protocol has no way to resume a session that died mid-task
+  under another agent's codename.** The owner restarted a session that had
+  run out of provider funds and told the resuming agent to assume the
+  original identity and *not* check in. The protocol only knows fresh
+  check-ins and clock-outs: without a check-in the roster shows no live row
+  while the work continues, and `ledger-mem check` flags a second entry for
+  an existing session number as "a resumed session re-logged". The resumed
+  agent is therefore either invisible on the board or a duplicate.
+- **Flaw 2 — the pytest baseline is not platform-complete.** Three tests
+  (`test_tilde_display_normalizes_home_and_nested_paths`,
+  `test_pip_install_goes_to_localmind_folder_by_default`,
+  `test_the_shell_tool_really_runs_in_the_chosen_shell`) hardcode POSIX
+  paths/shells and fail on Windows, but none is in
+  `scripts/pytest-baseline.txt`. Every Windows session's exit gate reports
+  them as new regressions for code it never touched, and the baseline's own
+  rule — "never add entries; new failures are regressions" — forbids the
+  cheap fix at the gate. Proving they are pre-existing costs a full suite
+  run on a clean-HEAD worktree (≈14 minutes here).
+- **Root cause:** (1) the workflow assumes one agent ↔ one session ↔ one
+  live row, with no adoption handoff; (2) the baseline was recorded on the
+  machine where the suite was authored, and no gate step distinguishes "new
+  on this OS" from "new in this diff".
+- **Suggested fix:** (1) an explicit `resume`/`adopt` mode that keeps the
+  original codename and appends to the original session entry instead of
+  demanding a new check-in; (2) make the platform-dependent tests
+  platform-aware (done for these three — they now assert against `os.sep` /
+  the offered-shell list) or generate the baseline per OS at gate time.
+- **Status:** the three tests are fixed in this session; the two protocol
+  questions (adoption, per-OS baseline) remain open for a core pass.

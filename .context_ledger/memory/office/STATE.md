@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-26T10:01:48Z_
+_Regenerated: 2026-10-26T13:16:06Z_
 
 ## Standing params
 - **Core:** 2.0.4 (locked, verified 2026-10-26)
@@ -15,13 +15,12 @@ _Regenerated: 2026-10-26T10:01:48Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-- **Dara** (S003) — Working — Frontend lint sweep to zero (39 problems: hooks rules, any, unused, parse error) + the te…
+(office empty — no live roster rows)
 
 ## Current task
-- **2026-10-26 — Nadia / deepseek-flash** — dependency-audit + eslint fixes (B-2026-09-21-1 exit gate, dependabot alerts), then the goal-round deep-dive turn (B-2026-10-26-1): durable… — *working*
+- **2026-10-26 — Dara / deepseek-flash** — the goal-round deep-dive turn (B-2026-10-26-1): durable same-session goal, continuation driver, get_goal/update_goal tools, round meter, wr… — *done*
 
 ## Backlog — High priority (the top of the queue)
-| B-2026-09-21-1 | EXIT GATE BLOCKED: `scripts/ci-check.sh`'s frontend leg fails on `eslint . --max-warnings 53` — the recent UI work added React-effect warnings ("Calling setState synchronously within an effect", missing hook deps) so the count exceeds the budget (0 errors). Fix the warnings (preferred) or consciously raise `--max-warnings`; do not let a red exit gate become normal. Surfaces: `frontend/src/hooks/useLocalMind.ts`, `hooks/useWorkspaceData.ts`, `hooks/use-mobile.ts`, `components/chat/` (ChatInput, ChatMessage, TurnView, FilePreviewDialog, WelcomeScreen), `components/ui/` (sidebar, toggle, navigation-menu, form). Exact command: `sh .context_ledger/core/bin/ledger-gates run exit`. |
 | B-2026-09-21-2 | In-app State Explorer + engine selector (the state-driven engine, ADR-71 in `history/office-002/plans/decisions.md`): port the explorer into the app as its own interface (a game tree, move list, eval bar, inspector, meters, rewindable timeline — the owner's "geeky, not a chat" direction) and add the Classic/State engine setting so the engine becomes selectable in Settings. Reference implementations: the self-contained prototype `docs/prototypes/state-explorer/` and the backend-served page in `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter: `state_agent/adapters/localmind.py`); the `EngineEvent` record is the UI contract. In flight when office-002 closed — check whether it landed before starting. |
 | B-2026-09-21-3 | State engine slice 2 (ADR-71, partly done — the Simulator ships: an action that must not be performed is predicted, labelled, never a fact, never settling, and a run that needs one stops `needs_action`): NEXT here is EXECUTING a confirmed action behind the ADR-67 flag and verifying it by a read-back probe, a SECOND `Environment` adapter as the proof the engine's boundary holds (a CLI or filesystem env with its own CLI), beam > 1, and persisted state so a turn can resume. Original text: engine slice 2: write-capable moves — mark tools `read_only=False`, PREDICT their outcome with the model (labelled `predicted`, never learned as a fact), execute only after the ADR-67 confirmation flag, then verify by a read-back probe; beam > 1; persist the state so a turn can resume; per-provider concurrency budget before widening parallel probes. Extends `backend/src/state_agent/` (the engine itself; the simulator is a `Simulator` implementation). |
 | B-2026-09-21-4 | Benchmark the state engine against Classic (ADR-71 §8): both engines selectable and observable, same tasks, measurable comparison, only then a decision about an `Auto` engine. Ties to B-2026-09-21-2. |
@@ -30,8 +29,8 @@ _Regenerated: 2026-10-26T10:01:48Z_
 _12 medium, 3 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
-- flaws/log.md (protocol/.context_ledger friction): 2 entries, last added 2026-09-21
-- inefficiencies/log.md (project code/env friction): 1 entry, last added 2026-09-21
+- flaws/log.md (protocol/.context_ledger friction): 3 entries, last added 2026-10-26
+- inefficiencies/log.md (project code/env friction): 2 entries, last added 2026-10-26
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-21
 
 ## Collaboration
