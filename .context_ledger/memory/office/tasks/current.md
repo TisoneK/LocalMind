@@ -12,7 +12,7 @@ entry and backlog before starting.
 - **Status:** done | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-10-26 — Dara / deepseek-flash
-- **Feature:** post-close fixes
-- **Task:** owner-reported — (1) the assistant error card showed raw provider JSON (`Zen AI returned 400: {...}`), fixed in the error normalizer; (2) the composer stacked a second steering field over the main input, folded into one input whose steer action appears only while a turn is running with text
+- **Session:** 2026-10-26 — Ezra / GLM (Z.ai) (S004)
+- **Feature:** none
+- **Task:** re-identity of the borrowed skin — palettes renamed (Graphite Blue / Graphite Green), Graphite Blue the default in dark mode everywhere, clean break with no compat alias; plus the closeout compliance (rebase, gates, logs, board, review report, push)
 - **Status:** done

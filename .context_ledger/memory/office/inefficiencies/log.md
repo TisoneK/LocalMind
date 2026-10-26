@@ -92,3 +92,23 @@ and using absolute paths (the pattern already in the log) is the fix.
 - **Prevent next time:** when Vite says ready but Electron times out, check the port's
   owner (`netstat -ano`) before touching the frontend; a port alone cannot prove the
   responding app is Vite on Windows.
+
+## 2026-10-26 — Ezra / GLM (Z.ai) (S004) — palette ids are validated by two independent lists
+
+- **Observation:** the frontend (`THEME_IDS` in `useTheme.ts`) and the backend
+  (`valid_themes` in `api/routes/config.py`) each keep their own copy of the
+  valid palette ids. The backend list missing the then-default id shipped
+  silently: every attempt to save the default palette from Settings got a 400
+  that the UI swallowed, so a one-line default rendered as "working" until
+  someone actually tried to save it.
+- **Prevent next time:** when touching either list, touch both in the same
+  change — `tests/api/test_config_adapter.py` now POSTs every built-in id the
+  frontend offers, which closes the loop for today; a frontend-side mirror
+  test would catch the reverse direction.
+- **Also observed while verifying the build on Linux:** the root
+  `npm run build` cannot pass on this sandbox — the electron workspace's
+  `electron-builder --publish never` aborts for missing Linux packaging
+  metadata (author email / homepage / `.deb` maintainer; last touched by the
+  dependabot batch `f393bea2`). Pre-existing and Windows-invisible (sessions
+  build the frontend workspace); noted so a future Linux-CI effort knows
+  where to start.

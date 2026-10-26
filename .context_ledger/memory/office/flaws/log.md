@@ -122,3 +122,27 @@ evidence: `history/office-002/flaws/log.md`.
   the offered-shell list) or generate the baseline per OS at gate time.
 - **Status:** the three tests are fixed in this session; the two protocol
   questions (adoption, per-OS baseline) remain open for a core pass.
+
+## 2026-10-26 — Ezra / GLM (Z.ai) (S004) — the supervisor had to ask "Pushed??"
+
+- **What happened:** the theme re-identity work was committed locally (two
+  commits) but left unpushed across multiple supervisor turns, against the
+  standing push policy ("push to main directly after each commit"). The
+  kickoff's Phase 6 names exactly this a protocol failure: "If the user has to
+  remind you to commit or push, that is a protocol failure — log it."
+- **How it compounded:** with the push skipped, the rest of the closeout
+  drifted too — the roster row kept saying "Orientation complete … awaiting
+  task assignment" while two real tasks shipped, the ledger gates
+  (pre-commit/integration/exit) were never run for the theme commits, and no
+  `sessions.md` entry was appended as the work landed.
+- **Why a peer collision went unnoticed:** a concurrent session (Dara/S003,
+  owner-directed post-close work) pushed four commits to main while this
+  session worked; no `git fetch` happened between my commits, so the divergence
+  surfaced only when the supervisor asked about pushes. The mandatory
+  claim/event rule never triggered because nothing in my local view showed a
+  live peer — fetch before commit is the cheap fix.
+- **Correction (this closeout):** rebased onto `origin/main` (no file
+  overlap), gates run green, board made current, session logged, review report
+  written, everything pushed together.
+- **Standing rule going forward:** every commit pushes immediately; the board
+  and the session log update in the same breath as the work, not at exit.

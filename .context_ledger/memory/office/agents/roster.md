@@ -52,7 +52,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Ezra | S004 | GLM (Z.ai; harness states no exact version — owner asked to confirm) | Environment steward: sandbox bring-up (clone/install/build/smoke) verified; standing by for owner's task | Working | Orientation complete (Phases 0–3); awaiting task assignment |
+| Ezra | S004 | GLM (Z.ai; harness states no exact version — owner asked to confirm) | Re-identity shipped: palettes renamed, Graphite Blue the default in dark mode; closeout compliance done | Done | Shipped: `c4b5d8f8` + `145b9561` rebased onto Dara's post-close work; gates green; default live-verified (isolated 8765); pushed |
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
 what is in flight and at which stage, and what is blocked — and so how

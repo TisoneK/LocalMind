@@ -90,3 +90,50 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Follow-up filed:** `B-2026-10-26-3` — continuation beyond the open request (resume an active+armed goal after a dropped connection or restart, plus a resume affordance in the meter). The driver's current in-request design is documented there rather than implied.
 - **Friction logged:** `flaws/log.md` (no ledger path for resuming a stalled peer's identity; the Windows baseline is not platform-complete) and `inefficiencies/log.md` (the silent last-tool consult; shared-method mocks need a caller discriminator).
 - **Close:** `tasks/current.md` set to this session as done. Per the owner's instruction the session assumed Dara's identity without a fresh check-in; the S003 roster row stays clocked out.
+
+## 2026-10-26 — Session 4 — Ezra (S004) — the palettes become ours; Graphite Blue is the default in dark mode
+
+- **Agent:** Ezra | **Model:** GLM (Z.ai; harness states no exact version — owner
+  asked to confirm) | **Platform:** Linux cloud sandbox | **Role:** engineer | **Core:** 2.0.4
+- **Session shape:** checked in earlier this day (sandbox bring-up, arrival note
+  `20261026T162207Z-Ezra-5cbbab58`); this is the session's first `sessions.md`
+  entry — logged at close together with the work instead of as it landed. That
+  lag is part of the flaw logged below.
+- **Shipped — re-identity of the borrowed skin (owner-picked names):** the
+  default palette's id moved to `graphite-blue` ("Graphite Blue") and the
+  emerald-accent palette keeps id `graphite` with the label "Graphite Green".
+  Clean break, no compat alias: a stored choice under the retired borrowed id
+  now falls back to the default — the same look, so nothing visible changes for
+  the user. Renamed in `useTheme.ts` (ThemeName union, THEMES labels/blurbs/
+  swatches), `index.html` (`data-theme` + the no-flash pre-paint script),
+  `globals.css` (all three selector blocks), and the backend (`valid_themes`,
+  stored-value and fresh-install defaults); SettingsModal "Reset to built-in
+  theme" returns to graphite-blue. Borrowed-identity comment attributions in
+  `sessionReading.ts` (+test), `ChatStatsStrip.tsx`, `CenterPanel.tsx` rewritten
+  as our own contract wording. Historical S002 records keep their provenance.
+- **Latent product bug fixed on the way:** the backend's `valid_themes` never
+  contained the default palette's original id, so saving the default from
+  Settings always failed with a silently-swallowed 400. Now every built-in
+  palette persists, and every fresh-install default reads `graphite-blue` +
+  `dark` — the previous fresh-install default served the green palette, which
+  the owner's "make the blue one default and in dark mode" exposed.
+- **Verification:** frontend vitest **618/618 (59 files)** at commit time,
+  **619/619 (59 files)** on the rebased tree (peer's new composer test folded
+  in); production build (`tsc -b && vite build`) clean; backend
+  `tests/api/test_config_adapter.py` **14/14**; **live test** on the isolated harness (port 8765, scratch
+  `LOCALMIND_HOME`): fresh home `GET /api/settings` → `graphite-blue`/`dark`;
+  all four built-in ids POST→GET round-trip; an unknown id → 400 with the last
+  valid value kept. Probe kept sandbox-side at
+  `/home/z/my-project/scripts/test_theme_default_live.py` (not committed).
+- **Commits:** `c4b5d8f8` (feat(theme)), `145b9561` (chore(ledger) memory note
+  in `system/ui-architecture.md`) — rebased onto the concurrent Dara/S003
+  post-close work (no file overlap).
+- **Friction logged:** `flaws/log.md` (the supervisor had to ask "Pushed??";
+  board and session log went stale mid-session; gates skipped for the theme
+  commits) and `inefficiencies/log.md` (palette ids validated by two
+  independent lists — a mismatch ships silently).
+- **Open, owner's call:** four S002-era published commit messages still carry
+  the retired borrowed name; scrubbing them means rewriting published history
+  plus a force-push. Deliberately left.
+- **Close:** `tasks/current.md` set to this session's task as `done`; roster
+  row updated to `Done` (row comes down only at clock-out).
