@@ -23,6 +23,6 @@
   "allowScripts": {
     "electron-winstaller@5.4.0": true,
     "esbuild@0.25.12": true,
-    "electron@43.3.0": true
+    "electron@43.8.3": true
   }
 }
