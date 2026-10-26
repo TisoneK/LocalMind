@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-26T13:16:06Z_
+_Regenerated: 2026-10-26T16:15:58Z_
 
 ## Standing params
 - **Core:** 2.0.4 (locked, verified 2026-10-26)
@@ -15,7 +15,7 @@ _Regenerated: 2026-10-26T13:16:06Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-(office empty — no live roster rows)
+- **Ezra** (S004) — Working — Environment steward: clone/install verification done, standing by for owner's task
 
 ## Current task
 - **2026-10-26 — Dara / deepseek-flash** — the goal-round deep-dive turn (B-2026-10-26-1): durable same-session goal, continuation driver, get_goal/update_goal tools, round meter, wr… — *done*
