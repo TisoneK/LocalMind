@@ -574,6 +574,37 @@ async def test_conversational_response_streamed_error_chunk_is_normalized():
 
 
 @pytest.mark.asyncio
+async def test_trivial_response_multi_word_provider_name_never_leaks_raw_json():
+    """Live report (2026-10-26): the adapter prefixes the connection's
+    DISPLAY name — "Zen AI returned 400: {...}". The space defeated the
+    envelope parser, so the fallback text and the error card showed the raw
+    provider JSON. The friendly canonical message must replace it."""
+
+    async def mock_chat(messages, intent="chat", **kwargs):
+        yield MagicMock(
+            text="",
+            done=True,
+            error=(
+                'Zen AI returned 400: {"error":{"type":"server.error",'
+                '"message":"Upstream request failed: Model is unavailable."}}'
+            ),
+        )
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat = mock_chat
+
+    chunks = [c async for c in conversational_response("What can you do?", mock_adapter)]
+    text = "".join(c.text for c in chunks if getattr(c, "text", ""))
+    assert "{" not in text
+    assert "Zen AI returned" not in text
+    assert "server.error" not in text
+    assert "temporarily unavailable" in text.lower()
+    err_chunks = [c for c in chunks if getattr(c, "error", None)]
+    assert err_chunks, "raw error must be forwarded for the canonical card"
+    assert any(getattr(c, "done", False) for c in chunks)
+
+
+@pytest.mark.asyncio
 async def test_trivial_response_zen_payload_never_leaks_raw_json():
     """The exact user-reported case: the full Zen 429 JSON payload must not
     appear in the fallback text — only the friendly message.

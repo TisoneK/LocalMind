@@ -106,9 +106,15 @@ _MESSAGES: dict[str, str] = {
 
 # Matches the adapters' error format: "{provider} returned {status}: {body}"
 # e.g. "zen returned 429: {...}" (openai_compat.py) and
-# "Ollama returned 404 for model 'llama3'. ..." (ollama.py).
+# "Ollama returned 404 for model 'llama3'. ..." (ollama.py). The provider
+# token may be a multi-word DISPLAY name ("Zen AI returned 400: ...") — the
+# adapter prefixes the connection's human name, so a space is legal. Without
+# this the whole envelope misses the parser, `status` stays unknown, the
+# error classifies as generic and the raw provider JSON is copied straight
+# into the user-facing fallback text.
 _PROVIDER_ERROR_RE = re.compile(
-    r"^(?P<provider>[A-Za-z0-9_.\-]+)\s+returned\s+(?P<status>\d{3})(?P<rest>.*)$",
+    r"^(?P<provider>[A-Za-z0-9_.\-]+(?:\s+[A-Za-z0-9_.\-]+)*)"
+    r"\s+returned\s+(?P<status>\d{3})(?P<rest>.*)$",
     re.DOTALL,
 )
 
@@ -260,6 +266,17 @@ def _walk_error(parsed: Any) -> Any:
     return err
 
 
+def _normalize_type_token(token: Any) -> str:
+    """Lowercase a provider type/code token and flatten dotted namespaces.
+
+    Providers name errors as namespaced paths ("server.error",
+    "rate_limit.exceeded") while the catalog is keyed with underscores.
+    Flattening dots keeps one catalog for both spellings instead of
+    duplicating every rule.
+    """
+    return str(token or "").strip().lower().replace(".", "_")
+
+
 def _dig_type(parsed: Any) -> str:
     """Pull a normalized (lowercased) error-type/code token from a body.
 
@@ -272,10 +289,10 @@ def _dig_type(parsed: Any) -> str:
     err = _walk_error(parsed)
     type_tok = code_tok = ""
     if isinstance(err, dict):
-        type_tok = str(err.get("type") or "").strip().lower()
-        code_tok = str(err.get("code") or "").strip().lower()
+        type_tok = _normalize_type_token(err.get("type"))
+        code_tok = _normalize_type_token(err.get("code"))
     if not type_tok and not code_tok and isinstance(parsed, dict):
-        code_tok = str(parsed.get("code") or "").strip().lower()
+        code_tok = _normalize_type_token(parsed.get("code"))
     if type_tok in _ERROR_TYPE_RULES:
         return type_tok
     if code_tok:

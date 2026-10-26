@@ -360,6 +360,30 @@ class TestProviderEnvelopes:
         assert err["provider"] == "openai"
         assert "weird_error" in err["message"]
 
+    def test_multi_word_display_provider_name_is_parsed(self):
+        # Live report (2026-10-26): the adapter prefixes the connection's
+        # DISPLAY name — "Zen AI returned 400: ...". The space used to miss
+        # the envelope parser entirely, leaving status/type unparsed, so the
+        # raw JSON body was classified as an internal generic error and
+        # copied verbatim into the chat fallback text.
+        err = normalize_error(
+            'Zen AI returned 400: {"error":{"type":"server.error",'
+            '"message":"Upstream request failed: Model is unavailable."}}'
+        )
+        assert err["provider"] == "Zen AI"
+        assert err["source"] == SOURCE_PROVIDER
+        assert err["code"] == SERVER_ERROR
+        assert err["retryable"] is True
+        assert "{" not in err["message"]
+        assert "server.error" not in err["message"]
+
+    def test_dotted_type_namespace_matches_catalog(self):
+        err = normalize_error(
+            'zen returned 400: {"error":{"type":"rate_limit.exceeded",'
+            '"message":"slow down"}}'
+        )
+        assert err["code"] == RATE_LIMIT
+
     def test_plain_dict_without_provider_stays_internal(self):
         err = normalize_error({"message": "iteration limit reached"})
         assert err["code"] == GENERIC_ERROR
