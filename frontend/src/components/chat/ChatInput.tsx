@@ -145,6 +145,20 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onC
           </div>
         )}
         <div className="relative flex items-end gap-2 bg-brand-bg-chat-input border border-brand-border rounded-xl px-3 py-2.5 focus-within:border-brand-green/40 transition-colors">
+          {/* Steering lives on the LEFT of the composer so it never touches
+              or crowds the Stop button on the right. It appears only while a
+              turn is open and the input has text. */}
+          {isStreaming && onSteer && input.trim() && (
+            <button
+              type="button"
+              onClick={handleSteer}
+              className="flex shrink-0 items-center gap-1 self-center rounded-md border border-brand-green/30 bg-brand-green/10 px-2 py-1 text-[10px] font-medium text-brand-green transition-colors hover:bg-brand-green/20"
+              title="Steer the agent — inject at the next step (it keeps running)"
+            >
+              <Navigation className="h-3 w-3" />
+              Steer
+            </button>
+          )}
           {/* Textarea — wrapped in the right-click edit menu
               (Cut / Copy / Paste / Select all) */}
           <InputContextMenu textareaRef={textareaRef} value={input} onChange={setInput}>
@@ -229,26 +243,16 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onC
               </div>
             )}
 
-            {/* Send / Steer / Abort */}
+            {/* Send / Abort — the steering action lives on the left side of
+                the composer, so this cluster is never shared with it. */}
             {isStreaming ? (
-              <>
-                {onSteer && input.trim() && (
-                  <button
-                    onClick={handleSteer}
-                    className="rounded-full p-2 bg-brand-green text-white hover:bg-brand-green/80 transition-colors"
-                    title="Steer the agent — inject at the next step (it keeps running)"
-                  >
-                    <Navigation className="h-3.5 w-3.5" />
-                  </button>
-                )}
-                <button
-                  onClick={handleAbort}
-                  className="rounded-full p-2 bg-brand-red text-white hover:bg-brand-red/80 transition-colors"
-                  title="Stop generating"
-                >
-                  <Square className="h-3.5 w-3.5" />
-                </button>
-              </>
+              <button
+                onClick={handleAbort}
+                className="rounded-full p-2 bg-brand-red text-white hover:bg-brand-red/80 transition-colors"
+                title="Stop generating"
+              >
+                <Square className="h-3.5 w-3.5" />
+              </button>
             ) : (
               <button
                 onClick={handleSend}

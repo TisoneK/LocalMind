@@ -81,7 +81,12 @@ describe('ChatInput', () => {
     const box = screen.getByPlaceholderText(/Steer the agent at the next step/i);
     await userEvent.type(box, 'please focus on the tests');
 
-    await userEvent.click(screen.getByTitle(/Steer the agent/i));
+    const steer = screen.getByTitle(/Steer the agent/i);
+    // The steering action must not share the Stop button's cluster.
+    const stop = screen.getByTitle('Stop generating');
+    expect(stop.parentElement?.contains(steer)).toBe(false);
+
+    await userEvent.click(steer);
 
     expect(onSteer).toHaveBeenCalledWith('please focus on the tests');
     expect(onAbort).not.toHaveBeenCalled();
