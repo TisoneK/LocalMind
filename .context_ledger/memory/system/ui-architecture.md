@@ -190,3 +190,30 @@ The agent doesn't decide CSS. It decides the semantic presentation type.
 4. Finally Phase 5 (agent workspace UX) — refine the advanced capabilities
 
 The key is: **don't polish visuals before the contract is stable.**
+
+---
+
+## Theme identity — the palettes are ours (2026-10-26)
+
+The skin adopted in S002 (see the S002 review in `office/reviews/` for provenance)
+shipped under a borrowed working title. Per owner direction the identity is
+original now; the owner picked the name. Dated historical records keep their
+provenance on purpose.
+
+- **`graphite-blue` / "Graphite Blue"** (the default) — flat neutral graphite
+  ramp, hairline borders, one blue accent (`#5686fe`). Also the BACKEND default
+  (`config.py` SettingsResponse + `_read_appearance`), so a fresh start with no
+  settings.json and no localStorage restores Graphite Blue in dark mode.
+- **`graphite` / "Graphite Green"** — neutral slate, emerald accent (`#34d399`).
+  Id unchanged; label only.
+- **Clean break, no compat alias (owner directive):** the retired id is not
+  recognised anywhere — frontend `THEME_IDS`, the index.html pre-paint script,
+  and the appearance API all reject or ignore it. A choice saved under the
+  retired id falls back to the default, which is the same look, so nothing
+  visible changes.
+- **Latent bug fixed en route:** the backend never accepted the old default id,
+  so saving the default palette from Settings always 400'd silently;
+  persistence works for every palette now.
+- **Verified 2026-10-26 (after the clean break):** frontend vitest green
+  (59 files), `tsc -b && vite build` clean, backend `tests/api/test_config_adapter.py`
+  green.
