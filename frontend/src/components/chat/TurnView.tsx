@@ -7,7 +7,7 @@
  * finishes it folds to a one-line summary the user can reopen.
  */
 
-import { memo, useEffect, useState } from 'react';
+import { memo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   AlertTriangle,
@@ -215,10 +215,12 @@ export const TurnView = memo(function TurnView({ message, todos, isStreaming }: 
   const elapsed = useElapsedSeconds(running);
   // The header's clock must not vanish the moment the turn ends: remember what it showed
   // while running, and prefer the measured latency once the reply carries it.
+  // Adjusted during render (the state-mirrors-a-prop pattern) so no effect-time
+  // setState ever cascades a second render.
   const [lastShown, setLastShown] = useState(0);
-  useEffect(() => {
-    if (running) setLastShown(elapsed);
-  }, [running, elapsed]);
+  if (running && lastShown !== elapsed) {
+    setLastShown(elapsed);
+  }
   const totalMs = message.performance?.latencyMs || (lastShown > 0 ? lastShown * 1000 : 0);
   // null = follow the turn (open while running, folded when done); a click pins it.
   const [pinned, setPinned] = useState<boolean | null>(null);

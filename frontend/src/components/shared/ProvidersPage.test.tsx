@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { ProvidersPage, providerHealth, splitProviders } from './ProvidersPage';
+import { providerHealth, splitProviders } from '@/lib/localmind/providerHealth';
+import { ProvidersPage } from './ProvidersPage';
 import { localmindClient } from '@/lib/localmind/client';
 
 const conn = (over: Record<string, unknown> = {}) => ({

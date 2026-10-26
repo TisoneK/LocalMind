@@ -30,10 +30,7 @@ interface CommandPaletteProps {
 
 const ITEM = 'gap-2 text-[12px] text-brand-green-soft data-[selected=true]:bg-brand-green/10 data-[selected=true]:text-brand-green';
 
-/** True for the ⌘K / Ctrl+K chord. */
-export function isPaletteShortcut(e: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey'>): boolean {
-  return (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k';
-}
+import { isPaletteShortcut } from '@/lib/localmind/paletteShortcut';
 
 export function CommandPalette({
   sessions,
@@ -49,12 +46,13 @@ export function CommandPalette({
   const [found, setFound] = useState<{ id: string; title: string; snippet: string }[]>([]);
 
   // Search what was SAID in your chats, not just their titles (debounced, server-side).
+  // The "not searching" case is derived below, so the effect only touches state
+  // from the async fetch callbacks — never synchronously.
+  const searching = open && query.trim().length >= 2;
+  const results = searching ? found : [];
   useEffect(() => {
     const q = query.trim();
-    if (!open || q.length < 2) {
-      setFound([]);
-      return;
-    }
+    if (!open || q.length < 2) return;
     let live = true;
     const t = setTimeout(() => {
       localmindClient
@@ -107,7 +105,7 @@ export function CommandPalette({
         className="h-10 border-0 bg-transparent text-[12px] text-brand-green-soft outline-none ring-0 focus:ring-0 focus-visible:ring-0 placeholder:text-brand-green-muted"
       />
       <CommandList className="max-h-[50vh] bg-brand-bg-base">
-        {found.length === 0 && (
+        {results.length === 0 && (
           <CommandEmpty className="py-6 text-center text-[11px] text-brand-green-muted">Nothing matches.</CommandEmpty>
         )}
         <CommandGroup heading="Actions">
@@ -135,9 +133,9 @@ export function CommandPalette({
             <FolderOpen className="h-3.5 w-3.5" /> Show this chat's files
           </CommandItem>
         </CommandGroup>
-        {found.length > 0 && (
+        {results.length > 0 && (
           <CommandGroup heading="In your chats" forceMount>
-            {found.map((f) => (
+            {results.map((f) => (
               <CommandItem
                 key={`hit-${f.id}`}
                 value={`hit ${f.id}`}

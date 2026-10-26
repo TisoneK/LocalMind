@@ -178,8 +178,11 @@ function FactCard({
   );
 }
 
+// Stable empty-array identity so useMemo deps don't churn when `facts` is null.
+const EMPTY_FACTS: MemoryFact[] = [];
+
 export function MemoryTab({ facts, onDelete, onStore, onEdit, onRefresh }: MemoryTabProps) {
-  const safeFacts = facts ?? [];
+  const safeFacts = facts ?? EMPTY_FACTS;
   const [query, setQuery] = useState('');
   // Manual store affordance.
   const [draft, setDraft] = useState('');

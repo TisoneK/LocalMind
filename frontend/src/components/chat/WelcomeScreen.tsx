@@ -6,42 +6,25 @@
  * (files, the web, the machine, memory, research, code), so the starters span that range.
  */
 
-import { Brain, Code2, Cpu, FileText, Globe, HardDrive, Newspaper, type LucideIcon } from 'lucide-react';
+import { Brain, Cpu } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useEnterMotion } from '@/lib/localmind/motion';
-
-interface Starter {
-  icon: LucideIcon;
-  label: string;
-  prompt: string;
-  /** Tile colour, from the same palette as the tool icons. */
-  tone: string;
-}
-
-export const STARTERS: Starter[] = [
-  { icon: HardDrive, label: 'Check my machine', prompt: 'How much free disk space and memory do I have right now?', tone: 'text-brand-amber bg-brand-amber/10' },
-  { icon: Globe, label: 'Look something up', prompt: "What's the weather in Nairobi right now?", tone: 'text-brand-blue bg-brand-blue/10' },
-  { icon: Newspaper, label: 'Catch me up', prompt: 'Search the web for the top tech news today and summarise it in five bullets.', tone: 'text-brand-purple bg-brand-purple/10' },
-  { icon: FileText, label: 'Make a file', prompt: 'Create a folder called notes and put a todo.md in it with a short plan for my week.', tone: 'text-brand-green bg-brand-green/10' },
-  { icon: Brain, label: 'Remember something', prompt: 'Remember that I prefer short answers with the key point first.', tone: 'text-brand-purple bg-brand-purple/10' },
-  { icon: Code2, label: 'Explore a project', prompt: 'List the files in my current folder and tell me what this project does.', tone: 'text-brand-blue bg-brand-blue/10' },
-];
-
-export type EngineStatus = 'online' | 'offline' | 'checking';
-
-/** "Good morning" / "Good afternoon" / "Good evening" for a given hour (0-23). */
-export function greetingFor(hour: number): string {
-  if (hour < 5) return 'Still up?';
-  if (hour < 12) return 'Good morning';
-  if (hour < 18) return 'Good afternoon';
-  return 'Good evening';
-}
+import { STARTERS, greetingFor } from '@/lib/localmind/welcomeContent';
+import type { EngineStatus } from '@/lib/localmind/welcomeContent';
 
 const STATUS_COPY: Record<EngineStatus, { text: string; dot: string }> = {
   online: { text: 'Ready · everything runs on your machine', dot: 'bg-brand-green' },
   checking: { text: 'Starting the local engine…', dot: 'bg-brand-amber animate-pulse' },
   offline: { text: "Can't reach the local engine — retrying", dot: 'bg-brand-red animate-pulse' },
 };
+
+function Kbd({ children }: { children: string }) {
+  return (
+    <kbd className="rounded border border-brand-border bg-brand-bg-rail px-1 py-px font-mono text-[9.5px] text-brand-green-soft">
+      {children}
+    </kbd>
+  );
+}
 
 interface WelcomeScreenProps {
   onPick: (prompt: string) => void;
@@ -50,14 +33,6 @@ interface WelcomeScreenProps {
   memoryCount?: number;
   /** Injected for tests. */
   hour?: number;
-}
-
-function Kbd({ children }: { children: string }) {
-  return (
-    <kbd className="rounded border border-brand-border bg-brand-bg-rail px-1 py-px font-mono text-[9.5px] text-brand-green-soft">
-      {children}
-    </kbd>
-  );
 }
 
 export function WelcomeScreen({ onPick, status = 'online', memoryCount = 0, hour = new Date().getHours() }: WelcomeScreenProps) {

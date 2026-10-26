@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { STARTERS, WelcomeScreen, greetingFor } from './WelcomeScreen';
+import { STARTERS, greetingFor } from '@/lib/localmind/welcomeContent';
+import { WelcomeScreen } from './WelcomeScreen';
 
 describe('WelcomeScreen', () => {
   it('sends the starter prompt when a card is clicked', () => {

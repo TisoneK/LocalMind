@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { findRetryPrompt, CenterPanel } from './CenterPanel';
+import { findRetryPrompt } from '@/lib/localmind/retryPrompt';
+import { CenterPanel } from './CenterPanel';
 import { ChatMessage as ChatMessageType, ReflectionLesson } from '@/types';
 import { localmindClient as client } from '@/lib/localmind/client';
 

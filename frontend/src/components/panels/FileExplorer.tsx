@@ -276,19 +276,20 @@ export function FileExplorer({ files, onFileOpen, onFilesChanged }: FileExplorer
     }
   }, []);
 
-  // Debounced recursive search across the browser's root.
+  // Debounced recursive search across the browser's root. The "no query" case is
+  // derived (an empty query hides results/error/spinner), so the effect only
+  // touches state from the async timer callbacks — never synchronously.
+  const activeQuery = query.trim();
+  const visibleResults = activeQuery ? searchResults : null;
+  const visibleError = activeQuery ? searchError : null;
+  const visibleSearching = activeQuery ? searching : false;
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    const q = query.trim();
-    if (!q) {
-      setSearchResults(null);
-      setSearchError(null);
-      return;
-    }
-    setSearching(true);
+    if (!query.trim()) return;
     searchTimer.current = setTimeout(async () => {
       try {
-        const results = await localmindClient.searchFiles(root, q);
+        setSearching(true);
+        const results = await localmindClient.searchFiles(root, query.trim());
         setSearchResults(results);
         setSearchError(null);
       } catch {
@@ -429,25 +430,25 @@ export function FileExplorer({ files, onFileOpen, onFilesChanged }: FileExplorer
         </div>
       )}
 
-      {searching && (
+      {visibleSearching && (
         <div className="flex items-center gap-1.5 px-1 py-1 text-[10px] text-brand-green-muted">
           <Loader2 className="h-2.5 w-2.5 animate-spin" />
           Searching…
         </div>
       )}
 
-      {searchError && (
-        <div className="px-1 py-1 text-[10px] text-brand-red">{searchError}</div>
+      {visibleError && (
+        <div className="px-1 py-1 text-[10px] text-brand-red">{visibleError}</div>
       )}
 
-      {searchResults !== null && !searching ? (
-        searchResults.length === 0 ? (
+      {visibleResults !== null && !visibleSearching ? (
+        visibleResults.length === 0 ? (
           <div className="px-1 py-2 text-[10px] text-brand-green-faint italic">
             No matches for “{query.trim()}”
           </div>
         ) : (
           <div className="space-y-0.5" data-testid="search-results">
-            {searchResults.map((entry) =>
+            {visibleResults.map((entry) =>
               entry.type === 'folder' ? (
                 <div key={entry.relPath} className="flex items-center gap-1.5 px-2 py-1 rounded">
                   <Folder className="h-3.5 w-3.5 text-brand-amber shrink-0" />

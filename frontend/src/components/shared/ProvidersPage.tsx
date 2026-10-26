@@ -10,32 +10,8 @@ import { Eye, EyeOff, Loader2, Plus, RefreshCw, Trash2, Zap } from 'lucide-react
 import { localmindClient, type ConnectionRecord, type ConnectionTestResult } from '@/lib/localmind/client';
 import type { ModelOption } from '@/types';
 
-type Health = 'ready' | 'needs-key' | 'off';
-
-export function providerHealth(c: Pick<ConnectionRecord, 'enabled' | 'api_key_set' | 'kind'>): Health {
-  if (!c.enabled) return 'off';
-  if (c.kind === 'ollama') return 'ready';
-  return c.api_key_set ? 'ready' : 'needs-key';
-}
-
-const DOT: Record<Health, string> = {
-  ready: 'bg-brand-green',
-  'needs-key': 'bg-brand-amber',
-  off: 'bg-brand-border',
-};
-
-const HEALTH_TEXT: Record<Health, string> = {
-  ready: 'Ready',
-  'needs-key': 'Needs an API key',
-  off: 'Off',
-};
-
-/** Providers you have set up (custom, or with a key, or the one in use) versus the rest of the built-ins. */
-export function splitProviders(all: ConnectionRecord[], active: string) {
-  const mine = all.filter((c) => !c.preset || c.api_key_set || c.id === active || c.kind === 'ollama');
-  const more = all.filter((c) => !mine.includes(c));
-  return { mine, more };
-}
+// Health logic and its labels live in the pure lib module; this file exports only the component.
+import { providerHealth, splitProviders, DOT, HEALTH_TEXT } from '@/lib/localmind/providerHealth';
 
 function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
@@ -65,6 +41,9 @@ export function ProvidersPage({ onChanged }: Props) {
   const [adding, setAdding] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
+  // Mount fetch as a promise chain in the effect (no effect-time setState —
+  // the updates run when the fetch resolves). `reload` stays for the
+  // save/delete handlers, which may run state updates from event handlers.
   const reload = useCallback(async () => {
     try {
       const s = await localmindClient.getSettings();
@@ -73,15 +52,29 @@ export function ProvidersPage({ onChanged }: Props) {
       setActive((s as unknown as { adapter?: string }).adapter ?? '');
       setSelectedId((cur) => cur || (s as unknown as { adapter?: string }).adapter || list[0]?.id || '');
     } catch {
-      /* offline: an empty list says so */
-    } finally {
-      setLoaded(true);
+      /* offline: the list stays as-is */
     }
   }, []);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    let cancelled = false;
+    localmindClient.getSettings().then(
+      (s) => {
+        if (cancelled) return;
+        const list = ((s as unknown as { connections?: ConnectionRecord[] }).connections ?? []) as ConnectionRecord[];
+        const adapter = (s as unknown as { adapter?: string }).adapter ?? '';
+        setConnections(list);
+        setActive(adapter);
+        setSelectedId((cur) => cur || adapter || list[0]?.id || '');
+      },
+      () => {},
+    ).finally(() => {
+      if (!cancelled) setLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const selected = connections.find((c) => c.id === selectedId) ?? null;
   const q = filter.trim().toLowerCase();
@@ -233,8 +226,23 @@ function ProviderDetail({
   }, [conn.id, conn.kind, conn.model]);
 
   useEffect(() => {
-    void loadModels();
-  }, [loadModels]);
+    if (conn.kind === 'ollama') return;
+    let cancelled = false;
+    localmindClient.getModels(conn.id).then(
+      (r) => {
+        if (cancelled) return;
+        setModels(r.models);
+        setCurrentModel(r.current || conn.model);
+        setModelsLoading(false);
+      },
+      () => {
+        if (!cancelled) setModels([]);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [conn.id, conn.kind, conn.model]);
 
   const save = async (patch: Parameters<typeof localmindClient.saveConnection>[0], ok?: string) => {
     setBusy(true);

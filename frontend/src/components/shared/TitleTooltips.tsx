@@ -17,18 +17,8 @@ interface Tip {
   below: boolean;
 }
 
-const SHOW_DELAY_MS = 350;
-const MARGIN = 8;
-const MAX_WIDTH = 280;
-
-/** Where to put a tooltip for `rect`: centred over it, or under it when there is no room above. */
-export function placeTip(rect: { left: number; right: number; top: number; bottom: number }, viewportWidth: number) {
-  const below = rect.top < 56;
-  const half = MAX_WIDTH / 2;
-  const centre = (rect.left + rect.right) / 2;
-  const x = Math.min(Math.max(centre, half + MARGIN), viewportWidth - half - MARGIN);
-  return { x, y: below ? rect.bottom + MARGIN : rect.top - MARGIN, below };
-}
+// Tooltip geometry constants and placement live in the pure lib module; this file exports only the component.
+import { placeTip, SHOW_DELAY_MS, MAX_WIDTH } from '@/lib/localmind/titleTooltip';
 
 function titledAncestor(target: EventTarget | null): HTMLElement | null {
   const el = target instanceof Element ? target.closest<HTMLElement>('[title], [data-tip-title]') : null;

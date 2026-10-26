@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { CommandPalette, isPaletteShortcut } from './CommandPalette';
+import { isPaletteShortcut } from '@/lib/localmind/paletteShortcut';
+import { CommandPalette } from './CommandPalette';
 import { localmindClient } from '@/lib/localmind/client';
 
 const sessions = [

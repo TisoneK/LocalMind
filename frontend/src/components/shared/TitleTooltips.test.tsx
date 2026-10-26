@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { TitleTooltips, placeTip } from './TitleTooltips';
+import { placeTip } from '@/lib/localmind/titleTooltip';
+import { TitleTooltips } from './TitleTooltips';
 
 describe('TitleTooltips', () => {
   beforeEach(() => vi.useFakeTimers());

@@ -51,11 +51,18 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onC
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [editing, setEditing] = useState(false);
 
-  // "Edit" on your last message loads it here.
-  useEffect(() => {
-    if (!prefill) return;
+  // "Edit" on your last message loads it here. The text/editing state is
+  // adjusted during render (state-mirrors-a-prop pattern: fires once per new
+  // prefill object, no effect-time setState cascade); focusing stays in the
+  // effect below, where side effects belong.
+  const [lastPrefill, setLastPrefill] = useState<ChatInputProps['prefill']>(undefined);
+  if (prefill && prefill !== lastPrefill) {
+    setLastPrefill(prefill);
     setInput(prefill.text);
     setEditing(true);
+  }
+  useEffect(() => {
+    if (!prefill) return;
     requestAnimationFrame(() => {
       const el = textareaRef.current;
       if (el) {

@@ -57,19 +57,27 @@ export function FilePreviewDialog({ path, onClose, diffs }: FilePreviewDialogPro
   // Spreadsheet tab (CSV/XLSX) — reset whenever a different file opens.
   const [activeSheet, setActiveSheet] = useState(0);
 
-  useEffect(() => {
-    // Closing (path → null): keep the last file on screen so the fade-out doesn't
-    // flash an empty body. The next open resets everything below.
-    if (!path) return;
-    let cancelled = false;
+  // Reset per newly-opened file — adjusted during render (state-mirrors-a-prop
+  // pattern; no effect-time setState cascade). Closing (path → null) keeps the
+  // last file on screen so the fade-out doesn't flash an empty body; the next
+  // open resets everything below.
+  const [openedPath, setOpenedPath] = useState<string | null>(null);
+  if (path && path !== openedPath) {
+    setOpenedPath(path);
     setLoading(true);
     setError(null);
     setContent(null);
     setMode('preview');
     setSaveError(null);
     setSavedFlash(false);
+    setDraft('');
     setActiveSheet(0);
     setDraftSheets([]);
+  }
+
+  useEffect(() => {
+    if (!path) return;
+    let cancelled = false;
     localmindClient.getFileContent(path).then((data) => {
       if (cancelled) return;
       setLoading(false);
