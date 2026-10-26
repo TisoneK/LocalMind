@@ -57,13 +57,17 @@ def test_the_agent_is_told_the_shell_only_when_one_was_chosen(monkeypatch):
 
 
 def test_the_shell_tool_really_runs_in_the_chosen_shell(monkeypatch):
-    import shutil
+    import sys
 
-    if not shutil.which("sh"):
-        pytest.skip("no sh")
     from tools.shell import _run
 
-    monkeypatch.setattr(settings, "localmind_shell", "sh", raising=False)
+    # "sh" is a Unix-only choice; Windows offers powershell/cmd/git-bash.
+    shell_id = "git-bash" if sys.platform.startswith("win") else "sh"
+    if sc.resolve(shell_id) is None:
+        pytest.skip(f"{shell_id} not available")
+    marker = "bash" if shell_id == "git-bash" else "sh"
+
+    monkeypatch.setattr(settings, "localmind_shell", shell_id, raising=False)
     out = _run("echo $0")
     assert out["success"]
-    assert "sh" in str(out["message"])
+    assert marker in str(out["message"]).lower()

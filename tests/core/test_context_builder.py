@@ -280,13 +280,20 @@ def test_tilde_display_normalizes_home_and_nested_paths():
     `/home/` or `/Users/` regex, so it also covers a Windows
     `C:\\Users\\<user>` home. A merely-prefix-matching sibling dir must
     NOT collapse (path-separator boundary check)."""
+    import os
+
     from core.context_builder import _tilde_display
 
-    home = "/Users/tison"
+    home = os.path.join("home", "tison")
     assert _tilde_display(home, home) == "~"
-    assert _tilde_display("/Users/tison/Dev/LocalMind", home) == "~/Dev/LocalMind"
-    assert _tilde_display("/Users/tisonprefix/other", home) == "/Users/tisonprefix/other"
-    assert _tilde_display("/opt/other", home) == "/opt/other"
+    assert (
+        _tilde_display(os.path.join(home, "Dev", "LocalMind"), home)
+        == f"~{os.sep}Dev{os.sep}LocalMind"
+    )
+    sibling = os.path.join("home", "tisonprefix", "other")
+    assert _tilde_display(sibling, home) == sibling
+    other = os.path.join("opt", "other")
+    assert _tilde_display(other, home) == other
     assert _tilde_display("", home) == ""
 
 

@@ -18,8 +18,11 @@ def target():
 
 
 def test_pip_install_goes_to_localmind_folder_by_default():
+    # The target is always quoted on Windows — the shell there needs it even
+    # when the path happens to contain no spaces.
+    expected_target = f'"{target()}"' if os.name == "nt" else target()
     out = package_env.rewrite_install("pip install Pillow")
-    assert out == f"pip install --target {target()} Pillow"
+    assert out == f"pip install --target {expected_target} Pillow"
 
 
 def test_variants_and_compound_commands_only_touch_the_install_verb():
