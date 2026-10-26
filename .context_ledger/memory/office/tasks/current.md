@@ -13,6 +13,6 @@ entry and backlog before starting.
 -->
 
 - **Session:** 2026-10-26 — Dara / deepseek-flash
-- **Feature:** goal-rounds
-- **Task:** the goal-round deep-dive turn (B-2026-10-26-1): durable same-session goal, continuation driver, get_goal/update_goal tools, round meter, write-capable rounds behind ADR-67 — after the dependency audit and the lint sweep to zero
+- **Feature:** post-close fixes
+- **Task:** owner-reported — (1) the assistant error card showed raw provider JSON (`Zen AI returned 400: {...}`), fixed in the error normalizer; (2) the composer stacked a second steering field over the main input, folded into one input whose steer action appears only while a turn is running with text
 - **Status:** done
