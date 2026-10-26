@@ -246,18 +246,22 @@ export function useTodos(sessionId: string | null) {
 
 // ─── useObservability ──────────────────────────────────────────────────
 
+// Stable seed value — a module constant keeps the loader's dependency list honest
+// without re-running the fetch on every render (an inline literal would be a
+// new identity each time).
+const EMPTY_OBS: ObservationData = { intent: '', confidence: 0, toolsUsed: [], memoryHits: 0, contextTokens: 0, latency: 0 };
+
 export function useObservability(sessionId: string | null) {
   // Don't default intent to 'chat' — that masks the empty state.
   // The ObservabilityTab uses hasData = confidence>0 || toolsUsed>0 || latency>0
   // to decide whether to show real data or the "—" placeholder.
-  const emptyObs: ObservationData = { intent: '', confidence: 0, toolsUsed: [], memoryHits: 0, contextTokens: 0, latency: 0 };
-  const [observation, setObservation] = useState<ObservationData>(emptyObs);
+  const [observation, setObservation] = useState<ObservationData>(EMPTY_OBS);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
     const load = async () => {
-      if (!sessionId) { queueMicrotask(() => { if (mounted) { setObservation(emptyObs); setLoading(false); } }); return; }
+      if (!sessionId) { queueMicrotask(() => { if (mounted) { setObservation(EMPTY_OBS); setLoading(false); } }); return; }
       const data = await localmindClient.getObservability(sessionId);
       if (mounted) {
         setObservation({
@@ -346,7 +350,23 @@ export function useModels(): ModelsState {
     } catch { /* keep */ } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    let cancelled = false;
+    localmindClient.getModels().then(
+      (data) => {
+        if (cancelled) return;
+        setModels(data.models);
+        setCurrent(data.current);
+        setProvider(data.provider);
+      },
+      () => {},
+    ).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const selectModel = useCallback(async (modelId: string) => {
     try {
@@ -374,7 +394,21 @@ export function useMemory() {
     catch { /* keep */ } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    let cancelled = false;
+    localmindClient.getMemory().then(
+      (data) => {
+        if (cancelled) return;
+        setFacts(data);
+      },
+      () => {},
+    ).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const storeFact = useCallback(async (content: string, source: string) => {
     try { await localmindClient.storeMemory(content, source); const data = await localmindClient.getMemory(); setFacts(data); } catch { /* */ }

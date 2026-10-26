@@ -185,8 +185,21 @@ export function useSessions() {
   }, []);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    let cancelled = false;
+    localmindClient.getSessions().then(
+      (data) => {
+        if (cancelled) return;
+        // Defensive: ensure sessions is always an array
+        setSessions(Array.isArray(data) ? data : []);
+      },
+      () => {},
+    ).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Poll for session updates every 10s so the sidebar picks up
   // LLM-generated titles that are written ~2-5s after the first message.
@@ -413,10 +426,20 @@ export function useChat(
   // always belong to the turn that just ended. The effect re-runs if a late
   // metrics event arrives after the done callback, upgrading a live estimate
   // to the exact final numbers.
-  useEffect(() => {
-    if (isStreaming) return;
-    const m = lastMetrics;
-    if (!m || (m.latency <= 0 && m.totalTokens <= 0)) return;
+  // Derived during render (state-mirrors-the-value pattern; no effect-time
+  // setState): when a fresh metrics record lands while idle, attach it once.
+  // `attachedMetrics` remembers the last record merged, which covers the
+  // late-upgrade case (a new record means a new identity) and the at-turn-
+  // start clear (send() clears lastMetrics, so a new record means the next
+  // turn ended). Aborted turns that produced NO metrics never attach.
+  const [attachedMetrics, setAttachedMetrics] = useState(lastMetrics);
+  if (
+    !isStreaming &&
+    lastMetrics &&
+    (lastMetrics.latency > 0 || lastMetrics.totalTokens > 0) &&
+    attachedMetrics !== lastMetrics
+  ) {
+    setAttachedMetrics(lastMetrics);
     setMessages((prev) => {
       const updated = [...prev];
       const last = updated[updated.length - 1];
@@ -424,18 +447,18 @@ export function useChat(
         updated[updated.length - 1] = {
           ...last,
           performance: {
-            latencyMs: m.latency > 0 ? m.latency : undefined,
-            promptTokens: m.promptTokens > 0 ? m.promptTokens : undefined,
-            completionTokens: m.completionTokens > 0 ? m.completionTokens : undefined,
-            tokensPerSecond: m.tokensPerSecond > 0 ? m.tokensPerSecond : undefined,
-            cachedTokens: (m.cachedTokens || 0) > 0 ? m.cachedTokens : undefined,
-            llmCalls: (m.llmCalls || 0) > 0 ? m.llmCalls : undefined,
+            latencyMs: lastMetrics.latency > 0 ? lastMetrics.latency : undefined,
+            promptTokens: lastMetrics.promptTokens > 0 ? lastMetrics.promptTokens : undefined,
+            completionTokens: lastMetrics.completionTokens > 0 ? lastMetrics.completionTokens : undefined,
+            tokensPerSecond: lastMetrics.tokensPerSecond > 0 ? lastMetrics.tokensPerSecond : undefined,
+            cachedTokens: (lastMetrics.cachedTokens || 0) > 0 ? lastMetrics.cachedTokens : undefined,
+            llmCalls: (lastMetrics.llmCalls || 0) > 0 ? lastMetrics.llmCalls : undefined,
           },
         };
       }
       return updated;
     });
-  }, [isStreaming, lastMetrics, setMessages]);
+  }
 
   // Stats split: accumulate each completed turn into the session totals shown
   // in the bottom-right corner. Runs only when idle (the stream owns timing
@@ -649,7 +672,7 @@ export function useChat(
     return () => {
       mounted = false;
     };
-  }, [sessionId]);
+  }, [sessionId, applySessionStats]);
 
   // An undone file change is no longer a change: drop it from the Files-changed list.
   useEffect(() => {
@@ -2058,7 +2081,7 @@ export function useChat(
 
       abortRef.current = abortFn;
     },
-    [sessionId]  // isStreaming is read via isStreamingRef to avoid stale closures
+    [sessionId, currentIntent, currentConfidence, onTerminalEvent]  // isStreaming is read via isStreamingRef to avoid stale closures
   );
 
   const steer = useCallback((message: string) => {

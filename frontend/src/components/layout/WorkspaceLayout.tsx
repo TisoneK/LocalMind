@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { LeftPanel } from './LeftPanel';
 import { CommandPalette } from './CommandPalette';
 import { CenterPanel } from './CenterPanel';
@@ -88,12 +88,16 @@ export function WorkspaceLayout() {
   // "current" field once it loads. Previously defaulted to 'qwen3-235b'
   // (a hardcoded Ollama model), which caused a UI/backend desync: the
   // sidebar showed "Qwen3-235B-A22B" even when the backend was using Zen.
-  const [selectedModel, setSelectedModel] = useState('');
+  // Initial state reads the persisted choice directly (no effect-time
+  // setState); FIX 8 below re-syncs from the backend's "current" field once
+  // it loads. Previously defaulted to '' then was set again in the mount
+  // effect, which cascaded an extra render on every cold start.
+  const [selectedModel, setSelectedModel] = useState(() => getPersistedSettings()?.model || '');
 
-  // FIX 8: Persisted actions — derived from live tool_calls so the Actions
-  // panel is never empty during agent execution. The API-backed actions are
-  // used as a fallback for historical data.
-  const [liveActions, setLiveActions] = useState<ActionItem[]>([]);
+  // FIX 8: Actions derive directly from live tool_calls during render (no
+  // effect-time setState): the Actions panel is never empty during agent
+  // execution, and the API-backed actions are the fallback for historical
+  // data (merged by ID below).
 
   // Terminal hook — created first so we can reference addToolOutput in useChat
   const terminal = useTerminal();
@@ -102,14 +106,10 @@ export function WorkspaceLayout() {
   // sessions update — only fire once on the first non-empty session load.
   const hasAutoSelectedRef = useRef(false);
 
-  // FIX 8: Restore persisted adapter on mount
+  // FIX 8: Restore persisted adapter on mount (the persisted model is read
+  // in the selectedModel initializer above — no effect-time setState here).
   useEffect(() => {
     localmindClient.restorePersistedAdapter();
-    // Also restore persisted model selection
-    const saved = getPersistedSettings();
-    if (saved?.model) {
-      setSelectedModel(saved.model);
-    }
     // Load persisted chat mode from backend settings.
     localmindClient.getSettings().then((s) => {
       if (s.chat_mode) setChatMode(s.chat_mode);
@@ -166,13 +166,14 @@ export function WorkspaceLayout() {
   const { facts: memoryFacts, deleteFact, storeFact, editFact, refresh: refreshMemory } = useMemory();
 
   // Sync selectedModel from the backend's /api/models "current" field.
-  // This runs whenever the models list refreshes (on mount, after model
-  // switch, etc.) so the UI always reflects the backend's active model.
-  useEffect(() => {
-    if (currentModelId && currentModelId !== selectedModel) {
-      setSelectedModel(currentModelId);
-    }
-  }, [currentModelId, selectedModel]);
+  // Runs whenever the models list refreshes (on mount, after model switch,
+  // etc.) so the UI always reflects the backend's active model — adjusted
+  // during render (state-mirrors-a-prop pattern; no effect-time setState).
+  const [lastBackendCurrent, setLastBackendCurrent] = useState(currentModelId);
+  if (lastBackendCurrent !== currentModelId) {
+    setLastBackendCurrent(currentModelId);
+    if (currentModelId) setSelectedModel(currentModelId);
+  }
 
   // effectiveModelId prefers the backend-reported current model, falling
   // back to selectedModel (which is also synced above). This ensures the
@@ -204,51 +205,41 @@ export function WorkspaceLayout() {
     ? Math.min(lastCallPromptTokens, lastMetrics?.cachedTokens || 0)
     : 0;
 
-  // Clear liveActions when switching sessions so the Actions panel doesn't
-  // show the previous session's tool calls.
-  useEffect(() => {
-    setLiveActions([]);
-  }, [currentSessionId]);
-
-  // FIX 3: Derive actions from live tool_calls so the Actions panel
+  // FIX 3: Actions derived from live tool_calls so the Actions panel
   // always shows what's happening. When the API returns historical
-  // actions, we merge them — live actions take priority.
-  useEffect(() => {
-    if (activeToolCalls.length > 0) {
-      const newActions: ActionItem[] = activeToolCalls.map((tc) => ({
-        id: tc.id,
-        type: tc.name as ActionItem['type'],
-        label: tc.label || tc.name.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase()),
-        detail: tc.input || '',
-        input: tc.input,
-        output: tc.output,
-        error: tc.error,
-        iteration: tc.iteration,
-        todoId: tc.todoId,
-        reasoning: tc.reasoning,
-        status: tc.status,
-        timestamp: new Date().toLocaleTimeString('en-GB', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false,
-        }),
-        duration: tc.duration ? tc.duration / 1000 : undefined,
-      }));
-      setLiveActions(newActions);
-    } else {
-      // Clear live actions when no tool calls are active so the panel
-      // doesn't show stale data from the previous turn.
-      setLiveActions([]);
-    }
-  }, [activeToolCalls]);
-
-  // FIX: Don't clear liveActions when streaming ends — keep them visible
-  // until the API catches up. Previously, liveActions were cleared after 5s,
-  // causing the sidebar to flash "No actions yet" when apiActions was still
-  // empty. Now we merge live and API actions, deduplicating by ID, with live
-  // actions taking priority (they're more recent and accurate).
-  // Live actions are only cleared when a NEW streaming session starts
-  // (handled in the send() function via setActiveToolCalls([])).
+  // actions, we merge them below — live actions take priority (they're
+  // more recent and accurate), and switching sessions drops the previous
+  // session's live rows (one-frame empty, then whatever the new session
+  // streams in).
+  const [lastActionsSession, setLastActionsSession] = useState(currentSessionId);
+  if (lastActionsSession !== currentSessionId) {
+    setLastActionsSession(currentSessionId);
+  }
+  const liveActions = useMemo<ActionItem[]>(
+    () =>
+      lastActionsSession === currentSessionId
+        ? activeToolCalls.map((tc) => ({
+            id: tc.id,
+            type: tc.name as ActionItem['type'],
+            label: tc.label || tc.name.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase()),
+            detail: tc.input || '',
+            input: tc.input,
+            output: tc.output,
+            error: tc.error,
+            iteration: tc.iteration,
+            todoId: tc.todoId,
+            reasoning: tc.reasoning,
+            status: tc.status,
+            timestamp: new Date().toLocaleTimeString('en-GB', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            }),
+            duration: tc.duration ? tc.duration / 1000 : undefined,
+          }))
+        : [],
+    [activeToolCalls, currentSessionId, lastActionsSession],
+  );
 
   // Merge: live actions override API actions by ID; API actions fill in the rest
   const actions = (() => {
@@ -277,34 +268,41 @@ export function WorkspaceLayout() {
   // "New Chat" returns the left sidebar to the Chat tab (it may be stuck on
   // Actions/Files from the previous session's tool activity).
   const [forceChatTab, setForceChatTab] = useState(false);
-  const prevParentRunning = useRef(false);
-  useEffect(() => {
-    const parentRunning = (agentRuns || []).some(
-      (r) => r.role === 'parent' && r.status === 'running'
-    );
-    // Fire only on the rising edge (turn start), not on every render while
-    // streaming. This prevents the effect from re-fighting forceTerminalTab
-    // after a shell/code_exec tool starts.
-    if (parentRunning && !prevParentRunning.current) {
+  // Fire only on the rising edge (turn start), not on every render while
+  // streaming — derived during render (state-mirrors-the-data pattern; no
+  // effect-time setState), so this also cannot re-fight forceTerminalTab
+  // after a shell/code_exec tool starts.
+  const parentRunning = (agentRuns || []).some(
+    (r) => r.role === 'parent' && r.status === 'running'
+  );
+  const [wasParentRunning, setWasParentRunning] = useState(false);
+  if (parentRunning !== wasParentRunning) {
+    setWasParentRunning(parentRunning);
+    if (parentRunning) {
       setForceAgentsTab(true);
       if (rightPanelCollapsed) {
         setRightPanelCollapsed(false);
       }
     }
-    prevParentRunning.current = parentRunning;
-  }, [agentRuns, rightPanelCollapsed]);
+  }
 
   // memory_op tool activity → Memory tab (like the shell →
   // Terminal switch above). memory_op is the agent's explicit memory tool
-  // (store/recall/forget/list) — a real signal the user should see.
-  useEffect(() => {
-    if (activeToolCalls.some(tc => tc.name === 'memory_op' && isActiveToolStatus(tc.status))) {
+  // (store/recall/forget/list) — a real signal the user should see. Derived
+  // during render on the activity's start edge (no effect-time setState).
+  const memoryOpActive = activeToolCalls.some(
+    (tc) => tc.name === 'memory_op' && isActiveToolStatus(tc.status)
+  );
+  const [wasMemoryOpActive, setWasMemoryOpActive] = useState(false);
+  if (memoryOpActive !== wasMemoryOpActive) {
+    setWasMemoryOpActive(memoryOpActive);
+    if (memoryOpActive) {
       setForceMemoryTab(true);
       if (rightPanelCollapsed) {
         setRightPanelCollapsed(false);
       }
     }
-  }, [activeToolCalls, rightPanelCollapsed]);
+  }
 
   // Handle new chat
   const handleNewChat = useCallback(() => {

@@ -173,22 +173,23 @@ export function LeftPanel({
   // effect (activeTab is a dep) yanked it straight back; only the second
   // action stuck. Consuming unconditionally means the flag is gone before
   // the first tool event can race it.
-  const forceChatConsumed = useRef(false);
+  // Force-to-Chat, derived during render (no effect-time setState): while
+  // the flag is live the Chat tab is the desired target; the switch settles
+  // before the ack effect below clears the flag, so the tab persists.
+  if (forceChatTab && activeTab !== 'chat') {
+    setActiveTab('chat');
+  }
+
+  const chatAckedRef = useRef(false);
   useEffect(() => {
     if (!forceChatTab) {
-      forceChatConsumed.current = false;
+      chatAckedRef.current = false;
       return;
     }
-    // Fire at most once per flag activation: setActiveTab('chat') below
-    // re-runs this effect (activeTab is a dep) before the parent's
-    // onChatTabShown re-render lands, which would double-call otherwise.
-    if (forceChatConsumed.current) return;
-    forceChatConsumed.current = true;
-    if (activeTab !== 'chat') {
-      setActiveTab('chat');
-    }
+    if (chatAckedRef.current) return;
+    chatAckedRef.current = true;
     onChatTabShown?.();
-  }, [forceChatTab, activeTab, onChatTabShown]);
+  }, [forceChatTab, onChatTabShown]);
 
   // The command palette (⌘K) asks for the Files tab by event, like the right rail's tabs.
   useEffect(() => {

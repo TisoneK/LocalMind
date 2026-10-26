@@ -144,41 +144,57 @@ export function RightPanel({
   // — means the flag is gone before any later signal can race it. Each flag
   // fires at most once per activation (a consumed ref, since the setActiveTab
   // below re-runs this effect via the activeTab dep).
-  const terminalConsumed = useRef(false);
+  // Force-to-tab, derived during render (no effect-time setState): while a
+  // force flag is live, its tab is the desired target (later signals win:
+  // memory > agents > terminal, matching the old consume-effect run order),
+  // and the switch settles before the parent's ack effect below clears the
+  // flag — so the tab persists after the flag drops.
+  let forcedTab: RightTab | null = null;
+  if (forceMemoryTab) {
+    forcedTab = 'memory';
+  } else if (forceAgentsTab) {
+    forcedTab = 'agents';
+  } else if (forceTerminalTab) {
+    forcedTab = 'terminal';
+  }
+  if (forcedTab && activeTab !== forcedTab) {
+    setActiveTab(forcedTab);
+  }
+
+  // Ack each live force flag once (the parent clears it in response). Ref
+  // guards only — no setState runs in these effects.
+  const terminalAckedRef = useRef(false);
   useEffect(() => {
     if (!forceTerminalTab) {
-      terminalConsumed.current = false;
+      terminalAckedRef.current = false;
       return;
     }
-    if (terminalConsumed.current) return;
-    terminalConsumed.current = true;
-    if (activeTab !== 'terminal') setActiveTab('terminal');
+    if (terminalAckedRef.current) return;
+    terminalAckedRef.current = true;
     onTerminalTabShown?.();
-  }, [forceTerminalTab, activeTab, onTerminalTabShown]);
+  }, [forceTerminalTab, onTerminalTabShown]);
 
-  const agentsConsumed = useRef(false);
+  const agentsAckedRef = useRef(false);
   useEffect(() => {
     if (!forceAgentsTab) {
-      agentsConsumed.current = false;
+      agentsAckedRef.current = false;
       return;
     }
-    if (agentsConsumed.current) return;
-    agentsConsumed.current = true;
-    if (activeTab !== 'agents') setActiveTab('agents');
+    if (agentsAckedRef.current) return;
+    agentsAckedRef.current = true;
     onAgentsTabShown?.();
-  }, [forceAgentsTab, activeTab, onAgentsTabShown]);
+  }, [forceAgentsTab, onAgentsTabShown]);
 
-  const memoryConsumed = useRef(false);
+  const memoryAckedRef = useRef(false);
   useEffect(() => {
     if (!forceMemoryTab) {
-      memoryConsumed.current = false;
+      memoryAckedRef.current = false;
       return;
     }
-    if (memoryConsumed.current) return;
-    memoryConsumed.current = true;
-    if (activeTab !== 'memory') setActiveTab('memory');
+    if (memoryAckedRef.current) return;
+    memoryAckedRef.current = true;
     onMemoryTabShown?.();
-  }, [forceMemoryTab, activeTab, onMemoryTabShown]);
+  }, [forceMemoryTab, onMemoryTabShown]);
 
   // Listen for 'localmind:activate-terminal' from code block Run buttons
   // and 'localmind:focus-terminal' from the left panel's ⋮ overflow menu.

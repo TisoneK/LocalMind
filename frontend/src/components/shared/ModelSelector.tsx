@@ -19,7 +19,7 @@ export function ModelSelector({ selectedModel, onModelChange, models }: ModelSel
   // Previously this fell back to a hardcoded list of 5 Ollama models
   // (Qwen3-235B, DeepSeek-R1, etc.), which caused the sidebar to show
   // "Qwen3-235B-A22B" even when the backend was using a cloud provider.
-  const modelList = models || [];
+  const modelList = useMemo(() => models || [], [models]);
 
   // Some providers (Zen) expose 60+ models. Scrolling a tall dropdown to
   // reach one is painful (and unreliable on macOS). A type-to-filter box
@@ -32,13 +32,18 @@ export function ModelSelector({ selectedModel, onModelChange, models }: ModelSel
     );
   }, [modelList, query]);
 
-  // Focus the search box and reset the filter each time the menu opens.
+  // Reset the filter each time the menu opens — adjusted during render
+  // (state-mirrors-a-prop pattern; no effect-time setState cascade). The
+  // focus side effect stays in its own no-setState effect below.
+  const [wasOpen, setWasOpen] = useState(false);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setQuery('');
+  }
   useEffect(() => {
-    if (open) {
-      setQuery('');
-      const id = requestAnimationFrame(() => searchRef.current?.focus());
-      return () => cancelAnimationFrame(id);
-    }
+    if (!open) return;
+    const id = requestAnimationFrame(() => searchRef.current?.focus());
+    return () => cancelAnimationFrame(id);
   }, [open]);
 
   // Find the current model in the list. If not found (e.g. the backend's
