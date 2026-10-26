@@ -1,3 +1,7 @@
+// Vendored shadcn/radix primitives: variant constants and contextual hooks are
+// intentionally exported alongside their components; splitting them would fork
+// the vendored source and complicate upstream maintenance.
+/* eslint-disable react-refresh/only-export-components */
 "use client"
 
 import * as React from "react"

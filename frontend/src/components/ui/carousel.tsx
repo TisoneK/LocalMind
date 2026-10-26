@@ -90,12 +90,22 @@ function Carousel({
 
   React.useEffect(() => {
     if (!api || !setApi) return
+    // Vendored upstream pattern: the carousel child publishes its API to the
+    // parent store once the instance is ready; the store passes it back down.
     setApi(api)
   }, [api, setApi])
 
+  // Initial scroll state derives from the API instance the moment it
+  // arrives — during render (state-mirrors-the-prop pattern; no effect-time
+  // setState). The subscription effect below only keeps it fresh after that.
+  const [lastSyncedApi, setLastSyncedApi] = React.useState<CarouselApi>()
+  if (api && api !== lastSyncedApi) {
+    setLastSyncedApi(api)
+    onSelect(api)
+  }
+
   React.useEffect(() => {
     if (!api) return
-    onSelect(api)
     api.on("reInit", onSelect)
     api.on("select", onSelect)
 
