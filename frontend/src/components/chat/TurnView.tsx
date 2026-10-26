@@ -270,11 +270,11 @@ export const TurnView = memo(function TurnView({ message, todos, isStreaming }: 
                 {turn.plan && turn.plan.total > 1 && (
                   <span
                     className="ml-auto shrink-0 whitespace-nowrap rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-brand-green-soft"
-                    title={turn.plan.items[turn.plan.currentIndex]?.label}
+                    title={`Plan: ${turn.plan.items[turn.plan.currentIndex]?.label ?? ''} — the checklist is a prior, not the step count`}
                   >
                     {running && turn.plan.done < turn.plan.total
-                      ? `Step ${turn.plan.currentIndex + 1}/${turn.plan.total}`
-                      : `${turn.plan.done}/${turn.plan.total} steps`}
+                      ? `Plan ${turn.plan.currentIndex + 1}/${turn.plan.total}`
+                      : `${turn.plan.done}/${turn.plan.total} plan`}
                   </span>
                 )}
               </span>

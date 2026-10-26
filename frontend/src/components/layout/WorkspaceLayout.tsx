@@ -550,6 +550,9 @@ export function WorkspaceLayout() {
           reflectionLessons={reflectionLessons}
           passiveMemories={passiveMemories}
           fileDiffs={fileDiffs}
+          sessionStats={sessionStats}
+          lastMetrics={lastMetrics}
+          elapsedMs={elapsedMs}
         />
         )}
       </div>

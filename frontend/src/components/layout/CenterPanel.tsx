@@ -12,9 +12,10 @@ import {
   Loader2,
   X,
 } from 'lucide-react';
-import { ChatMessage as ChatMessageType, DiffData, ReflectionLesson, PassiveMemory } from '@/types';
+import { ChatMessage as ChatMessageType, DiffData, PerformanceMetrics, ReflectionLesson, PassiveMemory, SessionStats } from '@/types';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { WelcomeScreen } from '@/components/chat/WelcomeScreen';
+import { ChatStatsStrip } from '@/components/chat/ChatStatsStrip';
 import { useTabTitle } from '@/hooks/useTabTitle';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { TranscriptContextMenu } from '@/components/chat/TranscriptContextMenu';
@@ -109,6 +110,12 @@ interface CenterPanelProps {
   chatMode?: string;
   /** Callback to change chat mode. */
   onChatModeChange?: (mode: 'auto' | 'agent' | 'direct') => void;
+  /** Durable session totals: turns, steps, tokens, cache hit (Harness stats strip). */
+  sessionStats?: SessionStats | null;
+  /** The open turn's provider metrics while streaming. */
+  lastMetrics?: PerformanceMetrics | null;
+  /** Wall time of the open turn (ms) for the "Deep diving for …" reading. */
+  elapsedMs?: number;
 }
 
 export function CenterPanel({
@@ -132,6 +139,9 @@ export function CenterPanel({
   fileDiffs,
   chatMode,
   onChatModeChange,
+  sessionStats,
+  lastMetrics,
+  elapsedMs,
 }: CenterPanelProps) {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   // Guide the user in chat when the configured embed model
@@ -714,6 +724,14 @@ export function CenterPanel({
         prefill={prefill}
         onEditSend={(m) => (onRetryTurn ? onRetryTurn(m, true) : onSend(m))}
         onEditCancel={() => setPrefill(null)}
+        footer={
+          <ChatStatsStrip
+            stats={sessionStats}
+            live={lastMetrics}
+            isStreaming={isStreaming}
+            elapsedMs={elapsedMs}
+          />
+        }
       />
     </div>
   );
