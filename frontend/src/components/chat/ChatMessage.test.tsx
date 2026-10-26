@@ -210,3 +210,31 @@ describe('ChatMessage undo', () => {
     expect(screen.queryByTestId('diff-undo')).toBeNull();
   });
 });
+
+describe('ChatMessage goal rounds', () => {
+  it('renders a live goal-round boundary as a marker, not a user bubble', () => {
+    render(
+      <ChatMessage
+        message={makeMessage({
+          role: 'user',
+          content: '',
+          goalRound: { round: 2, maxRounds: 8, objective: 'Ship the goal slice' },
+        })}
+      />,
+    );
+    const marker = screen.getByTestId('goal-round-marker');
+    expect(marker).toHaveTextContent('Goal round 2/8');
+    expect(marker).toHaveTextContent('Ship the goal slice');
+    expect(screen.queryByText('You')).not.toBeInTheDocument();
+  });
+
+  it('maps a restored <goal_round> prompt to the same marker', () => {
+    const prompt =
+      '<goal_round>\nObjective: "Finish the migration"\nRound: 3/12\nContinue this objective.\n</goal_round>';
+    render(<ChatMessage message={makeMessage({ role: 'user', content: prompt })} />);
+    const marker = screen.getByTestId('goal-round-marker');
+    expect(marker).toHaveTextContent('Goal round 3/12');
+    expect(marker).toHaveTextContent('Finish the migration');
+    expect(screen.queryByText(/<goal_round>/)).not.toBeInTheDocument();
+  });
+});

@@ -12,7 +12,7 @@ import {
   Loader2,
   X,
 } from 'lucide-react';
-import { ChatMessage as ChatMessageType, DiffData, PerformanceMetrics, ReflectionLesson, PassiveMemory, SessionStats } from '@/types';
+import { ChatMessage as ChatMessageType, DiffData, PerformanceMetrics, ReflectionLesson, PassiveMemory, SessionStats, GoalState } from '@/types';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { WelcomeScreen } from '@/components/chat/WelcomeScreen';
 import { ChatStatsStrip } from '@/components/chat/ChatStatsStrip';
@@ -101,6 +101,8 @@ interface CenterPanelProps {
   lastMetrics?: PerformanceMetrics | null;
   /** Wall time of the open turn (ms) for the "Deep diving for …" reading. */
   elapsedMs?: number;
+  /** The chat's durable goal — drives the composer round meter. */
+  goal?: GoalState | null;
 }
 
 export function CenterPanel({
@@ -127,6 +129,7 @@ export function CenterPanel({
   sessionStats,
   lastMetrics,
   elapsedMs,
+  goal,
 }: CenterPanelProps) {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   // Guide the user in chat when the configured embed model
@@ -715,6 +718,7 @@ export function CenterPanel({
             live={lastMetrics}
             isStreaming={isStreaming}
             elapsedMs={elapsedMs}
+            goal={goal}
           />
         }
       />

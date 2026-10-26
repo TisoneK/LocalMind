@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { User, Copy, Check, Pencil, Undo2, FileEdit, FilePlus, FileMinus, Activity, RefreshCw } from 'lucide-react';
+import { User, Copy, Check, Pencil, Undo2, FileEdit, FilePlus, FileMinus, Activity, RefreshCw, Compass } from 'lucide-react';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 // Register only the languages LocalMind commonly encounters.
@@ -46,7 +46,7 @@ SyntaxHighlighter.registerLanguage('html', html);
 SyntaxHighlighter.registerLanguage('xml', html);
 SyntaxHighlighter.registerLanguage('shell', shell);
 SyntaxHighlighter.registerLanguage('shell-session', shell);
-import { ChatMessage as ChatMessageType, FileResult, PendingWrite, DiffData, TodoItem } from '@/types';
+import { ChatMessage as ChatMessageType, FileResult, PendingWrite, DiffData, TodoItem, GoalRound } from '@/types';
 import { formatLatency, formatTokens } from '@/lib/localmind/progress';
 import { TONE_CLASS, latencyTone, speedTone } from '@/lib/localmind/metricTone';
 import { localmindClient } from '@/lib/localmind/client';
@@ -521,9 +521,24 @@ function MessageActions({
   );
 }
 
+const GOAL_ROUND_RE =
+  /^<goal_round>\s*\n[\s\S]*?Objective:\s*"((?:[^"\\]|\\.)*)"[\s\S]*?Round:\s*(\d+)\/(\d+)/;
+
+/** A persisted goal continuation is stored as its `<goal_round>` prompt. Show
+ *  the round marker instead of the raw protocol text. */
+function parseGoalRoundPrompt(content: string): GoalRound | null {
+  if (!content.startsWith('<goal_round>')) return null;
+  const match = GOAL_ROUND_RE.exec(content);
+  if (!match) return { round: 0, maxRounds: 0, objective: '' };
+  return {
+    round: Number(match[2]),
+    maxRounds: Number(match[3]),
+    objective: match[1].replace(/\\"/g, '"'),
+  };
+}
+
 export function ChatMessage({ message, isStreaming, onRetry, onEdit, fileDiffs, todos }: ChatMessageProps) {
   const isUser = message.role === 'user';
-
   // Clickable file-result chips open an inline preview dialog
   // (text/code/markdown/office docs parsed server-side, images as data URLs).
   const [previewPath, setPreviewPath] = useState<string | null>(null);
@@ -578,6 +593,28 @@ export function ChatMessage({ message, isStreaming, onRetry, onEdit, fileDiffs, 
     }
     return { additions, deletions };
   }, [diffHunks]);
+
+  // A goal continuation appears in the transcript as a round marker, not as a
+  // "You" bubble repeating the protocol prompt. Live boundaries carry
+  // `goalRound`; reloaded history stores the `<goal_round>` prompt itself.
+  const goalRound = isUser ? message.goalRound ?? parseGoalRoundPrompt(message.content) : null;
+  if (goalRound) {
+    return (
+      <div className="px-4 py-2" data-message-content-id={message.id} data-testid="goal-round-marker">
+        <div className="mx-auto flex max-w-3xl items-center gap-2 rounded border border-brand-green/20 bg-brand-green/5 px-3 py-1.5 text-[10.5px] text-brand-green-muted">
+          <Compass className="h-3 w-3 shrink-0 text-brand-green" />
+          <span className="shrink-0 font-medium text-brand-green-soft">
+            {goalRound.round > 0 ? `Goal round ${goalRound.round}/${goalRound.maxRounds}` : 'Goal round'}
+          </span>
+          {goalRound.objective && (
+            <span className="truncate" title={goalRound.objective}>
+              {goalRound.objective}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
