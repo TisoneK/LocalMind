@@ -296,14 +296,14 @@ export function TerminalPanel({
   );
 
   // ── Debounced completion ──
+  // Anticipates that showing suggestions requires a live, qualifying input, rather than clearing suggestions through setState and synchronously ignoring the effect.
+  const suggestionsActive =
+    showSuggestions && suggestions.length > 0 && input.trim().length > 1;
   const completionTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
     if (completionTimerRef.current) clearTimeout(completionTimerRef.current);
     if (input.trim() && input.length > 1) {
       completionTimerRef.current = setTimeout(() => requestCompletion(input), 150);
-    } else {
-      setSuggestions([]);
-      setShowSuggestions(false);
     }
     return () => {
       if (completionTimerRef.current) clearTimeout(completionTimerRef.current);
@@ -351,7 +351,7 @@ export function TerminalPanel({
       // Tab completion
       if (e.key === 'Tab') {
         e.preventDefault();
-        if (showSuggestions && suggestions.length > 0) {
+        if (suggestionsActive) {
           const selected = suggestions[selectedSuggestion];
           setInput(selected.text);
           setShowSuggestions(false);
@@ -360,7 +360,7 @@ export function TerminalPanel({
       }
 
       // Suggestion navigation
-      if (showSuggestions) {
+      if (suggestionsActive) {
         if (e.key === 'ArrowDown') {
           e.preventDefault();
           setSuggestionChosen(true);
@@ -380,7 +380,7 @@ export function TerminalPanel({
       }
 
       // Command history navigation (when suggestions are NOT showing)
-      if (!showSuggestions) {
+      if (!suggestionsActive) {
         if (e.key === 'ArrowUp') {
           e.preventDefault();
           if (commandHistoryIndex === -1) {
@@ -424,7 +424,7 @@ export function TerminalPanel({
       // Enter to submit
       if (e.key === 'Enter') {
         e.preventDefault();
-        if (showSuggestions && suggestions.length > 0 && suggestionChosen) {
+        if (suggestionsActive && suggestionChosen) {
           const selected = suggestions[selectedSuggestion];
           setInput(selected.text);
           setShowSuggestions(false);
@@ -437,7 +437,7 @@ export function TerminalPanel({
     [
       input,
       isRunning,
-      showSuggestions,
+      suggestionsActive,
       suggestions,
       selectedSuggestion,
       suggestionChosen,
@@ -869,7 +869,7 @@ export function TerminalPanel({
       </div>
 
       {/* ── Autocomplete Suggestions ── */}
-      {showSuggestions && suggestions.length > 0 && (
+      {suggestionsActive && (
         <div
           ref={suggestionsRef}
           className="border-t border-brand-border bg-brand-bg-panel-alt max-h-32 overflow-y-auto"
