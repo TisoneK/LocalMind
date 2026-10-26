@@ -32,6 +32,7 @@ import type {
   ModelOption,
   CompletionSuggestion,
   SessionFileEntry,
+  GoalState,
 } from '@/types';
 import { createSSEParser } from './sse';
 import type { EngineEvent, RunMeta } from './stateEngine';
@@ -602,6 +603,13 @@ class LocalMindClient {
 
   async deleteSession(sessionId: string): Promise<void> {
     await this.request(`/api/sessions/${sessionId}`, { method: 'DELETE' });
+  }
+
+  async getSessionGoal(sessionId: string): Promise<GoalState | null> {
+    const data = await this.request<{ goal: GoalState | null }>(
+      `/api/sessions/${encodeURIComponent(sessionId)}/goal`
+    );
+    return data.goal ?? null;
   }
 
   async getSessionHistory(sessionId: string): Promise<ChatMessage[]> {

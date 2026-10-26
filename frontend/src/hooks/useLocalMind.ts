@@ -41,6 +41,8 @@ import type {
   DiffData,
   ReflectionLesson,
   PassiveMemory,
+  GoalState,
+  GoalRound,
 } from '@/types';
 
 // cap the accumulated per-turn run groups in the Agent Workspace so a
@@ -278,6 +280,9 @@ interface ChatState {
    *  right corner answers "how is this session doing overall" while each
    *  bubble keeps its own per-message line. */
   sessionStats: SessionStats;
+  /** The chat's durable goal (null when none is current). While active and
+   *  armed, the backend keeps queueing goal rounds inside the open turn. */
+  goal: GoalState | null;
   send: (message: string, sessionIdOverride?: string, tool?: string, retry?: boolean | 'edit') => void;
   abort: () => void;
   /** Inject a user message at the next step boundary
@@ -352,6 +357,7 @@ export function useChat(
   const [passiveMemories, setPassiveMemories] = useState<PassiveMemory[]>([]);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [sessionStats, setSessionStats] = useState<SessionStats>({ ..._EMPTY_SESSION_STATS });
+  const [goal, setGoal] = useState<GoalState | null>(null);
   // Mirrors sessionStats for pure, synchronous reads (the accumulation effect
   // computes the next totals from this ref — never from a state updater — so
   // there's no side-effect-in-updater smell and no StrictMode double-invoke
@@ -579,6 +585,7 @@ export function useChat(
       if (!sessionId) {
         if (mounted) {
           setMessages([]);
+          setGoal(null);
           setFileDiffs({});
           setLiveObservation(null);
           setCurrentIntent(undefined);
@@ -604,6 +611,7 @@ export function useChat(
       // the new history loads.
       if (prevSessionIdRef.current !== sessionId) {
         setFileDiffs({});
+        setGoal(null);
         setLiveObservation(null);
         setCurrentIntent(undefined);
         setCurrentConfidence(undefined);
@@ -638,9 +646,15 @@ export function useChat(
       if (prevSessionIdRef.current === sessionId && isStreamingRef.current) {
         return;
       }
-      const history = await localmindClient.getSessionHistory(sessionId);
+      const [history, goalState] = await Promise.all([
+        localmindClient.getSessionHistory(sessionId),
+        // A goal is session state, not stream state: restore it on reload so
+        // the meter reflects a goal the turn has not touched yet.
+        localmindClient.getSessionGoal(sessionId).catch(() => null),
+      ]);
       if (mounted) {
         setMessages(history);
+        setGoal(goalState);
         // Restore the Agent Workspace run tree. The Agents tab
         // shows the most recent turn's tree (each send replaces it), so pick
         // the LAST assistant message that carries one — earlier turns' trees
@@ -861,6 +875,7 @@ export function useChat(
                 // the static "Generating response..." indicator.
                 currentContent += token;
                 streamedProgressText += token;
+                const contentNow = currentContent;
                 if (!answerStartedAt) answerStartedAt = Date.now();
                 const answerMs = Date.now() - answerStartedAt;
                 const estimatedCompletionTokens = estimateTokens(streamedProgressText);
@@ -885,7 +900,10 @@ export function useChat(
                   const updated = [...prev];
                   const last = updated[updated.length - 1];
                   if (last && last.role === 'assistant') {
-                    updated[updated.length - 1] = { ...last, content: currentContent, answerMs };
+                    // Snapshot at EVENT time: a later goal-round boundary in
+                    // the same batch resets the accumulator, and the updater
+                    // must still write the text this event belonged to.
+                    updated[updated.length - 1] = { ...last, content: contentNow, answerMs };
                   }
                   return updated;
                 });
@@ -937,6 +955,8 @@ export function useChat(
                 streamedProgressText += thinkingToken;
                 if (!turnSettled) thinkResume();  // reasoning is active again — unless the answer is already done
                 const thinkMs = thinkElapsed();
+                const thinkingNow = thinkingContent;
+                const segmentsNow = publicSegments();
                 const estimatedCompletionTokens = estimateTokens(streamedProgressText);
                 const liveElapsed = streamStartedAtRef.current
                   ? Date.now() - streamStartedAtRef.current
@@ -959,7 +979,7 @@ export function useChat(
                   const updated = [...prev];
                   const last = updated[updated.length - 1];
                   if (last && last.role === 'assistant') {
-                    updated[updated.length - 1] = { ...last, thinking: thinkingContent, thinkMs, thinkingSegments: publicSegments(), isAgent: true };
+                    updated[updated.length - 1] = { ...last, thinking: thinkingNow, thinkMs, thinkingSegments: segmentsNow, isAgent: true };
                   }
                   return updated;
                 });
@@ -970,11 +990,13 @@ export function useChat(
                 if (thinkingContent) {
                   thinkPause();  // close the active segment; freeze the accumulator
                   const thinkMs = thinkElapsed();
+                  const thinkingNow = thinkingContent;
+                  const segmentsNow = publicSegments();
                   setMessages((prev) => {
                     const updated = [...prev];
                     const last = updated[updated.length - 1];
                     if (last && last.role === 'assistant') {
-                      updated[updated.length - 1] = { ...last, thinking: thinkingContent, thinkMs, thinkingSegments: publicSegments(), isAgent: true };
+                      updated[updated.length - 1] = { ...last, thinking: thinkingNow, thinkMs, thinkingSegments: segmentsNow, isAgent: true };
                     }
                     return updated;
                   });
@@ -1604,12 +1626,67 @@ export function useChat(
                 break;
               }
 
+              // Durable-goal snapshot (initial, per-round, and final). Kept at
+              // session level so the composer meter survives the turn.
+              case 'goal': {
+                setGoal((parsed.goal as GoalState | null) ?? null);
+                break;
+              }
+
+              // A goal continuation begins inside the SAME open turn. Start a
+              // fresh assistant bubble so each round stays readable, and reset
+              // the per-round streaming accumulators — earlier rounds'
+              // messages already own their copied content/tool lists.
+              case 'goal_round': {
+                const round = parsed.goal_round as GoalRound | undefined;
+                if (!round) break;
+                currentContent = '';
+                streamedProgressText = '';
+                thinkingContent = '';
+                thinkingSegments.length = 0;
+                thinkAccumMs = 0;
+                thinkStartTime = 0;
+                answerStartedAt = 0;
+                toolCalls.splice(0, toolCalls.length);
+                toolsUsedSet.clear();
+                setActiveToolCalls([]);
+                setMessages((prev) => {
+                  const now = Date.now();
+                  const stamp = new Date().toLocaleTimeString('en-GB', {
+                    hour: '2-digit', minute: '2-digit', hour12: false,
+                  });
+                  const marker: ChatMessage = {
+                    id: `goal-round-${now}-${round.round}`,
+                    role: 'user',
+                    content: '',
+                    timestamp: stamp,
+                    goalRound: round,
+                  };
+                  const assistant: ChatMessage = {
+                    id: `assistant-${now}-${round.round}`,
+                    role: 'assistant',
+                    content: '',
+                    timestamp: stamp,
+                    toolCalls: [],
+                    statusText: `Goal round ${round.round}/${round.maxRounds} — continuing...`,
+                  };
+                  return [...prev, marker, assistant];
+                });
+                break;
+              }
+
               case 'done': {
                 // The answer is complete: free the input now. The stream may
                 // stay open a while for post-answer services and the final flush.
                 turnSettled = true;
                 thinkPause();  // the reasoning clock stops with the answer
                 setIsStreaming(false);
+                // The done payload carries the final goal snapshot (it may be
+                // null when the goal was cleared/blocked during the turn), so
+                // the meter settles without a refetch.
+                if (parsed.goal !== undefined) {
+                  setGoal((parsed.goal as GoalState | null) ?? null);
+                }
                 // Everything the user sees about THIS turn ends here, not when the stream later
                 // closes after the post-answer services: the run's clock stops at the answer
                 // (closing it at stream close stretched every duration by the reflection time and
@@ -1946,6 +2023,7 @@ export function useChat(
                 if (parsed.content && !_isPromptLeak(parsed.content)) {
                   currentContent += parsed.content;
                   streamedProgressText += parsed.content;
+                  const contentNow = currentContent;
                   const estimatedCompletionTokens = estimateTokens(streamedProgressText);
                   const liveElapsed = streamStartedAtRef.current
                     ? Date.now() - streamStartedAtRef.current
@@ -1963,7 +2041,7 @@ export function useChat(
                     const updated = [...prev];
                     const last = updated[updated.length - 1];
                     if (last && last.role === 'assistant') {
-                      updated[updated.length - 1] = { ...last, content: currentContent };
+                      updated[updated.length - 1] = { ...last, content: contentNow };
                     }
                     return updated;
                   });
@@ -1977,6 +2055,7 @@ export function useChat(
               }
               currentContent += rawData;
               streamedProgressText += rawData;
+              const contentNow = currentContent;
               const estimatedCompletionTokens = estimateTokens(streamedProgressText);
               const liveElapsed = streamStartedAtRef.current
                 ? Date.now() - streamStartedAtRef.current
@@ -1994,7 +2073,7 @@ export function useChat(
                 const updated = [...prev];
                 const last = updated[updated.length - 1];
                 if (last && last.role === "assistant") {
-                  updated[updated.length - 1] = { ...last, content: currentContent };
+                  updated[updated.length - 1] = { ...last, content: contentNow };
                 }
                 return updated;
               });
@@ -2126,6 +2205,7 @@ export function useChat(
   // the backend, so its "clear stale data" branch never fires for it.
   const resetSession = useCallback(() => {
     setLastMetrics(null);
+    setGoal(null);
     setReflectionLessons([]);
     setPassiveMemories([]);
     setLiveObservation(null);
@@ -2140,7 +2220,7 @@ export function useChat(
     sessionStatsSeededForRef.current = null;
   }, [applySessionStats]);
 
-  return { messages, fileDiffs, isStreaming, currentIntent, currentConfidence, activeToolCalls, agentRuns, liveObservation, lastMetrics, reflectionLessons, passiveMemories, elapsedMs, sessionStats, send, abort, steer, setMessages, resetSession, onTerminalEvent };
+  return { messages, fileDiffs, isStreaming, currentIntent, currentConfidence, activeToolCalls, agentRuns, liveObservation, lastMetrics, reflectionLessons, passiveMemories, elapsedMs, sessionStats, goal, send, abort, steer, setMessages, resetSession, onTerminalEvent };
 }
 
 export * from './useTerminal';

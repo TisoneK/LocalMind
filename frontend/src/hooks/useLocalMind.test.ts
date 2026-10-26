@@ -18,6 +18,7 @@ import { useChat } from './useLocalMind';
 const streamMock = vi.hoisted(() => ({
   streamChat: vi.fn(),
   getSessionHistory: vi.fn(),
+  getSessionGoal: vi.fn(() => Promise.resolve(null)),
   steer: vi.fn(),
   abort: vi.fn(),
   classifyClientIntent: vi.fn(() => 'chat'),
@@ -27,6 +28,7 @@ vi.mock('@/lib/localmind/client', () => ({
   localmindClient: {
     streamChat: streamMock.streamChat,
     getSessionHistory: streamMock.getSessionHistory,
+    getSessionGoal: streamMock.getSessionGoal,
     steer: streamMock.steer,
     abort: streamMock.abort,
   },
@@ -1099,6 +1101,72 @@ describe('useChat reasoning phases', () => {
     expect(last.thinkingSegments?.map((g) => g.text)).toEqual(['first phase', 'second phase']);
     expect(last.thinkingSegments?.map((g) => g.afterTools)).toEqual([0, 1]);
     act(() => onDone()());
+    unmount();
+  });
+});
+
+describe('useChat goal rounds', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    streamMock.getSessionHistory.mockResolvedValue([]);
+  });
+
+  it('tracks the goal and starts a fresh bubble at each goal-round boundary', () => {
+    const { result, onChunk, unmount } = renderChatWithCapturedStream();
+    const goal = {
+      id: 'goal-1',
+      objective: 'Ship the delivery slice',
+      phase: 'active',
+      revision: 1,
+      roundsStarted: 0,
+      maxGoalRounds: 4,
+      armed: true,
+    };
+
+    act(() => {
+      onChunk()(JSON.stringify({ type: 'goal', goal }));
+      onChunk()(JSON.stringify({ type: 'token', content: 'first round' }));
+      onChunk()(JSON.stringify({
+        type: 'goal_round',
+        goal_round: { round: 1, maxRounds: 4, objective: 'Ship the delivery slice' },
+      }));
+      onChunk()(JSON.stringify({ type: 'token', content: 'second round' }));
+    });
+
+    expect(result.current.goal?.id).toBe('goal-1');
+    const messages = result.current.messages;
+    expect(messages).toHaveLength(4);
+    expect(messages[1].content).toBe('first round');
+    expect(messages[2].goalRound).toEqual({
+      round: 1,
+      maxRounds: 4,
+      objective: 'Ship the delivery slice',
+    });
+    expect(messages[3].role).toBe('assistant');
+    expect(messages[3].content).toBe('second round');
+
+    unmount();
+  });
+
+  it('settles the final goal snapshot from the done payload', () => {
+    const { result, onChunk, unmount } = renderChatWithCapturedStream();
+    const shape = {
+      id: 'goal-2',
+      objective: 'Finish',
+      phase: 'active',
+      revision: 2,
+      roundsStarted: 1,
+      maxGoalRounds: 8,
+      armed: true,
+    };
+
+    act(() => {
+      onChunk()(JSON.stringify({ type: 'goal', goal: shape }));
+      onChunk()(JSON.stringify({ type: 'done', goal: { ...shape, phase: 'complete', revision: 3 } }));
+    });
+
+    expect(result.current.goal?.phase).toBe('complete');
+    expect(result.current.goal?.revision).toBe(3);
     unmount();
   });
 });

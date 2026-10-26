@@ -183,6 +183,33 @@ export interface ChatMessage {
    *  server-side from obs events and persisted with the message). The Agents
    *  tab restores the last turn's tree from here on reload. */
   agentRuns?: AgentRun[];
+  /** Set on the synthetic user bubble that marks a goal-round boundary in a
+   *  live deep dive. Absent on ordinary user messages. */
+  goalRound?: GoalRound;
+}
+
+/** One goal-round boundary inside the open turn. */
+export interface GoalRound {
+  round: number;
+  maxRounds: number;
+  objective: string;
+}
+
+/** The chat's durable goal: one objective this session keeps working across
+ *  turns until it completes, blocks, or is paused/cleared. `armed` is
+ *  process-local — a restarted backend comes back disarmed until the goal is
+ *  explicitly resumed, so reloading the chat never restarts autonomous work. */
+export type GoalPhase = 'active' | 'paused' | 'blocked' | 'complete';
+
+export interface GoalState {
+  id: string;
+  objective: string;
+  phase: GoalPhase;
+  revision: number;
+  roundsStarted: number;
+  maxGoalRounds: number;
+  blockedReason?: string | null;
+  armed: boolean;
 }
 
 /** Frontend Phase Visibility.

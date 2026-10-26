@@ -5,6 +5,7 @@ import { useChat } from './useLocalMind';
 const streamMock = vi.hoisted(() => ({
   streamChat: vi.fn(),
   getSessionHistory: vi.fn(async () => []),
+  getSessionGoal: vi.fn(async () => null),
   steer: vi.fn(),
   abort: vi.fn(),
   classifyClientIntent: vi.fn(() => 'chat'),
@@ -14,6 +15,7 @@ vi.mock('@/lib/localmind/client', () => ({
   localmindClient: {
     streamChat: streamMock.streamChat,
     getSessionHistory: streamMock.getSessionHistory,
+    getSessionGoal: streamMock.getSessionGoal,
     steer: streamMock.steer,
     abort: streamMock.abort,
   },
