@@ -217,3 +217,9 @@ provenance on purpose.
 - **Verified 2026-10-26 (after the clean break):** frontend vitest green
   (59 files), `tsc -b && vite build` clean, backend `tests/api/test_config_adapter.py`
   green.
+- **Owner ruling (2026-10-26/27):** the S002-era published commit messages that
+  still carry the borrowed working title stay as-is — no history rewrite, no
+  force-push ("not a problem as long as future agents never make that
+  mistake"). The enforceable half is recorded in `memory/user/preferences.md`:
+  nothing NEW (commits, changelog, ledger text, comments) ever carries the
+  retired id again.

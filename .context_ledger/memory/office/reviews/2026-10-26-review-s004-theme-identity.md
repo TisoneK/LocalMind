@@ -86,8 +86,11 @@ display label changed, and ids are what get stored).
 
 ## Open items (owner's call)
 
-- Four S002-era **published** commit messages still carry the retired borrowed
-  name. Scrubbing them requires rewriting published history plus a force-push;
-  deliberately left as-is until the owner decides.
+- ~~Four S002-era **published** commit messages still carry the retired borrowed
+  name.~~ **RESOLVED (owner ruling, 2026-10-26/27):** they stay as-is — no
+  history rewrite, no force-push ("not a problem as long as future agents
+  never make that mistake"). The enforceable guardrail (nothing new carries
+  the retired id; closeout discipline) is recorded standing in
+  `memory/user/preferences.md` and `system/ui-architecture.md`.
 - Broader docs sweep of generic "intelligence harness" concept language was
   scoped out (generic vocabulary, not borrowed identity).

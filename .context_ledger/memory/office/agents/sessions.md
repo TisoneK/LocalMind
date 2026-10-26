@@ -137,3 +137,10 @@ re-seeded into the new office explicitly, and nothing else carries over.
   plus a force-push. Deliberately left.
 - **Close:** `tasks/current.md` set to this session's task as `done`; roster
   row updated to `Done` (row comes down only at clock-out).
+- **Addendum — owner ruling (same day):** the "Open, owner's call" item above
+  is RESOLVED — the S002-era published commit messages stay as-is, no history
+  rewrite ("that's not a problem as long as future agents never make that
+  mistake"). The standing guardrail is now recorded in
+  `memory/user/preferences.md` (identity + closeout discipline bullets), the
+  ruling in `system/ui-architecture.md`, and the review report's open-items
+  section reflects the resolution.
