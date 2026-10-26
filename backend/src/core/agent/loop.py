@@ -6027,6 +6027,21 @@ class AgentLoop:
                         # No sign of tool call — check one more time then break
                         break
 
+                # A background consult started after the LAST tool call has no
+                # next iteration head to drain at. Without this flush, its prose
+                # would be dropped when the turn ends — the one case where a
+                # consult runs completely silent.
+                if _consult_inflight is not None:
+                    _drain_chunks, _drain_done = _consult_inflight.drain_nowait()
+                    for _tc in _drain_chunks:
+                        yield StreamChunk(text="", thinking=_filter_system_leaks(_tc.thinking), done=False)
+                    if _drain_done:
+                        _absorb_thinker_analysis(
+                            loop_messages, trace, _obs, _consult_inflight.analysis, _consult_inflight.iteration,
+                            bus=_bus, goal_version=_consult_inflight.goal_version,
+                        )
+                        _consult_inflight = None
+
                 # ── Check for MiniMax tool-call XML in the buffered text ──
                 _minimax_calls = _parse_minimax_tool_call(_minimax_buffer)
 

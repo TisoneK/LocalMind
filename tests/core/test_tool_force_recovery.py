@@ -237,14 +237,34 @@ class TestThinkerStreamSilent:
                     tool_args={"command": "ls -la"},
                     raw_content="",
                 )
-            return _text_stream("Done — the evidence is analyzed.")
+            # A real provider stream awaits I/O between chunks; the background
+            # Thinker consult needs those scheduling turns to queue its prose
+            # before this final answer ends the turn. A strictly synchronous
+            # generator starves it on the Windows event loop.
+            async def _final_stream():
+                import asyncio
 
-        async def chat(messages, temperature=0.4, intent="analyze", **kwargs):
+                for _ in range(20):
+                    await asyncio.sleep(0)
+                yield StreamChunk(text="Done — the evidence is analyzed.", done=False)
+                yield StreamChunk(text="", done=True)
+
+            return _final_stream()
+
+        async def chat(messages, temperature=0.4, intent=None, **kwargs):
+            if intent != "analyze":
+                # The planner shares adapter.chat (intent="chat"), and the
+                # forced-final-answer rescue passes no intent at all — only
+                # the Thinker consult asks for "analyze".
+                yield StreamChunk(text="", done=True)
+                return
             # The Thinker consult: evidence-named prose + JSON tail.
+            # The trailing blank line closes the paragraph, so the prose gate
+            # flushes it on arrival instead of holding it until stream end.
             seen["thinker_ran"] = True
             yield StreamChunk(
-                text="file1.txt and notes/ are here; the ask targets the notes",
-                thinking="file1.txt and notes/ are here; the ask targets the notes",
+                text="file1.txt and notes/ are here; the ask targets the notes\n\n",
+                thinking="file1.txt and notes/ are here; the ask targets the notes\n\n",
                 done=False,
             )
             yield StreamChunk(
