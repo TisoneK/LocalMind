@@ -53,7 +53,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Ezra | S004 | GLM (Z.ai; harness states no exact version — owner asked to confirm) | Re-identity shipped: palettes renamed, Graphite Blue the default in dark mode; closeout compliance done | Done | Shipped: `c4b5d8f8` + `145b9561` rebased onto Dara's post-close work; gates green; default live-verified (isolated 8765); pushed |
-| Amani | S006 | GLM (Z.ai; harness states no exact version) | The mid-loop consult never actually thought — it performed an inner voice on demand. Root fix: the consult streams the model's native reasoning verbatim; the answer channel is a never-shown JSON decision payload; prose gate and word budgets deleted | Done | Shipped: `c118898` evidence-grounding, `b7f7985` full-evidence thinking, `045199d` native-reasoning consult (LIVE full PASS on zai; throttled reruns held verbatim at 42K chars). Open: zai free package exhausted (1113) — one rerun re-proves the decision check once topped up; cerebras CF-403 / chutes $0.00 unchanged |
+| Amani | S006 | GLM (Z.ai; harness states no exact version) | Sandbox-reset recovery (ops, part 4 — no product code): re-clone, verify push state against the ledger's claims, rewire the credential chain | Working | Checked in; fresh clone verified `origin/main` at `5e3921e` (all S006 work present) before any local commit; PAT restored to ledger secrets, auth live-tested 200/200 |
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
 what is in flight and at which stage, and what is blocked — and so how
