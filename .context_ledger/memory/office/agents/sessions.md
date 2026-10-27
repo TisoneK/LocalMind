@@ -206,3 +206,12 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Gates (honest scope):** conflict-markers, backlog-duplicates, and bookkeeping checks all green (pure-sh ledger-file checks). tsc / ruff / pytest / eslint NOT run — this fresh sandbox has no node_modules or venv and the session touches zero product files; full gate bring-up belongs to the next product session (Task-9 precedent).
 - **Open (unchanged):** zai recharge → one `scripts/live_test_native_thinker.py` rerun re-proves the decision check; the evidence-grounding live repro unblocks on any working provider; `B-2026-10-27-1` / `B-2026-10-27-2` / `P-2026-10-27-1` stand.
 - **Close:** roster → Done; STATE regenerated; `current.md` set done.
+
+## 2026-10-27 — Session 7 — Ines (S007) — pull latest: main fast-forwarded to dc0ea44c, core 2.2.0 re-verified
+
+- **Agent:** Ines | **Model:** unknown (Qoder agent; harness states no model id) | **Platform:** Windows 11 local (DESKTOP-3LRR8MD) | **Role:** engineer | **Core:** 2.2.0
+- **Task (owner):** "Pull changes."
+- **Landed:** `git pull --ff-only` fast-forwarded `5ea4bef3..dc0ea44c` (61 files, +3,848/−507): S006's evidence-grounding and full-evidence modules, the native-thinker rework, their tests, and the S006 parts 2–4 ledger closeouts. Tree clean before and after; no product code touched.
+- **Protocol:** `ledger-sync verify` OK 2.2.0 ("every port parses"); `status` 2.2.0 up to date (adjacent source clone behind — no action); `ledger-guard install` OK (pre-commit, prepare-commit-msg and pre-push hooks; `.claude/settings.json` already current); pre-commit gates green (tsc, ruff, conflict markers, backlog duplicates) on both ledger commits. `status` refreshed `core.lock` with source metadata — staged normally.
+- **Process:** check-in `871b8bca`, STATE regen `14928124`; solo claim/release emitted; no friction this session — nothing appended to the flaws/inefficiencies logs.
+- **Close:** roster clocked out; `current.md` closed; STATE regenerated.

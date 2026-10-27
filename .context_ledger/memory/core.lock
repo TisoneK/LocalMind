@@ -3,3 +3,11 @@
 # restores the version recorded here from git history.
 version=2.2.0
 verified=2026-10-27
+source_kind=upstream
+source_state=behind
+source_url=https://github.com/TisoneK/context-ledger.git
+source_path=C:/Users/Lameck/Tisone/context-ledger
+source_ref=main
+source_commit=c7c7a51f57bbc0384ef0f833f195088ce0eeb9af
+source_version=2.2.0
+source_checked=2026-10-27
