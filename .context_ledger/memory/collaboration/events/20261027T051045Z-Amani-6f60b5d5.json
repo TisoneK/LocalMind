@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261027T051045Z-Amani-6f60b5d5",
+  "type": "claim",
+  "session": "S006",
+  "agent": "Amani",
+  "created": "2026-10-27T05:10:45Z",
+  "issue": "native-thinker-reasoning",
+  "body": "Continuation of the S006 line: the owner ruled the mid-loop consult never actually thinks — it performs an inner voice on demand (roleplay prose streamed as thought), while the reference harness records the model's native per-step reasoning verbatim. Scope: make the consult stream the native reasoning channel only and answer JSON-only; no authored prose is ever shown as thought. Touching backend/src/core/agent/thinker/ (thinker, prompt, parse), one comment block in backend/src/core/agent/loop.py, and the thinker tests.",
+  "paths": ["backend/src/core/agent/thinker/", "backend/src/core/agent/loop.py", "tests/core/agent/thinker/", "tests/core/test_thinker_brevity.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
