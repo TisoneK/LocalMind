@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261027T130304Z-Amani-34f0cc13",
+  "type": "release",
+  "session": "S006",
+  "agent": "Amani",
+  "created": "2026-10-27T13:03:04Z",
+  "issue": "harness-inventory-reidentify",
+  "body": "Re-identity shipped: inventory restated as outcomes in our own words, file renamed from the borrowed shorthand, grep-asserted clean; standing rule recorded in memory/user/preferences.md",
+  "paths": [],
+  "refs": ["fd497cad"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
