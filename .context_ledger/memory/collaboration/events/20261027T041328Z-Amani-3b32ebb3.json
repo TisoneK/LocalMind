@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261027T041328Z-Amani-3b32ebb3",
+  "type": "release",
+  "session": "S006",
+  "agent": "Amani",
+  "created": "2026-10-27T04:13:28Z",
+  "issue": "agent-web-evidence",
+  "body": "Thinking layer reads full stored results; Thinker prompt engagement floor; honest fallback framing (b7f7985). Provider live turn blocked — all six provider paths walled from sandbox (receipts in review addendum)",
+  "paths": ["backend/src/agents/", "backend/src/tools/", "backend/src/core/"],
+  "refs": ["b7f7985"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

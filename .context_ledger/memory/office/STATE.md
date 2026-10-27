@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-27T03:49:12Z_
+_Regenerated: 2026-10-27T04:13:33Z_
 
 ## Standing params
 - **Core:** 2.2.0 (locked, verified 2026-10-27)
@@ -35,5 +35,5 @@ _14 medium, 3 low priority row(s) — see tasks/backlog.md_
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-21
 
 ## Collaboration
-- 135 event(s) on file; most recent: `20261027T034912Z-Amani-5d489b07.json`
+- 136 event(s) on file; most recent: `20261027T041328Z-Amani-3b32ebb3.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`

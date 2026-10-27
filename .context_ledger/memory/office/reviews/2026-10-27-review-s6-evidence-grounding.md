@@ -138,3 +138,58 @@ figure-free turns untouched.
 - Non-parent agents (research etc.) and the criteria-based gate path are not
   wired to the criterion yet; the exhibited failure was a parent no-criteria
   turn.
+
+---
+
+## Addendum — the same day, owner follow-up (still S006)
+
+The owner pushed six connected complaints. Separated, diagnosed, and what was done:
+
+1. **"push committed work first" + "why do you think secrets/ exist for???"** — the
+   fresh sandbox had lost the prior session's secrets with its machine, and S006
+   treated "no PAT" as a wall. Ruling recorded in `user/preferences.md`: credentials
+   provided in chat are stored per `secrets/README.md` and used. PAT + five provider
+   keys now live there (gitignored, 0600); six commits pushed, then the fix below.
+2. **The one-sentence thought that pretends** — root cause found and it is the same
+   disease as the grounding hole: the post-tool Thinker consult is fed the
+   head+tail observation STUBS, and its prompt demanded "two to four sentences".
+   A thinker fed stubs and a sentence floor produces theater by construction.
+3. **"final answer is just the evidence"** — the synthesis-from-trace and rescue
+   fallbacks also reasoned over stubs (the rescue cut every tool message to
+   1,500 chars, head+tail only), and the deterministic worker report — raw
+   evidence in the chat — stood in as the answer.
+4. **"truncation on output"** — the full text existed all along in the index;
+   nothing that thinks read it.
+
+**Shipped (`b7f7985`):** `core/agent/full_evidence.py` — the bounded full-text view
+(stored chunks of stubbed results, full copies of small results, newest first);
+the post-tool Thinker now reasons over it; the Thinker prompt requires engaging
+the results by name (quote the value/gap, say what it settles, decide the next
+move) with the anti-rambling ceilings unchanged; `_synthesize_final_from_trace`
+and `_force_final_answer` read full evidence (rescue per-result cap 1,500 →
+6,000); the last-resort worker report opens with "I could not produce a clean
+final answer from these steps" (framing stripped from model-bound history by the
+same block pattern). Suite: **3663 passed / 2 skipped**.
+
+**deepseek-harness study (owner pointed at it for thinker/system-prompt/
+trajectory):** read its agent-loop, trajectory UI, and lifecycle docs. The load-
+bearing contrast: the harness has NO separate thinker component — the model's
+own native reasoning (per-step `reasoningEffort`) is the thinking, and the
+trajectory view records it faithfully per step (cell kinds system/user/context/
+compacted/message/tool/subtool, each with full detail panels: thinking, source
+blocks, output, schema, timing). LocalMind already streams native GLM thinking
+(ThinkingBlock); what it lacked was feeding that layer real evidence — now fixed.
+Borrowable later, filed not built: trajectory-record-style detail panels for the
+Actions tab (extends the parked Harness-shell-parity row), and the harness's
+compaction pattern (prune/summarize under pressure) as the long-run alternative
+to head+tail stubs.
+
+**Provider live run — still blocked, with receipts this time:** cerebras →
+Cloudflare 403 on the sandbox IP (HTML challenge page); zai → 429 "Insufficient
+balance"; chutes → 402 "account balance is $0.0"; gemini → 400 "User location is
+not supported"; zen → 401 "api_key_expired"; bankofai → no key ever provided.
+The harness (`scripts/live_test_evidence_grounding.py`) now honours a
+caller-exported `LOCALMIND_ADAPTER` + key env, so any ONE working provider runs
+the full repro in a single command. The zai key balance and the expired zen key
+are the owner's to recharge/rotate; a bankofai key would be the cleanest per
+`system/live-testing.md`.
