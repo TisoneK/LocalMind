@@ -10,6 +10,182 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 2.2.0 — 2026-10-04
+
+**`ledger-guard` finishes the enforcement set from the host-repo audit:
+push-time checks and per-session identity.** 2.1.x shipped the turn-time
+reminder, the commit gate and sync-first; this adds the two mechanisms that
+needed a server-side or identity layer.
+
+- **Push-time checks** (`ledger-guard push-check [range]`, run by a new git
+  `pre-push` hook and, optionally, CI): a commit that touches both the
+  ledger and the product surface fails; so does removing or rewriting a
+  line of an append-only log (`sessions.md`, `flaws/log.md`, `decisions.md`,
+  `inefficiencies/log.md`) — unless the same line is re-added in the same
+  commit, which is how a move to an archive looks. Advisory notices (never
+  fail): product commits pushed with no session entry in the range (normal
+  mid-session) and commits with no `Ledger-Session` trailer.
+  `ledger-guard install --ci` writes `.github/workflows/ledger-guard.yml`
+  (core integrity + push-check on every push and PR) from
+  `templates/ci/ledger-guard.yml`; it is opt-in and never overwrites.
+- **Per-session identity.** A check-in commit (`... (S018) checks in ...`)
+  registers the codename with a heartbeat file under the git common dir
+  (untracked, shared by worktrees). A new `prepare-commit-msg` hook adds a
+  `Ledger-Session: S018` trailer to every commit and refreshes the heartbeat.
+  One live session is attributed automatically; with several live in one
+  checkout an unattributed commit is refused until you prefix
+  `LEDGER_SESSION=S<NNN>` (a malformed value is refused too).
+- **Heartbeat expiry.** A heartbeat older than `LEDGER_SESSION_TTL_HOURS`
+  (default 4) is stale. `ledger-guard sessions` and the per-turn reminder
+  list still-open roster rows whose session has gone quiet — report only; a
+  peer's row is never edited on a guess. `heartbeat S<NNN> [Name]` registers
+  by hand, `release S<NNN>` drops it at clock-out.
+- `install` now installs three git hooks (`pre-commit`, `prepare-commit-msg`,
+  `pre-push`); `status` reports all of them, the CI workflow and live sessions.
+
+Not done, and said so: a model string is still not an identity, and the
+trailer is only as honest as the committing agent (`LEDGER_SESSION` can be set
+to anyone's codename). Per-turn rule injection covers only agents with a prompt
+hook; the git hooks cover every agent. The PowerShell port runs `sessions`,
+`heartbeat`, `release`, `push-check` and `remind` through the sh edition (git
+ships its own sh, so it must exist on any machine that commits) and is UNRUN.
+
+Migration: re-run `ledger-guard install` once per clone to add the two new git
+hooks; add `--ci` to opt into the workflow.
+
+---
+
+## 2.1.2 — 2026-10-04
+
+**Fix: `ledger-guard tool-check` blocked commands that only mention a gate.**
+The piped-gate pattern matched the word `ledger-gates` anywhere in the tool call
+and then any `|` after it, so a heredoc that merely named the tool followed by a
+`| tail` several lines later was refused — it locked the session that shipped
+2.1.0 out of editing its own files. The pattern now needs a real invocation
+(`ledger-gates run|checkpoint`) and stops at a backslash, backtick or `)` (a JSON
+newline is `\n`), so prose cannot reach a pipe on a later line; `2>&1|tail`
+is still caught. Two tests added (tight pipe blocked, prose allowed).
+
+Migration: none; `ledger-sync update` picks it up.
+
+---
+
+## 2.1.1 — 2026-10-04
+
+**Fix: `ledger-guard install` wrote an invalid `.claude/settings.json`.** The
+hook command embeds `"$CLAUDE_PROJECT_DIR"` inside a JSON string and its quotes
+were not backslash-escaped, so Claude Code could not load the file and none of
+the three hooks ran (found the first time the repo dogfooded 2.1.0). The sh and
+PowerShell ports now escape them, and a test parses the generated file as JSON.
+
+Migration: a project that ran `ledger-guard install` on 2.1.0 must delete the
+generated `.claude/settings.json` (or fix its quotes) and re-run
+`ledger-guard install`; the install never overwrites an existing file.
+
+---
+
+## 2.1.0 — 2026-10-04
+
+**`ledger-guard`: the rules that were enforced only by an agent's goodwill
+now have a mechanism behind them.** A host-repo agent audited its own
+session and found every protocol rule was prose it chose to follow: no git
+hooks, no CI, nothing re-injecting the rules after a context compaction,
+gate results read through `| tail`, a commit made behind a red gate. Three
+of the gaps are closed here; the rest (push-time CI, per-session identity)
+stay open in `flaws/log.md`.
+
+- **Gate-pass marker.** `ledger-gates run pre-commit` records, inside the
+  git dir (never tracked), the index tree it passed for (`git write-tree`).
+  A red run revokes it. The same marker is written by the PowerShell port.
+- **Git pre-commit hook** (`ledger-guard install`): refuses a commit whose
+  staged tree has no fresh pass — so staging more after the gate, or never
+  running it, blocks the commit. Works for every agent, not just Claude.
+  Skipped (noticed) during a merge/rebase/cherry-pick; one commit may pass
+  with `LEDGER_GUARD_SKIP=1`, which is loud and logged to
+  `<git-dir>/ledger-guard.log`.
+- **Claude Code hooks** (same install, written to `.claude/settings.json`
+  when absent, otherwise printed to merge): `SessionStart` and
+  `UserPromptSubmit` run `ledger-guard remind` — a short protocol floor
+  (`templates/guard-reminder.md`) plus the live roster rows and the current
+  task, every turn, which survives compaction; `PreToolUse` on Bash runs
+  `ledger-guard tool-check`, blocking a piped `ledger-gates` verdict
+  (`| tail` masking red) and `--no-verify`.
+- **`ledger-gates checkpoint`** nudges when the git hook is not installed.
+- **Sync before check-in.** The entrance rule in `AGENTS.md`, `CLAUDE.md` and
+  kickoff Phase 2 now says the first step is `git pull --ff-only` on a
+  clean tree — a sync is not analysis — so the board you sign is the real
+  one (twice-logged flaw: stale clone, wrong codename, rebase conflict).
+  Phase 1 also runs `ledger-guard install` once per clone.
+
+Migration: run `ledger-guard install` once per clone after updating; refresh
+`AGENTS.md`/`CLAUDE.md` from the templates to pick up the sync wording. The
+PowerShell port of `ledger-guard` is written but UNRUN (no engine on the
+authoring machine) — the git hook itself always runs the sh edition, since
+git ships its own sh.
+
+---
+
+## 2.0.5 — 2026-10-03
+
+*Numbering: this was first pushed as 2.1.0 and renumbered within the hour, before
+any known host took it — it fixes a defect (`status` never checked upstream), so it is a
+PATCH. A project that did sync to 2.1.0 cannot `update` down to 2.0.5
+(`ledger-sync` refuses a downgrade); it takes the next release instead.*
+
+**`ledger-sync status` now compares the update source with upstream, and
+records where the core comes from.** Until now `status` only looked at a
+local sibling clone, so a clone that had not been fetched read "up to
+date" while origin was a release ahead — a host session found its core
+outdated only by reading origin's log. And nothing said whether an
+upgrade came from a published release or from someone's unpushed clone.
+
+- **`status` compares first.** Before reporting, it fetches the source
+  clone's `origin` branch (into `FETCH_HEAD` only — the clone's working
+  tree and branches are never touched) and reports one of: in sync,
+  BEHIND upstream (with the upstream core version, which becomes the
+  target — "UPDATE AVAILABLE" no longer depends on the clone being
+  fresh), AHEAD of upstream (a local-only core), DIVERGED, UNREACHABLE
+  (never printed as "up to date"), or no remote. Uncommitted edits to the
+  source's `core/` count as local.
+- **`status` logs the source.** The resolved source is written to
+  `memory/core.lock` as `source_kind` / `source_state` / `source_url` /
+  `source_path` / `source_ref` / `source_commit` / `source_version` /
+  `source_checked`. The write is skipped when only the date would change,
+  so a repeated `status` leaves a clean tree; `status --no-record` never
+  writes.
+- **`update` and `migrate` read the record.** Source lookup order is: an
+  explicit path, the recorded `source_path`, `LEDGER_PKG`, the sibling
+  guesses, and finally a shallow clone of the recorded `source_url`
+  (also `--upstream URL` or `LEDGER_UPSTREAM`) — so a host with no clone
+  can still update from upstream. The stale check runs *before* the
+  same-version shortcut: a clone behind upstream no longer answers
+  "already at X — nothing to do" while a release exists. It refuses unless
+  you pass `--from-upstream` (install straight from origin) or
+  `--allow-stale`; a local-only or unverified source installs with a
+  warning.
+- **`update` records the upgrade.** `installed_version`,
+  `installed_from_version`, `installed_kind` (`upstream`/`local`/
+  `unverified`), `installed_url`, `installed_path`, `installed_commit`,
+  `installed_on` — so a host can tell what it was upgraded from. `verify`
+  and `lock` re-write `core.lock` but preserve both groups.
+- Offline or CI: `LEDGER_OFFLINE=1` skips the network (the source reads
+  as unreachable/unverified).
+
+Migration: none. A `core.lock` without the new keys is read as "no
+record yet"; the first `status` writes one.
+
+Package tests: 59 green on the sh edition, 17 new (stale/in-sync/ahead/
+offline states, the recorded fields, no churn on re-run, `--no-record`,
+the stale refusal and its remedy, `--from-upstream` install provenance,
+and provenance surviving a re-lock). **The PowerShell port of all of this
+(`ledger-sync.ps1`) was written without a PowerShell engine on the
+authoring machine and has not been run** — it is ASCII-clean and brace-
+balanced, and one gated test exercises its status path where an engine
+exists; a Windows pass should run `status`, `status --no-record`, and
+`update --from-upstream` before this is trusted there.
+
+---
+
 ## 2.0.4 — 2026-09-23
 
 **Windows sessions could not pass their exit gate at all.** 2.0.3 shipped

@@ -14,7 +14,9 @@ this list back on the same reasoning — see CHANGELOG). -->
 This repo runs the `.context_ledger/` engineering protocol.
 
 **Before reading anything else here — including the rest of this
-file — check in:** add your row to
+file — check in:** sync first (`git pull --ff-only` on a clean tree — a
+sync is not analysis, and it makes the board you sign the real one), then
+add your row to
 [`.context_ledger/memory/office/agents/roster.md`](.context_ledger/memory/office/agents/roster.md)
 (a real name — never "Claude" — plus codename `S<NNN>`, model, Status
 `Working`), then commit and push it. Reading or analyzing first is how

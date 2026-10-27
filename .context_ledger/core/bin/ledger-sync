@@ -8,11 +8,21 @@
 # skeleton from templates. Durable memory files are never altered.
 #
 # Commands (project mode — run as: sh .context_ledger/core/bin/ledger-sync <cmd>):
-#   status               local core version + best reachable update source
+#   status [--no-record] [--upstream URL] [SOURCE]
+#                        local core version + best reachable update source,
+#                        compared against that source's UPSTREAM first (a
+#                        stale clone must not read "up to date"). Records the
+#                        resolved source in memory/core.lock (source_*) so
+#                        update knows where it is fetching from; --no-record
+#                        leaves the lock untouched.
 #   verify               check every core file against core/MANIFEST.sha256
 #   update [SOURCE]      replace core/ from SOURCE (package clone / unpacked
-#                        archive). Same-MAJOR updates apply directly; a MAJOR
-#                        bump needs --major. Then migrate --backfill-only runs,
+#                        archive) -- by default the source status recorded.
+#                        --from-upstream installs straight from the source's
+#                        origin (shallow clone); --allow-stale installs from a
+#                        clone that is behind upstream; installed_* in core.lock
+#                        records what came from where. Same-MAJOR updates apply
+#                        directly; a MAJOR bump needs --major. Then migrate --backfill-only runs,
 #                        which groups a legacy flat layout into memory/office/.
 #   migrate [SOURCE]     ONE-COMMAND bring-current: update core to the newest
 #                        reachable version, then backfill every missing zone/
@@ -104,6 +114,9 @@ find_source() { # echoes a core dir, or nothing. $1 = optional explicit source
     source_core_dir "$1" || die "not a package clone or core tree: $1"
     return
   fi
+  # the source a previous status/update recorded (core 2.0.5) beats guessing
+  _rp=$(lock_get source_path 2>/dev/null)
+  [ -n "$_rp" ] && source_core_dir "$_rp" 2>/dev/null && return
   [ -n "${LEDGER_PKG:-}" ] && source_core_dir "$LEDGER_PKG" && return
   for d in "$PROJECT_DIR/../context-ledger" "$PROJECT_DIR/../context" "$PROJECT_DIR/../.context"; do
     source_core_dir "$d" 2>/dev/null && return
@@ -157,13 +170,19 @@ normalize_lf() {
 write_lock() { # $1 = version
   [ "$MODE" = project ] || return 0
   mkdir -p "$MEMORY_DIR"
+  # source_* / installed_* are provenance (core 2.0.5): a re-lock must not
+  # drop them, or every verify would erase where the core came from.
+  _keep=""
+  [ -f "$MEMORY_DIR/core.lock" ] && _keep=$(grep -E '^(source_|installed_)' "$MEMORY_DIR/core.lock" | tr -d '\r')
   {
     echo "# written by ledger-sync — the last-known-good core version."
     echo "# Do not edit by hand. If core fails verify, \`ledger-sync rollback\`"
     echo "# restores the version recorded here from git history."
     echo "version=$1"
     echo "verified=$(date +%Y-%m-%d)"
+    [ -n "$_keep" ] && printf '%s\n' "$_keep"
   } > "$MEMORY_DIR/core.lock"
+  return 0
 }
 
 lock_version() {
@@ -193,30 +212,210 @@ fleet_register() {
   printf '%s  bootstrapped=%s  core=%s\n' "$1" "$(date +%Y-%m-%d)" "$2" >> "$FF"
 }
 
+# --- source provenance (core 2.0.5) ------------------------------------------
+# status records WHERE the core would come from, update records where it DID
+# come from, both in memory/core.lock as source_* / installed_* lines. Before
+# this, a stale sibling clone read "up to date" while origin was releases
+# ahead, and nothing said which source an upgrade used.
+
+lock_get() { # $1 = key -> value from core.lock, or nothing
+  [ -n "${MEMORY_DIR:-}" ] && [ -f "$MEMORY_DIR/core.lock" ] || return 0
+  sed -n "s/^$1=//p" "$MEMORY_DIR/core.lock" | head -n1 | tr -d '\r'
+}
+
+lock_set_group() { # $1 = key prefix (source_ | installed_); stdin = the new key=value lines
+  [ "$MODE" = project ] || return 0
+  _lk=$MEMORY_DIR/core.lock
+  [ -f "$_lk" ] || write_lock "$(core_version "$CORE_DIR")"
+  _new=$(cat)
+  _tmp=$_lk.tmp.$$
+  { grep -v "^$1" "$_lk" | tr -d '\r'; [ -n "$_new" ] && printf '%s\n' "$_new"; } > "$_tmp" && mv "$_tmp" "$_lk"
+  return 0
+}
+
+TMP_UP=""
+cleanup_up() { [ -n "$TMP_UP" ] && rm -rf "$TMP_UP"; TMP_UP=""; return 0; }
+
+# probe_source CORE_DIR -- compare the clone holding CORE_DIR with its upstream.
+# Sets P_CLONE P_URL P_REF P_HEAD P_UP P_UPV P_DIRTY P_STATE P_KIND.
+#   state: in-sync | behind | ahead | diverged | unreachable | no-remote
+#   kind:  upstream (the bytes are a published commit) | local (unpushed or
+#          edited) | unverified (could not reach upstream to tell)
+probe_source() {
+  P_CLONE=""; P_URL=""; P_REF=""; P_HEAD=""; P_UP=""; P_UPV=""; P_DIRTY=no
+  P_STATE=no-remote; P_KIND=local
+  P_CLONE=$(git -C "$1" rev-parse --show-toplevel 2>/dev/null) || { P_CLONE=""; return 0; }
+  P_URL=$(git -C "$P_CLONE" remote get-url origin 2>/dev/null) || P_URL=""
+  P_HEAD=$(git -C "$P_CLONE" rev-parse HEAD 2>/dev/null) || P_HEAD=""
+  P_REF=$(git -C "$P_CLONE" symbolic-ref --short -q HEAD 2>/dev/null) || P_REF=""
+  [ -n "$(git -C "$1" status --porcelain -- . 2>/dev/null)" ] && P_DIRTY=yes
+  [ -n "$P_URL" ] || return 0
+  [ -n "$P_REF" ] || P_REF=main
+  P_KIND=unverified
+  if [ "${LEDGER_OFFLINE:-0}" = 1 ]; then P_STATE=unreachable; return 0; fi
+  # FETCH_HEAD only (plus the remote-tracking ref git updates anyway): the
+  # clone's working tree and branches are never touched.
+  if ! GIT_TERMINAL_PROMPT=0 git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 -C "$P_CLONE" fetch -q origin "$P_REF" >/dev/null 2>&1; then
+    P_STATE=unreachable; return 0
+  fi
+  P_UP=$(git -C "$P_CLONE" rev-parse FETCH_HEAD 2>/dev/null) || P_UP=""
+  [ -n "$P_UP" ] || { P_STATE=unreachable; return 0; }
+  P_UPV=$(git -C "$P_CLONE" show FETCH_HEAD:core/VERSION 2>/dev/null | head -n1 | tr -d '[:space:]')
+  if [ "$P_HEAD" = "$P_UP" ]; then P_STATE=in-sync
+  elif git -C "$P_CLONE" merge-base --is-ancestor "$P_HEAD" "$P_UP" 2>/dev/null; then P_STATE=behind
+  elif git -C "$P_CLONE" merge-base --is-ancestor "$P_UP" "$P_HEAD" 2>/dev/null; then P_STATE=ahead
+  else P_STATE=diverged; fi
+  case $P_STATE in
+    in-sync|behind) P_KIND=upstream ;;
+    *) P_KIND=local ;;
+  esac
+  [ "$P_DIRTY" = yes ] && P_KIND=local
+  return 0
+}
+
+# fetch_upstream_core URL [REF] -- shallow-clone the package into a temp dir
+# and use its core/ as the source (no sibling clone needed, or --from-upstream).
+# Sets SRC and the P_* facts, with SRC_PATH empty (there is no local clone).
+fetch_upstream_core() {
+  cleanup_up
+  TMP_UP=$(mktemp -d 2>/dev/null) || return 1
+  _fr=${2:-}
+  if [ -n "$_fr" ]; then
+    GIT_TERMINAL_PROMPT=0 git clone -q --depth 1 --branch "$_fr" "$1" "$TMP_UP/pkg" >/dev/null 2>&1 || { cleanup_up; return 1; }
+  else
+    GIT_TERMINAL_PROMPT=0 git clone -q --depth 1 "$1" "$TMP_UP/pkg" >/dev/null 2>&1 || { cleanup_up; return 1; }
+  fi
+  [ -d "$TMP_UP/pkg/core/rules" ] && [ -f "$TMP_UP/pkg/core/VERSION" ] || { cleanup_up; return 1; }
+  SRC=$TMP_UP/pkg/core
+  P_CLONE=""; P_URL=$1
+  P_REF=$(git -C "$TMP_UP/pkg" symbolic-ref --short -q HEAD 2>/dev/null) || P_REF=${_fr:-main}
+  P_HEAD=$(git -C "$TMP_UP/pkg" rev-parse HEAD 2>/dev/null); P_UP=$P_HEAD
+  P_UPV=$(core_version "$SRC"); P_DIRTY=no; P_STATE=in-sync; P_KIND=upstream
+  return 0
+}
+
+# prepare_source ARG -- resolve the update source and probe it. Honors
+# UP_URL (--upstream), FROM_UP (--from-upstream) and ALLOW_STALE. Sets SRC,
+# SRC_V and the P_* facts; returns 1 when no source is reachable.
+prepare_source() {
+  SRC=""
+  SRC=$(find_source "${1:-}") || SRC=""
+  if [ -n "$SRC" ]; then
+    probe_source "$SRC"
+    [ -n "$UP_URL" ] && [ -z "$P_URL" ] && P_URL=$UP_URL
+    if [ "${FROM_UP:-no}" = yes ]; then
+      [ -n "$P_URL" ] || { err "--from-upstream: the source has no origin remote; pass --upstream URL"; return 1; }
+      fetch_upstream_core "$P_URL" "$P_REF" || { err "--from-upstream: could not clone $P_URL"; return 1; }
+    fi
+  else
+    _u=${UP_URL:-${LEDGER_UPSTREAM:-$(lock_get source_url)}}
+    [ -n "$_u" ] || return 1
+    fetch_upstream_core "$_u" "$(lock_get source_ref)" || return 1
+  fi
+  SRC_V=$(core_version "$SRC")
+  return 0
+}
+
+# record_source -- write the source_* block (status). Skips the write when
+# nothing but the checked date would change, so a plain status leaves a clean tree.
+record_source() {
+  [ "$MODE" = project ] || return 0
+  _blk=$(printf 'source_kind=%s\nsource_state=%s\nsource_url=%s\nsource_path=%s\nsource_ref=%s\nsource_commit=%s\nsource_version=%s\n' \
+    "$P_KIND" "$P_STATE" "$P_URL" "$P_CLONE" "$P_REF" "${P_UP:-$P_HEAD}" "${P_UPV:-$SRC_V}")
+  _old=$(grep '^source_' "$MEMORY_DIR/core.lock" 2>/dev/null | grep -v '^source_checked=' | tr -d '\r')
+  [ "$_old" = "$_blk" ] && return 0
+  printf '%s\nsource_checked=%s\n' "$_blk" "$(date +%Y-%m-%d)" | lock_set_group source_
+}
+
+# record_install -- what update/migrate actually installed, and from where.
+# $1 = version installed, $2 = version it replaced.
+record_install() {
+  [ "$MODE" = project ] || return 0
+  printf 'installed_version=%s\ninstalled_from_version=%s\ninstalled_kind=%s\ninstalled_url=%s\ninstalled_path=%s\ninstalled_commit=%s\ninstalled_on=%s\n' \
+    "$1" "$2" "$P_KIND" "$P_URL" "$P_CLONE" "$P_HEAD" "$(date +%Y-%m-%d)" | lock_set_group installed_
+}
+
+# guard_stale -- refuse a source clone that is behind upstream unless told
+# otherwise. Runs BEFORE the same-version shortcut: a stale clone at the
+# project's own version would otherwise say "nothing to do" while upstream
+# has a release.
+guard_stale() {
+  if [ "$P_STATE" = behind ] && [ "${FROM_UP:-no}" = no ] && [ "${ALLOW_STALE:-no}" = no ] \
+     && [ -n "$P_UPV" ] && [ "$(ver_cmp "$P_UPV" "$SRC_V")" = newer ]; then
+    die "source clone ${P_CLONE:-$SRC} is behind upstream ($SRC_V < $P_UPV): git -C ${P_CLONE:-<clone>} pull --ff-only, or re-run with --from-upstream (install straight from $P_URL), or --allow-stale"
+  fi
+  return 0
+}
+
+# warn_source -- say so when the bytes about to be installed are not a
+# published upstream commit.
+warn_source() {
+  case $P_KIND in
+    local) _ed=""; [ "$P_DIRTY" = yes ] && _ed=", uncommitted edits in core/"
+           say "warning: installing a LOCAL core ($P_STATE$_ed) -- not a published upstream commit" ;;
+    unverified) say "warning: upstream unreachable -- could not confirm this source is current" ;;
+  esac
+  return 0
+}
+
 need_project() { [ "$MODE" = project ] || die "'$1' runs inside a project (.context_ledger/core/bin/ledger-sync), not the package clone"; }
 need_package() { [ "$MODE" = package ] || die "'$1' runs from a package clone, not inside a project"; }
 
 # --- commands ----------------------------------------------------------------
 cmd_status() {
   need_project status
+  RECORD=yes; SRC_ARG=""; UP_URL=""; FROM_UP=no
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --no-record) RECORD=no ;;
+      --upstream) shift; UP_URL=${1:-} ;;
+      *) SRC_ARG=$1 ;;
+    esac
+    shift
+  done
   LOCAL_V=$(core_version "$CORE_DIR")
   say "core:   $LOCAL_V  ($LEDGER_DIR/core)"
   say "locked: $(lock_version | grep . || echo '(no core.lock yet)')"
-  if SRC=$(find_source "${1:-}"); then
-    SRC_V=$(core_version "$SRC")
-    case $(ver_cmp "$SRC_V" "$LOCAL_V") in
-      newer)
-        if [ "$(ver_part "$SRC_V" 1)" = "$(ver_part "$LOCAL_V" 1)" ]; then
-          say "source: $SRC_V  ($SRC) — UPDATE AVAILABLE (same MAJOR: safe to 'update')"
-        else
-          say "source: $SRC_V  ($SRC) — MAJOR update: read its CHANGELOG.md, then 'update --major' with the user's go-ahead"
-        fi ;;
-      same)  say "source: $SRC_V  ($SRC) — up to date" ;;
-      older) say "source: $SRC_V  ($SRC) — source is OLDER than local; nothing to do" ;;
+  _lastk=$(lock_get installed_kind); _lastv=$(lock_get installed_version)
+  [ -n "$_lastv" ] && say "last install: $_lastv from ${_lastk:-?} ($(lock_get installed_url)) on $(lock_get installed_on)"
+  if prepare_source "$SRC_ARG"; then
+    # compare the clone with its upstream FIRST: a stale clone must not
+    # report "up to date" while origin is releases ahead.
+    _where=${P_CLONE:-fetched from $P_URL}
+    say "source: $SRC_V  ($_where)"
+    case $P_STATE in
+      in-sync)     say "origin: $P_URL ($P_REF) -- source is in sync with upstream" ;;
+      behind)      say "origin: $P_URL ($P_REF) -- source clone is BEHIND upstream (upstream core ${P_UPV:-?})" ;;
+      ahead)       say "origin: $P_URL ($P_REF) -- source is AHEAD of upstream: unpushed commits, a local-only core" ;;
+      diverged)    say "origin: $P_URL ($P_REF) -- source has DIVERGED from upstream" ;;
+      unreachable) say "origin: $P_URL ($P_REF) -- upstream UNREACHABLE; cannot tell whether this source is current" ;;
+      no-remote)   say "origin: none -- source has no remote; provenance is local" ;;
     esac
+    [ "$P_DIRTY" = yes ] && say "        core/ in the source has uncommitted edits"
+    # the version that matters is the newest we can SEE: upstream's if it is ahead of the clone
+    TARGET_V=$SRC_V
+    if [ -n "$P_UPV" ] && [ "$(ver_cmp "$P_UPV" "$TARGET_V")" = newer ]; then TARGET_V=$P_UPV; fi
+    case $(ver_cmp "$TARGET_V" "$LOCAL_V") in
+      newer)
+        if [ "$(ver_part "$TARGET_V" 1)" = "$(ver_part "$LOCAL_V" 1)" ]; then
+          say "result: $TARGET_V -- UPDATE AVAILABLE (same MAJOR: safe to 'update')"
+        else
+          say "result: $TARGET_V -- MAJOR update: read its CHANGELOG.md, then 'update --major' with the user's go-ahead"
+        fi
+        if [ "$TARGET_V" != "$SRC_V" ]; then
+          say "        the source clone only has $SRC_V: pull it (git -C ${P_CLONE:-<clone>} pull --ff-only) or 'update --from-upstream'"
+        fi ;;
+      same)  case $P_STATE in
+               unreachable|no-remote) say "result: $SRC_V -- matches the source, but the source is unverified against upstream" ;;
+               *) say "result: $LOCAL_V -- up to date" ;;
+             esac ;;
+      older) say "result: source is OLDER than local; nothing to do" ;;
+    esac
+    if [ "$RECORD" = yes ]; then record_source; fi
   else
-    say "source: none reachable (no sibling package clone; set LEDGER_PKG or pass a path) — skipping, this is fine"
+    say "source: none reachable (no sibling package clone, no recorded source; set LEDGER_PKG, pass a path, or --upstream URL) -- skipping, this is fine"
   fi
+  cleanup_up
 }
 
 # Port parse check (core 1.0.1): hashing catches a corrupted file, not a port
@@ -392,26 +591,37 @@ swap_core() {
 cmd_update() {
   need_project update
   backfill_project   # repair missing files even on a same-version no-op
-  ALLOW_MAJOR=no; SRC_ARG=""
-  for a in "$@"; do
-    case "$a" in
+  ALLOW_MAJOR=no; SRC_ARG=""; UP_URL=""; FROM_UP=no; ALLOW_STALE=no
+  while [ $# -gt 0 ]; do
+    case "$1" in
       --major) ALLOW_MAJOR=yes ;;
-      *) SRC_ARG=$a ;;
+      --from-upstream) FROM_UP=yes ;;
+      --allow-stale) ALLOW_STALE=yes ;;
+      --upstream) shift; UP_URL=${1:-} ;;
+      *) SRC_ARG=$1 ;;
     esac
+    shift
   done
-  SRC=$(find_source "$SRC_ARG") || die "no update source found (sibling clone, LEDGER_PKG, or a path argument)"
-  SRC_V=$(core_version "$SRC"); LOCAL_V=$(core_version "$CORE_DIR")
+  prepare_source "$SRC_ARG" || die "no update source found (recorded source, sibling clone, LEDGER_PKG, a path argument, or --upstream URL)"
+  LOCAL_V=$(core_version "$CORE_DIR")
+  guard_stale
   case $(ver_cmp "$SRC_V" "$LOCAL_V") in
-    same)  say "already at $LOCAL_V — nothing to do"; return 0 ;;
-    older) say "source ($SRC_V) is older than local ($LOCAL_V) — refusing to downgrade"; return 0 ;;
+    same)  say "already at $LOCAL_V -- nothing to do"; cleanup_up; return 0 ;;
+    older) say "source ($SRC_V) is older than local ($LOCAL_V) -- refusing to downgrade"; cleanup_up; return 0 ;;
   esac
   if [ "$(ver_part "$SRC_V" 1)" != "$(ver_part "$LOCAL_V" 1)" ] && [ "$ALLOW_MAJOR" = no ]; then
+    cleanup_up
     die "MAJOR version bump ($LOCAL_V -> $SRC_V): read CHANGELOG.md migration notes, get the user's go-ahead, re-run with --major"
   fi
+  warn_source
+  say "source: ${P_CLONE:-$P_URL} [$P_KIND, $P_STATE]"
   swap_core "$SRC" "$SRC_V"
-  say "core updated: $LOCAL_V -> $SRC_V"
+  record_install "$SRC_V" "$LOCAL_V"
+  record_source
+  cleanup_up
+  say "core updated: $LOCAL_V -> $SRC_V  (from $P_KIND source ${P_CLONE:-$P_URL})"
   # Hand off to the JUST-INSTALLED script so backfill knows every file the new
-  # version introduced (the running old script cannot) — one update fully
+  # version introduced (the running old script cannot) -- one update fully
   # migrates. Old scripts (pre-0.16) lack this line; there, run `migrate` once.
   exec sh "$CORE_DIR/bin/ledger-sync" migrate --backfill-only
 }
@@ -422,28 +632,38 @@ cmd_update() {
 # Leaves exactly one manual step: fill the project facts.
 cmd_migrate() {
   need_project migrate
-  _backfill_only=no; ALLOW_MAJOR=no; SRC_ARG=""
-  for a in "$@"; do
-    case "$a" in
+  _backfill_only=no; ALLOW_MAJOR=no; SRC_ARG=""; UP_URL=""; FROM_UP=no; ALLOW_STALE=no
+  while [ $# -gt 0 ]; do
+    case "$1" in
       --backfill-only) _backfill_only=yes ;;
       --major) ALLOW_MAJOR=yes ;;
-      *) SRC_ARG=$a ;;
+      --from-upstream) FROM_UP=yes ;;
+      --allow-stale) ALLOW_STALE=yes ;;
+      --upstream) shift; UP_URL=${1:-} ;;
+      *) SRC_ARG=$1 ;;
     esac
+    shift
   done
 
   if [ "$_backfill_only" = no ]; then
-    SRC=$(find_source "$SRC_ARG" 2>/dev/null || true)
-    if [ -n "${SRC:-}" ]; then
-      SRC_V=$(core_version "$SRC"); LOCAL_V=$(core_version "$CORE_DIR")
+    if prepare_source "$SRC_ARG"; then
+      LOCAL_V=$(core_version "$CORE_DIR")
+      guard_stale
       if [ "$(ver_cmp "$SRC_V" "$LOCAL_V")" = newer ]; then
         if [ "$(ver_part "$SRC_V" 1)" != "$(ver_part "$LOCAL_V" 1)" ] && [ "$ALLOW_MAJOR" = no ]; then
+          cleanup_up
           die "MAJOR bump ($LOCAL_V -> $SRC_V): read CHANGELOG.md, then: ledger-sync migrate --major"
         fi
-        say "updating core: $LOCAL_V -> $SRC_V"
+        warn_source
+        say "updating core: $LOCAL_V -> $SRC_V  (from $P_KIND source ${P_CLONE:-$P_URL}, $P_STATE)"
         swap_core "$SRC" "$SRC_V"
+        record_install "$SRC_V" "$LOCAL_V"
+        record_source
+        cleanup_up
         # re-exec the new script so its backfill knows all new files
         exec sh "$CORE_DIR/bin/ledger-sync" migrate --backfill-only
       fi
+      cleanup_up
     fi
   fi
 
@@ -714,6 +934,6 @@ case "$CMD" in
   bootstrap) cmd_bootstrap "$@" ;;
   harvest)   cmd_harvest "$@" ;;
   ''|-h|--help|help)
-    sed -n '2,38p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+    sed -n '2,52p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
   *) die "unknown command: $CMD (try: ledger-sync help)" ;;
 esac

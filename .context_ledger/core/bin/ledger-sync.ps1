@@ -25,11 +25,21 @@
 #
 # Commands (project mode -- run the launcher, no execution-policy setup:
 #     .context_ledger/core/bin/ledger-sync.cmd <cmd>):
-#   status               local core version + best reachable update source
+#   status [--no-record] [--upstream URL] [SOURCE]
+#                        local core version + best reachable update source,
+#                        compared against that source's UPSTREAM first (a
+#                        stale clone must not read "up to date"). Records the
+#                        resolved source in memory/core.lock (source_*) so
+#                        update knows where it is fetching from; --no-record
+#                        leaves the lock untouched.
 #   verify               check every core file against core/MANIFEST.sha256
 #   update [SOURCE]      replace core/ from SOURCE (package clone / unpacked
-#                        archive). Same-MAJOR updates apply directly; a MAJOR
-#                        bump needs -Major. Then migrate -BackfillOnly runs,
+#                        archive) -- by default the source status recorded.
+#                        --from-upstream installs straight from the source's
+#                        origin (shallow clone); --allow-stale installs from a
+#                        clone that is behind upstream; installed_* in core.lock
+#                        records what came from where. Same-MAJOR updates apply
+#                        directly; a MAJOR bump needs -Major. Then migrate -BackfillOnly runs,
 #                        which groups a legacy flat layout into memory/office/.
 #   migrate [SOURCE]     ONE-COMMAND bring-current: update core to newest,
 #                        backfill every missing zone/file, normalize, relock,
@@ -129,6 +139,12 @@ function Find-Source { # $explicit -> core dir or $null
     if (-not $d) { Die "not a package clone or core tree: $explicit" }
     return $d
   }
+  # the source a previous status/update recorded (core 2.0.5) beats guessing
+  $rp = Lock-Get 'source_path'
+  if ($rp -and (Test-Path -LiteralPath $rp)) {
+    $d = Source-Core-Dir $rp
+    if ($d) { return $d }
+  }
   if ($env:LEDGER_PKG) {
     $d = Source-Core-Dir $env:LEDGER_PKG
     if ($d) { return $d }
@@ -212,13 +228,16 @@ function Write-Lock { # $version
   # this file (ps1 string literals stay pure ASCII). WriteAllText keeps UTF-8
   # without a BOM.
   $em = [string][char]0x2014
-  $body = @(
+  # source_* / installed_* are provenance (core 2.0.5): a re-lock must not
+  # drop them, or every verify would erase where the core came from.
+  $keep = @(Lock-Lines '^(source_|installed_)')
+  $body = (@(
     "# written by ledger-sync $em the last-known-good core version."
     '# Do not edit by hand. If core fails verify, `ledger-sync rollback`'
     '# restores the version recorded here from git history.'
     "version=$version"
     "verified=$today"
-  ) -join "`n"
+  ) + $keep) -join "`n"
   [IO.File]::WriteAllText((Join-Path $MEMORY_DIR 'core.lock'), $body + "`n", (New-Object System.Text.UTF8Encoding $false))
 }
 
@@ -231,6 +250,232 @@ function Lock-Version {
   return ''
 }
 
+# --- source provenance (core 2.0.5) ------------------------------------------
+# status records WHERE the core would come from, update records where it DID
+# come from, both in memory/core.lock as source_* / installed_* lines. Before
+# this, a stale sibling clone read "up to date" while origin was releases
+# ahead, and nothing said which source an upgrade used.
+
+$script:TMP_UP = ''
+$script:UP_URL = ''
+$script:FROM_UP = $false
+$script:ALLOW_STALE = $false
+$script:RECORD = $true
+$script:SRC = $null
+$script:SRC_V = ''
+$script:P = @{ Clone = ''; Url = ''; Ref = ''; Head = ''; Up = ''; UpV = ''; Dirty = $false; State = 'no-remote'; Kind = 'local' }
+
+function Lock-Lines { # $regex -> lock lines matching it (LF, no CR)
+  param([string]$regex)
+  if ($MODE -ne 'project') { return @() }
+  $lf = Join-Path $MEMORY_DIR 'core.lock'
+  if (-not (Test-Path -LiteralPath $lf)) { return @() }
+  $out = @()
+  foreach ($line in Get-Content -Encoding UTF8 -LiteralPath $lf) {
+    $l = $line.TrimEnd("`r")
+    if ($l -match $regex) { $out += $l }
+  }
+  return $out
+}
+
+function Lock-Get { # $key -> value or ''
+  param([string]$key)
+  if ($MODE -ne 'project') { return '' }
+  foreach ($l in (Lock-Lines ('^' + [regex]::Escape($key) + '='))) {
+    return $l.Substring($key.Length + 1)
+  }
+  return ''
+}
+
+function Lock-Set-Group { # $prefix, $lines[] -- replace every $prefix* line, keep the rest
+  param([string]$prefix, [string[]]$lines)
+  if ($MODE -ne 'project') { return }
+  $lf = Join-Path $MEMORY_DIR 'core.lock'
+  if (-not (Test-Path -LiteralPath $lf)) { Write-Lock (Core-Version $CORE_DIR) }
+  $kept = @()
+  foreach ($line in Get-Content -Encoding UTF8 -LiteralPath $lf) {
+    $l = $line.TrimEnd("`r")
+    if (-not $l.StartsWith($prefix)) { $kept += $l }
+  }
+  $body = ($kept + $lines) -join "`n"
+  [IO.File]::WriteAllText($lf, $body + "`n", (New-Object System.Text.UTF8Encoding $false))
+}
+
+function Git-Run { # git args -> @{ Rc; Out } ; never throws on native stderr (5.1 under 'Stop')
+  param([string[]]$gitArgs)
+  $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+  $out = $null; $rc = 1
+  try {
+    $env:GIT_TERMINAL_PROMPT = '0'
+    $out = & git @gitArgs 2>$null
+    $rc = $LASTEXITCODE
+  } catch { $rc = 1 } finally { $ErrorActionPreference = $old }
+  $text = ''
+  if ($null -ne $out) { $text = (($out | Out-String).Trim()) }
+  return @{ Rc = $rc; Out = $text }
+}
+
+function Cleanup-Up {
+  if ($script:TMP_UP -and (Test-Path -LiteralPath $script:TMP_UP)) {
+    Remove-Item -LiteralPath $script:TMP_UP -Recurse -Force -ErrorAction SilentlyContinue
+  }
+  $script:TMP_UP = ''
+}
+
+# Probe-Source $coreDir -- compare the clone holding $coreDir with its upstream.
+#   state: in-sync | behind | ahead | diverged | unreachable | no-remote
+#   kind:  upstream (a published commit) | local (unpushed or edited) | unverified
+function Probe-Source {
+  param([string]$coreDir)
+  $p = @{ Clone = ''; Url = ''; Ref = ''; Head = ''; Up = ''; UpV = ''; Dirty = $false; State = 'no-remote'; Kind = 'local' }
+  $script:P = $p
+  $r = Git-Run @('-C', $coreDir, 'rev-parse', '--show-toplevel')
+  if ($r.Rc -ne 0 -or -not $r.Out) { return }
+  $p.Clone = $r.Out
+  $r = Git-Run @('-C', $p.Clone, 'remote', 'get-url', 'origin'); if ($r.Rc -eq 0) { $p.Url = $r.Out }
+  $r = Git-Run @('-C', $p.Clone, 'rev-parse', 'HEAD'); if ($r.Rc -eq 0) { $p.Head = $r.Out }
+  $r = Git-Run @('-C', $p.Clone, 'symbolic-ref', '--short', '-q', 'HEAD'); if ($r.Rc -eq 0) { $p.Ref = $r.Out }
+  $r = Git-Run @('-C', $coreDir, 'status', '--porcelain', '--', '.'); if ($r.Rc -eq 0 -and $r.Out) { $p.Dirty = $true }
+  if (-not $p.Url) { return }
+  if (-not $p.Ref) { $p.Ref = 'main' }
+  $p.Kind = 'unverified'
+  if ($env:LEDGER_OFFLINE -eq '1') { $p.State = 'unreachable'; return }
+  # FETCH_HEAD only (plus the remote-tracking ref git updates anyway): the
+  # clone's working tree and branches are never touched.
+  $r = Git-Run @('-c', 'http.lowSpeedLimit=1000', '-c', 'http.lowSpeedTime=20', '-C', $p.Clone, 'fetch', '-q', 'origin', $p.Ref)
+  if ($r.Rc -ne 0) { $p.State = 'unreachable'; return }
+  $r = Git-Run @('-C', $p.Clone, 'rev-parse', 'FETCH_HEAD')
+  if ($r.Rc -ne 0 -or -not $r.Out) { $p.State = 'unreachable'; return }
+  $p.Up = $r.Out
+  $r = Git-Run @('-C', $p.Clone, 'show', 'FETCH_HEAD:core/VERSION')
+  if ($r.Rc -eq 0 -and $r.Out) { $p.UpV = ($r.Out -split "`n" | Select-Object -First 1) -replace '\s', '' }
+  if ($p.Head -eq $p.Up) { $p.State = 'in-sync' }
+  elseif ((Git-Run @('-C', $p.Clone, 'merge-base', '--is-ancestor', $p.Head, $p.Up)).Rc -eq 0) { $p.State = 'behind' }
+  elseif ((Git-Run @('-C', $p.Clone, 'merge-base', '--is-ancestor', $p.Up, $p.Head)).Rc -eq 0) { $p.State = 'ahead' }
+  else { $p.State = 'diverged' }
+  if ($p.State -eq 'in-sync' -or $p.State -eq 'behind') { $p.Kind = 'upstream' } else { $p.Kind = 'local' }
+  if ($p.Dirty) { $p.Kind = 'local' }
+}
+
+# Fetch-Upstream-Core $url [$ref] -- shallow-clone the package into a temp dir
+# and use its core/ as the source (no sibling clone needed, or --from-upstream).
+function Fetch-Upstream-Core {
+  param([string]$url, [string]$ref)
+  Cleanup-Up
+  $tmp = Join-Path ([IO.Path]::GetTempPath()) ('ledger-up-' + [guid]::NewGuid().ToString('N'))
+  New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+  $script:TMP_UP = $tmp
+  $dest = Join-Path $tmp 'pkg'
+  $cargs = @('clone', '-q', '--depth', '1')
+  if ($ref) { $cargs += @('--branch', $ref) }
+  $cargs += @($url, $dest)
+  $r = Git-Run $cargs
+  if ($r.Rc -ne 0) { Cleanup-Up; return $false }
+  $core = Source-Core-Dir $dest
+  if (-not $core) { Cleanup-Up; return $false }
+  $head = (Git-Run @('-C', $dest, 'rev-parse', 'HEAD')).Out
+  $rf = (Git-Run @('-C', $dest, 'symbolic-ref', '--short', '-q', 'HEAD')).Out
+  if (-not $rf) { $rf = if ($ref) { $ref } else { 'main' } }
+  $script:SRC = $core
+  $script:P = @{ Clone = ''; Url = $url; Ref = $rf; Head = $head; Up = $head; UpV = (Core-Version $core); Dirty = $false; State = 'in-sync'; Kind = 'upstream' }
+  return $true
+}
+
+# Prepare-Source $arg -- resolve the update source and probe it. Honors
+# UP_URL (--upstream), FROM_UP (--from-upstream). Sets SRC, SRC_V and P.
+function Prepare-Source {
+  param([string]$arg)
+  $script:SRC = Find-Source $arg
+  if ($script:SRC) {
+    Probe-Source $script:SRC
+    if ($script:UP_URL -and -not $script:P.Url) { $script:P.Url = $script:UP_URL }
+    if ($script:FROM_UP) {
+      if (-not $script:P.Url) { Err '--from-upstream: the source has no origin remote; pass --upstream URL'; return $false }
+      if (-not (Fetch-Upstream-Core $script:P.Url $script:P.Ref)) { Err "--from-upstream: could not clone $($script:P.Url)"; return $false }
+    }
+  } else {
+    $u = $script:UP_URL
+    if (-not $u) { $u = $env:LEDGER_UPSTREAM }
+    if (-not $u) { $u = Lock-Get 'source_url' }
+    if (-not $u) { return $false }
+    if (-not (Fetch-Upstream-Core $u (Lock-Get 'source_ref'))) { return $false }
+  }
+  $script:SRC_V = Core-Version $script:SRC
+  return $true
+}
+
+# Record-Source -- write the source_* block (status). Skips the write when
+# nothing but the checked date would change, so a plain status leaves a clean tree.
+function Record-Source {
+  if ($MODE -ne 'project') { return }
+  $p = $script:P
+  $commit = if ($p.Up) { $p.Up } else { $p.Head }
+  $ver = if ($p.UpV) { $p.UpV } else { $script:SRC_V }
+  $blk = @(
+    "source_kind=$($p.Kind)", "source_state=$($p.State)", "source_url=$($p.Url)",
+    "source_path=$($p.Clone)", "source_ref=$($p.Ref)", "source_commit=$commit", "source_version=$ver"
+  )
+  $old = @(Lock-Lines '^source_' | Where-Object { -not $_.StartsWith('source_checked=') })
+  if (($old -join "`n") -eq ($blk -join "`n")) { return }
+  Lock-Set-Group 'source_' ($blk + ('source_checked=' + (Get-Date -Format 'yyyy-MM-dd')))
+}
+
+# Record-Install $newV $oldV -- what update/migrate actually installed, and from where.
+function Record-Install {
+  param([string]$newV, [string]$oldV)
+  if ($MODE -ne 'project') { return }
+  $p = $script:P
+  Lock-Set-Group 'installed_' @(
+    "installed_version=$newV", "installed_from_version=$oldV", "installed_kind=$($p.Kind)",
+    "installed_url=$($p.Url)", "installed_path=$($p.Clone)", "installed_commit=$($p.Head)",
+    ('installed_on=' + (Get-Date -Format 'yyyy-MM-dd'))
+  )
+}
+
+# Guard-Stale -- refuse a source clone that is behind upstream unless told
+# otherwise. Runs BEFORE the same-version shortcut: a stale clone at the
+# project's own version would otherwise say "nothing to do" while upstream has a release.
+function Guard-Stale {
+  $p = $script:P
+  if ($p.State -eq 'behind' -and -not $script:FROM_UP -and -not $script:ALLOW_STALE -and $p.UpV -and ((Ver-Cmp $p.UpV $script:SRC_V) -eq 'newer')) {
+    $where = if ($p.Clone) { $p.Clone } else { $script:SRC }
+    Cleanup-Up
+    Die "source clone $where is behind upstream ($($script:SRC_V) < $($p.UpV)): git -C $where pull --ff-only, or re-run with --from-upstream (install straight from $($p.Url)), or --allow-stale"
+  }
+}
+
+# Warn-Source -- say so when the bytes about to be installed are not a
+# published upstream commit.
+function Warn-Source {
+  $p = $script:P
+  if ($p.Kind -eq 'local') {
+    $ed = if ($p.Dirty) { ', uncommitted edits in core/' } else { '' }
+    Say "warning: installing a LOCAL core ($($p.State)$ed) -- not a published upstream commit"
+  } elseif ($p.Kind -eq 'unverified') {
+    Say 'warning: upstream unreachable -- could not confirm this source is current'
+  }
+}
+
+function Parse-Update-Flags { # $argv -> sets script flags, returns the SOURCE arg
+  param([string[]]$flagArgs)
+  $srcArg = ''
+  $i = 0
+  while ($i -lt $flagArgs.Count) {
+    $a = $flagArgs[$i]
+    switch ($a) {
+      '--major'         { $script:Major = $true }
+      '--from-upstream' { $script:FROM_UP = $true }
+      '--allow-stale'   { $script:ALLOW_STALE = $true }
+      '--no-record'     { $script:RECORD = $false }
+      '--backfill-only' { }
+      '--upstream'      { $i++; if ($i -lt $flagArgs.Count) { $script:UP_URL = $flagArgs[$i] } }
+      default           { $srcArg = $a }
+    }
+    $i++
+  }
+  return $srcArg
+}
+
 function Need-Project {
   param([string]$name)
   if ($MODE -ne 'project') {
@@ -240,30 +485,65 @@ function Need-Project {
 
 # --- commands ----------------------------------------------------------------
 function Cmd-Status {
-  param([string]$srcArg)
+  param([string[]]$sArgs)
   Need-Project 'status'
+  $srcArg = Parse-Update-Flags $sArgs
   $localV = Core-Version $CORE_DIR
   Say "core:   $localV  ($LEDGER_DIR/core)"
   $locked = Lock-Version
   if ($locked -eq '') { $locked = '(no core.lock yet)' }
   Say "locked: $locked"
-  $src = Find-Source $srcArg
-  if ($src) {
-    $srcV = Core-Version $src
-    switch (Ver-Cmp $srcV $localV) {
+  $lastV = Lock-Get 'installed_version'
+  if ($lastV) {
+    $lk = Lock-Get 'installed_kind'; if (-not $lk) { $lk = '?' }
+    Say "last install: $lastV from $lk ($(Lock-Get 'installed_url')) on $(Lock-Get 'installed_on')"
+  }
+  if (Prepare-Source $srcArg) {
+    # compare the clone with its upstream FIRST: a stale clone must not
+    # report "up to date" while origin is releases ahead.
+    $p = $script:P
+    $srcV = $script:SRC_V
+    $where = if ($p.Clone) { $p.Clone } else { "fetched from $($p.Url)" }
+    Say "source: $srcV  ($where)"
+    $upv = if ($p.UpV) { $p.UpV } else { '?' }
+    switch ($p.State) {
+      'in-sync'     { Say "origin: $($p.Url) ($($p.Ref)) -- source is in sync with upstream" }
+      'behind'      { Say "origin: $($p.Url) ($($p.Ref)) -- source clone is BEHIND upstream (upstream core $upv)" }
+      'ahead'       { Say "origin: $($p.Url) ($($p.Ref)) -- source is AHEAD of upstream: unpushed commits, a local-only core" }
+      'diverged'    { Say "origin: $($p.Url) ($($p.Ref)) -- source has DIVERGED from upstream" }
+      'unreachable' { Say "origin: $($p.Url) ($($p.Ref)) -- upstream UNREACHABLE; cannot tell whether this source is current" }
+      'no-remote'   { Say 'origin: none -- source has no remote; provenance is local' }
+    }
+    if ($p.Dirty) { Say '        core/ in the source has uncommitted edits' }
+    # the version that matters is the newest we can SEE: upstream's if it is ahead of the clone
+    $targetV = $srcV
+    if ($p.UpV -and ((Ver-Cmp $p.UpV $targetV) -eq 'newer')) { $targetV = $p.UpV }
+    switch (Ver-Cmp $targetV $localV) {
       'newer' {
-        if ((Ver-Part $srcV 1) -eq (Ver-Part $localV 1)) {
-          Say "source: $srcV  ($src) -- UPDATE AVAILABLE (same MAJOR: safe to 'update')"
+        if ((Ver-Part $targetV 1) -eq (Ver-Part $localV 1)) {
+          Say "result: $targetV -- UPDATE AVAILABLE (same MAJOR: safe to 'update')"
         } else {
-          Say "source: $srcV  ($src) -- MAJOR update: read its CHANGELOG.md, then 'update -Major' with the user's go-ahead"
+          Say "result: $targetV -- MAJOR update: read its CHANGELOG.md, then 'update -Major' with the user's go-ahead"
+        }
+        if ($targetV -ne $srcV) {
+          $cl = if ($p.Clone) { $p.Clone } else { '<clone>' }
+          Say "        the source clone only has ${srcV}: pull it (git -C $cl pull --ff-only) or 'update --from-upstream'"
         }
       }
-      'same'  { Say "source: $srcV  ($src) -- up to date" }
-      'older' { Say "source: $srcV  ($src) -- source is OLDER than local; nothing to do" }
+      'same' {
+        if ($p.State -eq 'unreachable' -or $p.State -eq 'no-remote') {
+          Say "result: $srcV -- matches the source, but the source is unverified against upstream"
+        } else {
+          Say "result: $localV -- up to date"
+        }
+      }
+      'older' { Say 'result: source is OLDER than local; nothing to do' }
     }
+    if ($script:RECORD) { Record-Source }
   } else {
-    Say "source: none reachable (no sibling package clone; set LEDGER_PKG or pass a path) -- skipping, this is fine"
+    Say 'source: none reachable (no sibling package clone, no recorded source; set LEDGER_PKG, pass a path, or --upstream URL) -- skipping, this is fine'
   }
+  Cleanup-Up
 }
 
 # Port parse check (core 1.0.1): hashing catches a corrupted file, not a port
@@ -411,20 +691,27 @@ function Cmd-Update {
   param([string[]]$uArgs)
   Need-Project 'update'
   Backfill-Project
-  $srcArg = ''
-  foreach ($a in $uArgs) { if ($a -eq '--major') { $script:Major = $true } else { $srcArg = $a } }
-  $src = Find-Source $srcArg
-  if (-not $src) { Die 'no update source found (sibling clone, LEDGER_PKG, or a path argument)' }
-  $srcV = Core-Version $src; $localV = Core-Version $CORE_DIR
+  $srcArg = Parse-Update-Flags $uArgs
+  if (-not (Prepare-Source $srcArg)) { Die 'no update source found (recorded source, sibling clone, LEDGER_PKG, a path argument, or --upstream URL)' }
+  $src = $script:SRC; $srcV = $script:SRC_V; $localV = Core-Version $CORE_DIR
+  Guard-Stale
   switch (Ver-Cmp $srcV $localV) {
-    'same'  { Say "already at $localV -- nothing to do"; exit 0 }
-    'older' { Say "source ($srcV) is older than local ($localV) -- refusing to downgrade"; exit 0 }
+    'same'  { Say "already at $localV -- nothing to do"; Cleanup-Up; exit 0 }
+    'older' { Say "source ($srcV) is older than local ($localV) -- refusing to downgrade"; Cleanup-Up; exit 0 }
   }
   if (((Ver-Part $srcV 1) -ne (Ver-Part $localV 1)) -and (-not $Major)) {
+    Cleanup-Up
     Die "MAJOR version bump ($localV -> $srcV): read CHANGELOG.md migration notes, get the user's go-ahead, re-run with -Major"
   }
+  Warn-Source
+  $p = $script:P
+  $from = if ($p.Clone) { $p.Clone } else { $p.Url }
+  Say "source: $from [$($p.Kind), $($p.State)]"
   Swap-Core $src $srcV
-  Say "core updated: $localV -> $srcV"
+  Record-Install $srcV $localV
+  Record-Source
+  Cleanup-Up
+  Say "core updated: $localV -> $srcV  (from $($p.Kind) source $from)"
   # hand off to the just-installed script so backfill knows every new file
   & (Join-Path $CORE_DIR 'bin/ledger-sync.ps1') migrate --backfill-only
   exit $LASTEXITCODE
@@ -436,25 +723,29 @@ function Cmd-Update {
 function Cmd-Migrate {
   param([string[]]$mArgs)
   Need-Project 'migrate'
-  $backfillOnly = $false; $srcArg = ''
-  foreach ($a in $mArgs) {
-    if ($a -eq '--backfill-only') { $backfillOnly = $true }
-    elseif ($a -eq '--major') { $script:Major = $true }
-    else { $srcArg = $a }
-  }
+  $backfillOnly = ($mArgs -contains '--backfill-only')
+  $srcArg = Parse-Update-Flags $mArgs
   if (-not $backfillOnly) {
-    $src = Find-Source $srcArg
-    if ($src) {
-      $srcV = Core-Version $src; $localV = Core-Version $CORE_DIR
+    if (Prepare-Source $srcArg) {
+      $src = $script:SRC; $srcV = $script:SRC_V; $localV = Core-Version $CORE_DIR
+      Guard-Stale
       if ((Ver-Cmp $srcV $localV) -eq 'newer') {
         if (((Ver-Part $srcV 1) -ne (Ver-Part $localV 1)) -and (-not $Major)) {
+          Cleanup-Up
           Die "MAJOR bump ($localV -> $srcV): read CHANGELOG.md, then re-run with -Major"
         }
-        Say "updating core: $localV -> $srcV"
+        Warn-Source
+        $p = $script:P
+        $from = if ($p.Clone) { $p.Clone } else { $p.Url }
+        Say "updating core: $localV -> $srcV  (from $($p.Kind) source $from, $($p.State))"
         Swap-Core $src $srcV
+        Record-Install $srcV $localV
+        Record-Source
+        Cleanup-Up
         & (Join-Path $CORE_DIR 'bin/ledger-sync.ps1') migrate --backfill-only
         exit $LASTEXITCODE
       }
+      Cleanup-Up
     }
   }
   Backfill-Project
@@ -543,7 +834,7 @@ function Cmd-Rollback {
 $argsRest = if ($null -eq $Rest) { @() } else { $Rest }
 
 switch ($Command) {
-  'status'   { Cmd-Status ($argsRest | Select-Object -First 1); exit 0 }
+  'status'   { Cmd-Status $argsRest; exit 0 }
   'verify'   { Cmd-Verify ($argsRest | Select-Object -First 1) }
   'update'   { Cmd-Update $argsRest }
   'migrate'  { Cmd-Migrate $argsRest }
@@ -561,7 +852,9 @@ switch ($Command) {
   { $_ -in '', $null, '-h', '--help', 'help' } {
     # print the command-doc comment (lines 13..31) as help, stripping '# '
     $self = Get-Content -Encoding UTF8 -LiteralPath $PSCommandPath
-    $self[12..33] | ForEach-Object { Say ($_ -replace '^# ?', '') }
+    $last = 33
+    for ($n = 12; $n -lt $self.Count; $n++) { if ($self[$n] -match '^# Exit codes') { $last = $n; break } }
+    $self[12..$last] | ForEach-Object { Say ($_ -replace '^# ?', '') }
     exit 2
   }
   default { Die "unknown command: $Command (try: ledger-sync.ps1 help)" }

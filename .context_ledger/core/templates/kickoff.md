@@ -136,6 +136,20 @@ the `.ps1` port with `-ExecutionPolicy Bypass` (same commands, same output):
 .context_ledger/core/bin/ledger-sync.cmd status
 ```
 
+Then install the guard hooks (idempotent; the git hook lives in `.git/`,
+so every fresh clone needs it once):
+
+```bash
+sh .context_ledger/core/bin/ledger-guard install    # Windows: .context_ledger/core/bin/ledger-guard.cmd install
+```
+
+It installs a git pre-commit hook that refuses a commit with no fresh
+`ledger-gates run pre-commit` pass for the staged tree, and writes the
+Claude Code hooks (`.claude/settings.json`) that re-inject the protocol
+floor every turn and block a piped gate verdict / `--no-verify`. Commit
+a new `.claude/settings.json` on its own. Other agents: wire
+`ledger-guard remind` into their prompt hook; the git hook covers all.
+
 - `verify` fails → core was hand-edited or corrupted. Run
   `sh .context_ledger/core/bin/ledger-sync rollback` (Windows:
   `.context_ledger/core/bin/ledger-sync.cmd rollback`), log a flaw in
@@ -151,12 +165,18 @@ the `.ps1` port with `-ExecutionPolicy Bypass` (same commands, same output):
 
 ### Phase 2 — Check in
 
-**Before the deep read, before analysis, before product work.** Needs
-only two files: `memory/office/agents/roster.md` (the board) and the last
+**Before the deep read, before analysis, before product work.** The
+board you sign must be the real one, so the first step is a sync —
+`git pull --ff-only` on a clean tree (Phase 1 did it; redo it if any time
+passed). A sync is not analysis. Needs only two files: `memory/office/agents/roster.md` (the board) and the last
 entry of `memory/office/agents/sessions.md` (the next free session
 number). Pick a real name (not your own model/product name — see the
 roster's own header), add your row, commit and push it now:
-`chore(ledger): <name> (<codename>) checks in — <task>`. Then regenerate
+`chore(ledger): <name> (<codename>) checks in — <task>` (stage only the
+roster, run `ledger-gates run pre-commit`, commit — the guard hook
+requires the gate pass). If the push is rejected, a peer signed
+concurrently: re-read the board, fix your own row to the next free
+codename, never drop theirs. Then regenerate
 the session digest for Phase 3:
 
 ```bash
@@ -257,7 +277,8 @@ Not done until:
    more — the digest should reflect this session's outcome for whoever
    reads it next.
 6. You clock out: remove your row from `memory/office/agents/roster.md`
-   in the closing commit — but only when actually leaving. The session
+   in the closing commit (and run `ledger-guard release <codename>` to drop
+   your heartbeat) — but only when actually leaving. The session
    isn't over until the user says so; if more work arrives after
    clock-out, check back in first (same name and codename) and extend
    your existing `sessions.md` entry, never open a second one.

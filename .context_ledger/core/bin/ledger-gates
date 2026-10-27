@@ -236,10 +236,33 @@ checkpoint() {
       say "NOTICE: the office is full ($_sc / $_gs sessions) — run: ledger-history close"
     fi
   fi
+  # advisory nudge (never blocks): the guard hooks are what back the rules
+  if [ -f "$CORE_DIR/bin/ledger-guard" ]; then
+    _gh=$(git -C "$PROJECT_DIR" rev-parse --git-path hooks/pre-commit 2>/dev/null)
+    case "$_gh" in /*) ;; *) _gh=$PROJECT_DIR/$_gh ;; esac
+    if ! grep -qs 'ledger-guard' "$_gh"; then
+      say "NOTICE: ledger-guard hooks are not installed in this checkout -- run: sh $CORE_DIR/bin/ledger-guard install"
+    fi
+  fi
   if [ -n "$GATE_SESSION" ] && [ -n "$GATE_ISSUE" ]; then
     sh "$CORE_DIR/bin/ledger-collab" status --session "$GATE_SESSION" --issue "$GATE_ISSUE"
   fi
   say "CHECKPOINT PASSED: re-read the latest state before the next action"
+}
+
+# A passing pre-commit gate leaves a marker inside the git dir (never tracked)
+# naming the index tree it passed for; ledger-guard's git hook refuses a commit
+# whose staged tree differs. Best-effort: a project without git gets no marker.
+record_pass() {
+  _gd=$(git -C "$PROJECT_DIR" rev-parse --absolute-git-dir 2>/dev/null) || return 0
+  _tree=$(git -C "$PROJECT_DIR" write-tree 2>/dev/null) || return 0
+  printf 'tree=%s\ngate=pre-commit\nat=%s\n' "$_tree" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$_gd/ledger-gate-pass"
+}
+
+# A red pre-commit gate revokes any earlier pass: the verdict now on record is red.
+clear_pass() {
+  _gd=$(git -C "$PROJECT_DIR" rev-parse --absolute-git-dir 2>/dev/null) || return 0
+  rm -f "$_gd/ledger-gate-pass"
 }
 
 run_gate() {
@@ -272,7 +295,11 @@ run_gate() {
       [ -x "$CORE_DIR/bin/ledger-mem" ] && sh "$CORE_DIR/bin/ledger-mem" prune
       ;;
   esac
-  [ "$_failed" -eq 0 ] || { err "$_gate gate failed ($_failed check(s))"; return 1; }
+  if [ "$_failed" -ne 0 ]; then
+    [ "$_gate" = pre-commit ] && clear_pass
+    err "$_gate gate failed ($_failed check(s))"; return 1
+  fi
+  [ "$_gate" = pre-commit ] && record_pass
   say "GATE PASSED: $_gate"
 }
 

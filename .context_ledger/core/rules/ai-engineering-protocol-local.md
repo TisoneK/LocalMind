@@ -257,6 +257,26 @@ command and observed result before retrying.
   **strip every hit on sight** — a leaked reference is a safe fix: drop it (state
   the reason in plain words if one was pointed at), commit the strip as a normal
   product fix, and continue the session; never leave a known leak or defer it.
+- **The guard backs the pre-commit rule mechanically.** A passing
+  `run pre-commit` records the staged tree it passed for (inside `.git/`,
+  untracked); `sh .context_ledger/core/bin/ledger-guard install` wires a git
+  pre-commit hook that refuses any commit whose staged tree has no fresh pass
+  (a red gate revokes it; staging more after the pass invalidates it), plus
+  Claude Code hooks that re-inject the protocol floor every turn and block
+  piping a gate (`| tail` masks a red verdict) and `--no-verify`. One commit
+  may pass with `LEDGER_GUARD_SKIP=1` — loud, logged, and a flaw to record.
+- **Identity and push-time checks.** Your check-in commit registers your
+  codename (a heartbeat file in `.git/`, never tracked); every later commit
+  gets a `Ledger-Session: S<NNN>` trailer and refreshes it. With one live
+  session that is automatic; with several in one checkout, prefix commits
+  with `LEDGER_SESSION=S<NNN>` (an unattributed commit is refused). A
+  heartbeat older than `LEDGER_SESSION_TTL_HOURS` (default 4) marks the
+  session stale: `ledger-guard sessions` and the per-turn reminder flag its
+  still-open roster row — ask the supervisor, then clock it out; never edit a
+  peer's row on a guess. `ledger-guard push-check` (the git pre-push hook,
+  and CI via `ledger-guard install --ci`) fails a push containing a commit
+  that touches both surfaces or removes/rewrites a line of an append-only log
+  that was not merely moved to an archive.
 - **Before branch integration:** run
   `sh .context_ledger/core/bin/ledger-gates run integration --session <id> --issue <id>`.
   This includes `ledger-collab check` and configured build/integration
@@ -348,7 +368,7 @@ git pull --ff-only
 
 **Step 3 — Read `.context_ledger/` (agent memory)**
 - **Reading `workflows/active.md` is a binding instruction, not passive documentation.** It records the standing session parameters and confirms the protocol in force. The protocol itself is already on disk — vendored at `.context_ledger/core/` — so there is nothing to fetch: your edition is `.context_ledger/core/rules/` + the file matching YOUR agent type (see Pitfall #43 — memory never chooses your edition).
-- **Check the vendored core first (never fatal):** `sh .context_ledger/core/bin/ledger-sync verify` — a failure means core was hand-edited or corrupted: run `ledger-sync rollback`, log a flaw, continue on the restored core. Then `ledger-sync status` — a newer core with the same MAJOR may be applied with `ledger-sync update` (it replaces `core/` only, never memory; commit as `chore(ledger): update core to <version>`); a MAJOR bump or no reachable source = note it and move on.
+- **Check the vendored core first (never fatal):** `sh .context_ledger/core/bin/ledger-sync verify` — a failure means core was hand-edited or corrupted: run `ledger-sync rollback`, log a flaw, continue on the restored core. Then `ledger-sync status` — it compares the update source with that source's own upstream and records the result in `core.lock`, so a stale clone is never reported as up to date; a newer core with the same MAJOR may be applied with `ledger-sync update` (it replaces `core/` only, never memory; commit as `chore(ledger): update core to <version>`); a MAJOR bump or no reachable source = note it and move on.
 - **Check in first — at the entrance, before the deep read.** Signing needs exactly two files: `.context_ledger/memory/office/agents/roster.md` (the board) and the last entry of `.context_ledger/memory/office/agents/sessions.md` (the next free session number). Read just those two, add your row, commit, and push (full check-in rules below). Everything else — the rest of memory, the protocol read, product code, analysis — comes AFTER your row is on the board: a worker who spends the startup read on protocol and product code checks in late, and two workers launched together then both see an empty office, both take the same codename, and meet mid-session as strangers fighting over the main tree. The push is what makes presence visible in minutes and claims your codename.
 - If `.context_ledger/` exists, read it in this order:
   1. `.context_ledger/README.md` — the zone map (core = read-only protocol; memory = this project's data)

@@ -202,7 +202,7 @@ File inventory, write modes, and scopes. **Write modes:**
 | `user/identity.md` | update-in-place | user | Who the user is |
 | `user/preferences.md` | update-in-place | user | Standing preferences, each bullet with provenance |
 | `overrides/rules.md` | update-in-place | project | Project-local protocol adjustments (see Overrides) |
-| `core.lock` | overwrite (by `ledger-sync`) | project | Last-known-good core version + when it was verified |
+| `core.lock` | overwrite (by `ledger-sync`) | project | Last-known-good core version + when it was verified, plus where the core came from (`source_*`, `installed_*`) |
 | `secrets/<slug>` | local-only | machine | One secret per file; line 1 = value. Self-gitignored |
 | `secrets/README.md`, `secrets/.gitignore` | generated | project | The secrets hard rules; the self-ignore |
 
@@ -675,6 +675,23 @@ cannot pick the wrong edition (the kickoff routes by type).
 - **core.lock:** after any successful `verify`, `ledger-sync` records
   the version + date in `memory/core.lock`. That is the
   **last-known-good** marker.
+- **Source provenance (core 2.0.5):** `ledger-sync status` compares the
+  update source — a sibling clone, `LEDGER_PKG`, or a path — with that
+  clone's own upstream (`origin`) *before* it reports. A clone that is
+  behind upstream is reported as stale and never as "up to date"; one
+  that is ahead or edited is a local-only core; an unreachable upstream
+  is reported as unverified. The resolved source is written to
+  `core.lock` as `source_kind` (`upstream`/`local`/`unverified`),
+  `source_state`, `source_url`, `source_path`, `source_ref`,
+  `source_commit`, `source_version` and `source_checked`, and
+  `update`/`migrate` read it first, so they fetch from the source status
+  recorded — falling back to a shallow clone of `source_url` when no
+  local clone exists. `update` refuses a stale clone (`--from-upstream`
+  installs straight from origin, `--allow-stale` overrides) and records
+  what it installed as `installed_version`, `installed_from_version`,
+  `installed_kind`, `installed_url`, `installed_path`, `installed_commit`
+  and `installed_on`. `status --no-record` leaves the lock untouched.
+  A re-lock (`verify`, `lock`) preserves both groups.
 - **Fallback:** if a session cannot parse or trust the current core
   (failed verify, half-applied update), roll back to the locked
   version — `ledger-sync rollback` restores `core/` from the project's

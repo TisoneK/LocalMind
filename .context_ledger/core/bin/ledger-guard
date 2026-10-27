@@ -1,0 +1,450 @@
+#!/bin/sh
+# ledger-guard — mechanical backing for protocol rules agents otherwise follow
+# on goodwill alone.
+#
+# Commands (run inside a bootstrapped project):
+#   install [--force] [--ci]
+#                       install the git hooks (pre-commit, prepare-commit-msg,
+#                       pre-push) and the Claude Code hooks; --ci also writes
+#                       .github/workflows/ledger-guard.yml
+#   status              show what is installed and the gate-pass state of the index
+#   sessions            registered sessions + heartbeat age; roster rows gone stale
+#   heartbeat S<NNN> [Name]
+#                       register / refresh a session (a check-in commit does this)
+#   release S<NNN>      drop a session's heartbeat when you clock out
+#   push-check [range]  fail on mixed-surface commits and edited append-only logs
+#                       (the pre-push hook and CI run this)
+#   remind              print the protocol floor + live roster + current task
+#                       (hook: SessionStart / UserPromptSubmit stdout reaches the agent)
+#   tool-check          PreToolUse hook: reads the tool call JSON on stdin; blocks
+#                       a masked gate verdict and `--no-verify` (exit 2)
+#   git-pre-commit      the git hook: refuses a commit whose staged tree has no
+#                       fresh `ledger-gates run pre-commit` pass
+#
+# Escape hatch: LEDGER_GUARD_SKIP=1 lets one commit through, loudly, and logs it
+# to <git-dir>/ledger-guard.log.
+
+set -u
+
+say() { printf '%s\n' "$*"; }
+err() { printf 'ledger-guard: %s\n' "$*" >&2; }
+die() { err "$*"; exit 2; }
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd) || exit 2
+CORE_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd) || exit 2
+LEDGER_DIR=$(dirname -- "$CORE_DIR")
+LEDGER_NAME=$(basename -- "$LEDGER_DIR")
+case "$LEDGER_NAME" in
+  .context_ledger|.context) PROJECT_DIR=$(dirname -- "$LEDGER_DIR") ;;
+  *) PROJECT_DIR=$LEDGER_DIR; LEDGER_NAME="" ;;
+esac
+MEMORY_DIR=$LEDGER_DIR/memory
+
+usage() { sed -n '5,25p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+
+git_p() { git -C "$PROJECT_DIR" "$@"; }
+git_dir() { git_p rev-parse --absolute-git-dir 2>/dev/null; }
+hooks_dir() { git_p rev-parse --git-path hooks 2>/dev/null | sed "s|^[^/]|$PROJECT_DIR/&|"; }
+
+# The index fingerprint: the tree git would commit. Exact, byte-safe, and
+# computable the same way by the PowerShell port.
+index_tree() { git_p write-tree 2>/dev/null; }
+marker_file() { _gd=$(git_dir) || return 1; printf '%s/ledger-gate-pass\n' "$_gd"; }
+
+marker_state() { # prints: fresh | stale | none
+  _mf=$(marker_file) || { say none; return; }
+  [ -f "$_mf" ] || { say none; return; }
+  _mt=$(sed -n 's/^tree=//p' "$_mf" | head -n1 | tr -d '\r')
+  _it=$(index_tree)
+  if [ -n "$_it" ] && [ "$_mt" = "$_it" ]; then say fresh; else say stale; fi
+}
+
+in_progress_op() {
+  _gd=$(git_dir) || return 1
+  [ -d "$_gd/rebase-merge" ] || [ -d "$_gd/rebase-apply" ] || [ -f "$_gd/MERGE_HEAD" ] || [ -f "$_gd/CHERRY_PICK_HEAD" ] || [ -f "$_gd/REVERT_HEAD" ]
+}
+
+cmd_git_pre_commit() {
+  if [ "${LEDGER_GUARD_SKIP:-}" = 1 ]; then
+    err "WARNING: LEDGER_GUARD_SKIP=1 -- committing WITHOUT a fresh pre-commit gate pass"
+    _gd=$(git_dir) && printf '%s skipped-guard tree=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(index_tree)" >> "$_gd/ledger-guard.log"
+    return 0
+  fi
+  if in_progress_op; then
+    err "notice: merge/rebase/cherry-pick in progress -- gate-pass check skipped"
+    return 0
+  fi
+  [ -f "$CORE_DIR/bin/ledger-gates" ] || return 0
+  case "$(marker_state)" in
+    fresh) return 0 ;;
+    none) _why="no pre-commit gate has passed in this checkout" ;;
+    *) _why="the staged tree changed since the last pre-commit gate pass" ;;
+  esac
+  err "BLOCKED: $_why."
+  err "  Stage exactly what you will commit, then run:"
+  err "    sh ${LEDGER_NAME:+$LEDGER_NAME/}core/bin/ledger-gates run pre-commit"
+  err "  and read its verdict line (never through a pipe). Then commit again."
+  return 1
+}
+
+cmd_tool_check() {
+  _in=$(cat)
+  case "$_in" in *ledger-gates*|*--no-verify*) ;; *) return 0 ;; esac
+  if printf '%s' "$_in" | grep -Eq 'git[[:space:]][^|;&"]*(commit|push)[^|;&"]*--no-verify'; then
+    err "BLOCKED -- --no-verify skips the pre-commit gate hook. Run the gate and commit normally."
+    return 2
+  fi
+  if printf '%s' "$_in" | grep -Eq 'ledger-gates(\.ps1|\.cmd)?[[:space:]]+(run|checkpoint)([^|;&\\`)]|>&[0-9])*\|([^|]|$)'; then
+    # (a backslash, backtick or ')' ends the match: in the tool-call JSON a
+    # newline is `\n`, so prose that merely names the tool cannot reach a
+    # pipe on a later line)
+    err "BLOCKED -- a ledger-gates verdict is being piped (tail/head/grep...). The consumer's exit status can mask a red gate and the output you need is cut. Run the gate bare, or redirect to a file and read the verdict line."
+    return 2
+  fi
+  return 0
+}
+
+cmd_remind() {
+  _f=$CORE_DIR/templates/guard-reminder.md
+  say "[ledger-guard] protocol reminder"
+  [ -f "$_f" ] && cat "$_f"
+  _r=$MEMORY_DIR/office/agents/roster.md
+  if [ -f "$_r" ]; then
+    say "Board (rows not Done):"
+    grep -E '^\| *[^|-][^|]*\| *S[0-9]+ ' "$_r" | awk -F'|' '{ gsub(/^ +| +$/, "", $2); gsub(/^ +| +$/, "", $3); gsub(/^ +| +$/, "", $6); gsub(/^ +| +$/, "", $7); if ($6 != "Done") print "  - " $2 " (" $3 ") " $6 ": " substr($7, 1, 100) }'
+  fi
+  _c=$MEMORY_DIR/office/tasks/current.md
+  if [ -f "$_c" ]; then
+    _t=$(sed -n 's/^- \*\*Task:\*\* *//p' "$_c" | tail -n1)
+    _s=$(sed -n 's/^- \*\*Status:\*\* *//p' "$_c" | tail -n1)
+    say "Current task: ${_t:-?} [${_s:-?}]"
+  fi
+  _me=$(resolve_session); _rc=$?
+  case "$_rc" in
+    0) if [ -n "$_me" ]; then heartbeat_write "$_me"; say "You are: $_me (commits get a Ledger-Session trailer; this prompt refreshed your heartbeat)"
+       else say "No session registered in this checkout yet -- your check-in commit registers you."; fi ;;
+    1) say "Several sessions are live in this checkout ($(live_sessions | tr '\n' ' ')) and LEDGER_SESSION is not set -- prefix your commits: LEDGER_SESSION=S<NNN> git commit ..." ;;
+    *) say "LEDGER_SESSION is set but is not a codename (S<NNN>)." ;;
+  esac
+  _st=$(stale_rows)
+  [ -n "$_st" ] && { say "Stale roster rows (heartbeat expired):"; say "$_st"; }
+  say "Pre-commit gate vs. staged tree: $(marker_state)"
+  return 0
+}
+
+# ---- per-session identity ---------------------------------------------------
+# A session is a codename (S018) with a heartbeat file under the git COMMON dir
+# (shared by worktrees, never tracked). Commits carry a `Ledger-Session:` trailer;
+# a heartbeat older than the TTL marks the session stale. The model string is
+# deliberately not part of this: it is a fingerprint, not an identity.
+TTL_HOURS=${LEDGER_SESSION_TTL_HOURS:-4}
+case "$TTL_HOURS" in ''|*[!0-9]*) TTL_HOURS=4 ;; esac
+
+sessions_dir() {
+  _sc=$(git_p rev-parse --git-common-dir 2>/dev/null) || return 1
+  case "$_sc" in /*) ;; *) _sc=$PROJECT_DIR/$_sc ;; esac
+  printf '%s/ledger-sessions\n' "$_sc"
+}
+valid_codename() { case "$1" in S[0-9][0-9][0-9]|S[0-9][0-9][0-9][0-9]) return 0 ;; esac; return 1; }
+now_s() { date +%s; }
+sess_field() { sed -n "s/^$2=//p" "$1" | head -n1 | tr -d '\r'; }
+
+heartbeat_write() { # $1 codename, $2 name (optional; kept from the old file when empty)
+  _sd=$(sessions_dir) || return 1
+  mkdir -p "$_sd" || return 1
+  _sf=$_sd/$1; _sn=${2:-}; _ss=""
+  if [ -f "$_sf" ]; then
+    [ -n "$_sn" ] || _sn=$(sess_field "$_sf" name)
+    _ss=$(sess_field "$_sf" started)
+  fi
+  printf 'name=%s\nstarted=%s\nat=%s\nat_iso=%s\n' "$_sn" "${_ss:-$(now_s)}" "$(now_s)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$_sf"
+}
+
+live_sessions() { # codenames whose heartbeat is younger than the TTL, one per line
+  _sd=$(sessions_dir) || return 0
+  [ -d "$_sd" ] || return 0
+  _lim=$(( $(now_s) - TTL_HOURS * 3600 ))
+  for _sf in "$_sd"/S*; do
+    [ -f "$_sf" ] || continue
+    _se=$(sess_field "$_sf" at); case "$_se" in ''|*[!0-9]*) continue ;; esac
+    [ "$_se" -ge "$_lim" ] && basename -- "$_sf"
+  done
+  return 0
+}
+
+# Who is acting? $LEDGER_SESSION wins; else the single live session. Prints the
+# codename (nothing when no session is registered). Returns 1 when several
+# sessions are live and none was named, 2 for a malformed $LEDGER_SESSION.
+resolve_session() {
+  if [ -n "${LEDGER_SESSION:-}" ]; then
+    valid_codename "$LEDGER_SESSION" || return 2
+    printf '%s\n' "$LEDGER_SESSION"; return 0
+  fi
+  _live=$(live_sessions); _cnt=$(printf '%s' "$_live" | grep -c .)
+  case "$_cnt" in 0) return 0 ;; 1) printf '%s\n' "$_live"; return 0 ;; *) return 1 ;; esac
+}
+
+roster_open_rows() { # name|codename|status for every row that is not Done
+  _rr=$MEMORY_DIR/office/agents/roster.md
+  [ -f "$_rr" ] || return 0
+  grep -E '^\| *[^|-][^|]*\| *S[0-9]+ ' "$_rr" | awk -F'|' '{ for (i = 2; i <= 6; i++) gsub(/^ +| +$/, "", $i); if ($6 != "Done") print $2 "|" $3 "|" $6 }'
+}
+
+stale_rows() { # roster rows still open whose registered session has gone quiet
+  _sd=$(sessions_dir) || return 0
+  [ -d "$_sd" ] || return 0
+  _lim=$(( $(now_s) - TTL_HOURS * 3600 ))
+  roster_open_rows | while IFS='|' read -r _n _c _st; do
+    [ -f "$_sd/$_c" ] || continue
+    _se=$(sess_field "$_sd/$_c" at); case "$_se" in ''|*[!0-9]*) continue ;; esac
+    if [ "$_se" -lt "$_lim" ]; then
+      say "  STALE? $_n ($_c) $_st -- no heartbeat for $(( ($(now_s) - _se) / 3600 ))h (ttl ${TTL_HOURS}h). Ask the supervisor, then clock the row out; never edit a peer's row on a guess."
+    fi
+  done
+}
+
+cmd_heartbeat() {
+  valid_codename "${1:-}" || die "usage: ledger-guard heartbeat S<NNN> [Name]"
+  heartbeat_write "$1" "${2:-}" || die "cannot write the heartbeat"
+  say "heartbeat: $1 (live for ${TTL_HOURS}h; every commit and prompt-time reminder refreshes it)"
+}
+
+cmd_release() {
+  valid_codename "${1:-}" || die "usage: ledger-guard release S<NNN>"
+  _sd=$(sessions_dir) || die "not a git repository"
+  rm -f "$_sd/$1"
+  say "released $1 (clock out of the roster too)"
+}
+
+cmd_sessions() {
+  _sd=$(sessions_dir) || die "not a git repository"
+  _any=0
+  if [ -d "$_sd" ]; then
+    for _sf in "$_sd"/S*; do
+      [ -f "$_sf" ] || continue
+      _any=1
+      _se=$(sess_field "$_sf" at); case "$_se" in ''|*[!0-9]*) _se=0 ;; esac
+      _age=$(( ($(now_s) - _se) / 60 ))
+      if [ "$_age" -ge $(( TTL_HOURS * 60 )) ]; then _tag=STALE; else _tag=live; fi
+      say "$(basename -- "$_sf")  $(sess_field "$_sf" name)  last seen ${_age}m ago  [$_tag]"
+    done
+  fi
+  [ "$_any" -eq 1 ] || say "no sessions registered in this checkout (a check-in commit registers one)"
+  stale_rows
+}
+
+cmd_git_prepare_commit_msg() {
+  _mf=${1:-}; _src=${2:-}
+  [ -n "$_mf" ] && [ -f "$_mf" ] || return 0
+  case "$_src" in merge|squash) return 0 ;; esac
+  [ "${LEDGER_GUARD_SKIP:-}" = 1 ] && return 0
+  _own=""
+  case "$(sed -n '1p' "$_mf")" in
+    *"checks in"*|*"checks back in"*)
+      # the check-in commit names its author: register it (and attribute this commit to it)
+      _subj=$(sed -n '1p' "$_mf")
+      _own=$(printf '%s' "$_subj" | sed -n 's/.*(\(S[0-9][0-9]*\)).*/\1/p')
+      if valid_codename "$_own"; then
+        _nm=$(printf '%s' "$_subj" | sed -n 's/^[^:]*: *\(.*\) (S[0-9]*).*/\1/p')
+        heartbeat_write "$_own" "$_nm"
+      else
+        _own=""
+      fi ;;
+  esac
+  if [ -n "$_own" ]; then
+    _sid=$_own
+  else
+    _sid=$(resolve_session); _rc=$?
+    case "$_rc" in
+      1)
+        err "BLOCKED: several sessions are live in this checkout ($(live_sessions | tr '\n' ' ')) and this commit does not say which is yours."
+        err "  Prefix it:  LEDGER_SESSION=S<NNN> git commit ...   (or LEDGER_GUARD_SKIP=1 for one unattributed commit)"
+        return 1 ;;
+      2) err "LEDGER_SESSION='${LEDGER_SESSION:-}' is not a codename (S<NNN>)"; return 1 ;;
+    esac
+    [ -n "$_sid" ] && heartbeat_write "$_sid"
+  fi
+  [ -n "$_sid" ] || return 0
+  git_p interpret-trailers --in-place --if-exists doNothing --trailer "Ledger-Session: $_sid" "$_mf" 2>/dev/null || true
+  return 0
+}
+
+# ---- push-time checks -------------------------------------------------------
+# Run over a commit range (the pre-push hook feeds it the refs being pushed; CI
+# feeds it the push/PR range). Violations (exit 1): a commit touching both the
+# ledger and the product surface; an append-only log line removed or rewritten
+# (unless the same line is re-added in the commit -- a move to an archive).
+# Notices (never fail): product commits with no session entry in the range --
+# normal mid-session, since the entry is written at close -- and commits with
+# no Ledger-Session trailer.
+AO_FILES="memory/office/agents/sessions.md memory/office/flaws/log.md memory/office/plans/decisions.md memory/office/inefficiencies/log.md"
+
+push_check() {
+  [ -n "$LEDGER_NAME" ] || { say "push-check: package layout (no ledger surface) -- skipped"; return 0; }
+  _revs=$(git_p rev-list --no-merges --reverse "$@" 2>/dev/null) || { err "notice: cannot resolve '$*' -- push-check skipped for it"; return 0; }
+  _aolist=""
+  for _a in $AO_FILES; do _aolist="$_aolist|$LEDGER_NAME/$_a"; done
+  _viol=0; _prod=0; _sess=0; _untr=0; _n=0
+  for _c in $_revs; do
+    _n=$((_n + 1))
+    _short=$(git_p log -1 --format='%h %s' "$_c")
+    _files=$(git_p diff-tree --no-commit-id --name-only -r --root "$_c")
+    _hasl=0; _hasp=0
+    while IFS= read -r _f; do
+      [ -n "$_f" ] || continue
+      case "$_f" in "$LEDGER_NAME"/*) _hasl=1 ;; *) _hasp=1 ;; esac
+    done <<EOF
+$_files
+EOF
+    if [ "$_hasl" -eq 1 ] && [ "$_hasp" -eq 1 ]; then
+      err "VIOLATION $_short"
+      err "  touches both surfaces (.context_ledger/ and project files) -- split it into two commits"
+      _viol=$((_viol + 1))
+    fi
+    [ "$_hasp" -eq 1 ] && _prod=$((_prod + 1))
+    case "$_files" in *"$LEDGER_NAME/memory/office/agents/sessions.md"*) _sess=1 ;; esac
+    if [ "$_hasl" -eq 1 ]; then
+      _rem=$(git_p show --format= -U0 --no-color "$_c" | awk -v ao="$_aolist" '
+        BEGIN { n = split(ao, a, "|"); for (i = 1; i <= n; i++) if (a[i] != "") is[a[i]] = 1 }
+        /^diff --git / { hdr = 1; f = ""; next }
+        hdr && /^--- / { f = $0; sub(/^--- /, "", f); sub(/^a\//, "", f); next }
+        hdr && /^\+\+\+ / { next }
+        /^@@/ { hdr = 0; next }
+        hdr { next }
+        /^\+/ { add[substr($0, 2)] = 1; next }
+        /^-/ { l = substr($0, 2); if ((f in is) && l ~ /[^ \t]/) { k++; r[k] = l; rf[k] = f } }
+        END { for (i = 1; i <= k; i++) if (!(r[i] in add)) print rf[i] ": " r[i] }')
+      if [ -n "$_rem" ]; then
+        err "VIOLATION $_short"
+        err "  append-only log edited (a past line was removed or rewritten, not moved to an archive):"
+        printf '%s\n' "$_rem" | head -n 3 | while IFS= read -r _l; do err "    - $_l"; done
+        _viol=$((_viol + 1))
+      fi
+    fi
+    git_p log -1 --format=%B "$_c" | grep -q '^Ledger-Session:' || _untr=$((_untr + 1))
+  done
+  [ "$_n" -gt 0 ] || { say "push-check: no commits in range"; return 0; }
+  if [ "$_prod" -gt 0 ] && [ "$_sess" -eq 0 ]; then
+    say "NOTICE: $_prod product commit(s) in this push and no session entry (agents/sessions.md) -- fine mid-session; log it before you finish."
+  fi
+  [ "$_untr" -gt 0 ] && say "NOTICE: $_untr of $_n commit(s) carry no Ledger-Session trailer (committed without the guard hooks installed?)."
+  [ "$_viol" -eq 0 ] && { say "push-check: $_n commit(s) OK"; return 0; }
+  err "push-check: $_viol violation(s) in $_n commit(s)"
+  return 1
+}
+
+cmd_push_check() {
+  [ "${1:-}" = --range ] && shift
+  if [ $# -eq 0 ]; then
+    if git_p rev-parse --verify -q '@{upstream}' >/dev/null 2>&1; then set -- '@{upstream}..HEAD'
+    else set -- -n 20 HEAD
+    fi
+  fi
+  push_check "$@"
+}
+
+cmd_git_pre_push() {
+  if [ "${LEDGER_GUARD_SKIP:-}" = 1 ]; then
+    err "WARNING: LEDGER_GUARD_SKIP=1 -- pushing WITHOUT the ledger push-check"
+    _gd=$(git_dir) && printf '%s skipped-push-check\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$_gd/ledger-guard.log"
+    return 0
+  fi
+  _z=0000000000000000000000000000000000000000; _bad=0
+  while read -r _lref _lsha _rref _rsha; do
+    [ -n "${_lsha:-}" ] || continue
+    [ "$_lsha" = "$_z" ] && continue
+    if [ "$_rsha" = "$_z" ]; then push_check "$_lsha" --not --remotes || _bad=1
+    else push_check "$_rsha..$_lsha" || _bad=1
+    fi
+  done
+  [ "$_bad" -eq 0 ]
+}
+
+install_ci() {
+  _t=$CORE_DIR/templates/ci/ledger-guard.yml
+  [ -f "$_t" ] || die "CI template missing: $_t"
+  _o=$PROJECT_DIR/.github/workflows/ledger-guard.yml
+  if [ -f "$_o" ]; then say ".github/workflows/ledger-guard.yml already exists -- left alone"; return 0; fi
+  mkdir -p "$PROJECT_DIR/.github/workflows" && sed "s|__LEDGER__|${LEDGER_NAME:-.context_ledger}|g" "$_t" > "$_o"
+  say "wrote .github/workflows/ledger-guard.yml (core integrity + push-check on every push and PR)"
+  say "NOTE: commit it on its own -- it is project tooling, not ledger memory"
+}
+
+hook_snippet() {
+  # the command string sits inside JSON, so its own quotes are backslash-escaped
+  _p="\\\"\$CLAUDE_PROJECT_DIR\\\"/${LEDGER_NAME:+$LEDGER_NAME/}core/bin/ledger-guard"
+  cat <<EOF
+{
+  "hooks": {
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "sh $_p remind" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "sh $_p remind" }] }],
+    "PreToolUse": [{ "matcher": "Bash", "hooks": [{ "type": "command", "command": "sh $_p tool-check" }] }]
+  }
+}
+EOF
+}
+
+cmd_install() {
+  _force=0; _ci=0
+  for _a in "$@"; do
+    case "$_a" in --force) _force=1 ;; --ci) _ci=1 ;; *) die "install: unknown argument '$_a'" ;; esac
+  done
+  git_p rev-parse --git-dir >/dev/null 2>&1 || die "not a git repository: $PROJECT_DIR"
+  _hd=$(hooks_dir)
+  mkdir -p "$_hd" || die "cannot create $_hd"
+  _g="\"\$(git rev-parse --show-toplevel)/${LEDGER_NAME:+$LEDGER_NAME/}core/bin/ledger-guard\""
+  for _h in pre-commit prepare-commit-msg pre-push; do
+    _hk=$_hd/$_h
+    if [ -f "$_hk" ] && ! grep -q 'ledger-guard' "$_hk" && [ "$_force" -eq 0 ]; then
+      err "a $_h hook already exists and is not ledger-guard's: $_hk"
+      err "  re-run with --force to replace it, or add this line to it yourself:"
+      err "  sh $_g git-$_h \"\$@\" || exit 1"
+    else
+      # exec would drop stdin for nothing here, but pre-push needs it: the ref list arrives on stdin
+      printf '#!/bin/sh\n# installed by ledger-guard (%s) -- see core/CHANGELOG.md\nexec sh %s git-%s "$@"\n' "$_h" "$_g" "$_h" > "$_hk"
+      chmod +x "$_hk"
+      say "installed git $_h hook: $_hk"
+    fi
+  done
+  [ "$_ci" -eq 1 ] && install_ci
+  _cs=$PROJECT_DIR/.claude/settings.json
+  if [ -f "$_cs" ] && grep -q 'ledger-guard' "$_cs"; then
+    say "Claude Code hooks already present in .claude/settings.json"
+  elif [ -f "$_cs" ]; then
+    say "NOTICE: .claude/settings.json exists -- merge this \"hooks\" block into it yourself:"
+    hook_snippet
+  else
+    mkdir -p "$PROJECT_DIR/.claude" && hook_snippet > "$_cs"
+    say "wrote .claude/settings.json (Claude Code hooks: SessionStart + UserPromptSubmit remind, PreToolUse tool-check)"
+    say "NOTE: commit it on its own -- it is project tooling, not ledger memory"
+  fi
+  say "other agents: wire 'sh ${LEDGER_NAME:+$LEDGER_NAME/}core/bin/ledger-guard remind' into their prompt hook; the git hook covers every agent"
+}
+
+cmd_status() {
+  for _h in pre-commit prepare-commit-msg pre-push; do
+    _hk=$(hooks_dir)/$_h
+    if [ -f "$_hk" ] && grep -q 'ledger-guard' "$_hk"; then say "git $_h hook: installed"; else say "git $_h hook: MISSING (run: ledger-guard install)"; fi
+  done
+  if [ -f "$PROJECT_DIR/.github/workflows/ledger-guard.yml" ]; then say "CI workflow: installed"; else say "CI workflow: not installed (optional: ledger-guard install --ci)"; fi
+  _lv=$(live_sessions | tr '\n' ' '); say "live sessions here: ${_lv:-none}"
+  if [ -f "$PROJECT_DIR/.claude/settings.json" ] && grep -q 'ledger-guard' "$PROJECT_DIR/.claude/settings.json"; then say "Claude Code hooks: installed"; else say "Claude Code hooks: not installed (run: ledger-guard install)"; fi
+  say "pre-commit gate vs. staged tree: $(marker_state)"
+}
+
+CMD=${1:-}; [ $# -gt 0 ] && shift
+case "$CMD" in
+  install) cmd_install "$@" ;;
+  status) cmd_status ;;
+  remind) cmd_remind ;;
+  tool-check) cmd_tool_check ;;
+  git-pre-commit) cmd_git_pre_commit ;;
+  git-prepare-commit-msg) cmd_git_prepare_commit_msg "$@" ;;
+  git-pre-push) cmd_git_pre_push ;;
+  push-check) cmd_push_check "$@" ;;
+  sessions) cmd_sessions ;;
+  heartbeat) cmd_heartbeat "$@" ;;
+  release) cmd_release "$@" ;;
+  ''|-h|--help|help) usage ;;
+  *) die "unknown command '$CMD' (try: ledger-guard help)" ;;
+esac

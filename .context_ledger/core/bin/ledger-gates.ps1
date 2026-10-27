@@ -230,8 +230,39 @@ function Checkpoint { param([string[]]$CheckpointArgs)
     $gs = $os; if ($gs -le 0) { $gs = $gsz }; if ($gs -le 0) { $gs = 20 }
     if ($sc -ge $gs) { Say "NOTICE: the office is full ($sc / $gs sessions) - run: ledger-history close" }
   }
+  # advisory nudge (never blocks): the guard hooks are what back the rules
+  if (Test-Path -LiteralPath (Join-Path $coreDir 'bin/ledger-guard.ps1')) {
+    $gh = (& git -C $projectDir rev-parse --git-path hooks/pre-commit 2>$null)
+    $installed = $false
+    if ($LASTEXITCODE -eq 0 -and $gh) {
+      $gh = @($gh)[0]; if (-not [System.IO.Path]::IsPathRooted($gh)) { $gh = Join-Path $projectDir $gh }
+      if ((Test-Path -LiteralPath $gh -PathType Leaf) -and ([System.IO.File]::ReadAllText($gh) -match 'ledger-guard')) { $installed = $true }
+    }
+    if (-not $installed) { Say "NOTICE: ledger-guard hooks are not installed in this checkout - run: ledger-guard install" }
+  }
   if ($scope.Session -and $scope.Issue) { & (Join-Path $coreDir 'bin/ledger-collab.ps1') status --session $scope.Session --issue $scope.Issue }
   Say 'CHECKPOINT PASSED: re-read the latest state before the next action'
+}
+# A passing pre-commit gate leaves a marker inside the git dir (never tracked)
+# naming the index tree it passed for; ledger-guard's git hook refuses a commit
+# whose staged tree differs. Best-effort: a project without git gets no marker.
+function Record-Pass {
+  try {
+    $gd = (& git -C $projectDir rev-parse --absolute-git-dir 2>$null)
+    if ($LASTEXITCODE -ne 0 -or -not $gd) { return }
+    $tree = (& git -C $projectDir write-tree 2>$null)
+    if ($LASTEXITCODE -ne 0 -or -not $tree) { return }
+    $text = "tree=$(@($tree)[0])`ngate=pre-commit`nat=$([DateTime]::UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'"))`n"
+    [System.IO.File]::WriteAllText((Join-Path (@($gd)[0]) 'ledger-gate-pass'), $text, (New-Object System.Text.UTF8Encoding($false)))
+  } catch { }
+}
+# A red pre-commit gate revokes any earlier pass: the verdict now on record is red.
+function Clear-Pass {
+  try {
+    $gd = (& git -C $projectDir rev-parse --absolute-git-dir 2>$null)
+    if ($LASTEXITCODE -ne 0 -or -not $gd) { return }
+    Remove-Item -LiteralPath (Join-Path (@($gd)[0]) 'ledger-gate-pass') -Force -ErrorAction SilentlyContinue
+  } catch { }
 }
 function Run-Gate { param([string]$RequestedGate, [string[]]$GateArgs)
   if ($RequestedGate -notin @('pre-commit','integration','exit')) { Die "unknown gate: $RequestedGate" }
@@ -258,7 +289,8 @@ function Run-Gate { param([string]$RequestedGate, [string[]]$GateArgs)
     $memScript = Join-Path $coreDir 'bin/ledger-mem.ps1'
     if (Test-Path -LiteralPath $memScript) { Invoke-ChildScript $memScript @('prune') }
   }
-  if ($failed) { Die "$RequestedGate gate failed" }
+  if ($failed) { if ($RequestedGate -eq 'pre-commit') { Clear-Pass }; Die "$RequestedGate gate failed" }
+  if ($RequestedGate -eq 'pre-commit') { Record-Pass }
   Say "GATE PASSED: $RequestedGate"
 }
 function Init-Config {

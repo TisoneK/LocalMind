@@ -24,7 +24,9 @@ This repo uses the `.context_ledger/` protocol: persistent agent memory
 plus a vendored copy of the full workflow, committed to git.
 
 **Do this before reading anything else in this repo — including the
-rest of this file:** add your row to
+rest of this file:** sync first (`git pull --ff-only` on a clean tree — a
+sync is not analysis, and it makes the board you sign the real one), then
+add your row to
 [`memory/office/agents/roster.md`](.context_ledger/memory/office/agents/roster.md)
 (a real name you pick — never your own model or product name; plus a
 codename `S<NNN>`, your model, one line on what you're doing, and

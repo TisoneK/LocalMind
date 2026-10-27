@@ -1,0 +1,31 @@
+# Installed by `ledger-guard install --ci` (core/templates/ci/ledger-guard.yml).
+# Server-side backstop for the rules a local hook can be skipped around:
+# core integrity, mixed-surface commits, edited append-only logs.
+name: ledger-guard
+on:
+  push:
+  pull_request:
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: core integrity
+        run: sh __LEDGER__/core/bin/ledger-sync verify
+      - name: push-check
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            sh __LEDGER__/core/bin/ledger-guard push-check "origin/$BASE_REF..HEAD"
+          elif [ "$BEFORE" = 0000000000000000000000000000000000000000 ]; then
+            sh __LEDGER__/core/bin/ledger-guard push-check -n 20 HEAD
+          else
+            sh __LEDGER__/core/bin/ledger-guard push-check "$BEFORE..$SHA"
+          fi
