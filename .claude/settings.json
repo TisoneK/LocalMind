@@ -1,0 +1,7 @@
+{
+  "hooks": {
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "sh \"$CLAUDE_PROJECT_DIR\"/.context_ledger/core/bin/ledger-guard remind" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "sh \"$CLAUDE_PROJECT_DIR\"/.context_ledger/core/bin/ledger-guard remind" }] }],
+    "PreToolUse": [{ "matcher": "Bash", "hooks": [{ "type": "command", "command": "sh \"$CLAUDE_PROJECT_DIR\"/.context_ledger/core/bin/ledger-guard tool-check" }] }]
+  }
+}
