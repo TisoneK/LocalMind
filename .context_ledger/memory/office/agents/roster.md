@@ -53,7 +53,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Ezra | S004 | GLM (Z.ai; harness states no exact version — owner asked to confirm) | Re-identity shipped: palettes renamed, Graphite Blue the default in dark mode; closeout compliance done | Done | Shipped: `c4b5d8f8` + `145b9561` rebased onto Dara's post-close work; gates green; default live-verified (isolated 8765); pushed |
-| Amani | S006 | GLM (Z.ai; harness states no exact version) | Core sync (ops, part 5 — no product code): ledger-sync update to pick up core 2.2.1 (sandbox reset recovery + continuation guidance) just released upstream | Working | Check-in next; vendored core verified at 2.2.0, source resolves to 2.2.1 in sync with upstream |**Keep your Status cells current — that is what the board is for.** The
+| Amani | S006 | GLM (Z.ai; harness states no exact version) | Core sync (ops, part 5 — no product code): ledger-sync update to pick up core 2.2.1 (sandbox reset recovery + continuation guidance) just released upstream | Done | Shipped: vendored core 2.2.0 → 2.2.1, verify green post-update; only `core/` + `core.lock` changed; commits `96c4ded3` (check-in) + `c3fa97dd` (update) pushed. Open unchanged: zai recharge → one `live_test_native_thinker.py` rerun; B-2026-10-27-1/-2, P-2026-10-27-1 |**Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
 what is in flight and at which stage, and what is blocked — and so how
 to coordinate with you without interrupting. Edit your own row (don't

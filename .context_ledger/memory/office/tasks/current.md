@@ -9,10 +9,10 @@ entry and backlog before starting.
 <!-- TEMPLATE — replace everything below this comment:
 - **Session:** YYYY-MM-DD — <agent> / <model>
 - **Task:** <what is being worked on right now>
-- **Status:** done | done | blocked (<blocker>)
+- **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-10-27 — Ines / unknown (Qoder agent) (S007)
-- **Feature:** none (sync session — no product code)
-- **Task:** pull latest `main` into the checkout, verify the vendored core, close out the ledger bookkeeping
+- **Session:** 2026-10-27 — Amani / GLM (Z.ai) (S006) — part 5
+- **Feature:** none (ops — core sync, no product code)
+- **Task:** ledger-sync update: vendored core 2.2.0 → 2.2.1 (sandbox reset recovery + continuation guidance), verified and pushed
 - **Status:** done

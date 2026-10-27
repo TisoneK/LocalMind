@@ -215,3 +215,13 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Protocol:** `ledger-sync verify` OK 2.2.0 ("every port parses"); `status` 2.2.0 up to date (adjacent source clone behind — no action); `ledger-guard install` OK (pre-commit, prepare-commit-msg and pre-push hooks; `.claude/settings.json` already current); pre-commit gates green (tsc, ruff, conflict markers, backlog duplicates) on both ledger commits. `status` refreshed `core.lock` with source metadata — staged normally.
 - **Process:** check-in `871b8bca`, STATE regen `14928124`; solo claim/release emitted; no friction this session — nothing appended to the flaws/inefficiencies logs.
 - **Close:** roster clocked out; `current.md` closed; STATE regenerated.
+
+## 2026-10-27 — Session 6, part 5 — Amani (S006) — core sync: vendored core updated to 2.2.1 (sandbox recovery guidance lands)
+
+- **Agent:** Amani | **Model:** GLM (Z.ai) | **Platform:** Linux cloud sandbox | **Role:** engineer | **Core:** 2.2.1 (was 2.2.0)
+- **Task (owner):** "Run ledger sync in LocalMind" — pick up core 2.2.1, released and self-hosted upstream this session (context-ledger 8bedd85/aa74e0f).
+- **Landed:** `git pull --ff-only` first (Ines's Session 7 closeout + collab events); `ledger-sync verify` OK 2.2.0; `status --no-record` showed 2.2.1 available, same MAJOR, source in sync with upstream; `ledger-sync update` applied 2.2.0 → 2.2.1 — only `core/` + `memory/core.lock` changed (project facts already filled; no root files touched); post-update verify green ("every file matches MANIFEST.sha256 and every port parses (2.2.1)").
+- **What 2.2.1 brings (from the changelog):** the "Sandbox and ephemeral hosts — durability and reset recovery" subsection (durability law, secrets-on-restoring-hosts rules, five-step reset-recovery runbook), EXIT clean-working-tree gate, corrected secrets-persistence guidance, worklog ranked best-effort cache, re-check-in rule extended to reset resumption. Directly relevant to this sandbox: two resets were survived here by exactly the runbook's steps before they were written down.
+- **Process:** check-in `96c4ded3`, update commit `c3fa97dd`, both pushed. No product code; no session-scoped collaboration.
+- **Close:** roster → Done; `current.md` closed; STATE regenerated.
+- **Housekeeping (same part):** `tasks/current.md`'s TEMPLATE comment block was found pre-damaged (Status line read "done | done | blocked"; likely a prior session's overwrite anchored inside the template) — restored to the canonical vendored form ("in-progress | done | blocked"); live-entry format above is unaffected.
