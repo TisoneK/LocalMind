@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-27T02:48:24Z_
+_Regenerated: 2026-10-27T03:10:26Z_
 
 ## Standing params
 - **Core:** 2.2.0 (locked, verified 2026-10-27)
@@ -16,6 +16,7 @@ _Regenerated: 2026-10-27T02:48:24Z_
 
 ## Office — who's in, right now
 - **Ezra** (S004) — Done — Re-identity shipped: palettes renamed, Graphite Blue the default in dark mode; closeout c…
+- **Amani** (S006) — Working — Autopsy of the failed Kitengela weather turn (fetch extraction, chunk re-query ranking, a…
 
 ## Current task
 - **2026-10-27 — Kai / GLM (Z.ai) (S005)** — setup — pull latest and bring the checkout to a working dev state (core 2.0.4 → 2.2.0, entry points refreshed, guard hooks installed, b… — *done*
