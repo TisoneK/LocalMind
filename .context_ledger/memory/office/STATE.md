@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-27T04:13:33Z_
+_Regenerated: 2026-10-27T05:40:22Z_
 
 ## Standing params
 - **Core:** 2.2.0 (locked, verified 2026-10-27)
@@ -16,10 +16,10 @@ _Regenerated: 2026-10-27T04:13:33Z_
 
 ## Office — who's in, right now
 - **Ezra** (S004) — Done — Re-identity shipped: palettes renamed, Graphite Blue the default in dark mode; closeout c…
-- **Amani** (S006) — Done — Autopsy of the failed Kitengela weather turn (fetch extraction, chunk re-query ranking, a…
+- **Amani** (S006) — Done — The mid-loop consult never actually thought — it performed an inner voice on demand. Ro…
 
 ## Current task
-- **2026-10-27 — Amani / GLM (Z.ai) (S006)** — autopsy of the failed Kitengela weather turn (invented forecast figures) + the root fix: an evidence-grounding acceptance criterion that na… — *done*
+- **2026-10-27 — Amani / GLM (Z.ai) (S006, part 3)** — the mid-loop consult never actually thought — it performed an inner voice on demand; root fix: stream the model's native reasoning verbat… — *done*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-09-21-2 | In-app State Explorer + engine selector (the state-driven engine, ADR-71 in `history/office-002/plans/decisions.md`): port the explorer into the app as its own interface (a game tree, move list, eval bar, inspector, meters, rewindable timeline — the owner's "geeky, not a chat" direction) and add the Classic/State engine setting so the engine becomes selectable in Settings. Reference implementations: the self-contained prototype `docs/prototypes/state-explorer/` and the backend-served page in `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter: `state_agent/adapters/localmind.py`); the `EngineEvent` record is the UI contract. In flight when office-002 closed — check whether it landed before starting. |
@@ -30,10 +30,10 @@ _Regenerated: 2026-10-27T04:13:33Z_
 _14 medium, 3 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
-- flaws/log.md (protocol/.context_ledger friction): 5 entries, last added 2026-10-27
+- flaws/log.md (protocol/.context_ledger friction): 6 entries, last added 2026-10-27
 - inefficiencies/log.md (project code/env friction): 6 entries, last added 2026-10-27
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-21
 
 ## Collaboration
-- 136 event(s) on file; most recent: `20261027T041328Z-Amani-3b32ebb3.json`
+- 138 event(s) on file; most recent: `20261027T054013Z-Amani-8116c13c.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`

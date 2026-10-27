@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261027T054013Z-Amani-8116c13c",
+  "type": "release",
+  "session": "S006",
+  "agent": "Amani",
+  "created": "2026-10-27T05:40:13Z",
+  "issue": "native-thinker-reasoning",
+  "body": "Native-reasoning consult shipped: the mid-loop consult streams the model's native reasoning verbatim (the answer channel is a never-shown JSON decision payload); the performed inner voice, its prose gate and its word budgets are deleted. Live full PASS on zai/glm-4.5-flash; review at office/reviews/2026-10-27-review-s6-native-thinker.md.",
+  "paths": [],
+  "refs": ["045199d"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

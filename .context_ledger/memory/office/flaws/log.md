@@ -167,3 +167,10 @@ evidence: `history/office-002/flaws/log.md`.
 - **Symptom:** the board showed the scope only after the work (and its commits) were already pushed — "the push is the peer alarm, the board is the dodge" ran with the dodge half on.
 - **Root cause:** none in this session but mine — the light path was on record (preferences closeout bullet Ezra logged after the same failure) and I still sequenced it at the end.
 - **Suggested fix:** behavioral, not structural — claim before the first edit, every session. If it repeats a third time, consider a `ledger-gates checkpoint`-level nudge ("live claim?") at Phase 4 arrival.
+---
+## 2026-10-27 — Amani / GLM (Z.ai) (S006)
+
+- **Flaw:** a live-harness invocation exported provider keys with a generated `${P^^}_API_KEY=` prefix assignment; bash treated the assignment as a command name and echoed two key VALUES into the session transcript.
+- **Symptom:** the tool error printed `CEREBRAS_API_KEY=<value>: command not found` — value visible in the transcript (never in any file, log, or commit; secrets dir and tracked files stayed clean).
+- **Root cause:** shell expansion in an env-prefix position — the construct cannot fail silently, and its failure mode is an echo. The standing rule ("never echo a key value") was broken by tooling choice, not by intent.
+- **Suggested fix:** keys are exported only through literal-name constructs that cannot echo on failure (`case`-dispatched `export FOO="$(head -n1 <secrets file>)"`), the pattern the corrected harness runs now use. Rotation of the two exposed keys is the owner's standing practice for plaintext exposure.

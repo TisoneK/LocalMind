@@ -12,7 +12,7 @@ entry and backlog before starting.
 - **Status:** done | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-10-27 — Amani / GLM (Z.ai) (S006)
-- **Feature:** evidence-grounded answers
-- **Task:** autopsy of the failed Kitengela weather turn (invented forecast figures) + the root fix: an evidence-grounding acceptance criterion that names invented figures and redoes the answer grounded or honestly reports the gap
+- **Session:** 2026-10-27 — Amani / GLM (Z.ai) (S006, part 3)
+- **Feature:** native-reasoning consult
+- **Task:** the mid-loop consult never actually thought — it performed an inner voice on demand; root fix: stream the model's native reasoning verbatim, answer channel becomes a never-shown JSON decision payload, prose gate and word budgets deleted
 - **Status:** done
