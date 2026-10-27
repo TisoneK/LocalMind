@@ -94,6 +94,7 @@ from core.agent.delegation import (
     snapshot_messages,
     validate_rewritten_history,
 )
+from core.agent.evidence_grounding import check_answer_grounding, collect_evidence_text
 from core.agent.init_stream import (
     InitializationPreview,
     extract_preview,
@@ -137,7 +138,6 @@ from core.agent.tool_dispatch import dispatch_with_retry
 from core.agent.tool_schemas import TOOL_DEFINITIONS, tool_defs_for_call
 from core.agent.turn_bus import TurnBus
 from core.agent.turn_outcome import Recovery, TurnOutcome, classify_turn_outcome
-from core.agent.evidence_grounding import check_answer_grounding, collect_evidence_text
 from core.context_builder import _build_environment_context
 from core.context_compactor import TOOL_RESULT_BUDGET_CHARS, simplify_tool_results
 from core.models import AgentAbortedError, Intent, StreamChunk, ToolResult
