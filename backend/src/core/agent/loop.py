@@ -5755,13 +5755,15 @@ class AgentLoop:
 
                 # ── Post-tool Thinker consult ─────────────────────────────
                 # A read-only reasoning pass on what was just GATHERED (not
-                # the raw request). Its prose streams to the
-                # ThinkingBlock. After a SUCCESSFUL tool the consult
-                # no longer blocks the next model call — it runs in the
-                # background (overlapping the model work) and its analysis is
-                # injected at the next iteration head by the drain there;
-                # this is what lets the consult fire after EVERY tool without
-                # re-creating the earlier serial latency. After a FAILURE
+                # the raw request). The model's native reasoning streams to
+                # the ThinkingBlock, verbatim from the thinking channel —
+                # the consult never surfaces authored prose. After a
+                # SUCCESSFUL tool the consult no longer blocks the next
+                # model call — it runs in the background (overlapping the
+                # model work) and its analysis is injected at the next
+                # iteration head by the drain there; this is what lets the
+                # consult fire after EVERY tool without re-creating the
+                # earlier serial latency. After a FAILURE
                 # the consult stays BLOCKING: recovery advice must shape the
                 # very next call or the model may repeat the failure.
                 # Throttling: at most one consult in flight and

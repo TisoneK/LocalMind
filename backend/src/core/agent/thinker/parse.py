@@ -1,9 +1,12 @@
 """Parse a Thinker model response into a ThinkerAnalysis.
 
 Fail-safe by construction: a malformed or JSON-less response still yields a
-usable analysis (the prose becomes the reasoning, structure stays empty) so
-the agent can fall back to its own next-step choice — a bad consult must
-never crash or block the loop.
+safe analysis (the structure stays empty) so the agent can fall back to its
+own next-step choice — a bad consult must never crash or block the loop.
+
+The visible `reasoning` is the model's native reasoning, passed in by the
+consult from the thinking channel. The text channel is the decision payload
+only: prose found there is never re-cast as thought.
 """
 
 from __future__ import annotations
@@ -91,22 +94,23 @@ def _ambiguities(value: Any) -> list[Ambiguity]:
     return out
 
 
-def parse_thinker_analysis(text: str) -> ThinkerAnalysis:
-    """Parse the model's consult output. The prose before the JSON is the
-    reasoning; the JSON carries the structure. Never raises."""
+def parse_thinker_analysis(text: str, reasoning: str = "") -> ThinkerAnalysis:
+    """Parse the model's consult output. `reasoning` is the model's native
+    reasoning captured from the thinking channel — the visible thought.
+    `text` is the answer channel; only its JSON structure is used. Never
+    raises."""
     raw = (text or "").strip()
-    payload, json_start = _first_json_object(raw)
+    payload, _json_start = _first_json_object(raw)
 
-    reasoning = (raw[:json_start] if json_start > 0 else raw).strip()
-    # Drop a trailing fence marker left over from ```json blocks.
-    reasoning = re.sub(r"```(?:json)?\s*$", "", reasoning).strip()
+    native = (reasoning or "").strip()
 
     if payload is None:
-        # No structure — the prose is still useful as visible reasoning.
-        return ThinkerAnalysis(reasoning=reasoning[:_MAX_RAW], raw=raw[:_MAX_RAW])
+        # No structure — the consult produced no decision. The native
+        # reasoning (if any) still stands as the visible thought.
+        return ThinkerAnalysis(reasoning=native[:_MAX_RAW], raw=raw[:_MAX_RAW])
 
     analysis = ThinkerAnalysis(
-        reasoning=reasoning[:_MAX_RAW],
+        reasoning=native[:_MAX_RAW],
         facts=_strings(payload.get("facts")),
         ambiguities=_ambiguities(payload.get("ambiguities")),
         next_step=str(payload.get("next_step", "")).strip()[:_MAX_ITEM_CHARS],

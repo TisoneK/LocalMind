@@ -1,6 +1,8 @@
-"""Tests for the Thinker module  — the agent's reasoning backbone."""
+"""Tests for the Thinker module — the agent's reasoning backbone."""
 
 from __future__ import annotations
+
+import asyncio
 
 import pytest
 
@@ -24,10 +26,12 @@ def test_prompt_shows_user_request_even_when_objective_is_generic():
     )
     msg = build_thinker_messages(ev)[1]["content"]
     assert "Create a recipe on desktop" in msg, "the real request must be shown"
-    # The generic fallback objective must NOT appear (it confused the Thinker).
+    # The generic fallback objective must NOT appear (it confused the analyst).
     assert "Determine and complete the user's request" not in msg
-    # And it must tell the Thinker not to get stuck on irrelevant evidence.
-    assert "irrelevant" in msg.lower()
+    # And the standing rule lives in the system prompt: don't get stuck on
+    # irrelevant evidence.
+    system = build_thinker_messages(ev)[0]["content"]
+    assert "irrelevant" in system.lower()
 
 
 def test_prompt_shows_meaningful_objective_alongside_request():
@@ -35,6 +39,28 @@ def test_prompt_shows_meaningful_objective_alongside_request():
     msg = build_thinker_messages(ev)[1]["content"]
     assert "read my cv" in msg
     assert "Find and read the user's CV" in msg  # meaningful objective still shown
+
+
+# ── The native-reasoning contract: decide, don't perform ────────────────────
+def test_prompt_demands_a_json_only_answer_and_no_performed_prose():
+    """The consult never asks the model to author thinking-shaped text: the
+    reasoning happens in the model's reasoning channel; the answer channel
+    carries exactly one JSON object. An 'inner voice' casting would be an
+    instruction to perform thinking, and a performance is not shown."""
+    system = build_thinker_messages(Evidence(user_message="x"))[0]["content"]
+    assert "EXACTLY ONE JSON object" in system
+    assert "no prose before or after it" in system
+    assert "reasoning channel" in system, "the model must be told where reasoning happens"
+    assert "inner voice" not in system
+    assert "thinking out loud" not in system
+    assert "first person" not in system
+
+
+def test_prompt_keeps_the_decision_quality_rules():
+    system = build_thinker_messages(Evidence(user_message="x"))[0]["content"]
+    assert "QUESTIONS from DIRECTIVES" in system
+    assert "Invent nothing" in system
+    assert "DEFAULT" in system, "ambiguities must carry the default to proceed on"
 
 
 # ── Contract ────────────────────────────────────────────────────────────────
@@ -50,7 +76,7 @@ def test_analysis_is_empty():
     assert ThinkerAnalysis(reasoning="hmm").is_empty is False
 
 
-# ── S425 continuity: prior analysis compounds instead of restarting ─────────
+# ── Continuity: prior analysis compounds instead of restarting ─────────────
 def test_prompt_renders_prior_analysis_block():
     ev = Evidence(
         user_message="read my cv",
@@ -58,7 +84,7 @@ def test_prompt_renders_prior_analysis_block():
         prior_analysis="  • cv.pdf is the newest\nNext step I was taking: read it",
     )
     msg = build_thinker_messages(ev)[1]["content"]
-    assert "YOUR EARLIER THINKING THIS TURN" in msg
+    assert "YOUR EARLIER ANALYSIS THIS TURN" in msg
     assert "cv.pdf is the newest" in msg
     assert "do not repeat it" in msg, "the block must demand the DELTA, not a repetition"
 
@@ -66,31 +92,18 @@ def test_prompt_renders_prior_analysis_block():
 def test_prompt_omits_prior_analysis_when_empty():
     ev = Evidence(user_message="read my cv", observations="found cv.pdf")
     msg = build_thinker_messages(ev)[1]["content"]
-    assert "YOUR EARLIER THINKING" not in msg
-
-
-# ── S425: the visible prose stays on the task, free of agent machinery ──────
-def test_prompt_forbids_internals_in_visible_reasoning():
-    """Owner directive: the streamed thinking reads like a person thinking
-    about the TASK — no tool names, no 'tool', no steps/loops/iterations/
-    prompts/'synthesize'/'the system' in the prose. The JSON tail is exempt
-    (the agent's mechanics may name tools)."""
-    system = build_thinker_messages(Evidence(user_message="x"))[0]["content"]
-    assert "free of machinery" in system
-    assert "never name a tool" in system
-    assert "MAY name tools" in system, "the JSON exemption must be explicit"
+    assert "YOUR EARLIER ANALYSIS" not in msg
 
 
 # ── Parser ──────────────────────────────────────────────────────────────────
-def test_parse_prose_plus_json():
-    text = (
-        "Two candidates found: report_2024.pdf and report_old.pdf; the 2024 one matches.\n"
+def test_parse_json_with_native_reasoning():
+    a = parse_thinker_analysis(
         '{"facts": ["report_2024.pdf is the newest"], '
         '"ambiguities": [{"text": "which format", "default": "pdf"}], '
-        '"next_step": "read report_2024.pdf", "confidence": 0.8}'
+        '"next_step": "read report_2024.pdf", "confidence": 0.8}',
+        reasoning="Two candidates found; the 2024 one matches the ask.",
     )
-    a = parse_thinker_analysis(text)
-    assert "Two candidates found" in a.reasoning
+    assert a.reasoning == "Two candidates found; the 2024 one matches the ask."
     assert a.facts == ["report_2024.pdf is the newest"]
     assert a.ambiguities[0].text == "which format" and a.ambiguities[0].default == "pdf"
     assert a.next_step == "read report_2024.pdf"
@@ -98,18 +111,31 @@ def test_parse_prose_plus_json():
 
 
 def test_parse_fenced_json():
-    text = "Reasoning here.\n```json\n{\"next_step\": \"synthesize the final answer\"}\n```"
-    a = parse_thinker_analysis(text)
+    a = parse_thinker_analysis(
+        '```json\n{"next_step": "synthesize the final answer"}\n```',
+        reasoning="Enough is known.",
+    )
     assert a.next_step == "synthesize the final answer"
-    assert a.reasoning.strip() == "Reasoning here."
-    assert "```" not in a.reasoning
+    assert a.reasoning == "Enough is known."
 
 
-def test_parse_no_json_keeps_prose_as_reasoning():
-    a = parse_thinker_analysis("I looked and found nothing conclusive.")
-    assert a.reasoning == "I looked and found nothing conclusive."
+def test_parse_text_prose_is_never_cast_as_reasoning():
+    """Prose in the answer channel is a contract violation, not a thought:
+    it must never surface as the analysis reasoning."""
+    a = parse_thinker_analysis(
+        "I looked and found nothing conclusive.",
+        reasoning="the results carry no temperature figure",
+    )
+    assert a.reasoning == "the results carry no temperature figure"
+    assert "nothing conclusive" not in a.reasoning
     assert a.facts == [] and a.next_step == ""
-    assert a.is_empty is False  # the reasoning is still usable
+
+
+def test_parse_no_json_no_native_reasoning_is_empty():
+    a = parse_thinker_analysis("Here is my analysis as requested.")
+    assert a.reasoning == ""
+    assert a.facts == [] and a.next_step == ""
+    assert a.is_empty is True  # nothing usable — the loop proceeds on its own
 
 
 def test_parse_malformed_never_raises():
@@ -134,15 +160,14 @@ class _MockAdapter:
 
 
 @pytest.mark.asyncio
-async def test_consult_streams_prose_but_never_the_json():
-    """ADR-57 slice 1: the consult's prose reasoning streams live as
-    `thinking` chunks — no call runs silent — but the JSON structure NEVER
-    surfaces (Session 324's leak, now enforced structurally: surfacing stops
-    at the JSON marker). The structured analysis still parses so the loop can
-    inject it into the agent's context."""
+async def test_consult_streams_native_reasoning_verbatim_and_never_the_answer():
+    """The thinking channel streams as it arrives, untouched. The answer
+    channel — JSON or any prose — never surfaces: the visible thought is
+    the model's actual reasoning, not text authored to look like it."""
     chunks = [
-        StreamChunk(text="Found two files; ", done=False),
-        StreamChunk(text="the newer one matches the ask. ", done=False),
+        StreamChunk(text="", thinking="two candidates; checking dates first. ", done=False),
+        StreamChunk(text="the 2024 file matches. ", done=False),
+        StreamChunk(text="", thinking="the older one predates the request. ", done=False),
         StreamChunk(text='{"facts": ["f1"], "next_step": "read it", ', done=False),
         StreamChunk(text='"confidence": 0.7}', done=False),
         StreamChunk(text="", done=True),
@@ -155,51 +180,50 @@ async def test_consult_streams_prose_but_never_the_json():
             surfaced.append(ch.thinking)
         if ch.done:
             final = ch
-    # The prose streamed; the JSON (split across chunks) never did.
     joined = "".join(surfaced)
-    assert "the newer one matches" in joined
-    assert '"facts"' not in joined and '"confidence"' not in joined and "{" not in joined
-    # Structured analysis still parsed + attached for the agent's context.
+    # Native reasoning streamed verbatim, in order.
+    assert joined == "two candidates; checking dates first. the older one predates the request. "
+    # The answer channel never leaked — neither the JSON nor its prose.
+    assert '"facts"' not in joined and "{" not in joined
+    assert "the 2024 file matches" not in joined
+    # The structured analysis still parsed for the agent's context.
     assert thinker.last_analysis.facts == ["f1"]
     assert thinker.last_analysis.next_step == "read it"
     assert final.metadata["thinker_analysis"]["next_step"] == "read it"
 
 
 @pytest.mark.asyncio
-async def test_consult_fenced_json_never_surfaces():
-    """A ```json fence split across chunks must not leak either — the fence
-    itself is held back and cut at the JSON start."""
+async def test_consult_text_only_answer_shows_nothing_but_still_decides():
+    """A provider that streams no reasoning channel: the consult honestly
+    shows nothing — silence, not a performance — and the JSON decision
+    still parses so the loop is shaped by it."""
     chunks = [
-        StreamChunk(text="The newest report matches. ", done=False),
-        StreamChunk(text="```json\n{\"next_step\": \"synthesize\"", done=False),
-        StreamChunk(text="}\n```", done=False),
+        StreamChunk(text='{"facts": ["f1"], "next_step": "read it", "confidence": 0.9}', done=False),
         StreamChunk(text="", done=True),
     ]
     thinker = Thinker()
-    joined = ""
+    surfaced = ""
     async for ch in thinker.consult(Evidence(observations="x"), _MockAdapter(chunks)):
-        if ch.thinking:
-            joined += ch.thinking
-    assert "matches" in joined
-    assert "```" not in joined and '"next_step"' not in joined
-    assert thinker.last_analysis.next_step == "synthesize"
+        surfaced += ch.thinking or ""
+    assert surfaced == ""
+    assert thinker.last_analysis.next_step == "read it"
 
 
 @pytest.mark.asyncio
-async def test_consult_no_json_streams_all_prose():
-    """A JSON-less response is still useful reasoning — all of it streams."""
+async def test_consult_json_less_answer_stays_honest():
+    """No reasoning channel and no JSON: nothing is shown and the analysis is
+    empty — the loop proceeds on its own next step (never a fabricated
+    thought to fill the silence)."""
     chunks = [
-        StreamChunk(text="Nothing conclusive here; ", done=False),
-        StreamChunk(text="ask the user for the missing year.", done=False),
+        StreamChunk(text="Nothing conclusive here; ask the user.", done=False),
         StreamChunk(text="", done=True),
     ]
     thinker = Thinker()
-    joined = ""
+    surfaced = ""
     async for ch in thinker.consult(Evidence(observations="x"), _MockAdapter(chunks)):
-        if ch.thinking:
-            joined += ch.thinking
-    assert joined.strip() == "Nothing conclusive here; ask the user for the missing year."
-    assert thinker.last_analysis.is_empty is False  # prose is the reasoning
+        surfaced += ch.thinking or ""
+    assert surfaced == ""
+    assert thinker.last_analysis.is_empty is True
 
 
 @pytest.mark.asyncio
@@ -222,67 +246,22 @@ async def test_consult_survives_provider_error():
     assert thinker.last_analysis is not None
 
 
-# ── the Thinker's reasoning about its own output format never reaches the user ──
-
-CONTRACT_META = (
-    "Now I need to format my response as JSON with:\n"
-    "- facts: What I know for certain\n"
-    "- ambiguities: Any uncertainties\n"
-    "- next_step: What I should do next\n"
-    "- confidence: A confidence score between 0.0 and 1.0"
-)
-
-
-def test_contract_paragraphs_are_recognised():
-    from core.agent.thinker.thinker import _is_contract_meta
-
-    assert _is_contract_meta(CONTRACT_META)
-    assert _is_contract_meta("Facts:\n- User is asking for current weather in Kitengela")
-    assert _is_contract_meta("Ambiguities:\n- I don't know the exact conditions")
-    assert _is_contract_meta("I'll write the answer as JSON with a next_step field.")
-
-
-def test_ordinary_reasoning_is_not_mistaken_for_contract():
-    from core.agent.thinker.thinker import _is_contract_meta
-
-    assert not _is_contract_meta("The user wants the weather right now, so I should search the web.")
-    assert not _is_contract_meta("The facts are clear: the tool returned 0 matches for 'disk'.")
-    assert not _is_contract_meta("Kitengela is in Kenya, based on my knowledge.")
-
-
-def test_gate_streams_whole_paragraphs_and_drops_contract_ones():
-    from core.agent.thinker.thinker import _ProseGate
-
-    gate = _ProseGate()
-    out: list[str] = []
-    # Arrives in awkward fragments, as a token stream does.
-    for piece in ("The user wants the wea", "ther now.\n\nNow I need to format my resp",
-                  "onse as JSON with:\n- facts: x\n- next_step: y\n\nSo I should search the web."):
-        out += gate.feed(piece)
-    out += gate.flush()
-    text = "".join(out)
-    assert "The user wants the weather now." in text
-    assert "So I should search the web." in text
-    assert "JSON" not in text and "next_step" not in text
-
-
 @pytest.mark.asyncio
-async def test_consult_surfaces_only_the_real_reasoning():
-    prose = (
-        "The user asks about disk space, which the system line already carries.\n\n"
-        f"{CONTRACT_META}\n\n"
-        "Facts:\n- disk has 16.1 GB free\n\n"
-    )
-    json_block = '{"facts": ["16.1 GB free"], "ambiguities": [], "next_step": "answer", "confidence": 0.9}'
+async def test_consult_timeout_keeps_the_reasoning_it_saw():
+    """A wall-clock timeout mid-reasoning yields what arrived — real
+    reasoning, not a substitute — plus the safe empty analysis."""
 
-    class FakeAdapter:
-        async def chat(self, messages, temperature=0.4, **kwargs):
-            yield StreamChunk(text=prose + json_block, done=False)
-            yield StreamChunk(text="", done=True)
+    class _SlowAdapter:
+        async def chat(self, messages, temperature=0.4, intent="analyze", **kwargs):
+            yield StreamChunk(text="", thinking="still weighing the sources...", done=False)
+            await asyncio.sleep(10)  # far past the consult timeout
+            yield StreamChunk(text='{"next_step": "x"}', done=False)  # pragma: no cover
 
+    thinker = Thinker(timeout_secs=0.05)
     surfaced = ""
-    evidence = Evidence(user_message="how much free disk space do I have?", observations="none")
-    async for chunk in Thinker().consult(evidence, FakeAdapter()):
-        surfaced += chunk.thinking or ""
-    assert "system line already carries" in surfaced
-    assert "JSON" not in surfaced and "Facts:" not in surfaced and "next_step" not in surfaced
+    async for ch in thinker.consult(Evidence(observations="x"), _SlowAdapter()):
+        if ch.done:
+            break
+        surfaced += ch.thinking or ""
+    assert "still weighing" in surfaced
+    assert thinker.last_analysis is not None

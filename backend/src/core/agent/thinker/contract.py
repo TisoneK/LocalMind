@@ -24,11 +24,11 @@ class Evidence:
     layer and produced a clarification loop.
     """
 
-    objective: str = ""          # what the user wants (from init) — context, not the subject
-    user_message: str = ""       # the latest user message — context
-    observations: str = ""       # the real gathered evidence (tool results / observation log)
-    last_action: str = ""        # the tool/action that produced the newest evidence
-    iteration: int = 0           # which loop step this consult happens at
+    objective: str = ""  # what the user wants (from init) — context, not the subject
+    user_message: str = ""  # the latest user message — context
+    observations: str = ""  # the real gathered evidence (tool results / observation log)
+    last_action: str = ""  # the tool/action that produced the newest evidence
+    iteration: int = 0  # which loop step this consult happens at
     # Conversation history for pre-tool understanding
     conversation_history: str = ""  # recent user/assistant turns for context
     # Continuity: this turn's EARLIER Thinker analysis (the compact
@@ -67,16 +67,16 @@ class Ambiguity:
 
 @dataclass
 class ThinkerAnalysis:
-    """The Thinker's structured output. `reasoning` is the human-readable
-    thought streamed live to the ThinkingBlock; the rest drives the agent's
-    next decision."""
+    """The Thinker's structured output. `reasoning` is the model's native
+    reasoning (captured from the thinking channel and streamed live to the
+    ThinkingBlock); the rest drives the agent's next decision."""
 
-    reasoning: str = ""                                  # prose thought (streamed)
-    facts: list[str] = field(default_factory=list)       # concrete findings FROM the evidence
+    reasoning: str = ""  # the model's native reasoning (streamed verbatim)
+    facts: list[str] = field(default_factory=list)  # concrete findings FROM the evidence
     ambiguities: list[Ambiguity] = field(default_factory=list)  # blockers + defaults
-    next_step: str = ""                                  # the smartest next action (drives the loop)
+    next_step: str = ""  # the smartest next action (drives the loop)
     confidence: float = 0.0
-    raw: str = ""                                         # the model's raw output (bounded)
+    raw: str = ""  # the model's raw output (bounded)
 
     @property
     def is_empty(self) -> bool:

@@ -1,9 +1,12 @@
-"""The Thinker — the agent's reasoning backbone.
+"""The Thinker — a read-only mid-loop analyst.
 
-A silent, read-only mid-loop analyst that reasons on GATHERED EVIDENCE (never
-the raw request) and returns a structured analysis the agent acts on. This is
-the ground-up replacement for the old "understanding" one-liner, which merely
-echoed the request from the upfront init call (a diagnosed failure).
+Reasons on GATHERED EVIDENCE (never the raw request) and returns a structured
+analysis the agent acts on. What the user watches from a consult is the
+model's native reasoning, streamed verbatim from the thinking channel — the
+consult never asks the model to author thinking-shaped prose and never shows
+the answer channel. This is the ground-up replacement for the old
+"understanding" one-liner, which merely echoed the request from the upfront
+init call (a diagnosed failure).
 """
 
 from .contract import Ambiguity, Evidence, ThinkerAnalysis
