@@ -70,6 +70,10 @@ Rows parked 2026-10-26 (S002, Harness-skin session) purely by the backlogcap —
 | B-2026-09-21-23 | Frontend test health: 9 context-menu tests fail under jsdom (the Radix menu opens once per file); cause already narrowed — fix or document with the cause. |
 | B-2026-09-21-24 | Provider model-switch policy: provider model switches only affect the picker — decide whether hidden models must also be refused by the agent/router, and live-test the add/hide/default/delete flows on a real provider (only the DeepSeek view was clicked through). |
 
+Rows opened 2026-10-27 (S006, evidence-grounding session) as deferred design questions:
+
+| P-2026-10-27-1 | Guided handoff to the browser tool for JavaScript-rendered data pages: the Kitengela trace burned 2 of 5 iterations fetching a page whose forecast is client-rendered — the static extract is navigation chrome, the tool honestly reports success, and no static-extraction heuristic separates it from real content (probed and rejected: wttr.in JSON has no long sentences, meteoblue's news blurb does — both discriminations fail). A safe acquisition-level signal (content-type, DOM shell signature, or a cheap model read) could route data-looking fetches of JS-heavy hosts to the browser tool. The answer-time grounding gate now stops the trust damage; this is about the wasted iterations. Context: `office/reviews/2026-10-27-review-s6-evidence-grounding.md`. |
+
 ## Someday
 
 Loose ideas with no owner and no hook yet. The lowest-pressure shelf.

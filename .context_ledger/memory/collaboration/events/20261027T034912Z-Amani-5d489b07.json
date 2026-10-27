@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261027T034912Z-Amani-5d489b07",
+  "type": "release",
+  "session": "S006",
+  "agent": "Amani",
+  "created": "2026-10-27T03:49:12Z",
+  "issue": "agent-web-evidence",
+  "body": "Evidence-grounding acceptance criterion shipped: invented figures named and redone grounded or honest (c118898); suite 3653/2; provider live run pending credential",
+  "paths": ["backend/src/agents/", "backend/src/tools/", "backend/src/core/"],
+  "refs": ["c118898"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

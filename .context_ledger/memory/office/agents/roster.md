@@ -53,7 +53,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Ezra | S004 | GLM (Z.ai; harness states no exact version — owner asked to confirm) | Re-identity shipped: palettes renamed, Graphite Blue the default in dark mode; closeout compliance done | Done | Shipped: `c4b5d8f8` + `145b9561` rebased onto Dara's post-close work; gates green; default live-verified (isolated 8765); pushed |
-| Amani | S006 | GLM (Z.ai; harness states no exact version) | Autopsy of the failed Kitengela weather turn (fetch extraction, chunk re-query ranking, answer hygiene) — root-cause fix in the loop | Working | Checked in; Phase 3 orient next |
+| Amani | S006 | GLM (Z.ai; harness states no exact version) | Autopsy of the failed Kitengela weather turn (fetch extraction, chunk re-query ranking, answer hygiene) — root-cause fix in the loop | Done | Shipped: `c118898` evidence-grounding criterion (invented figures named, answer redone grounded or honest); suite 3653/2 green; provider live run pending PAT — 4 commits staged locally, push blocked on credential |
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
 what is in flight and at which stage, and what is blocked — and so how

@@ -12,7 +12,7 @@ entry and backlog before starting.
 - **Status:** done | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-10-27 — Kai / GLM (Z.ai) (S005)
-- **Feature:** none
-- **Task:** setup — pull latest and bring the checkout to a working dev state (core 2.0.4 → 2.2.0, entry points refreshed, guard hooks installed, backend venv on Python 3.13, npm workspace, gates green)
+- **Session:** 2026-10-27 — Amani / GLM (Z.ai) (S006)
+- **Feature:** evidence-grounded answers
+- **Task:** autopsy of the failed Kitengela weather turn (invented forecast figures) + the root fix: an evidence-grounding acceptance criterion that names invented figures and redoes the answer grounded or honestly reports the gap
 - **Status:** done

@@ -118,3 +118,11 @@ and using absolute paths (the pattern already in the log) is the fix.
 - **Friction:** a fresh backend venv built with this machine's default `python` (3.14) collects no tests — pip resolves a cp313 `pydantic_core` build inside the cp314 venv, and `import pydantic_core` fails with `ModuleNotFoundError`, stopping every pytest collection.
 - **Cost:** first pytest read was a clean-looking exit 2 with no obvious fix; ~5 minutes to diagnose to the ABI mismatch, then a full venv rebuild.
 - **Workaround:** always create the dev venv with `py -3.13 -m venv backend/.venv` — 3.13 is what the resolved wheels target; 3.14 is the machine default.
+
+---
+
+## 2026-10-27 — Amani / GLM (Z.ai) (S006)
+
+- **Friction:** `web_fetch` cannot tell a JavaScript-rendered data page from real content — meteoblue's static HTML is language lists, promos and other cities' temperatures, yet the tool returns success with ~10K chars of it, and the loop counts that as evidence. Two of the five iterations in the Kitengela weather trace went to fetching and re-querying that chrome. Live-probed the obvious extraction heuristics and they are unsalvageable: sentence-density flags wttr.in (the best source — JSON has no long sentences) and passes meteoblue (its news blurb is real prose).
+- **Cost:** the trust damage is now closed at the answer layer (the acceptance gate's evidence-grounding criterion — invented figures are caught and named), but the wasted iterations are not: the loop still pays for the dead fetch before the gate fires.
+- **Workaround/status:** acquisition-level routing to the browser tool parked as `P-2026-10-27-1` (needs a safe quality signal, not a heuristic); figure-attribution follow-up is `B-2026-10-27-1`. Backlog sits at its cap — new rows went to Medium with the warning accepted.
