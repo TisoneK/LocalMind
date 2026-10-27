@@ -351,6 +351,7 @@ missing commands fail rather than pass with a notice.
 
 ### EXIT (Step 19 — the session is not done until ALL of these happen)
 - [ ] All fixes committed AND pushed
+- [ ] Working tree clean — no untracked files left behind (on sandbox/ephemeral hosts untracked work dies silently at the next platform reset: commit it, relocate it into `.context_ledger/`, or delete it — see Sandbox and ephemeral hosts below)
 - [ ] Report written, committed, AND pushed (`.context_ledger/memory/office/reviews/`)
 - [ ] CHANGELOG updated, committed, AND pushed (if behavior changed)
 - [ ] `.context_ledger/memory/office/tasks/`, `.context_ledger/memory/system/`, `.context_ledger/memory/office/plans/` updated, committed, AND pushed
@@ -388,7 +389,7 @@ missing commands fail rather than pass with a notice.
 - If the repo is private AND no PAT is found, STOP and report: "Private repo requires a PAT. Please paste it in chat."
 - If the repo is public, skip — clone directly.
 - Export the PAT as `GIT_TOKEN` env var. Never write it to any tracked file. After Step 2's clone you may store it at `.context_ledger/memory/secrets/github-pat` (line 1 = token; rules in the secrets README) — that directory is never tracked.
-  - **Cloud/sandbox agents:** `.context_ledger/` is cloned fresh each session, so the secret file is useful only within that session (avoids re-pasting the PAT for multiple pushes). It dies with the sandbox. The `GIT_TOKEN` env var is the primary store; the file is a convenience.
+  - **Cloud/sandbox agents:** `.context_ledger/` is cloned fresh each session, so the secret file is useful within that session (avoids re-pasting the PAT for multiple pushes). Whether it survives a platform reset depends entirely on the host's restore behavior — on some hosts a restored workspace brings the file back — so never rely on either outcome: the untracked placement is the leak-prevention property (git never sees the value), **not** a persistence guarantee. After any platform restore, re-apply owner-only modes to secrets files and re-verify before use (see Sandbox and ephemeral hosts — durability and reset recovery). The `GIT_TOKEN` env var is the primary store; the file is a convenience.
   - **Local agents:** `.context_ledger/memory/secrets/` persists across sessions, so the file survives between sessions. Still refer to it by filename (`secrets/github-pat`), never by value.
 
 **Step 2 — Clone the repo**
@@ -435,7 +436,7 @@ git config user.email "<GIT_EMAIL>"
 - **Check in (every session — solo or collaboration) — the rules.** Pick a real name you like (any human name — John, Ada, Kwame, Mei; unique in the office) and add or update your row in `.context_ledger/memory/office/agents/roster.md`: name, codename `S<NNN>` (your session number), model, one line on what you're on, and your starting Status — `Working`, with a status detail naming the stage or step you've reached. Then commit and push the row immediately: `chore(ledger): <name> (<codename>) checks in — <task>`. This is the office registry — it is how the next agent through the door sees you are here, and the push is the sync point: if it forces a rebase, a peer checked in concurrently, so re-read the board. **Your codename is claimed by your push, not by your intention** — whoever's check-in commit is already on origin keeps the number; a worker who reads for an hour before signing does not own the codename they thought of at the door. If a concurrent check-in leaves two rows with the same codename (or name) after your rebase, the earlier commit keeps it: edit **your own row only** to the next free codename in a follow-up commit — never drop or rewrite a peer's row to resolve a roster collision. Re-read the board right before signing whenever the startup was slow: a board read minutes ago is already stale while a peer can push. Present yourself by that name everywhere — events, session log, reports ("John (S427)", never "peer" or a bare id). **Roster edits are additive — your row only.** A live row you didn't write is a colleague's check-in, not sample text: never take a peer's identity (if your chosen name is taken, pick another), and never let an edit's `old_string` span or include a peer's row — the edit tool replaces blocks, so anchoring on the table body erases whoever is on it. After a roster edit, `git diff` must show exactly your own row changed (`+1` on check-in); review the diff before committing.
 - **Close a full office at the door — before the deep read, before any analysis.** The two files signing needs tell you the office's age: if `agents/sessions.md` already holds more than `office_size` sessions (default 20 — the codename you'd claim is past S020), the office is full, and you run the close as part of check-in, right after your row is pushed: `sh .context_ledger/core/bin/ledger-history close` (dry run prints the checklist; re-run with `--confirm`; Windows: the `.cmd`/`.ps1`). The directory freezes verbatim (your just-pushed row rides along); fill in the permanent record `history/office-<NNN>.md` (Accomplished / Decisions still in force / Open threads) and re-seed the open threads that still matter into the fresh office's `backlog.md` / `decisions.md` / logs — **re-seed work, not knowledge: into `backlog.md` only items with an active owner or a clear next step; findings, questions, and someday items from the old office's parking lot belong in the permanent record, not in the new queue** — **re-seeded entries describe the work in plain words and never cite the closed office's session numbers or codenames** ("as fixed in S014", "see Session 12"), which point into the frozen copy the new office never reads; the permanent record is the bridge. Then sign the NEW roster — same name, codename `S001`: numbering restarts in a new office, and old-office numbers never carry over. Log this session's entry in the new office's registry (full close mechanics: Step 17's office lifecycle).
 - **Claim an identity; never infer one.** You are a new arrival until you register: pick a fresh name and codename `S<NNN>` and write your own row — you never "recognize yourself" in a row that already exists. A roster row (or a `sessions.md` entry) whose model string matches your system prompt's model name or harness UUID is **not evidence that it is you**: model IDs and harness markers are fingerprints shared by every session running that harness or model — two peers can honestly list the same model, and one harness UUID appears in every session on it — and a fresh context can never prove it authored a past entry. Acting on the match adopts a peer's identity, and their in-flight state with it: their dirty checkout gets read as "my own uncommitted closeout" instead of the unexplained work it is (Pitfall #20). The only basis for "that row is mine" is continuity inside your own live context (you clocked out earlier in this same conversation — the re-check-in rule below) or the user telling you.
-- **Check back in when work resumes after clock-out.** Clocking out (Step 15) vacates the board, but the session is not over until the user says so (Pitfall #30) — a supervisor follow-up after wrap-up means you have *left the office and come back*. Re-check in **before touching anything**: re-add your row to `agents/roster.md` and push it — `chore(ledger): <name> (<codename>) checks back in — <task>`. You are the same session, so keep the same name and codename `S<N>`; do **not** resume editing under a retired identity while your row is gone (peers see edits landing from someone not on the board), and do **not** open a second `Session N` — extend your existing session entry at the true close (Step 17). If you can foresee the follow-up, the cleaner move is to not clock out until the user actually releases the session.
+- **Check back in when work resumes after clock-out.** Clocking out (Step 15) vacates the board, but the session is not over until the user says so (Pitfall #30) — a supervisor follow-up after wrap-up means you have *left the office and come back*. Re-check in **before touching anything**: re-add your row to `agents/roster.md` and push it — `chore(ledger): <name> (<codename>) checks back in — <task>`. You are the same session, so keep the same name and codename `S<N>`; do **not** resume editing under a retired identity while your row is gone (peers see edits landing from someone not on the board), and do **not** open a second `Session N` — extend your existing session entry at the true close (Step 17). If you can foresee the follow-up, the cleaner move is to not clock out until the user actually releases the session. The same rule covers resuming after a platform reset wiped the checkout mid-session: re-add the row and push it before touching anything (see Sandbox and ephemeral hosts — durability and reset recovery).
 - **Decide the mode from evidence, not from an empty board.** You are solo only if NO collaboration `session` + `issue` was declared AND the roster shows no live row you didn't write AND `tasks/current.md` is idle. A live roster row you didn't write means a peer is in the office: do not run a solo protocol — fetch and check for a `collab/<session-id>/coordination` branch and join its event trail; if none exists, declare a shared session/issue (mind the peer's "Doing" scope), take your own isolated clone/branch, and emit a `note` + `claim` before editing. If `tasks/current.md` shows a live session but the roster is empty (an old-core or crashed session), follow the stale-entry guidance on `current.md`; when it is genuinely live, do not start — one agent per project repo. Two sessions that both signed as solo and discover each other afterwards: the board now shows both — resolve the main tree by conversation, not by racing. Whoever has product work already in flight keeps the main tree; the other takes an isolated clone/branch off origin/main, and both declare the shared session/issue before further edits.
 - In single-agent mode, set `.context_ledger/memory/office/tasks/current.md` to this session's task before starting work (overwrite — it holds one task at a time). In collaboration mode, do not use it as a lock: create an isolated branch/worktree, emit a `claim` event with the shared session/issue IDs, and inspect peer events first.
 
@@ -781,6 +782,66 @@ git push origin main
 git remote set-url origin https://github.com/<OWNER>/<REPO>.git
 ```
 
+### Sandbox and ephemeral hosts — durability and reset recovery
+
+> Binding if you run on a containerized/sandbox host (cloud agent, CI
+> runner, any machine the platform may recycle between sessions). Four
+> observed resets on one cloud host produced three different survival
+> outcomes — the local filesystem cannot be trusted from memory; only the
+> push can.
+
+**The durability law.** On these hosts the local filesystem is a cache with
+platform-managed eviction. **A push is the only durable write** — this is
+Binding Rule 6 in its evidence-backed form. Whatever snapshot/restore the
+platform provides is best-effort: it may lag (end-of-session work can miss
+it), it may succeed for some paths and not others, and it never covers what
+was never written to disk. Assume any of these can vanish at a platform
+reset, without warning: untracked and ignored files, empty directories,
+embedded clones (unless the platform's archive lands), unpushed commits,
+stashes, in-memory session state, and anything outside the project
+directory (`/tmp`, home). Nothing durable has its only copy outside a
+pushed commit. Host convenience files (a shared worklog, scratch scripts)
+are accelerants that speed up re-orientation — never authoritative, never
+load-bearing; the durable record is the repo with its `.context_ledger/`.
+
+**Secrets on restoring hosts.** Secret values live only in
+`.context_ledger/memory/secrets/` because git cannot see them there — a
+leak-prevention property, **not** a persistence or safety claim: on hosts
+that restore workspaces, in-repo secret files can come back with everything
+else. Two consequences: (a) after any platform restore, re-apply owner-only
+modes (`chmod 600`) to every secrets file — boot-time permission sweeps
+have been observed stripping them to world-readable; (b) never treat "it
+will be wiped anyway" as a reason to put a value somewhere less safe, and
+rotate any secret that crossed a trust boundary in plaintext (chat
+transcripts included).
+
+**Reset-recovery runbook** — run it, in order, whenever the host shows
+signs of a fresh boot (very young uptime, fresh system logs, expected
+worktrees missing):
+
+1. **Detect and classify.** Confirm the reset from host evidence (uptime,
+   boot logs), then look at the project directory: populated → a restore
+   boot (expect file-mode churn); bare scaffold → a clean boot (expect to
+   re-clone).
+2. **Verify against the remote, never against memory.** For every repo you
+   expect: compare `git rev-parse HEAD` with the last session's claimed
+   state (`sessions.md` / the worklog), then `git fetch`. Do not assume
+   unpushed work survived — nothing unpushed is owed survival.
+3. **Harden.** `chmod 600` every secrets file; clear mode-only churn with
+   `git checkout -- .` (and set `core.fileMode false` in the clone's local
+   config so the sweep stops mattering); confirm credential wiring still
+   points at living files — re-provision from the surviving copy, or ask
+   the user up front (Pitfall #34) if nothing survived.
+4. **Report.** If the repo ships a reset-survival probe or equivalent
+   companion test, run its report mode and record the matrix in the
+   session's review — every reset is a data point.
+5. **Resume.** Re-check in (same codename, next part), read STATE and the
+   last session entry, and continue. If the durable record was kept, the
+   office reads as though nothing happened.
+
+Re-cloning after a reset is normal recovery, not a failure — log it in the
+session entry so the next agent knows why the checkout is hours old.
+
 ### When you make a mistake
 1. **Assess**: is it the latest commit? Has anyone else pulled it?
 2. **Reset locally**: `git reset --hard <sha-before-the-mistake>`
@@ -917,6 +978,10 @@ All agents in this sandbox share a single worklog at **`/home/z/my-project/workl
 > and does not travel with the repo. The durable, cross-machine session record
 > is `.context_ledger/memory/office/agents/sessions.md` (Step 17) — write both. The worklog can be
 > chatty and process-heavy; the session entry is the ~10-line distillation.
+> On hosts that snapshot/restore workspaces the worklog file may even survive
+> a platform reset — treat that as a convenience, never as durability: it is
+> a best-effort cache, authoritative for nothing (see Sandbox and ephemeral
+> hosts — durability and reset recovery).
 
 ### When to write:
 - After completing a logical unit of work (one or more commits)
@@ -1025,6 +1090,7 @@ Append-only. Never overwrite. Start each section with `---`.
 - **Python `externally-managed-environment`?** Create a venv first: `python -m venv .venv && source .venv/bin/activate`.
 - **Push rejected (non-fast-forward)?** Another agent pushed. In single-agent mode, `git pull --rebase origin main`, resolve and retry. In collaboration mode, fetch/rebase your isolated branch; preserve both immutable event files. Product conflicts require peer comparison and an agreement, never a silent overwrite.
 - **Push rejected (auth)?** The remote URL was stripped of the token. Re-add it: `git remote set-url origin "https://x-access-token:${GIT_TOKEN}@github.com/..."`, push, then strip again.
+- **Clone or worktree missing after a platform reset?** Normal recovery, not a crisis: re-clone (credential up front, Pitfall #34), verify HEAD against the last pushed claim, re-apply `chmod 600` to secrets files, then resume — the runbook is in Sandbox and ephemeral hosts — durability and reset recovery.
 - **ORM errors?** Regenerate the client after schema changes (e.g., `prisma generate`).
 - **Tool calls timing out?** After 2 consecutive timeouts, tell the user to restart the session.
 - **Whatever unstuck you** — log it in `.context_ledger/memory/office/inefficiencies/log.md` so the next agent skips the struggle.

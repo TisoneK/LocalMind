@@ -10,6 +10,50 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 2.2.1 — 2026-10-27
+
+**Guidance fix: sandbox/ephemeral hosts — what survives a platform reset,
+and how to recover.** Four observed resets on one cloud host produced three
+different survival outcomes, and the protocol carried one now-falsified
+claim in this area: the cloud-agent secrets note said the in-repo secrets
+file "dies with the sandbox", but on hosts that restore workspaces it comes
+back with everything else — non-persistence must never be sold as a safety
+property.
+
+- **New subsection under Git Workflow** ("Sandbox and ephemeral hosts —
+  durability and reset recovery"): the durability law (a push is the only
+  durable write; platform snapshot/restore is best-effort — it may lag,
+  end-of-session work can miss it); secrets on restoring hosts (the
+  untracked placement is leak prevention, not persistence; re-apply
+  `chmod 600` after any platform restore — boot-time permission sweeps
+  have been observed stripping secrets to world-readable; rotate anything
+  that crossed a trust boundary in plaintext); and the five-step
+  reset-recovery runbook (detect and classify → verify against the remote,
+  never against memory → harden → report → resume; re-cloning is normal
+  recovery, logged in the session entry).
+- **Woven into existing sections:** the EXIT checklist now demands a clean
+  working tree (untracked work dies silently at the next reset); the
+  cloud-agent secrets note states the placement is leak-prevention, not a
+  persistence guarantee; the re-check-in rule covers mid-session reset
+  resumption; the worklog scope note ranks it a best-effort cache,
+  authoritative for nothing; Getting Unstuck covers the missing-clone
+  case.
+- **Host-agnostic by design:** no platform-specific names in core — those
+  live in each project's `memory/system/environments.md`. A repo may ship
+  a reset-survival probe as a companion test; the runbook's report step
+  references it if present.
+
+Semver note: shaped as PATCH on purpose — a falsified-claim fix plus
+clarifying wording woven into existing sections; no new roles, pitfalls,
+templates, or schema fields, and no change to the `.context_ledger/` spec
+or memory layout. A secrets-mode guard in `ledger-guard` (warn when a
+secrets file is group/world-readable) was considered and deferred to 2.3.x
+as tooling.
+
+Migration: none; `ledger-sync update` picks it up.
+
+---
+
 ## 2.2.0 — 2026-10-04
 
 **`ledger-guard` finishes the enforcement set from the host-repo audit:
