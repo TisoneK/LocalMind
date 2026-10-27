@@ -12,7 +12,7 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-10-27 — Amani / GLM (Z.ai) (S006) — part 5
-- **Feature:** none (ops — core sync, no product code)
-- **Task:** ledger-sync update: vendored core 2.2.0 → 2.2.1 (sandbox reset recovery + continuation guidance), verified and pushed
-- **Status:** done
+- **Session:** 2026-10-27 — Amani / GLM (Z.ai) (S006) — part 6
+- **Feature:** none (ops/research — docs only, no product code)
+- **Task:** dsh↔LocalMind harness guarantee inventory: deep-read deepseek-ai/deepseek-harness (public repo), compare what each harness guarantees the user, label gaps, order the roadmap — `docs/dsh-harness-gap-inventory.md`
+- **Status:** in-progress
