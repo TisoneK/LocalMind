@@ -45,13 +45,20 @@ class WorkReportEntry:
 # feeds strip complete blocks via strip_worker_reports().
 WORK_REPORT_HEADER = "Worker report — tool execution evidence:"
 
-# A rendered block: the header line, the optional iteration-limit note, then
-# numbered "N. tool(input) — status" lines each optionally followed by an
-# indented "Output: …" line. Entry/Output shapes tolerate the small drift
-# models introduce when mimicking the format (")" numbering, 1–4 space
-# indents); a block still requires the exact header plus at least one entry.
+# A rendered block: the optional plain-language lead-in (render_user_fallback's
+# honest framing — stripped WITH the block so model-bound history keeps neither),
+# the header line, the optional iteration-limit note, then numbered
+# "N. tool(input) — status" lines each optionally followed by an indented
+# "Output: …" line. Entry/Output shapes tolerate the small drift models
+# introduce when mimicking the format (")" numbering, 1–4 space indents); a
+# block still requires the exact header plus at least one entry.
+_WORK_REPORT_LEAD = (
+    r"(?:I could not produce a clean final answer from these steps\. "
+    r"Here is exactly what ran and what came back:\n\n)?"
+)
 _WORK_REPORT_BLOCK_PATTERN = re.compile(
-    re.escape(WORK_REPORT_HEADER)
+    _WORK_REPORT_LEAD
+    + re.escape(WORK_REPORT_HEADER)
     + r"(?:\nThe agent loop reached its iteration limit after these operations:)?"
     + r"(?:\n[0-9]+[.)] .*(?:\n {1,4}Output: .*)?)+",
 )
@@ -215,6 +222,25 @@ class WorkReport:
                 output = output[:497] + "..."
             lines.append(f"   Output: {output}")
         return "\n".join(lines)
+
+    def render_user_fallback(self) -> str:
+        """Render the report as the LAST-RESORT user-facing answer.
+
+        A bare step list reads like internal thought pasted into the chat —
+        the user never asked for evidence, they asked for an answer. This
+        says plainly that the clean answer failed and the steps are the
+        honest remainder, so the block reads as a fallback, not a leak.
+        Contract note: the leading sentence sits OUTSIDE the report block,
+        so `strip_worker_reports` and `needs_report` matching (both keyed on
+        the header) are untouched.
+        """
+        rendered = self.render()
+        if not rendered:
+            return ""
+        return (
+            "I could not produce a clean final answer from these steps. "
+            "Here is exactly what ran and what came back:\n\n" + rendered
+        )
 
 
 @dataclass

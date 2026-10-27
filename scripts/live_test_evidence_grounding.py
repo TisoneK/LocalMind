@@ -74,7 +74,10 @@ def boot_server(port: int, log_file: Path) -> subprocess.Popen:
         {
             "LOCALMIND_PORT": str(port),
             "LOCALMIND_HOME": str(TRACEHOME),
-            "LOCALMIND_ADAPTER": "bankofai",
+            # Default to the primary live-test provider; a caller-exported
+            # LOCALMIND_ADAPTER (plus its key env) wins — the evidence-grounding
+            # repro runs on the exact model from the failure trace, cerebras.
+            "LOCALMIND_ADAPTER": os.environ.get("LOCALMIND_ADAPTER", "bankofai"),
             "PYTHONPATH": str(BACKEND / "src"),
         }
     )

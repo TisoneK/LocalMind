@@ -5794,13 +5794,26 @@ class AgentLoop:
                 ):
                     _consults_fired += 1
                     try:
+                        from core.agent.full_evidence import (
+                            full_tool_evidence_blocks,
+                            render_evidence_blocks,
+                        )
                         from core.agent.thinker import Evidence, Thinker
 
+                        # Reason on what the tools ACTUALLY returned, at full
+                        # stored depth — the head+tail stubs hid the middle of
+                        # every large result, and a thinker fed stubs produces
+                        # a one-sentence thought that pretends.
                         _ev = Evidence(
                             objective=(initialization.objective if initialization else ""),
                             user_message=_user_message_text(loop_messages),
-                            observations="\n".join(
-                                f"[{s.tool_name}] {s.observation}" for s in trace.steps if s.observation
+                            observations=render_evidence_blocks(
+                                full_tool_evidence_blocks(
+                                    trace,
+                                    loop_messages,
+                                    per_result_cap=6000,
+                                    total_cap=16000,
+                                )
                             ),
                             last_action=tool_name,
                             iteration=iteration + 1,
@@ -7200,6 +7213,7 @@ class AgentLoop:
                             trace, intent,
                             reformulated_message or _user_message_text(loop_messages),
                             active_adapter,
+                            loop_messages=loop_messages,
                         )
                         if _synth:
                             full_text = _synth
@@ -7383,6 +7397,7 @@ class AgentLoop:
                         trace, intent,
                         reformulated_message or _user_message_text(loop_messages),
                         active_adapter,
+                        loop_messages=loop_messages,
                     )
                     if _synth:
                         full_text = _synth
@@ -7525,7 +7540,8 @@ class AgentLoop:
             pass
 
     async def _synthesize_final_from_trace(
-        self, trace, intent: Intent, user_question: str, adapter
+        self, trace, intent: Intent, user_question: str, adapter,
+        loop_messages: Optional[list] = None,
     ) -> str:
         """Build a real content answer from tool evidence when the model
         finished the loop without emitting one.
@@ -7537,20 +7553,25 @@ class AgentLoop:
         observations instead. This only fires on the empty-answer path, so it
         strictly improves a currently-broken case (no regression to turns
         where the model already answered).
+
+        The synthesis reads the FULL stored evidence, not the head+tail
+        observation stubs — a synthesis fed stubs produces exactly the raw
+        evidence dump (or a thin nothing) this path exists to prevent.
         """
         if not self._synthesizer.enabled:
             return ""
         try:
+            from core.agent.full_evidence import full_tool_evidence_blocks
             from core.models import RiskLevel, ToolResult
 
             results = [
                 ToolResult(
-                    content=str(step.observation),
+                    content=block.text,
                     risk=RiskLevel.LOW,
-                    source=step.tool_name or "tool",
+                    source=block.tool_name or "tool",
                 )
-                for step in (getattr(trace, "steps", []) or [])
-                if step.tool_name and step.observation
+                for block in full_tool_evidence_blocks(trace, loop_messages)
+                if block.text
             ]
             if not results:
                 return ""
@@ -9567,7 +9588,7 @@ class AgentLoop:
         answer. Only fall back to the report when synthesis fails, times
         out, or itself produces a non-substantive reply.
         """
-        _report_text = trace.work_report().render() if trace is not None else ""
+        _report_text = trace.work_report().render_user_fallback() if trace is not None else ""
         _synth = ""
         try:
             async for _chunk in self._force_final_answer(
@@ -9628,15 +9649,17 @@ class AgentLoop:
         """
         # Strip tool_calls from messages for the plain chat call.
         # Convert tool results to user-readable context with generous truncation
-        # (1500 chars — the 500-char limit was too aggressive and lost key info).
+        # (6000 chars per result — 1500 cut the middle out of exactly the pages
+        # the turn fetched them for; the synthesis rescue is where the model
+        # finally reads what the tools returned).
         clean_messages = []
         for msg in loop_messages:
             if msg.get("role") == "tool":
                 # Tool results become user context — use generous truncation
                 content = msg.get("content", "")
-                if len(content) > 1500:
-                    half = 750
-                    _cut = f"\n…[{len(content) - 1500} chars omitted — not seen; say so if it matters]…\n"
+                if len(content) > 6000:
+                    half = 3000
+                    _cut = f"\n…[{len(content) - 6000} chars omitted — not seen; say so if it matters]…\n"
                     content = content[:half] + _cut + content[-half:]
                 clean_messages.append(
                     {
@@ -9710,7 +9733,7 @@ class AgentLoop:
                 if chunk.usage:
                     _merge_call_usage(_provider_usage, chunk.usage)
                 if chunk.error:
-                    _error_report = trace.work_report().render() if trace is not None else ""
+                    _error_report = trace.work_report().render_user_fallback() if trace is not None else ""
                     yield StreamChunk(
                         text=_error_report,
                         done=True,
@@ -9752,7 +9775,7 @@ class AgentLoop:
             logger.info(f"[agent.loop] final synthesis: {round((time.monotonic() - t_final) * 1000)}ms")
         except Exception as exc:
             logger.warning(f"[agent.loop] final synthesis failed: {exc}")
-            _error_report = trace.work_report().render() if trace is not None else ""
+            _error_report = trace.work_report().render_user_fallback() if trace is not None else ""
             if framing == "final":
                 _exception_text = (
                     "I couldn't complete the final answer. Here are the key findings "
@@ -9809,7 +9832,7 @@ class AgentLoop:
             and trace is not None
             and trace.work_report().needs_report(_final_text)
         ):
-            _report_text = trace.work_report().render()
+            _report_text = trace.work_report().render_user_fallback()
             if _report_text:
                 logger.info(
                     "[agent.loop] forced final response did not report tool evidence; "
