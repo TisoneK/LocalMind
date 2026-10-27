@@ -152,3 +152,16 @@ re-seeded into the new office explicitly, and nothing else carries over.
   visible before pushes. Retroactive scope `note` emitted to
   `collaboration/events/`; rule recorded in `memory/user/preferences.md` and
   `office/flaws/log.md`.
+
+## 2026-10-27 — Session 5 — Kai (S005) — pull latest + setup; core 2.2.0 lands in the checkout
+
+- **Agent:** Kai | **Model:** GLM (Z.ai) | **Platform:** Windows (win32) | **Role:** engineer | **Core:** 2.2.0 (was 2.0.4 at check-in)
+- **Task (owner):** "Pull latest and setup" — bring the checkout to a working dev state.
+- **Sync + core update:** pulled latest; core 2.0.4 → **2.2.0** from the local package source (same MAJOR); `verify` green on both engines (PowerShell 5.1 + 7.6.6). The `ledger-sync update` run initially timed out at the tool's 60s cap — a second `verify` confirmed it had completed cleanly.
+- **Entry points refreshed per migration notes:** AGENTS.md + CLAUDE.md regenerated from the 2.2.0 templates (CLAUDE.md had been missing the 2.0.3 restorations — the project copy was stale); `kickoff.md` updated in place with the new guard-install step, sync-first check-in wording, and the `ledger-guard release` exit step. Entry-point facts filled.
+- **Guard hooks installed** (`ledger-guard install`): git pre-commit / prepare-commit-msg / pre-push hooks + `.claude/settings.json` (committed on its own). Heartbeat registered for S005.
+- **Setup:** root `npm install` green (workspaces); backend venv recreated on **Python 3.13** and editable+dev install green; pre-commit gate green (tsc, ruff, conflict-markers, backlog-duplicates); pytest smoke `tests/api/test_config_adapter.py` 14/14; vitest **619/619 (59 files)**.
+- **Real fix found during setup:** the first backend venv used the machine default **Python 3.14.2**, and pip installed a **cp313** `pydantic_core` build inside it — `import pydantic_core` raised `ModuleNotFoundError`, so every pytest collection failed. Recreating the venv on 3.13.1 resolved it. Worth a note for future sessions: `python` on this machine is 3.14; the dev venv must be 3.13.
+- **Process lessons used:** the first push of the entry-point refresh was rejected by the new pre-push hook — it correctly caught my commit mixing the two surfaces (AGENTS/CLAUDE + kickoff); split into surface-pure commits and re-pushed. A never-pushed local commit of mine was redone via `reset --soft` (own commit only, no peer work present). The collaboration light path (claim → release) was emitted at close; the claim SHOULD have been emitted before the first edit — noted for the next session.
+- **Commits:** `24377c08` (core 2.2.0), `c3fb0636` (kickoff refresh), `cc670da5` (entry points), `5469ad22` (.claude hooks), `5a62dc43` (STATE.md + core.lock).
+- **Report:** `.context_ledger/memory/office/reviews/2026-10-27-review-s5-setup.md`

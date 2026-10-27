@@ -12,7 +12,7 @@ entry and backlog before starting.
 - **Status:** done | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-10-26 — Ezra / GLM (Z.ai) (S004)
+- **Session:** 2026-10-27 — Kai / GLM (Z.ai) (S005)
 - **Feature:** none
-- **Task:** re-identity of the borrowed skin — palettes renamed (Graphite Blue / Graphite Green), Graphite Blue the default in dark mode everywhere, clean break with no compat alias; plus the closeout compliance (rebase, gates, logs, board, review report, push)
+- **Task:** setup — pull latest and bring the checkout to a working dev state (core 2.0.4 → 2.2.0, entry points refreshed, guard hooks installed, backend venv on Python 3.13, npm workspace, gates green)
 - **Status:** done

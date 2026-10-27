@@ -160,3 +160,10 @@ evidence: `history/office-002/flaws/log.md`.
   instead of avoided on the board. Retroactive scope `note` emitted to
   `collaboration/events/`; going forward: claim → work → release, fetch
   before every push, never force over a peer.
+---
+## 2026-10-27 — Kai / GLM (Z.ai) (S005)
+
+- **Flaw:** a session's collaboration claim was emitted at close instead of before the first edit.
+- **Symptom:** the board showed the scope only after the work (and its commits) were already pushed — "the push is the peer alarm, the board is the dodge" ran with the dodge half on.
+- **Root cause:** none in this session but mine — the light path was on record (preferences closeout bullet Ezra logged after the same failure) and I still sequenced it at the end.
+- **Suggested fix:** behavioral, not structural — claim before the first edit, every session. If it repeats a third time, consider a `ledger-gates checkpoint`-level nudge ("live claim?") at Phase 4 arrival.

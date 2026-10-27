@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261027T023438Z-Kai-0cd60563",
+  "type": "claim",
+  "session": "S005",
+  "agent": "Kai",
+  "created": "2026-10-27T02:34:38Z",
+  "issue": "setup-core-2-2-0",
+  "body": "S005 (Kai): core 2.2.0 update + entry-point refresh + guard hooks + dev-env setup (backend venv py3.13, npm workspace)",
+  "paths": [".context_ledger/core", ".context_ledger/kickoff.md", "AGENTS.md", "CLAUDE.md", ".claude/settings.json", "backend/.venv"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

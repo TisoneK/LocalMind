@@ -53,7 +53,6 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Ezra | S004 | GLM (Z.ai; harness states no exact version — owner asked to confirm) | Re-identity shipped: palettes renamed, Graphite Blue the default in dark mode; closeout compliance done | Done | Shipped: `c4b5d8f8` + `145b9561` rebased onto Dara's post-close work; gates green; default live-verified (isolated 8765); pushed |
-| Kai | S005 | GLM (Z.ai) | Pull latest + setup: bring the fresh checkout to a working dev state, verify the exit gate | Working | Checked in; reading kickoff.md next |
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
 what is in flight and at which stage, and what is blocked — and so how

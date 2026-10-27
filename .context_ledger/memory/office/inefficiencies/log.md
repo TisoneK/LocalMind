@@ -112,3 +112,9 @@ and using absolute paths (the pattern already in the log) is the fix.
   dependabot batch `f393bea2`). Pre-existing and Windows-invisible (sessions
   build the frontend workspace); noted so a future Linux-CI effort knows
   where to start.
+---
+## 2026-10-27 — Kai / GLM (Z.ai) (S005)
+
+- **Friction:** a fresh backend venv built with this machine's default `python` (3.14) collects no tests — pip resolves a cp313 `pydantic_core` build inside the cp314 venv, and `import pydantic_core` fails with `ModuleNotFoundError`, stopping every pytest collection.
+- **Cost:** first pytest read was a clean-looking exit 2 with no obvious fix; ~5 minutes to diagnose to the ABI mismatch, then a full venv rebuild.
+- **Workaround:** always create the dev venv with `py -3.13 -m venv backend/.venv` — 3.13 is what the resolved wheels target; 3.14 is the machine default.
