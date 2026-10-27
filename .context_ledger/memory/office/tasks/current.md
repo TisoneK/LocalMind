@@ -12,7 +12,7 @@ entry and backlog before starting.
 - **Status:** done | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-10-27 — Amani / GLM (Z.ai) (S006, part 3)
-- **Feature:** native-reasoning consult
-- **Task:** the mid-loop consult never actually thought — it performed an inner voice on demand; root fix: stream the model's native reasoning verbatim, answer channel becomes a never-shown JSON decision payload, prose gate and word budgets deleted
+- **Session:** 2026-10-27 — Amani / GLM (Z.ai) (S006, part 4)
+- **Feature:** none (ops session — sandbox-reset recovery)
+- **Task:** re-clone after sandbox reset, verify push state live (origin/main at `5e3921e`, clean — part 3's claim confirmed), restore ledger secrets + credential helpers with a reset-proof fallback, push check-in + closeout
 - **Status:** done
