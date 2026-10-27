@@ -71,7 +71,15 @@ def _make_trace_with_tools(final_response: str):
     """Build a trace with tool evidence + a final-answer step."""
     return SimpleNamespace(
         steps=[
-            SimpleNamespace(tool_name="web_search", tool_input="weather Kitengela", tool_failed=False),
+            # The observation is the evidence the answer's figures came from —
+            # the grounding criterion reads it, so an answer quoting "16°C"
+            # needs the results to actually contain 16°.
+            SimpleNamespace(
+                tool_name="web_search",
+                tool_input="weather Kitengela",
+                tool_failed=False,
+                observation="8 results: Kitengela 16°C, overcast, humidity 70%",
+            ),
             SimpleNamespace(tool_name="", tool_input=None, tool_failed=False),
         ],
         success_criteria=[],

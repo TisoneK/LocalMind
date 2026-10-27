@@ -498,6 +498,23 @@ class ToolResultIndex:
         except Exception:
             return 0
 
+    def chunks_for_result(self, result_id: str) -> list[str]:
+        """Full stored chunk texts for one result, in order (plain read, no ranking).
+
+        The grounding check needs the whole text of a stubbed large result:
+        a figure quoted from the middle the stub omitted must still count as
+        grounded. Best-effort by design — any failure returns what exists.
+        """
+        try:
+            rows = self._connect().execute(
+                "SELECT chunk_ix, text FROM trc_chunks WHERE result_id = ? ORDER BY chunk_ix",
+                (result_id,),
+            ).fetchall()
+            return [str(row[1]) for row in rows if row[1]]
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[trc] chunks_for_result failed for %s: %s", result_id, exc)
+            return []
+
     def clear(self) -> None:
         """Remove every indexed chunk (FTS + vec). Used by tests and, later, by
         session/turn pruning."""

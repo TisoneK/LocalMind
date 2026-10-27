@@ -137,6 +137,7 @@ from core.agent.tool_dispatch import dispatch_with_retry
 from core.agent.tool_schemas import TOOL_DEFINITIONS, tool_defs_for_call
 from core.agent.turn_bus import TurnBus
 from core.agent.turn_outcome import Recovery, TurnOutcome, classify_turn_outcome
+from core.agent.evidence_grounding import check_answer_grounding, collect_evidence_text
 from core.context_builder import _build_environment_context
 from core.context_compactor import TOOL_RESULT_BUDGET_CHARS, simplify_tool_results
 from core.models import AgentAbortedError, Intent, StreamChunk, ToolResult
@@ -7928,6 +7929,82 @@ class AgentLoop:
                                 and gate_force_tool is not None
                             ):
                                 gate_force_tool[0] = True
+                            return "", False
+                # Evidence-grounding criterion. The detectors above judge
+                # whether the model acted or answered; none of them asks
+                # whether the figures it asserted exist in the evidence the
+                # turn produced. A turn whose tools returned a
+                # JavaScript-shell page (readable extract = navigation chrome
+                # plus other cities' temperatures) still counted as
+                # successful evidence, and the model filled the gap with a
+                # full forecast assembled from nothing — no detector blinked.
+                # The zero-tool path has a fabricated-data interceptor; this
+                # is the same contract for the tools-then-answer path, and
+                # deterministic: a figure read from any source leaves its
+                # digits in the conversation, so a figure that appears
+                # nowhere was invented. Fires at most once per turn (the
+                # marker below) and only while iterations remain; when out
+                # of budget the answer stands and the honest-stop machinery
+                # owns the outcome.
+                if is_parent and any(
+                    getattr(s, "tool_name", "") for s in getattr(trace, "steps", []) or []
+                ):
+                    _ground_text = getattr(trace, "final_response", "") or ""
+                    if _ground_text.strip():
+                        _ground_pool = collect_evidence_text(trace, loop_messages)
+                        # A stubbed large result shows the model only head+tail;
+                        # enrich the pool with its full stored chunks so a
+                        # figure quoted from a re-queried middle still counts.
+                        for _rid in set(
+                            re.findall(r"\bid=([A-Za-z0-9_]+-[0-9a-f]{16})\b", _ground_pool)
+                        ):
+                            try:
+                                _chunks = get_tool_result_index().chunks_for_result(_rid)
+                            except Exception:
+                                _chunks = []
+                            for _ch in _chunks:
+                                _ground_pool += "\n" + (_ch or "").lower()
+                        _ground_report = check_answer_grounding(_ground_text, _ground_pool)
+                        if (
+                            _ground_report.ungrounded
+                            and iteration + 1 < effective_max_iter
+                            and not any(
+                                isinstance(m, dict)
+                                and isinstance(m.get("content", ""), str)
+                                and "[EVIDENCE GROUNDING]" in m.get("content", "")
+                                for m in (loop_messages or [])
+                            )
+                        ):
+                            _ungrounded_preview = ", ".join(_ground_report.ungrounded[:5])
+                            if obs:
+                                obs.emit(
+                                    "agent_loop_gate_failed_replan",
+                                    intent=intent.value,
+                                    iteration=iteration + 1,
+                                    unmet=[
+                                        "figures in the answer appear in no tool result: "
+                                        f"{_ungrounded_preview}"
+                                    ],
+                                )
+                            loop_messages.append(
+                                {
+                                    "role": "user",
+                                    "content": (
+                                        _stage_card(
+                                            "EVIDENCE GROUNDING",
+                                            "answer",
+                                            _DECISION_ANSWER,
+                                            loop_messages,
+                                            trace,
+                                        )
+                                        + "\nThese figures in your reply appear in no tool result or "
+                                        f"conversation content: {_ungrounded_preview}. Remove them, "
+                                        "replace each with a figure you can point to in the evidence "
+                                        "above, or state plainly that the sources did not contain "
+                                        "the data. Never present a figure you cannot ground.\n"
+                                    ),
+                                }
+                            )
                             return "", False
                 return "", True
             _streak, _streak_tool = same_tool_failure_streak(trace)
