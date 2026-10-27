@@ -15,4 +15,4 @@ entry and backlog before starting.
 - **Session:** 2026-10-27 — Amani / GLM (Z.ai) (S006) — part 6
 - **Feature:** none (ops/research — docs only, no product code)
 - **Task:** dsh↔LocalMind harness guarantee inventory: deep-read deepseek-ai/deepseek-harness (public repo), compare what each harness guarantees the user, label gaps, order the roadmap — `docs/dsh-harness-gap-inventory.md`
-- **Status:** in-progress
+- **Status:** done

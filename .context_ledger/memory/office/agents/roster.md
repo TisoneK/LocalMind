@@ -53,7 +53,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Ezra | S004 | GLM (Z.ai; harness states no exact version — owner asked to confirm) | Re-identity shipped: palettes renamed, Graphite Blue the default in dark mode; closeout compliance done | Done | Shipped: `c4b5d8f8` + `145b9561` rebased onto Dara's post-close work; gates green; default live-verified (isolated 8765); pushed |
-| Amani | S006 | GLM (Z.ai; harness states no exact version) | Harness guarantee inventory (ops/research, part 6 — docs only): deep-read deepseek-ai/deepseek-harness and write the dsh↔LocalMind gap inventory that orders the harness roadmap | Working | dsh cloned @ 22ddee37 (19k files, read-only); two inventory passes done (context/conversation layer + operations surface); authoring `docs/dsh-harness-gap-inventory.md` |
+| Amani | S006 | GLM (Z.ai; harness states no exact version) | Harness guarantee inventory (ops/research, part 6 — docs only): deep-read deepseek-ai/deepseek-harness and write the dsh↔LocalMind gap inventory that orders the harness roadmap | Done | Shipped: `docs/dsh-harness-gap-inventory.md` (18 groups + originals + failure trace + roadmap order); dsh studied @ `22ddee37`; commits `1261f68c` + `a4d9dd6d` pushed. Roadmap merge with owner's 10-task scorecard pending (owner side) |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
