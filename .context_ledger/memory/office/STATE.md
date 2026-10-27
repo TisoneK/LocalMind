@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-27T06:23:33Z_
+_Regenerated: 2026-10-27T06:28:39Z_
 
 ## Standing params
 - **Core:** 2.2.0 (locked, verified 2026-10-27)
@@ -16,10 +16,11 @@ _Regenerated: 2026-10-27T06:23:33Z_
 
 ## Office — who's in, right now
 - **Ezra** (S004) — Done — Re-identity shipped: palettes renamed, Graphite Blue the default in dark mode; closeout c…
-- **Amani** (S006) — Done — Sandbox-reset recovery (ops, part 4 — no product code): re-clone, verify push state aga…
+- **Amani** (S006) — Done — Sandbox-reset recovery (ops, part 4 — no product code): re-clone, verify push state again…
+- **Ines** (S007) — Working — Pull-latest sync: pull `main`, verify the vendored core, confirm the checkout reflects th…
 
 ## Current task
-- **2026-10-27 — Amani / GLM (Z.ai) (S006, part 4)** — re-clone after sandbox reset, verify push state live (origin/main at `5e3921e`, clean — part 3's claim confirmed), restore ledger secrets… — *done*
+- **2026-10-27 — Amani / GLM (Z.ai) (S006, part 4)** — re-clone after sandbox reset, verify push state live (origin/main at `5e3921e`, clean — part 3's claim confirmed), restore ledger secrets +… — *done*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-09-21-2 | In-app State Explorer + engine selector (the state-driven engine, ADR-71 in `history/office-002/plans/decisions.md`): port the explorer into the app as its own interface (a game tree, move list, eval bar, inspector, meters, rewindable timeline — the owner's "geeky, not a chat" direction) and add the Classic/State engine setting so the engine becomes selectable in Settings. Reference implementations: the self-contained prototype `docs/prototypes/state-explorer/` and the backend-served page in `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter: `state_agent/adapters/localmind.py`); the `EngineEvent` record is the UI contract. In flight when office-002 closed — check whether it landed before starting. |
