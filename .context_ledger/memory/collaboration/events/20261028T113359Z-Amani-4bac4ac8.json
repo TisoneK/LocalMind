@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261028T113359Z-Amani-4bac4ac8",
+  "type": "release",
+  "session": "S006",
+  "agent": "Amani",
+  "created": "2026-10-28T11:33:59Z",
+  "issue": "identity-context-injection",
+  "body": "§U item 2 shipped: the model is told who and where the user is before it acts — stated facts labeled and authoritative on every chat surface, unstated facts declared absent with clarify-don't-guess, zone-named clock, acceptance gate accepts grounded identity answers and honest ask-backs (assertions rejected); suites green, wire-capture live proof PASS",
+  "paths": [],
+  "refs": ["938b197e"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
