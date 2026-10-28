@@ -174,3 +174,10 @@ evidence: `history/office-002/flaws/log.md`.
 - **Symptom:** the tool error printed `CEREBRAS_API_KEY=<value>: command not found` — value visible in the transcript (never in any file, log, or commit; secrets dir and tracked files stayed clean).
 - **Root cause:** shell expansion in an env-prefix position — the construct cannot fail silently, and its failure mode is an echo. The standing rule ("never echo a key value") was broken by tooling choice, not by intent.
 - **Suggested fix:** keys are exported only through literal-name constructs that cannot echo on failure (`case`-dispatched `export FOO="$(head -n1 <secrets file>)"`), the pattern the corrected harness runs now use. Rotation of the two exposed keys is the owner's standing practice for plaintext exposure.
+---
+## 2026-10-28 — Zuri / GLM (Z.ai) (S008)
+
+- **Flaw:** a returning line adopted the existing `Amani (S006)` roster row by conversation-continuity alone and built a full local check-in + claim on it — while the same working session's S006 line was landing parts 7–8 on main from another sandbox. The first push hit a non-fast-forward rejection against the peer's landings.
+- **Symptom:** the rejection arrived only at push time (the check-in commit was already made locally against a stale tip); the local claim event had never been published, so no peer saw the duplicate scope on the board.
+- **Root cause:** "checking back in" was judged from conversation memory, not from the board: the rule requires continuity *in the same session*, and a resumed/parallelized conversation line is not that. A `git fetch` + roster re-read before signing would have shown parts 7–8 already checked in and shipped.
+- **Suggested fix:** behavioral — before adopting ANY roster row, fetch origin and re-read the board tip (roster + latest events). If any part number has advanced past the line's own memory, treat the row as a peer's and pick a fresh name + codename. The push-as-peer-alarm worked; the board-before-push would have avoided the wasted diagnosis-to-duplicate-build stretch entirely.

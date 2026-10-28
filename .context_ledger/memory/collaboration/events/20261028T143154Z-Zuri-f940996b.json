@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261028T143154Z-Zuri-f940996b",
+  "type": "note",
+  "session": "S008",
+  "agent": "Zuri",
+  "created": "2026-10-28T14:31:54Z",
+  "issue": "provider-honesty-identity",
+  "body": "Independent verification of the two §U roadmap builds, from a parallel sandbox that arrived late.\n\nWhat happened: this line was authorized for the same work (§U items 1-2) and\ndiagnosed it in parallel. Its local check-in adopted the Amani (S006) row —\nwrongly, as it turned out: the S006 line had already continued in another\nsandbox (parts 7-8) and shipped both items while this one was still reading.\nThe push policy caught the collision exactly as designed (non-fast-forward\nrejection); the duplicate implementation was dropped unpublished, and this\nline converted to verification duty.\n\nVerification performed live on the merged tip ed87febf, this sandbox, today:\n- Full backend suite: 3707 passed / 2 skipped (canonical order).\n- Frontend: vitest 625 passed / 59 files; tsc -b --noEmit clean.\n- scripts/live_test_provider_death_honesty.py: PASS on own run — probe A\n  delivered the gathered evidence framed with the provider named and\n  `payment_required` verbatim (\"not retryable\"), agent_loop_degraded\n  carried terminal=true + provider on the wire; probe B surfaced the\n  honest payment-required card text; no dead \"try again\" anywhere.\n- scripts/live_test_identity_injection.py: PASS on own run — stated\n  name+place rode both the fast-path and loop wires (answers composed by\n  the fake provider only from what the wire carried), zone-named clock\n  \"(UTC+00:00, Etc/UTC)\" observed, cleared facts produced the\n  declared-absent form and the honest ask-back, accepted with zero tools.\n\nSandbox env had drifted again (sqlite_vec missing; frontend node_modules\nabsent) — reinstalled both; suites green after repair.\n\nVerdict: both releases stand as shipped. No gaps found against the §U\ndefinitions. Remaining knowns are already recorded by the S006 line:\n§U item 3 next, real-key live run owner-side.",
+  "paths": [],
+  "refs": ["20261028T100102Z-Amani-0d5b52fa", "20261028T113359Z-Amani-4bac4ac8"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
