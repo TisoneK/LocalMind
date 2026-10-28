@@ -12,7 +12,7 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-10-27 — Amani / GLM (Z.ai) (S006) — part 7
-- **Feature:** provider-failure honesty & the provider-death completion path (roadmap §U item 1, `docs/reference-harness-gap-inventory.md`)
-- **Task:** build §U item 1: named error codes surfaced verbatim; retryability honored in the UX (never "try again" when retryable=false; never "switch to a larger model" for a balance failure); provider always named (never "unknown"); failover attempted before dying; and the new rule — when synthesis dies with evidence in hand, the harness delivers what the evidence supports or says so honestly. Must compose with the S471 watchdog (no stall-shaming healthy streams) and preserve the ADR-34 event order.
-- **Status:** done — shipped part 7; full suites green; live repro PASS. Next: §U item 2 (identity context injection).
+- **Session:** 2026-10-28 — Amani / GLM (Z.ai) (S006) — part 8
+- **Feature:** identity context injection (roadmap §U item 2, `docs/reference-harness-gap-inventory.md`)
+- **Task:** build §U item 2 — the model is told who and where the user is before it acts: user-stated name and place plus machine-reported time with its zone as guaranteed injected facts, each labeled with what it is and where it came from; facts the user never stated are declared absent with clarify-don't-guess guidance, never inferred from tool results (fixes F1 at the root — the 12:45 place guess was luck, not a guarantee). Unconditional on every chat path; must compose with the existing user-context fusion (machine deductions stay labeled as deductions, never as the user's statement) and the staged-prompt budget/stability tests.
+- **Status:** in-progress — checked in; claimed paths; recon of the injection surface starting
