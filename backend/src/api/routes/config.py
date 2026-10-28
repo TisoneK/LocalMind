@@ -5,6 +5,7 @@ Settings endpoints for adapter and provider configuration.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 from typing import Optional
@@ -16,6 +17,8 @@ from pydantic import BaseModel, Field
 
 from adapters import clear_adapter_cache
 from core.config import settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -65,6 +68,11 @@ class SettingsResponse(BaseModel):
         "web_fetch": True,
         "memory_op": True,
     }
+    # User-stated identity facts ("About you"). Injected every turn as
+    # labeled, guaranteed context; empty = never stated (declared absent,
+    # never guessed).
+    user_name: str = ""
+    user_place: str = ""
 
 
 class AdapterConfig(BaseModel):
@@ -119,6 +127,47 @@ async def set_startup_session(req: StartupSessionRequest):
 class ChatModeRequest(BaseModel):
     """Body for POST /api/settings/chat-mode."""
     chat_mode: str  # "auto" | "agent" | "direct"
+
+
+# Cap the stated facts — they ride every prompt; a memoir is not an identity.
+_IDENTITY_FIELD_MAX = 200
+
+
+class IdentityRequest(BaseModel):
+    """Body for POST /api/settings/identity — the user's own stated facts.
+
+    Both fields optional so either can be saved alone; an empty string
+    clears that fact (an intentional clear, persisted as such).
+    """
+
+    user_name: str = ""
+    user_place: str = ""
+
+
+@router.post("/settings/identity")
+async def set_identity(req: IdentityRequest):
+    """Persist the user-stated identity facts (name, place as they say it).
+
+    These ride every turn as labeled, guaranteed context — the model is
+    told who and where the user is before it acts, and a fact left empty is
+    declared unknown with a clarify-don't-guess contract instead of ever
+    being inferred. Hot-applies: the injected cache refreshes here, so the
+    next message already carries the change.
+    """
+    name = req.user_name.strip()[:_IDENTITY_FIELD_MAX]
+    place = req.user_place.strip()[:_IDENTITY_FIELD_MAX]
+    settings.save_user_identity(name, place)
+    try:
+        from core.user_profile import set_cached_profile
+
+        set_cached_profile(name, place)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("[settings] identity cache refresh skipped: %s", exc)
+    return {
+        "user_name": name,
+        "user_place": place,
+        "message": "Saved — the assistant knows this from your next message.",
+    }
 
 
 @router.post("/settings/chat-mode")
@@ -455,6 +504,9 @@ async def get_settings():
         engine=getattr(settings, "localmind_engine", "classic"),
         # Operation permissions
         permissions=dict(getattr(settings, "localmind_permissions", {})),
+        # User-stated identity facts
+        user_name=getattr(settings, "localmind_user_name", ""),
+        user_place=getattr(settings, "localmind_user_place", ""),
     )
 
 

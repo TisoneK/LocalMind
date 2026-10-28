@@ -327,3 +327,118 @@ class TestSystemFactClass:
 
     def test_the_time_class_still_works_unchanged(self):
         assert _answer_grounded("what day is it", _grounded_date_answer(WEDNESDAY), now=WEDNESDAY)
+
+
+# ── GROUNDED (identity facts): answered from the `About this user` block ────
+
+STATED_PROFILE = {"name": "Amani", "place": "Nairobi, Kenya"}
+EMPTY_PROFILE = {"name": "", "place": ""}
+
+
+class TestIdentityClass:
+    def test_identity_request_shapes_match(self):
+        from core.agent.injected_context_gate import request_matches_identity_class
+
+        for q in (
+            "what's my name?",
+            "where am I?",
+            "who am I?",
+            "where do I live?",
+            "what country am I in?",
+            "do you know my name?",
+            "what is my location?",
+        ):
+            assert request_matches_identity_class(q), q
+
+    def test_tasks_and_unrelated_questions_do_not_match(self):
+        from core.agent.injected_context_gate import request_matches_identity_class
+
+        for q in (
+            "search my name in the company registry",
+            "create a file with my name in it",
+            "what is the capital of Peru?",
+            "what is my project called?",  # memory fact, not identity
+            "",
+        ):
+            assert not request_matches_identity_class(q), q
+
+    def test_answer_stating_the_stated_name_is_grounded(self):
+        assert _answer_grounded(
+            "what's my name?",
+            "Your name is Amani — you told me in Settings.",
+            profile=STATED_PROFILE,
+        )
+
+    def test_answer_stating_the_stated_place_is_grounded(self):
+        assert _answer_grounded(
+            "where am I?",
+            "You're in Nairobi, Kenya (you stated it in Settings).",
+            profile=STATED_PROFILE,
+        )
+
+    def test_a_value_the_profile_does_not_carry_is_not_grounded(self):
+        # The profile is authoritative: a place it never carried is a guess,
+        # and the class must not cover it (the gate keeps its behavior).
+        assert (
+            _answer_grounded("where am I?", "You're in Paris, France.", profile=STATED_PROFILE)
+            is False
+        )
+
+    def test_no_answer_fact_stays_outside_the_class(self):
+        assert (
+            _answer_grounded(
+                "where am I?", "I would need to check that for you.", profile=STATED_PROFILE
+            )
+            is False
+        )
+
+    def test_absent_fact_answered_by_asking_back_is_valid(self):
+        # The honest answer to a never-stated fact: ask. That IS a valid
+        # zero-tool turn — the guarantee says clarify, never guess.
+        assert _answer_grounded(
+            "what's my name?",
+            "You haven't told me your name yet — what should I call you?",
+            profile=EMPTY_PROFILE,
+        )
+
+    def test_absent_fact_declared_unknown_is_valid(self):
+        assert _answer_grounded(
+            "where am I?",
+            "I don't know your location — you haven't told me, and I won't "
+            "infer it from search results.",
+            profile=EMPTY_PROFILE,
+        )
+
+    def test_asserting_the_unstated_name_is_fabrication(self):
+        # A guessed name stated back as fact is exactly the failure this
+        # class exists to prevent — it must NOT pass the gate.
+        assert (
+            _answer_grounded(
+                "what's my name?", "Your name is John, of course.", profile=EMPTY_PROFILE
+            )
+            is False
+        )
+
+    def test_asserting_the_unstated_place_is_fabrication(self):
+        assert (
+            _answer_grounded(
+                "where am I?",
+                "You're in London, based on your English.",
+                profile=EMPTY_PROFILE,
+            )
+            is False
+        )
+
+    def test_it_is_a_valid_zero_tool_turn_end_to_end(self, monkeypatch):
+        import core.user_profile as prof
+
+        monkeypatch.setattr(prof, "_CACHED_PROFILE", STATED_PROFILE)
+        assert zero_tool_turn_is_valid("where am I?", "You're in Nairobi, Kenya — you told me.")
+
+    def test_the_honest_ask_back_is_a_valid_zero_tool_turn_end_to_end(self, monkeypatch):
+        import core.user_profile as prof
+
+        monkeypatch.setattr(prof, "_CACHED_PROFILE", EMPTY_PROFILE)
+        assert zero_tool_turn_is_valid(
+            "what's my name?", "You haven't told me your name yet — what should I call you?"
+        )

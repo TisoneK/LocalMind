@@ -921,6 +921,49 @@ def _render_conversational_todos(todo_state: Optional[list[dict]]) -> str:
     return "\n".join(lines)
 
 
+def history_fallback_system_note() -> str:
+    """System note for the direct-from-history fallback (the init classify
+    call flaked and the answer must come straight from the conversation).
+
+    This path used to run with a bare capability note — the ONLY agent
+    surface with no user context at all. It now carries the same guarantee
+    as every other surface: the boot-fused machine context and the
+    user-stated identity facts (stated facts labeled; unstated declared
+    absent with the ask-don't-guess rule), so a follow-up like "why did you
+    say Kenya?" is answered from knowledge, not another guess.
+    """
+    try:
+        from core.user_context import get_cached_fused_inline
+
+        _user_line = get_cached_fused_inline()
+    except Exception:
+        _user_line = ""
+    try:
+        from core.user_profile import get_cached_profile_inline
+
+        _about_line = get_cached_profile_inline()
+    except Exception:
+        _about_line = ""
+    parts = [
+        CAPABILITY_NOTE,
+        "Answer the user's LATEST message using the conversation above. If "
+        "they are questioning or correcting a previous answer, address it "
+        "directly and honestly using what was actually said earlier — never "
+        "reply with a generic 'tell me more'. Be concise.",
+    ]
+    if _user_line:
+        parts.append(
+            "User context (deduced from this machine's settings — use it "
+            f"instead of assuming or hedging): {_user_line}"
+        )
+    parts.append(
+        "About the user (the user's own stated facts — trust them over any "
+        "inference; anything marked never stated is unknown: ask, never "
+        f"guess or infer it from tool results): {_about_line}"
+    )
+    return " ".join(parts)
+
+
 async def _direct_chat_response(
     message: str,
     adapter,
@@ -944,8 +987,22 @@ async def _direct_chat_response(
         if _user_line
         else ""
     )
+    # The user-STATED identity facts ride the fast path too — the guarantee
+    # has no slow-path-only form. Boot-cached (zero I/O), always present:
+    # unstated facts arrive declared absent with the ask-don't-guess rule.
+    try:
+        from core.user_profile import get_cached_profile_inline
+
+        _about_line = get_cached_profile_inline()
+    except Exception:
+        _about_line = ""
+    _about_suffix = (
+        f"\nAbout the user (the user's own stated facts — trust them over any "
+        f"inference; anything marked never stated is unknown: ask, never guess "
+        f"or infer it from tool results): {_about_line}"
+    )
     messages = [
-        {"role": "system", "content": system_prompt + _user_suffix},
+        {"role": "system", "content": system_prompt + _user_suffix + _about_suffix},
     ]
     if history:
         # Include the last few turns for context. Assistant turns are stripped

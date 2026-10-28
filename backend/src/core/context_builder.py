@@ -149,14 +149,32 @@ def _build_environment_context(
     os_info = f"OS: {system} {release} ({version}) - {machine}"
 
     # ── Date/Time ──
-    now = datetime.datetime.now()
+    # Aware clock on purpose: naive now() renders an EMPTY %z in containers
+    # (no /etc/localtime link), which shipped a clock line with no zone at
+    # all — "11:17" with nothing after it. astimezone() attaches the local
+    # zone so the offset is always real.
+    now = datetime.datetime.now().astimezone()
     date_str = now.strftime("%A, %B %d, %Y")
     time_str = now.strftime("%H:%M")
     tz = now.strftime("%z")
+    # The zone NAME rides the offset when the boot-fused context knows it:
+    # "(UTC+03:00)" says when; "(UTC+03:00, Africa/Nairobi)" says when AND
+    # where the clock lives — the model never has to guess the zone from
+    # the offset alone. Name from the boot cache; the clock itself stays
+    # per-turn in this env block (never the cached system prefix).
+    _tz_name = ""
+    try:
+        from core.user_context import get_cached_fused_dict
+
+        _tz_name = str((get_cached_fused_dict() or {}).get("timezone_name") or "")
+    except Exception:
+        _tz_name = ""
+    _zone_parts: list[str] = []
     if tz:
-        tz_str = f" (UTC{tz[:3]}:{tz[3:]})"
-    else:
-        tz_str = ""
+        _zone_parts.append(f"UTC{tz[:3]}:{tz[3:]}")
+    if _tz_name:
+        _zone_parts.append(_tz_name)
+    tz_str = f" ({', '.join(_zone_parts)})" if _zone_parts else ""
 
     # ── Paths ──
     cwd = session_cwd or os.path.expanduser("~")
@@ -257,6 +275,20 @@ def _build_environment_context(
     except Exception:
         _user_line = ""
 
+    # ── About the user (stated facts, guaranteed) ──
+    # The user-stated name/place ride the env too — one lean line, always
+    # present: unstated facts are declared absent (ask, never infer) so the
+    # guarantee holds on every iteration, not only the bootstrap call.
+    # Deliberately NOT in the compact variant: the init/classify call only
+    # routes the turn and its budget is nearly saturated (~47 chars of
+    # headroom); the full env below covers every iteration that answers.
+    try:
+        from core.user_profile import get_cached_profile_inline
+
+        _about_line = get_cached_profile_inline()
+    except Exception:
+        _about_line = ""
+
     # ── Available tools summary ──
     # List the tools the model has access to so it doesn't need to guess
     from tools import available_tools
@@ -346,6 +378,7 @@ You have access to these tools: {tool_summary}
 - Current date: {date_str}
 - Current time: {time_str}{tz_str}
 - User context: {_user_line or "not deduced"}
+- About the user: {_about_line}
 - Working directory: {cwd_display} (already current for this turn -- do NOT
   run pwd/Get-Location/cd just to check it)
 - Home: {home_display}

@@ -20,6 +20,7 @@ vi.mock('@/lib/localmind/client', () => ({
     setLocalSettings: vi.fn(),
     selectModel: vi.fn(),
     setAppearance: vi.fn(),
+    setIdentity: vi.fn(),
   },
 }));
 
@@ -234,5 +235,49 @@ describe('SettingsModal', () => {
     expect(screen.getByRole('heading', { name: 'Permissions' })).toBeVisible();
     expect(screen.queryByRole('heading', { name: 'On Startup' })).toBeNull(); // hidden pages leave the a11y tree
     expect(screen.getByRole('button', { name: 'Agent' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('About you: loads the stated facts, saves edits, hot-applies', async () => {
+    mockClient.getSettings.mockResolvedValue(
+      settingsPayload({ user_name: 'Amani', user_place: 'Nairobi, Kenya' })
+    );
+    mockClient.getOllamaUrl.mockResolvedValue({ url: 'http://localhost:11434' });
+    mockClient.setIdentity.mockResolvedValue({
+      user_name: 'Amani',
+      user_place: 'Nairobi, Kenya',
+      message: 'Saved — the assistant knows this from your next message.',
+    });
+
+    render(<SettingsModal onClose={() => {}} onSave={() => {}} />);
+    await screen.findByRole('heading', { name: 'Settings' });
+
+    // The stated facts load back into the fields.
+    const nameInput = await screen.findByLabelText('Your name');
+    const placeInput = screen.getByLabelText('Where you are');
+    expect(nameInput).toHaveValue('Amani');
+    expect(placeInput).toHaveValue('Nairobi, Kenya');
+
+    // An edit + save hits the identity endpoint verbatim (trimmed).
+    await userEvent.clear(placeInput);
+    await userEvent.type(placeInput, 'Kilifi, Kenya');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => {
+      expect(mockClient.setIdentity).toHaveBeenCalledWith('Amani', 'Kilifi, Kenya');
+    });
+  });
+
+  it('About you: empty fields are a valid stated-nothing save (clear persists)', async () => {
+    mockClient.getSettings.mockResolvedValue(settingsPayload());
+    mockClient.getOllamaUrl.mockResolvedValue({ url: 'http://localhost:11434' });
+    mockClient.setIdentity.mockResolvedValue({ user_name: '', user_place: '', message: 'Saved' });
+
+    render(<SettingsModal onClose={() => {}} onSave={() => {}} />);
+    await screen.findByRole('heading', { name: 'Settings' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => {
+      // An empty save is an intentional clear, not a skip.
+      expect(mockClient.setIdentity).toHaveBeenCalledWith('', '');
+    });
   });
 });

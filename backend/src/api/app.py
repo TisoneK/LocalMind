@@ -225,6 +225,23 @@ async def lifespan(app: FastAPI):
     except Exception as _uc_exc:  # pragma: no cover - defensive
         logger.warning("[startup] user-context cache skipped: %s", _uc_exc)
 
+    # Cache the user-STATED identity facts (name, place — "About you" in
+    # Settings) so every turn injects them with zero I/O. Unlike the fused
+    # deduction above, absence is itself injected: a fact the user never
+    # stated is declared unknown with a clarify-don't-guess contract, so
+    # "where am I" is answerable from context or asked about — never
+    # inferred from search results. Best-effort — never blocks boot.
+    try:
+        from core.user_profile import set_cached_profile
+
+        set_cached_profile(
+            getattr(settings, "localmind_user_name", "") or "",
+            getattr(settings, "localmind_user_place", "") or "",
+        )
+        logger.info("[startup] user identity facts loaded (stated + declared-absent forms)")
+    except Exception as _up_exc:  # pragma: no cover - defensive
+        logger.warning("[startup] user-profile cache skipped: %s", _up_exc)
+
     if settings.localmind_adapter != "ollama":
         logger.info(
             "[startup] Cloud adapter '%s' active — skipping Ollama warmup entirely.",

@@ -2790,18 +2790,15 @@ class AgentLoop:
                     # answer the user's latest message directly from the
                     # conversation history (fixes a follow-up like "why did you
                     # say X?" being met with a generic "tell me more").
-                    from core.trivial_input import CAPABILITY_NOTE
+                    # The note builder carries the machine/user-context
+                    # guarantee too — this fallback used to be the one agent
+                    # surface with no user context at all.
+                    from core.trivial_input import history_fallback_system_note
+
                     _hist_msgs = [
                         {
                             "role": "system",
-                            "content": (
-                                CAPABILITY_NOTE
-                                + "Answer the user's "
-                                "LATEST message using the conversation above. If they are "
-                                "questioning or correcting a previous answer, address it "
-                                "directly and honestly using what was actually said earlier "
-                                "— never reply with a generic 'tell me more'. Be concise."
-                            ),
+                            "content": history_fallback_system_note(),
                         },
                         *messages,
                     ]

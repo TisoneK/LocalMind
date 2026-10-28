@@ -326,6 +326,13 @@ class Settings(BaseSettings):
     # (always full agent loop), “direct” (no tools, lightweight chat).
     localmind_chat_mode: str = "auto"
 
+    # User-stated identity facts ("About you" in Settings). Injected every
+    # turn as labeled, guaranteed context (core/user_profile.py) — the model
+    # is told who and where the user is before it acts. Empty = never
+    # stated, which the injection declares honestly instead of guessing.
+    localmind_user_name: str = ""
+    localmind_user_place: str = ""
+
     # Agent engine — "classic" (the parent agent, default) or "state" (the experimental
     # state-driven engine, ADR-71). Independent of provider/model. Only the UI acts on
     # it: State swaps the chat pane for the State Explorer.
@@ -513,6 +520,13 @@ class Settings(BaseSettings):
                     logger.info(f"[config] Set chat_mode to {val}")
                 else:
                     logger.warning(f"[config] Ignoring invalid chat_mode: {data['chat_mode']!r}")
+            # User-stated identity facts (written by POST /api/settings/identity;
+            # loaded here so they survive restarts). An empty stored value is a
+            # deliberate clear — loaded as such, never re-filled.
+            if "user_name" in data:
+                self.localmind_user_name = str(data["user_name"]).strip()
+            if "user_place" in data:
+                self.localmind_user_place = str(data["user_place"]).strip()
             if "engine" in data:
                 val = str(data["engine"]).strip().lower()
                 if val in ("classic", "state"):
@@ -646,6 +660,24 @@ class Settings(BaseSettings):
         # Update runtime cache
         self._runtime_api_keys.pop(provider, None)
         return True
+
+    def save_user_identity(self, user_name: str, user_place: str) -> None:
+        """Persist the user-stated identity facts.
+
+        Both keys are written explicitly — even when empty — so clearing a
+        fact in the UI survives restart. (``save_runtime_settings`` keeps
+        the previously stored value when a new one is empty, which is right
+        for partial updates and exactly wrong for an intentional clear.)
+        Updates the runtime attributes in the same step: hot-apply, no
+        restart.
+        """
+        path = self._runtime_settings_path()
+        existing = self._load_json_file(path)
+        existing["user_name"] = user_name
+        existing["user_place"] = user_place
+        self._secure_write_json(path, existing)
+        self.localmind_user_name = user_name
+        self.localmind_user_place = user_place
 
     def save_connection_record(self, record: dict) -> None:
         """Upsert one AI-connection record into settings.json + runtime cache."""

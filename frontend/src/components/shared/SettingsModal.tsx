@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Server, Loader2, CheckCircle2, AlertCircle, FileEdit, Palette, Sun, Moon, Monitor, Brain, Cpu, Database, RotateCcw, MessageSquarePlus, Download, Shield, Zap, GitBranch } from 'lucide-react';
+import { X, Server, Loader2, CheckCircle2, AlertCircle, FileEdit, Palette, Sun, Moon, Monitor, Brain, Cpu, Database, RotateCcw, MessageSquarePlus, Download, Shield, Zap, GitBranch, UserRound } from 'lucide-react';
 import { localmindClient } from '@/lib/localmind/client';
 import { Progress } from '@/components/ui/progress';
 import { PAGES, GROUPS, SECTION_PAGE, type PageId } from './settingsPages';
@@ -109,6 +109,11 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
   const [shellEnabled, setShellEnabled] = useState(false);
   // Startup session behavior ("resume" | "new").
   const [startupSession, setStartupSession] = useState<'new' | 'resume'>('new');
+  // The user's own stated facts ("About you") — injected into every turn as
+  // labeled context so the assistant knows who and where the user is
+  // instead of inferring it from search results.
+  const [userName, setUserName] = useState('');
+  const [userPlace, setUserPlace] = useState('');
   // Operation permissions.
   const [permissions, setPermissions] = useState<Record<string, boolean>>({
     file_read: true,
@@ -144,6 +149,9 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
         setShellEnabled(settings.shell_enabled ?? false);
         // Startup session behavior.
         setStartupSession(settings.startup_session === 'resume' ? 'resume' : 'new');
+        // The user's stated facts ("About you").
+        setUserName(settings.user_name ?? '');
+        setUserPlace(settings.user_place ?? '');
         // Operation permissions.
         if (settings.permissions && typeof settings.permissions === 'object') {
           setPermissions((prev) => ({ ...prev, ...settings.permissions }));
@@ -338,6 +346,23 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
       // Non-fatal: the local state is already correct.
     }
   }, []);
+
+  // Save the stated facts ("About you"). Hot-applies on the backend — the
+  // next message already carries them.
+  const handleSaveIdentity = useCallback(async () => {
+    setStatus('saving');
+    setMessage('Saving...');
+    try {
+      await localmindClient.setIdentity(userName.trim(), userPlace.trim());
+      setUserName(userName.trim());
+      setUserPlace(userPlace.trim());
+      setStatus('success');
+      setMessage("Saved — the assistant knows this from your next message.");
+    } catch (err) {
+      setStatus('error');
+      setMessage(err instanceof Error ? err.message : 'Failed to save');
+    }
+  }, [userName, userPlace]);
 
 
   const handleSaveOllamaUrl = useCallback(async () => {
@@ -836,6 +861,50 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                 data-testid="save-local-settings"
               >
                 Save local settings
+              </button>
+            </div>
+          </section>
+
+          {/* ── About you (stated facts) ── */}
+          <section hidden={page !== SECTION_PAGE['About you']}>
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
+              <UserRound className="h-4 w-4 text-brand-green" />
+              About you
+            </h3>
+            <p className="mb-3 text-xs text-brand-green-muted">
+              Tell LocalMind who and where you are, in your own words. These facts
+              are given to the assistant before every message — so answers come from
+              what you said, not guesses from web searches. Leave a field empty and the
+              assistant will ask instead of guessing.
+            </p>
+            <div className="space-y-3">
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-brand-green-soft">Your name</span>
+                <input
+                  type="text"
+                  value={userName}
+                  maxLength={200}
+                  placeholder="e.g. Amani — or leave empty"
+                  onChange={(e) => setUserName(e.target.value)}
+                  className="w-full rounded-lg border border-brand-border bg-brand-bg-base px-3 py-2 text-sm text-brand-green-soft focus:border-brand-green outline-none"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-brand-green-soft">Where you are</span>
+                <input
+                  type="text"
+                  value={userPlace}
+                  maxLength={200}
+                  placeholder="e.g. Nairobi, Kenya — as you'd say it"
+                  onChange={(e) => setUserPlace(e.target.value)}
+                  className="w-full rounded-lg border border-brand-border bg-brand-bg-base px-3 py-2 text-sm text-brand-green-soft focus:border-brand-green outline-none"
+                />
+              </label>
+              <button
+                onClick={handleSaveIdentity}
+                className="rounded-lg border border-brand-border px-3 py-1.5 text-xs font-medium text-brand-green-soft transition-colors hover:border-brand-green hover:text-brand-green"
+              >
+                Save
               </button>
             </div>
           </section>

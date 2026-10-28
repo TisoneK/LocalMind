@@ -12,7 +12,8 @@ and the turn lands at 2-3x the latency of the same answer accepted on the
 first iteration.
 
 Two criterion classes are valid zero-tool success shapes (GROUNDED covers the
-clock AND the machine facts on the injected `System:` line):
+clock, the machine facts on the injected `System:` line, AND the user's
+stated identity facts on the injected `About this user` block):
 
   GROUNDED   — the user's request is answerable from context the loop itself
                injects (current date/time, environment, memory facts, the
@@ -206,6 +207,87 @@ def _answer_states_system_fact(answer: str, summary: str) -> bool:
     return bool(host and host.group(1).lower() in lower)
 
 
+# ── GROUNDED (identity facts): who/where the user stated they are ──────────
+#
+# The system prompt injects an `About this user` block (stated name/place
+# labeled as stated; unstated facts DECLARED absent with an ask-don't-guess
+# rule) and the environment context repeats it every iteration. A model that
+# answers "where am I?" from that block is following the prompt, not
+# narrating — before this class existed the gate forced a tool, and the
+# 12:45 failure trace shows where that road ends: the model "found" the
+# country via web search and happened to be right. Luck is not a guarantee.
+
+_IDENTITY_REQUEST_RE = re.compile(
+    r"\b(?:"
+    r"my\s+name\b"
+    r"|who\s+am\s+i\b"
+    r"|where\s+am\s+i\b"
+    r"|where\s+do\s+i\s+live\b"
+    r"|what\s+country\s+am\s+i\b"
+    r"|my\s+(?:location|country|city|town)\b"
+    r"|do\s+you\s+know\s+(?:my\s+name|who\s+i\s+am|where\s+i\s+(?:am|live))\b"
+    r"|what(?:'s| is)?\s+my\s+name\b"
+    r")",
+    re.IGNORECASE,
+)
+
+# Assertion shapes for facts that were NEVER stated: the honest answer to an
+# unstated fact asks back or says it doesn't know — it does not assert one.
+_NAME_ASSERTION_RE = re.compile(
+    r"\b(?:your\s+name\s+is|you\s+are\s+(?:called|named)|you'?re\s+called)\b",
+    re.IGNORECASE,
+)
+_PLACE_ASSERTION_RE = re.compile(
+    r"\b(?:you'?re\s+(?:in|located\s+in|from)|you\s+are\s+(?:in|located\s+in|from)|"
+    r"you\s+(?:live|are)\s+in)\b",
+    re.IGNORECASE,
+)
+_IDENTITY_ABSENT_ANSWER_RE = re.compile(
+    r"\b(?:"
+    r"haven'?t\s+told|have\s+not\s+told|never\s+told|not\s+been\s+told"
+    r"|don'?t\s+know\s+your|do\s+not\s+know\s+your|not\s+stated|never\s+stated"
+    r"|you\s+haven'?t\s+said|didn'?t\s+tell|did\s+not\s+tell"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def request_matches_identity_class(message: str) -> bool:
+    """True when the request asks a fact the `About this user` block carries."""
+    if not message:
+        return False
+    if _TASK_SHAPED_RE.search(message):
+        return False
+    return bool(_IDENTITY_REQUEST_RE.search(message))
+
+
+def _identity_verdict(answer: str, profile: dict) -> bool:
+    """Verdict for an identity-shaped request against the stated profile.
+
+    A stated fact is grounded when the answer actually contains it (checked
+    against the injected profile — a value the profile does not carry is not
+    grounding). When a fact was never stated, the honest answer asks back or
+    says it is unknown: that IS a valid zero-tool turn. Asserting the
+    unstated value is fabrication and stays outside the class.
+    """
+    name = (profile.get("name") or "").strip()
+    place = (profile.get("place") or "").strip()
+    text = (answer or "").strip()
+    if not text:
+        return False
+    if name and re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text, re.IGNORECASE):
+        return True
+    if place and place.lower() in text.lower():
+        return True
+    # Nothing stated matched. Any unstated fact may still be answered
+    # honestly (ask back / declare unknown) — but never asserted.
+    if not name and _NAME_ASSERTION_RE.search(text):
+        return False
+    if not place and _PLACE_ASSERTION_RE.search(text):
+        return False
+    return bool("?" in text or _IDENTITY_ABSENT_ANSWER_RE.search(text))
+
+
 def request_matches_decline_class(message: str) -> bool:
     """True when the request matches a policy-violation shape."""
     if not message:
@@ -287,15 +369,20 @@ def answer_grounded_in_injected_context(
     answer: str,
     now: datetime.datetime | None = None,
     system_summary: str | None = None,
+    profile: dict | None = None,
 ) -> bool:
     """GROUNDED class verdict: the request asks an injected-context question
     AND the answer actually states the grounded fact.
 
     When the request is a time/date grounding question, the answer must
     state the real current date (weekday or calendar date, checked against
-    the real clock) or a clock time within minutes of it. A request that
-    matches the shape but an answer that does NOT contain the fact stays
-    outside the class — the gate then behaves exactly as before.
+    the real clock) or a clock time within minutes of it. When it asks a
+    machine fact, the answer must state a value the injected `System:` line
+    carries. When it asks an identity fact, the answer must state a value
+    the stated profile carries — or, for a never-stated fact, honestly ask
+    back instead of guessing. A request that matches the shape but an answer
+    that does NOT contain the fact stays outside the class — the gate then
+    behaves exactly as before.
     """
     if request_matches_grounded_class(request):
         return _answer_states_current_date(answer, now) or _answer_states_current_time(
@@ -307,6 +394,12 @@ def answer_grounded_in_injected_context(
 
             system_summary = get_cached_summary()
         return _answer_states_system_fact(answer, system_summary or "")
+    if request_matches_identity_class(request):
+        if profile is None:
+            from core.user_profile import get_cached_profile
+
+            profile = get_cached_profile()
+        return _identity_verdict(answer, profile or {})
     return False
 
 

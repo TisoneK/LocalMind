@@ -30,6 +30,7 @@ export const GROUPS: SettingsPage['group'][] = ['Basics', 'Models', 'Agent'];
 /** `legacy` sections are the pre-redesign provider UI, kept mounted but never shown (see ProvidersPage). */
 /** Which page each section (by its heading) belongs to. */
 export const SECTION_PAGE: Record<string, PageId> = {
+  'About you': 'general',
   'On Startup': 'general',
   'Chat mode': 'general',
   'Keyboard shortcuts': 'shortcuts',

@@ -35,6 +35,7 @@ from core.agent.tool_schemas import compact_tool_summary, render_tool_list
 from core.models import Intent
 from core.system_snapshot import get_cached_summary
 from core.user_context import get_cached_fused
+from core.user_profile import format_identity_context
 
 # Section heads of the native parent prompt that `staged_system_prompt` cuts at.
 # The builder below interpolates these same constants, so the boundaries cannot
@@ -595,7 +596,15 @@ def build_agent_system_prompt(
         # assuming/hedging a region on location-sensitive requests.
         _sys = _system_env_line()
         _user = get_cached_fused()
-        system_section = (f"\n{_sys}\n" if _sys else "") + (_user if _user else "")
+        # The user-STATED identity facts ride the same surface — labeled,
+        # guaranteed, and unconditional: unstated facts are declared absent
+        # with the clarify-don't-guess contract, so "where am I" is
+        # answerable from context or asked about, never inferred from tool
+        # results. Boot-cached, so the surface stays byte-stable per process.
+        _identity = format_identity_context()
+        system_section = (
+            (f"\n{_sys}\n" if _sys else "") + (_user if _user else "") + _identity
+        )
         # Derive the core/long-tail tool-name lists dynamically
         # from the tier-split constants so this prompt NEVER goes stale when
         # tools move between tiers (an earlier tier move shifted 6 tools

@@ -1350,6 +1350,10 @@ class LocalMindClient {
     engine?: string;
     // Configurable operation permissions.
     permissions?: Record<string, boolean>;
+    // The user's stated facts ("About you") — injected every turn as
+    // labeled context; empty = never stated (the assistant asks, never guesses).
+    user_name?: string;
+    user_place?: string;
   }> {
     return this.request('/api/settings');
   }
@@ -1359,6 +1363,14 @@ class LocalMindClient {
     return this.request('/api/settings/chat-mode', {
       method: 'POST',
       body: JSON.stringify({ chat_mode: chatMode }),
+    });
+  }
+
+  /** Save the user's stated facts ("About you"): name and place, verbatim as the user says them. Hot-applies to the next message. */
+  async setIdentity(userName: string, userPlace: string): Promise<{ user_name: string; user_place: string; message: string }> {
+    return this.request('/api/settings/identity', {
+      method: 'POST',
+      body: JSON.stringify({ user_name: userName, user_place: userPlace }),
     });
   }
 
