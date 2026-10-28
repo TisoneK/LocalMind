@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-27T13:03:04Z_
+_Regenerated: 2026-10-28T10:00:45Z_
 
 ## Standing params
 - **Core:** 2.2.1 (locked, verified 2026-10-27)
@@ -16,10 +16,10 @@ _Regenerated: 2026-10-27T13:03:04Z_
 
 ## Office — who's in, right now
 - **Ezra** (S004) — Done — Re-identity shipped: palettes renamed, Graphite Blue the default in dark mode; closeout c…
-- **Amani** (S006) — Done — Harness guarantee inventory (ops/research, part 6 — docs only): deep-read deepseek-ai/d…
+- **Amani** (S006) — Done — Part 7 (product): provider-failure honesty & the provider-death completion path — roadm…
 
 ## Current task
-- **2026-10-27 — Amani / GLM (Z.ai) (S006) — part 6** — harness guarantee inventory vs. the reference standard (public repo, studied read-only — provenance in dated office records): compare wha… — *done*
+- **2026-10-27 — Amani / GLM (Z.ai) (S006) — part 7** — build §U item 1: named error codes surfaced verbatim; retryability honored in the UX (never "try again" when retryable=false; never "switc… — *done — shipped part 7; full suites green; live repro PASS. Next: §U item 2 (identity context injection).*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-09-21-2 | In-app State Explorer + engine selector (the state-driven engine, ADR-71 in `history/office-002/plans/decisions.md`): port the explorer into the app as its own interface (a game tree, move list, eval bar, inspector, meters, rewindable timeline — the owner's "geeky, not a chat" direction) and add the Classic/State engine setting so the engine becomes selectable in Settings. Reference implementations: the self-contained prototype `docs/prototypes/state-explorer/` and the backend-served page in `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter: `state_agent/adapters/localmind.py`); the `EngineEvent` record is the UI contract. In flight when office-002 closed — check whether it landed before starting. |
@@ -35,5 +35,5 @@ _14 medium, 3 low priority row(s) — see tasks/backlog.md_
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-21
 
 ## Collaboration
-- 142 event(s) on file; most recent: `20261027T130304Z-Amani-34f0cc13.json`
+- 143 event(s) on file; most recent: `20261028T085649Z-Amani-c9282202.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`

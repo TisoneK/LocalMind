@@ -53,7 +53,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Ezra | S004 | GLM (Z.ai; harness states no exact version — owner asked to confirm) | Re-identity shipped: palettes renamed, Graphite Blue the default in dark mode; closeout compliance done | Done | Shipped: `c4b5d8f8` + `145b9561` rebased onto Dara's post-close work; gates green; default live-verified (isolated 8765); pushed |
-| Amani | S006 | GLM (Z.ai; harness states no exact version) | Part 7 (product): provider-failure honesty & the provider-death completion path — roadmap §U item 1 | Working | Checked in; claimed backend core + error surface + tests; recon of failover/error-normalizer/turn-loop in progress |
+| Amani | S006 | GLM (Z.ai; harness states no exact version) | Part 7 (product): provider-failure honesty & the provider-death completion path — roadmap §U item 1 | Done | Shipped: regex provider-name fix (never "unknown"), terminal-death evidence completion path in the loop, fast-path death swallow fixed, honest error card gating, todo-truth on the error path; full suite 3670 green, frontend 623 green, live repro PASS (`scripts/live_test_provider_death_honesty.py`). §U item 2 (identity injection) next |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
