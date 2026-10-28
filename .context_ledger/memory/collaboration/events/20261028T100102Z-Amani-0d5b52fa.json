@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261028T100102Z-Amani-0d5b52fa",
+  "type": "release",
+  "session": "S006",
+  "agent": "Amani",
+  "created": "2026-10-28T10:01:02Z",
+  "issue": "provider-death-honesty",
+  "body": "§U item 1 shipped: evidence-preserving completion path live-proven, provider never unknown, honest card gating, fast-path swallow fixed; suites green",
+  "paths": [],
+  "refs": ["7ec66569"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
