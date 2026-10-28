@@ -53,7 +53,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Ezra | S004 | GLM (Z.ai; harness states no exact version — owner asked to confirm) | Re-identity shipped: palettes renamed, Graphite Blue the default in dark mode; closeout compliance done | Done | Shipped: `c4b5d8f8` + `145b9561` rebased onto Dara's post-close work; gates green; default live-verified (isolated 8765); pushed |
-| Amani | S006 | GLM (Z.ai; harness states no exact version) | Harness guarantee inventory (ops/research, part 6 — docs only): deep-read deepseek-ai/deepseek-harness and write the reference-harness gap inventory that orders the harness roadmap | Done | Shipped: `docs/reference-harness-gap-inventory.md` (18 groups + originals + failure trace + roadmap order); reference harness studied @ `22ddee37` (provenance in dated office records); commits `1261f68c` + `a4d9dd6d` pushed, then **re-identified same day** per the owner's terms ruling — guarantees restated in our own words, borrowed vocabulary scrubbed, file renamed from the borrowed shorthand. Roadmap merge with owner's 10-task scorecard pending (owner side) |
+| Amani | S006 | GLM (Z.ai; harness states no exact version) | Part 7 (product): provider-failure honesty & the provider-death completion path — roadmap §U item 1 | Working | Checked in; claimed backend core + error surface + tests; recon of failover/error-normalizer/turn-loop in progress |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,

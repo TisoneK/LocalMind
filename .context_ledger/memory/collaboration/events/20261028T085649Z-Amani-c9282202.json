@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261028T085649Z-Amani-c9282202",
+  "type": "claim",
+  "session": "S006",
+  "agent": "Amani",
+  "created": "2026-10-28T08:56:49Z",
+  "issue": "provider-death-honesty",
+  "body": "Roadmap item 1 from the guarantee inventory: named-code surfacing, retryability-honest UX, provider named, failover-before-death, evidence-preserving completion path; composes with S471 watchdog",
+  "paths": ["backend/src/core/", "backend/tests/", "frontend/src/", "docs/reference-harness-gap-inventory.md", ".context_ledger/memory/"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
