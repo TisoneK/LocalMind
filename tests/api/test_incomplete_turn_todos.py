@@ -30,6 +30,7 @@ class _Evt:
         _Evt("agent_loop_failure", {"failure_type": "iteration_cap"}),
         _Evt("agent_loop_wall_clock_cap"),
         _Evt("agent_loop_degraded", {"provider_error_code": "rate_limit"}),
+        _Evt("agent_loop_error", {"error": "payment_required"}),
         _Evt("agent_loop_done", {"hit_limit": True}),
     ],
 )

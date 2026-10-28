@@ -96,9 +96,11 @@ export function ErrorMessage({ error, onRetry }: ErrorMessageProps) {
         </span>
       </div>
 
-      {/* Actions: Try again (when the parent can regenerate) + Switch model */}
+      {/* Actions: Try again ONLY when retrying can actually work — a
+          non-retryable failure (balance=0, bad key) makes that button a lie.
+          Switch model stays: a different model/provider can still succeed. */}
       <div className="flex flex-wrap items-center gap-2 px-3 pb-2.5">
-        {onRetry && (
+        {onRetry && error.retryable && (
           <button
             onClick={onRetry}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium border border-brand-green/30 bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-colors"

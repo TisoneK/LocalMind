@@ -15,6 +15,28 @@ describe('stripFallbackErrorText', () => {
     expect(stripFallbackErrorText(text)).toBe('Here is what I found so far: the file has 3 rows.');
   });
 
+  it('removes the code-aware dead-end fallback (provider named, code verbatim)', () => {
+    expect(
+      stripFallbackErrorText(
+        '⚠️ BankOfAI (promo free models — time-limited) returned `payment_required`; this turn can\'t continue because the failure is not retryable.'
+      )
+    ).toBe('');
+  });
+
+  it('removes the preserved-path no-tool fallback', () => {
+    expect(
+      stripFallbackErrorText(
+        '⚠️ zen returned `payment_required` (not retryable); this turn can\'t continue.'
+      )
+    ).toBe('');
+  });
+
+  it('keeps the honest evidence framing — it is answer content, not fallback', () => {
+    const text =
+      '⚠️ BankOfAI (promo free models — time-limited) returned `payment_required` while I was writing the answer up, so here is what the evidence already supports, as gathered:\n\nKiambu Town is 25°C and partly sunny.';
+    expect(stripFallbackErrorText(text)).toBe(text);
+  });
+
   it('leaves ordinary text alone', () => {
     expect(stripFallbackErrorText('All done.')).toBe('All done.');
   });

@@ -1466,6 +1466,16 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                         # silence means slow GENERATION, not a stalled queue.
                         _fast_first_byte_seen = True
                         collector.emit("provider_first_byte")
+                    if _chunk.error:
+                        # A provider death on the fast path must surface like
+                        # every other path — the SSE boundary normalizes it
+                        # into the honest error card (provider named, code
+                        # verbatim, no dead try-again). Swallowing it here
+                        # ended a provider-dead turn on a fake-clean done
+                        # with NO error event at all (live finding,
+                        # death-home repro probe B, 2026-10-28).
+                        yield _chunk
+                        return
                     if _chunk.usage:
                         _fast_usage.update(_chunk.usage)
                     if _chunk.thinking:

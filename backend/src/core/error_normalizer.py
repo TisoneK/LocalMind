@@ -108,13 +108,17 @@ _MESSAGES: dict[str, str] = {
 # e.g. "zen returned 429: {...}" (openai_compat.py) and
 # "Ollama returned 404 for model 'llama3'. ..." (ollama.py). The provider
 # token may be a multi-word DISPLAY name ("Zen AI returned 400: ...") — the
-# adapter prefixes the connection's human name, so a space is legal. Without
-# this the whole envelope misses the parser, `status` stays unknown, the
-# error classifies as generic and the raw provider JSON is copied straight
-# into the user-facing fallback text.
+# adapter prefixes the connection's human name, so a space is legal — and it
+# may carry a parenthesized/annotated suffix ("BankOfAI (promo free models —
+# time-limited) returned 400: ..."): the provider group is therefore a lazy
+# match up to the FIRST "returned <3 digits>" anchor, not a token whitelist.
+# Without this the whole envelope misses the parser, `status` stays unknown,
+# `provider` lands None (the UI renders the literal "unknown"), the error
+# classifies only by keywords and the raw provider JSON is copied straight
+# into the user-facing fallback text. Live finding, 2026-10-27 12:45 run.
 _PROVIDER_ERROR_RE = re.compile(
-    r"^(?P<provider>[A-Za-z0-9_.\-]+(?:\s+[A-Za-z0-9_.\-]+)*)"
-    r"\s+returned\s+(?P<status>\d{3})(?P<rest>.*)$",
+    r"^(?P<provider>.+?)"
+    r"\s+returned\s+(?P<status>\d{3})(?!\d)(?P<rest>.*)$",
     re.DOTALL,
 )
 

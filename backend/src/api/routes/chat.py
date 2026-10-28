@@ -425,6 +425,7 @@ _INCOMPLETE_TURN_EVENTS = frozenset({
     "agent_loop_failure",  # classified failure (iteration cap / tool failure)
     "agent_loop_wall_clock_cap",  # ran out of wall-clock time
     "agent_loop_degraded",  # provider error / rate-limit cutoff (partial evidence)
+    "agent_loop_error",  # provider death surfaced as the SSE error event
 })
 
 
@@ -995,6 +996,13 @@ async def _event_stream(
                     yield _sse({"type": "token", "content": chunk.text})
                     _response_chunks.append(chunk.text)
                 yield _sse({"type": "error", "error": normalize_error(chunk.error)})
+                # The turn is over and it did NOT finish its work: the error
+                # return below bypasses the normal `_incomplete_turn` capture,
+                # so record it here — otherwise the finally flips the remaining
+                # plan todos to "completed" and a failed turn reads 100%
+                # (live: the 2026-10-27 12:45 run showed 2/3 · 67% on a
+                # provider-dead turn).
+                _incomplete_turn = True
                 _last_sent_time = time.monotonic()
                 return
 

@@ -502,3 +502,36 @@ def test_a_rejected_max_tokens_is_not_reported_as_the_conversation_being_too_lon
     assert out["code"] != CONTEXT_OVERFLOW
     real = normalize_error("deepseek returned 400: This model's maximum context length is 65536 tokens; your messages exceed it")
     assert real["code"] == CONTEXT_OVERFLOW
+
+
+def test_parenthesized_display_name_parses_with_full_name() -> None:
+    """Live 2026-10-27 12:45 shape: an annotated display name must parse —
+    the provider must never render as "unknown" when the adapter's
+    connection name is known. The provider group is a lazy match up to the
+    first `returned <3 digits>` anchor, so parentheses, spaces and dashes
+    are all legal inside the name."""
+    raw = (
+        "BankOfAI (promo free models — time-limited) returned 400: "
+        '{"error":{"message":"credit insufficient balance: balance=0 '
+        'required=5196 (request id: 2026102709455742)"}}'
+    )
+    out = normalize_error(raw)
+    assert out["provider"] == "BankOfAI (promo free models — time-limited)", out
+    assert out["code"] == PAYMENT_REQUIRED
+    assert out["retryable"] is False
+    assert out["source"] == SOURCE_PROVIDER
+
+
+def test_quota_keyword_without_returned_shape_still_classifies() -> None:
+    """A provider-less quota string (raw exception text) keeps the honest
+    code and retryability even when no provider name can be parsed."""
+    out = normalize_error("credit insufficient balance: balance=0 required=5196")
+    assert out["code"] == PAYMENT_REQUIRED
+    assert out["retryable"] is False
+
+
+def test_returned_followed_by_four_digits_is_not_a_status() -> None:
+    """`returned 4004` must not parse as status 400 — the digit-boundary
+    guard keeps the envelope from lying about the status."""
+    out = normalize_error("prov returned 4004: weird body")
+    assert out["code"] != SERVER_ERROR  # 4004 is not a real HTTP status

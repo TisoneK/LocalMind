@@ -8,6 +8,11 @@
 const FALLBACKS = [
   /⚠️?\s*The model ran into an issue\.\s*Please try again,?\s*or switch to a larger model for this task\.?/gi,
   /The model provider rate-limited my request\.\s*Please try again in a moment\.?/gi,
+  // Code-aware fallbacks (provider-death honesty): the backend now names the
+  // provider and the canonical code instead of the generic try-again line.
+  /⚠️?\s*[^\n]*?returned [`']?[a-z_]+[`']?; this turn can't continue because the failure is not retryable\.?/gi,
+  /⚠️?\s*[^\n]*?returned [`']?[a-z_]+[`']? \(not retryable\); this turn can't continue\.?/gi,
+  /I gathered the information you asked for, but [^\n]*?returned [`']?[a-z_]+[`']? \(not retryable\)[^\n]*?this turn can't continue\.?/gi,
 ];
 
 export function stripFallbackErrorText(content: string): string {

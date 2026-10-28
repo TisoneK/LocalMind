@@ -58,6 +58,30 @@ describe('ErrorMessage', () => {
     expect(screen.queryByText('Try again')).not.toBeInTheDocument();
   });
 
+  it('hides Try again on a non-retryable failure — retrying a dead balance is a lie', () => {
+    // Live 2026-10-27 12:45: payment_required (balance=0, retryable=false)
+    // rendered a "Try again" button that could never work. The button only
+    // exists when retrying can actually succeed.
+    const onRetry = vi.fn();
+    render(
+      <ErrorMessage
+        error={{
+          ...RATE_LIMIT,
+          provider: 'BankOfAI (promo free models — time-limited)',
+          code: 'payment_required',
+          retryable: false,
+        }}
+        onRetry={onRetry}
+      />
+    );
+    expect(screen.queryByText('Try again')).not.toBeInTheDocument();
+    expect(screen.getByText('Payment required')).toBeInTheDocument();
+    expect(screen.getByText('Not retryable')).toBeInTheDocument();
+    expect(screen.getByText('BankOfAI (promo free models — time-limited)')).toBeInTheDocument();
+    // Switch model stays — a different model/provider can still succeed.
+    expect(screen.getByText('Switch model')).toBeInTheDocument();
+  });
+
   it('Switch model dispatches localmind:open-model-selector', () => {
     const dispatchSpy = vi
       .spyOn(window, 'dispatchEvent')

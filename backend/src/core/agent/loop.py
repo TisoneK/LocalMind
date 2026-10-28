@@ -6429,28 +6429,49 @@ class AgentLoop:
                     from core.error_normalizer import normalize_error
 
                     _normalized_stream_error = normalize_error(_stream_err)
+                    _err_code = str(_normalized_stream_error.get("code") or "error")
+                    _err_provider = str(_normalized_stream_error.get("provider") or "")
                     _has_successful_evidence = any(
                         step.tool_name and not step.tool_failed
                         for step in trace.steps
                     )
+                    # Terminal, non-retryable provider deaths (payment/auth)
+                    # preserve evidence too. Live lesson, 2026-10-27 12:45: the
+                    # answer was already in evidence when the account ran dry,
+                    # and the retryable-only gate threw a completed evidence
+                    # run away and told the user to "try again" — known-dead
+                    # advice. Edge-block 403s are structurally excluded: they
+                    # classify (server_error, retryable=True) and ride the
+                    # retryable path below, never this terminal one.
+                    _terminal_death = (
+                        _normalized_stream_error.get("source") == "model_provider"
+                        and not bool(_normalized_stream_error.get("retryable"))
+                        and _err_code in ("payment_required", "auth_error")
+                    )
                     _can_preserve_evidence = (
                         _has_successful_evidence
                         and _normalized_stream_error.get("source") == "model_provider"
-                        and bool(_normalized_stream_error.get("retryable"))
+                        and (
+                            bool(_normalized_stream_error.get("retryable"))
+                            or _terminal_death
+                        )
                     )
                     if _can_preserve_evidence:
                         logger.warning(
                             "[agent.loop] iter=%d — provider synthesis failed after "
-                            "successful tool work; preserving evidence (%s)",
+                            "successful tool work; preserving evidence (%s%s)",
                             iteration + 1,
-                            _normalized_stream_error.get("code", "provider_error"),
+                            _err_code,
+                            ", terminal" if _terminal_death else "",
                         )
                         if _obs:
                             _obs.emit(
                                 "agent_loop_degraded",
                                 iteration=iteration + 1,
-                                provider_error_code=_normalized_stream_error.get("code", "error"),
+                                provider_error_code=_err_code,
                                 evidence_preserved=True,
+                                provider=_err_provider or None,
+                                terminal=_terminal_death,
                             )
                         # FIRST try deterministic
                         # extraction from the evidence already in hand — zero
@@ -6477,12 +6498,30 @@ class AgentLoop:
                                     chars=len(_extracted),
                                     source="provider_failure_recovery",
                                 )
+                            # A terminal death (out-of-quota / auth) must SAY
+                            # so — the user gets the evidence answer AND the
+                            # truth about why it reads raw. The error rides
+                            # the final chunk so the honest card (provider
+                            # named, code verbatim, no try-again) still shows.
+                            _rescue_text = _extracted
+                            if _terminal_death:
+                                _rescue_text = (
+                                    f"⚠️ {_err_provider or 'The model provider'} returned "
+                                    f"`{_err_code}` while I was writing the answer up, "
+                                    "so here is what the evidence already supports, "
+                                    "as gathered:\n\n" + _extracted
+                                )
                             yield StreamChunk(
-                                text=_extracted,
+                                text=_rescue_text,
                                 done=False,
                                 usage=dict(_provider_usage),
                             )
-                            yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
+                            yield StreamChunk(
+                                text="",
+                                done=True,
+                                usage=dict(_provider_usage),
+                                error=_stream_err[:200] if _terminal_death else None,
+                            )
                             return
                         # Extraction failed — yield a CLEAN user-facing message
                         # with the actual evidence, NOT "check the Actions panel."
@@ -6491,24 +6530,40 @@ class AgentLoop:
                         # a user-facing response. Instead, build a simple summary
                         # from the tool observations we already have.
                         _tool_count = sum(1 for s in (trace.steps if trace else []) if getattr(s, "tool_name", ""))
+                        # Code-aware reason phrase: a rate limit and an empty
+                        # account are different truths — never call a dead
+                        # balance "rate-limited".
+                        if _terminal_death:
+                            _death_note = (
+                                f"{_err_provider or 'the model provider'} returned "
+                                f"`{_err_code}` (not retryable) on my final write-up"
+                            )
+                        else:
+                            _death_note = (
+                                "the model provider was rate-limited on my final synthesis"
+                            )
                         if _tool_count > 0:
                             # Build a simple evidence summary from trace steps
                             _evidence_lines = []
                             for s in (trace.steps if trace else []):
-                                _obs = getattr(s, "observation", "") or ""
-                                if _obs and len(_obs.strip()) > 20:
+                                _obs_text = getattr(s, "observation", "") or ""
+                                if _obs_text and len(_obs_text.strip()) > 20:
                                     # Strip page chrome (nav/login/loading junk) so
                                     # the fallback shows headlines, not a wall of
                                     # "Subscribe now / LOGOUT". Keep the first ~600
                                     # chars of the cleaned content.
-                                    _clean = _clean_evidence_text(_obs) or _obs.strip()
+                                    _clean = _clean_evidence_text(_obs_text) or _obs_text.strip()
                                     _evidence_lines.append(_clean[:600])
                             if _evidence_lines:
                                 _summary = (
-                                    "Here's what I found (the model provider was "
-                                    "rate-limited on my final synthesis, so this "
+                                    f"Here's what I found ({_death_note}, so this "
                                     "is the raw evidence):\n\n"
                                     + "\n\n---\n\n".join(_evidence_lines[:3])
+                                )
+                            elif _terminal_death:
+                                _summary = (
+                                    "I gathered the information you asked for, but "
+                                    f"{_death_note}; this turn can't continue."
                                 )
                             else:
                                 _summary = (
@@ -6523,15 +6578,27 @@ class AgentLoop:
                                 usage=dict(_provider_usage),
                             )
                         else:
-                            yield StreamChunk(
-                                text=(
+                            if _terminal_death:
+                                _no_tool_text = (
+                                    f"⚠️ {_err_provider or 'the model provider'} returned "
+                                    f"`{_err_code}` (not retryable); this turn can't continue."
+                                )
+                            else:
+                                _no_tool_text = (
                                     "The model provider rate-limited my request. "
                                     "Please try again in a moment."
-                                ),
+                                )
+                            yield StreamChunk(
+                                text=_no_tool_text,
                                 done=False,
                                 usage=dict(_provider_usage),
                             )
-                        yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
+                        yield StreamChunk(
+                            text="",
+                            done=True,
+                            usage=dict(_provider_usage),
+                            error=_stream_err[:200] if _terminal_death else None,
+                        )
                     else:
                         logger.warning(
                             f"[agent.loop] iter={iteration + 1} — error in stream, aborting"
@@ -6542,11 +6609,27 @@ class AgentLoop:
                                 error=_stream_err[:120],
                                 iteration=iteration + 1,
                             )
-                        yield StreamChunk(
-                            text=(
+                        # Honesty by code: "try again, or switch to a larger
+                        # model" is known-dead advice when the failure is not
+                        # retryable (a balance of 0 survives neither). Name the
+                        # provider and the code verbatim; the error card below
+                        # carries the truthful remedy.
+                        if (
+                            _normalized_stream_error.get("source") == "model_provider"
+                            and not bool(_normalized_stream_error.get("retryable"))
+                        ):
+                            _dead_end_text = (
+                                f"⚠️ {_err_provider or 'The model provider'} returned "
+                                f"`{_err_code}`; this turn can't continue because the "
+                                "failure is not retryable."
+                            )
+                        else:
+                            _dead_end_text = (
                                 "⚠️ The model ran into an issue. Please try again, "
                                 "or switch to a larger model for this task."
-                            ),
+                            )
+                        yield StreamChunk(
+                            text=_dead_end_text,
                             done=True,
                             error=_stream_err[:200],
                         )
