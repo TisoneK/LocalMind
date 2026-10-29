@@ -19,6 +19,7 @@ accordingly).
 | Ezra | GLM (Z.ai — harness states no exact version; owner asked to confirm) | 2026-10-26 | 2026-10-26 | 1 |
 | Ines | unknown (Qoder agent; harness states no model id) | 2026-10-27 | 2026-10-27 | 1 |
 | Nadia | unknown (Freebuff harness states no model id) | 2026-10-29 | 2026-10-29 | 1 |
+| Jabari | GLM (Z.ai — harness states no exact version) | 2026-10-29 | 2026-10-29 | 1 |
 
 ## Observations
 

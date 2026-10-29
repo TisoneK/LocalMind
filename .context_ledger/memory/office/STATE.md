@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-29T09:49:32Z_
+_Regenerated: 2026-10-29T19:44:52Z_
 
 ## Standing params
 - **Core:** 2.2.1 (locked, verified 2026-10-29)
@@ -19,9 +19,10 @@ _Regenerated: 2026-10-29T09:49:32Z_
 - **Amani** (S006) — Done — Part 8 (product): identity context injection — roadmap §U item 2
 - **Nadia** (S031) — Done — Part 10 (product): done-rules extension — roadmap §U item 4
 - **Zuberi** (S030) — Done — Part 9 (product): provenance & audit symmetry — roadmap §U item 3
+- **Jabari** (S033) — Working — Independent review of the S031 done-rules extension (§U item 4, row E) — supervisor-re…
 
 ## Current task
-- **2026-10-29 — Nadia / unknown model id (S031)** — the provider-death completion path is now a named state of the turn contract (`DEGRADED_ANSWER`) with its delivery composed there, not inli… — *done — backend 3717 passed / 4 skipped (+22 new) in three sequential batches; the only failures are 23 in `tests/tools` (22 are the documented Windows baseline, and `test_stop_already_stopped` passes in isolation — batch-order flake). `tsc -b --noEmit` clean, eslint clean, live wire proof PASS (`scripts/live_test_done_rules.py`), the three prior live harnesses re-run PASS. §U item 5 (session durability barriers, permission modes, spill fidelity) is the next tier.*
+- **2026-10-29 — Jabari / GLM (Z.ai) (S033)** — supervisor-requested second review pass over the done-rules work: deep-read `backend/src/core/agent/turn_outcome.py`, the `loop.py` diff, `… — *Working — checked in on fresh tip `f054688f`; claim emitted; deep read starting.*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-09-21-2 | In-app State Explorer + engine selector (the state-driven engine, ADR-71 in `history/office-002/plans/decisions.md`): port the explorer into the app as its own interface (a game tree, move list, eval bar, inspector, meters, rewindable timeline — the owner's "geeky, not a chat" direction) and add the Classic/State engine setting so the engine becomes selectable in Settings. Reference implementations: the self-contained prototype `docs/prototypes/state-explorer/` and the backend-served page in `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter: `state_agent/adapters/localmind.py`); the `EngineEvent` record is the UI contract. In flight when office-002 closed — check whether it landed before starting. |
@@ -37,5 +38,5 @@ _14 medium, 3 low priority row(s) — see tasks/backlog.md_
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-21
 
 ## Collaboration
-- 155 event(s) on file; most recent: `20261029T094820Z-Nadia-7fed8ca1.json`
+- 156 event(s) on file; most recent: `20261029T194414Z-Jabari-59e75997.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`
