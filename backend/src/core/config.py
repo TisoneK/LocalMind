@@ -379,7 +379,15 @@ class Settings(BaseSettings):
         return [Path(p) for p in _allowed_user_folders()]
 
     def is_path_allowed(self, path: Path) -> bool:
-        """Return True if path is within an allowed user folder."""
+        """Return True if path is within an allowed user folder.
+
+        The current session's file-effect mode (§U item 5) can lift this folder
+        boundary: a session pinned to ``full`` access returns True for any path.
+        Every other mode — and any failure to read the pin — keeps the folder
+        boundary, so only an explicit ``full`` pin on the running session
+        widens access (fail-closed by default)."""
+        if self._session_lifts_path_boundary():
+            return True
         try:
             resolved = path.resolve()
         except Exception:
@@ -391,6 +399,25 @@ class Settings(BaseSettings):
             except ValueError:
                 continue
         return False
+
+    def _session_lifts_path_boundary(self) -> bool:
+        """True only when the running turn's session is pinned to ``full`` mode.
+
+        Defensive and lazy: any import/read failure falls back to False (keep
+        the boundary). No session id → False (the no-session default is the
+        workspace boundary, never full)."""
+        try:
+            import core.permission_mode as _pm
+            from core.session_workspace import current_session_id
+            from storage.db import get_shared_store
+
+            sid = current_session_id()
+            if not sid:
+                return False
+            store = get_shared_store(self.localmind_db_path or "./localmind.db")
+            return _pm.coerce_mode(store.get_permission_mode(sid)) is _pm.FileEffectMode.FULL
+        except Exception:
+            return False
 
     def _runtime_settings_path(self) -> Path:
         """Return path to runtime settings file."""

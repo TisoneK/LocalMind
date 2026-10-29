@@ -5,7 +5,9 @@ from __future__ import annotations
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
+import core.permission_mode as permission_mode
 from core.config import settings
 from core.error_normalizer import normalize_error
 from storage.db import get_shared_store
@@ -413,3 +415,57 @@ async def delete_session(session_id: str):
 async def get_session_writes(session_id: str):
     """Return write-stats rows for a session."""
     return _store.get_session_writes(session_id)
+
+
+# ── Permission mode (§U item 5, rows H + J) ─────────────────────────────────
+# The file-effect mode is pinned per session and durable; the audit is the
+# model-invisible record of every permission decision at the tool seam. These
+# are operator/UI surfaces — nothing here is ever injected into a prompt.
+
+
+class PermissionModeRequest(BaseModel):
+    """Body for POST /api/sessions/{id}/permission-mode."""
+
+    mode: str
+
+
+def _mode_payload(session_id: str) -> dict:
+    raw = _store.get_permission_mode(session_id)
+    effective = permission_mode.coerce_mode(raw) or permission_mode.DEFAULT_MODE
+    return {
+        "session_id": session_id,
+        "mode": effective.value,
+        "pinned": raw is not None,
+        "default": permission_mode.DEFAULT_MODE.value,
+        "modes": [m.value for m in permission_mode.FileEffectMode],
+    }
+
+
+@router.get("/sessions/{session_id}/permission-mode")
+async def get_permission_mode(session_id: str):
+    """Return the session's file-effect mode (the shipped default when unpinned)."""
+    return _mode_payload(session_id)
+
+
+@router.post("/sessions/{session_id}/permission-mode")
+async def set_permission_mode(session_id: str, req: PermissionModeRequest):
+    """Pin the session's file-effect mode. Unknown modes are rejected so a bad
+    value can never be persisted (the dispatch seam would then fail closed)."""
+    mode = permission_mode.coerce_mode(req.mode)
+    if mode is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Unknown permission mode {req.mode!r}. "
+                f"Expected one of: {', '.join(m.value for m in permission_mode.FileEffectMode)}."
+            ),
+        )
+    _store.set_permission_mode(session_id, mode.value)
+    return {**_mode_payload(session_id), "message": "Permission mode updated"}
+
+
+@router.get("/sessions/{session_id}/permission-audit")
+async def get_permission_audit(session_id: str, limit: int = 100):
+    """Return the session's permission decisions (newest first), including the
+    write-ahead journal outcome of each allowed effecting call."""
+    return _store.list_permission_audit(session_id, limit=max(1, min(limit, 500)))
