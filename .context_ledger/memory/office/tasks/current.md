@@ -12,7 +12,7 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-10-28 — Amani / GLM (Z.ai) (S006) — part 8
-- **Feature:** identity context injection (roadmap §U item 2, `docs/reference-harness-gap-inventory.md`)
-- **Task:** build §U item 2 — the model is told who and where the user is before it acts: user-stated name and place plus machine-reported time with its zone as guaranteed injected facts, each labeled with what it is and where it came from; facts the user never stated are declared absent with clarify-don't-guess guidance, never inferred from tool results (fixes F1 at the root — the 12:45 place guess was luck, not a guarantee). Unconditional on every chat path; must compose with the existing user-context fusion (machine deductions stay labeled as deductions, never as the user's statement) and the staged-prompt budget/stability tests.
-- **Status:** done — shipped part 8; full suites green (backend 3707, frontend 625); wire-capture live proof PASS. Next: §U item 3 (provenance & audit symmetry + the meter's UI half).
+- **Session:** 2026-10-29 — Amani / GLM (Z.ai) (S006) — continuation line, collision reconciliation
+- **Feature:** none (ops — collision closeout + independent re-verification; no product code)
+- **Task:** reconcile the `roadmap-items-1-2` claim emitted against a stale tip (parts 7–8 had already shipped both §U items): verified both builds live in this sandbox (backend 3707/2 skipped after sqlite-vec repair; both wire harnesses PASS on own runs; ErrorMessage/errorText 21 frontend tests), released the redundant claim citing the two product commits, logged the flaw (fetch-before-ledger-read on resumed lines), session recorded, STATE regen.
+- **Status:** done — claim closed with no product commit of its own; §U item 3 (provenance & audit symmetry + the meter's UI half) remains the next build session.

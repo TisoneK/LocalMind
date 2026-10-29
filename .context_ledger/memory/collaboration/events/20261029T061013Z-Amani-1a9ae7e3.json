@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261029T061013Z-Amani-1a9ae7e3",
+  "type": "release",
+  "session": "S006",
+  "agent": "Amani",
+  "created": "2026-10-29T06:10:13Z",
+  "issue": "roadmap-items-1-2",
+  "body": "Collision reconciliation - this claim announced work that had already shipped. The line resumed from a stale local checkout (tip f7a92d41), read office memory from that stale disk, and emitted the claim before any fetch; the first push was rejected non-fast-forward against parts 7-8, which had landed both builds the day before (7ec66569 item 1, 938b197e item 2; verified independently by Zuri S008, a4602ca7). No product code was written on this claim.\n\nConverted to verification duty instead - all live, this sandbox, on the merged tip (rebase of the claim onto a4602ca7):\n- Full backend suite 3707 passed / 2 skipped (canonical order) after repairing sandbox drift (sqlite-vec missing).\n- scripts/live_test_provider_death_honesty.py PASS on an own run - provider named, payment_required verbatim, evidence delivered with terminal=true on the wire, no dead advice.\n- scripts/live_test_identity_injection.py PASS on an own run - stated facts on both wires (fast path + loop), zone-named clock, declared-absent form, honest ask-back accepted zero-tool.\n- Frontend targeted: ErrorMessage + errorText suites, 21 passed.\n\nVerdict: both releases stand as shipped; claim closed with no product commit of its own, citing the two product commits it redundantly claimed.",
+  "paths": [],
+  "refs": ["20261029T060242Z-Amani-260f50e1", "7ec66569", "938b197e"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

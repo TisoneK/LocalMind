@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-28T11:34:09Z_
+_Regenerated: 2026-10-29T06:11:37Z_
 
 ## Standing params
 - **Core:** 2.2.1 (locked, verified 2026-10-27)
@@ -19,7 +19,7 @@ _Regenerated: 2026-10-28T11:34:09Z_
 - **Amani** (S006) — Done — Part 8 (product): identity context injection — roadmap §U item 2
 
 ## Current task
-- **2026-10-28 — Amani / GLM (Z.ai) (S006) — part 8** — build §U item 2 — the model is told who and where the user is before it acts: user-stated name and place plus machine-reported time with… — *done — shipped part 8; full suites green (backend 3707, frontend 625); wire-capture live proof PASS. Next: §U item 3 (provenance & audit symmetry + the meter's UI half).*
+- **2026-10-29 — Amani / GLM (Z.ai) (S006) — continuation line, collision reconciliation** — reconcile the `roadmap-items-1-2` claim emitted against a stale tip (parts 7–8 had already shipped both §U items): verified both builds … — *done — claim closed with no product commit of its own; §U item 3 (provenance & audit symmetry + the meter's UI half) remains the next build session.*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-09-21-2 | In-app State Explorer + engine selector (the state-driven engine, ADR-71 in `history/office-002/plans/decisions.md`): port the explorer into the app as its own interface (a game tree, move list, eval bar, inspector, meters, rewindable timeline — the owner's "geeky, not a chat" direction) and add the Classic/State engine setting so the engine becomes selectable in Settings. Reference implementations: the self-contained prototype `docs/prototypes/state-explorer/` and the backend-served page in `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter: `state_agent/adapters/localmind.py`); the `EngineEvent` record is the UI contract. In flight when office-002 closed — check whether it landed before starting. |
@@ -30,10 +30,10 @@ _Regenerated: 2026-10-28T11:34:09Z_
 _14 medium, 3 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
-- flaws/log.md (protocol/.context_ledger friction): 6 entries, last added 2026-10-27
-- inefficiencies/log.md (project code/env friction): 6 entries, last added 2026-10-27
+- flaws/log.md (protocol/.context_ledger friction): 8 entries, last added 2026-10-29
+- inefficiencies/log.md (project code/env friction): 7 entries, last added 2026-10-28
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-21
 
 ## Collaboration
-- 146 event(s) on file; most recent: `20261028T113359Z-Amani-4bac4ac8.json`
+- 150 event(s) on file; most recent: `20261029T061023Z-Amani-663409f0.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`

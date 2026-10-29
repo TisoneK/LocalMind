@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261029T061023Z-Amani-663409f0",
+  "type": "note",
+  "session": "S006",
+  "agent": "Amani",
+  "created": "2026-10-29T06:10:23Z",
+  "issue": "roadmap-items-1-2",
+  "body": "Third instance of the stale-tip collision family (see the 2026-10-28 Zuri S008 flaw entry), with a new variant worth recording: the line resumed from a conversation summary, then read office memory (STATE, current.md, sessions) from a STALE LOCAL CHECKOUT - so the stale disk made the stale memories look live-verified. The resume sequence felt protocol-clean (memories were read before acting) but the fetch came last, after the claim. Lesson generalized: on a resumed/parallelized line, git fetch + board re-read is step zero, BEFORE reading ledger memories - a ledger on a stale checkout is itself a stale memory. Behavioral fix adopted here; pushing the fetch-first step into the resume runbook is the owner's call.",
+  "paths": [],
+  "refs": ["20261028T143154Z-Zuri-f940996b"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
