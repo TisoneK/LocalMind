@@ -230,6 +230,20 @@ interface PersistedSettings {
   ollamaUrl?: string;
 }
 
+/** The session's file-effect permission mode (§U item 5).
+ * Mirrors GET/POST /api/sessions/:id/permission-mode. */
+export interface PermissionModePayload {
+  session_id: string;
+  /** The mode in force — the shipped default when `pinned` is false. */
+  mode: string;
+  /** Whether the session has an explicit pin (vs. the default). */
+  pinned: boolean;
+  /** The shipped default mode. */
+  default: string;
+  /** All valid modes, for the selector. */
+  modes: string[];
+}
+
 // A connection is one model endpoint — a preset provider or a user-defined
 // OpenAI-compatible service. Mirrors backend/src/core/connections.py.
 export interface StateEngineInfo {
@@ -1435,6 +1449,20 @@ class LocalMindClient {
     return this.request('/api/settings/permissions', {
       method: 'POST',
       body: JSON.stringify(perms),
+    });
+  }
+
+  /** The session's file-effect mode (§U item 5): the shipped default when
+   * unpinned. `modes` is the full set of valid values for the selector. */
+  async getPermissionMode(sessionId: string): Promise<PermissionModePayload> {
+    return this.request(`/api/sessions/${encodeURIComponent(sessionId)}/permission-mode`);
+  }
+
+  /** Pin the session's file-effect mode. The backend rejects unknown modes. */
+  async setPermissionMode(sessionId: string, mode: string): Promise<PermissionModePayload & { message: string }> {
+    return this.request(`/api/sessions/${encodeURIComponent(sessionId)}/permission-mode`, {
+      method: 'POST',
+      body: JSON.stringify({ mode }),
     });
   }
 

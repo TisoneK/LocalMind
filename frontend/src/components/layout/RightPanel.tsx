@@ -71,6 +71,9 @@ interface RightPanelProps {
   width?: number;
   /** Called when settings change so the parent can refresh its model list */
   onModelsRefresh?: () => Promise<void>;
+  /** The active chat session — the Settings modal's per-session file-effect
+   * mode selector is keyed to it. */
+  chatSessionId?: string | null;
 }
 
 // The Observe tab and its Intent Classification / Agent Pipeline
@@ -116,6 +119,7 @@ export function RightPanel({
   onMemoryTabShown,
   width = 320,
   onModelsRefresh,
+  chatSessionId,
 }: RightPanelProps) {
   // Default to the Agents tab — it is the canonical live surface.
   const [activeTab, setActiveTab] = useState<RightTab>('agents');
@@ -359,7 +363,7 @@ export function RightPanel({
       />
 
       {showSettings && (
-        <SettingsModal onClose={() => setShowSettings(false)} onSave={refreshModels} />
+        <SettingsModal onClose={() => setShowSettings(false)} onSave={refreshModels} sessionId={chatSessionId} />
       )}
     </div>
   );
