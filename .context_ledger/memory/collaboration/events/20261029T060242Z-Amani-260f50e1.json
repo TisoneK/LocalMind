@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261029T060242Z-Amani-260f50e1",
+  "type": "claim",
+  "session": "S006",
+  "agent": "Amani",
+  "created": "2026-10-29T06:02:42Z",
+  "issue": "roadmap-items-1-2",
+  "body": "Building roadmap items 1-2 from docs/reference-harness-gap-inventory.md section U: (1) provider-failure honesty and the provider-death path - evidence delivery no longer requires retryable=true, fallback texts name the canonical code and honor retryability, frontend Try again honors retryable; (2) identity context injection - user-stated identity facts (place/timezone/name) as guaranteed injected items with provenance, loaded at boot and refreshed on statement.",
+  "paths": ["backend/src/core/agent/loop.py", "backend/src/core/user_context.py", "backend/src/core/context_builder.py", "backend/src/api/app.py", "backend/src/tools/memory_tool.py", "frontend/src/components/chat/ErrorMessage.tsx", "frontend/src/lib/localmind/errorText.ts", "tests/core/test_agent_loop_empty_response.py", "tests/core/test_user_context_prompts.py", "tests/core/test_provider_death_delivery.py", "tests/core/test_user_stated_identity.py", "frontend/src/components/chat/ErrorMessage.test.tsx", "frontend/src/lib/localmind/errorText.test.ts", ".context_ledger/memory/office/tasks/current.md"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
