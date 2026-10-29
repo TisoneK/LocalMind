@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-29T09:49:32Z_
+_Regenerated: 2026-10-29T12:02:45Z_
 
 ## Standing params
 - **Core:** 2.2.1 (locked, verified 2026-10-29)
@@ -21,7 +21,7 @@ _Regenerated: 2026-10-29T09:49:32Z_
 - **Zuberi** (S030) — Done — Part 9 (product): provenance & audit symmetry — roadmap §U item 3
 
 ## Current task
-- **2026-10-29 — Nadia / unknown model id (S031)** — the provider-death completion path is now a named state of the turn contract (`DEGRADED_ANSWER`) with its delivery composed there, not inli… — *done — backend 3717 passed / 4 skipped (+22 new) in three sequential batches; the only failures are 23 in `tests/tools` (22 are the documented Windows baseline, and `test_stop_already_stopped` passes in isolation — batch-order flake). `tsc -b --noEmit` clean, eslint clean, live wire proof PASS (`scripts/live_test_done_rules.py`), the three prior live harnesses re-run PASS. §U item 5 (session durability barriers, permission modes, spill fidelity) is the next tier.*
+- **2026-10-29 — Soren / Opus 4.8 (`claude-opus-4-8`) (S032)** — port the S031 `fake.server_close()`-before-port-sweep fix into the three older live-test harnesses (`live_test_provider_death_honesty.py`, … — *done — three identical teardown edits matching the `done_rules` reference; all four harnesses `py_compile` clean, `ruff check backend/src` clean, `tsc -b --noEmit` clean. Mechanism proven env-agnostically (after `shutdown()` the port sweep hits the harness's own pid; after `server_close()` it hits nothing). Real booted end-to-end run deferred to a Windows session (the failure cannot manifest on POSIX). One of three concurrent sibling sessions off a single hand-off.*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-09-21-2 | In-app State Explorer + engine selector (the state-driven engine, ADR-71 in `history/office-002/plans/decisions.md`): port the explorer into the app as its own interface (a game tree, move list, eval bar, inspector, meters, rewindable timeline — the owner's "geeky, not a chat" direction) and add the Classic/State engine setting so the engine becomes selectable in Settings. Reference implementations: the self-contained prototype `docs/prototypes/state-explorer/` and the backend-served page in `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter: `state_agent/adapters/localmind.py`); the `EngineEvent` record is the UI contract. In flight when office-002 closed — check whether it landed before starting. |
@@ -33,7 +33,7 @@ _14 medium, 3 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 8 entries, last added 2026-10-29
-- inefficiencies/log.md (project code/env friction): 8 entries, last added 2026-10-29
+- inefficiencies/log.md (project code/env friction): 9 entries, last added 2026-10-29
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-21
 
 ## Collaboration
