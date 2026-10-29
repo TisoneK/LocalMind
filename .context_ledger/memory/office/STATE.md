@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-29T12:03:12Z_
+_Regenerated: 2026-10-29T12:22:23Z_
 
 ## Standing params
 - **Core:** 2.2.1 (locked, verified 2026-10-29)
@@ -19,7 +19,6 @@ _Regenerated: 2026-10-29T12:03:12Z_
 - **Amani** (S006) — Done — Part 8 (product): identity context injection — roadmap §U item 2
 - **Nadia** (S031) — Done — Part 10 (product): done-rules extension — roadmap §U item 4
 - **Zuberi** (S030) — Done — Part 9 (product): provenance & audit symmetry — roadmap §U item 3
-- **Kiano** (S032) — Working — Durability + permission work — write-durability of the record/step bus and the tool-exe…
 
 ## Current task
 - **2026-10-29 — Nadia / unknown model id (S031)** — the provider-death completion path is now a named state of the turn contract (`DEGRADED_ANSWER`) with its delivery composed there, not inli… — *done — backend 3717 passed / 4 skipped (+22 new) in three sequential batches; the only failures are 23 in `tests/tools` (22 are the documented Windows baseline, and `test_stop_already_stopped` passes in isolation — batch-order flake). `tsc -b --noEmit` clean, eslint clean, live wire proof PASS (`scripts/live_test_done_rules.py`), the three prior live harnesses re-run PASS. §U item 5 (session durability barriers, permission modes, spill fidelity) is the next tier.*
@@ -30,11 +29,11 @@ _Regenerated: 2026-10-29T12:03:12Z_
 | B-2026-09-21-4 | Benchmark the state engine against Classic (ADR-71 §8): both engines selectable and observable, same tasks, measurable comparison, only then a decision about an `Auto` engine. Ties to B-2026-09-21-2. |
 | B-2026-09-21-5 | Confirmable-refusal rollout (ADR-67): convert every tool that refuses or guesses to "refuse only on a verified fact, name the fact and the confirming flag" — start with delete (`confirm_delete`), the shell tool's destructive/mass-touch commands (replace the substring blocklist), and installs (`scope=system`); record confirming flags in the run trace. Composes with the consequence-tiered ladder work (resolve → verify → assess → confirm → execute → verify → reflect). |
 
-_14 medium, 3 low priority row(s) — see tasks/backlog.md_
+_16 medium, 3 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 8 entries, last added 2026-10-29
-- inefficiencies/log.md (project code/env friction): 8 entries, last added 2026-10-29
+- inefficiencies/log.md (project code/env friction): 9 entries, last added 2026-10-29
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-21
 
 ## Collaboration
