@@ -1014,6 +1014,14 @@ describe('useChat turn end', () => {
       vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
       const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
       expect(result.current.agentRuns.some((r) => r.status === 'running')).toBe(true);
+      // Give the turn some content (a real tool) so its projected run tree is
+      // worth keeping — a bare chat turn's tree is dropped at settle, matching
+      // what the backend persists (build_workspace_artifacts' has_content guard).
+      act(() => {
+        onChunk()(JSON.stringify({
+          obs_event: { type: 'tool_call', data: { tool: 'shell', status: 'started', tool_args: 'ls', iteration: 1 } },
+        }));
+      });
       vi.setSystemTime(new Date('2026-01-01T00:00:06Z'));
       act(() => {
         onChunk()(JSON.stringify({ type: 'done' }));
