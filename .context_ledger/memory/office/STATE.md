@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-29T09:49:32Z_
+_Regenerated: 2026-10-29T23:42:29Z_
 
 ## Standing params
 - **Core:** 2.2.1 (locked, verified 2026-10-29)
@@ -18,10 +18,11 @@ _Regenerated: 2026-10-29T09:49:32Z_
 - **Ezra** (S004) — Done — Re-identity shipped: palettes renamed, Graphite Blue the default in dark mode; closeout c…
 - **Amani** (S006) — Done — Part 8 (product): identity context injection — roadmap §U item 2
 - **Nadia** (S031) — Done — Part 10 (product): done-rules extension — roadmap §U item 4
+- **Rafael** (S032) — Done — Trajectory view → projection of the record — gap-inventory §B/G (1 of 3 parallel wor…
 - **Zuberi** (S030) — Done — Part 9 (product): provenance & audit symmetry — roadmap §U item 3
 
 ## Current task
-- **2026-10-29 — Nadia / unknown model id (S031)** — the provider-death completion path is now a named state of the turn contract (`DEGRADED_ANSWER`) with its delivery composed there, not inli… — *done — backend 3717 passed / 4 skipped (+22 new) in three sequential batches; the only failures are 23 in `tests/tools` (22 are the documented Windows baseline, and `test_stop_already_stopped` passes in isolation — batch-order flake). `tsc -b --noEmit` clean, eslint clean, live wire proof PASS (`scripts/live_test_done_rules.py`), the three prior live harnesses re-run PASS. §U item 5 (session durability barriers, permission modes, spill fidelity) is the next tier.*
+- **2026-10-29 — Rafael / Opus 4.8 (S032)** — the agent run tree + phase strip are now derived by one deterministic reducer (`frontend/src/lib/localmind/turnProjection.ts`) from the tur… — *done — FE 660/660 (tsc+eslint clean), backend 3749 passed / 2 skipped (ruff clean), live proof PASS (`scripts/live_test_trajectory_projection.py`, fake + `--real deepseek`). Committed `14e18caa` on branch `claude/trajectory-projection-13b286`. Follow-ups B-2026-10-29-1 (flat tool-pills) and B-2026-10-29-2 (async-suite config flake). Awaiting owner review / merge.*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-09-21-2 | In-app State Explorer + engine selector (the state-driven engine, ADR-71 in `history/office-002/plans/decisions.md`): port the explorer into the app as its own interface (a game tree, move list, eval bar, inspector, meters, rewindable timeline — the owner's "geeky, not a chat" direction) and add the Classic/State engine setting so the engine becomes selectable in Settings. Reference implementations: the self-contained prototype `docs/prototypes/state-explorer/` and the backend-served page in `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter: `state_agent/adapters/localmind.py`); the `EngineEvent` record is the UI contract. In flight when office-002 closed — check whether it landed before starting. |
@@ -29,7 +30,7 @@ _Regenerated: 2026-10-29T09:49:32Z_
 | B-2026-09-21-4 | Benchmark the state engine against Classic (ADR-71 §8): both engines selectable and observable, same tasks, measurable comparison, only then a decision about an `Auto` engine. Ties to B-2026-09-21-2. |
 | B-2026-09-21-5 | Confirmable-refusal rollout (ADR-67): convert every tool that refuses or guesses to "refuse only on a verified fact, name the fact and the confirming flag" — start with delete (`confirm_delete`), the shell tool's destructive/mass-touch commands (replace the substring blocklist), and installs (`scope=system`); record confirming flags in the run trace. Composes with the consequence-tiered ladder work (resolve → verify → assess → confirm → execute → verify → reflect). |
 
-_14 medium, 3 low priority row(s) — see tasks/backlog.md_
+_16 medium, 3 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 8 entries, last added 2026-10-29

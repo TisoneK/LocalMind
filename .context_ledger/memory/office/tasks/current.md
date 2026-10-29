@@ -6,7 +6,7 @@ you find a stale in-progress entry here, a prior session died mid-task —
 its roster row (if left behind) says who was here; check the session
 entry and backlog before starting.
 
-- **Session:** 2026-10-29 — Nadia / unknown model id (S031)
-- **Feature:** done-rules extension — roadmap §U item 4 (`docs/reference-harness-gap-inventory.md`, row E)
-- **Task:** the provider-death completion path is now a named state of the turn contract (`DEGRADED_ANSWER`) with its delivery composed there, not inline in the loop; an unanswered call now leaves a recorded result (`OUTCOME UNKNOWN`, blind re-run forbidden for side-effecting tools) plus a pairing invariant at every iteration head; the batch path no longer lets one raised call kill its siblings; and the parent completion floor spends the bounded replan budget instead of re-asking 19 times.
-- **Status:** done — backend 3717 passed / 4 skipped (+22 new) in three sequential batches; the only failures are 23 in `tests/tools` (22 are the documented Windows baseline, and `test_stop_already_stopped` passes in isolation — batch-order flake). `tsc -b --noEmit` clean, eslint clean, live wire proof PASS (`scripts/live_test_done_rules.py`), the three prior live harnesses re-run PASS. §U item 5 (session durability barriers, permission modes, spill fidelity) is the next tier.
+- **Session:** 2026-10-29 — Rafael / Opus 4.8 (S032)
+- **Feature:** trajectory view → projection of the record — `docs/reference-harness-gap-inventory.md` rows B + G (1 of 3 parallel worktree sessions)
+- **Task:** the agent run tree + phase strip are now derived by one deterministic reducer (`frontend/src/lib/localmind/turnProjection.ts`) from the turn's recorded obs stream — the same projection the backend persists and a reload renders — replacing the imperative live accumulator in `useLocalMind.ts`; a cross-language contract test pins the two ports together; `has_content` now requires real work so a direct turn shows no run node on any path (live == reload).
+- **Status:** done — FE 660/660 (tsc+eslint clean), backend 3749 passed / 2 skipped (ruff clean), live proof PASS (`scripts/live_test_trajectory_projection.py`, fake + `--real deepseek`). Committed `14e18caa` on branch `claude/trajectory-projection-13b286`. Follow-ups B-2026-10-29-1 (flat tool-pills) and B-2026-10-29-2 (async-suite config flake). Awaiting owner review / merge.
