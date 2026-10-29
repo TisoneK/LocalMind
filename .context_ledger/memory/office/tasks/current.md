@@ -6,13 +6,7 @@ you find a stale in-progress entry here, a prior session died mid-task —
 its roster row (if left behind) says who was here; check the session
 entry and backlog before starting.
 
-<!-- TEMPLATE — replace everything below this comment:
-- **Session:** YYYY-MM-DD — <agent> / <model>
-- **Task:** <what is being worked on right now>
-- **Status:** in-progress | done | blocked (<blocker>)
--->
-
-- **Session:** 2026-10-29 — Amani / GLM (Z.ai) (S006) — continuation line, collision reconciliation
-- **Feature:** none (ops — collision closeout + independent re-verification; no product code)
-- **Task:** reconcile the `roadmap-items-1-2` claim emitted against a stale tip (parts 7–8 had already shipped both §U items): verified both builds live in this sandbox (backend 3707/2 skipped after sqlite-vec repair; both wire harnesses PASS on own runs; ErrorMessage/errorText 21 frontend tests), released the redundant claim citing the two product commits, logged the flaw (fetch-before-ledger-read on resumed lines), session recorded, STATE regen.
-- **Status:** done — claim closed with no product commit of its own; §U item 3 (provenance & audit symmetry + the meter's UI half) remains the next build session.
+- **Session:** 2026-10-29 — Zuberi / GLM (Z.ai) (S030)
+- **Feature:** provenance & audit symmetry — roadmap §U item 3 (`docs/reference-harness-gap-inventory.md`, rows B + G, fixes F5)
+- **Task:** typed injected items with sources recorded per turn and rendered inspectable (unknown kinds opaque); failed/retried tool attempts as a first-class ledger (retry counts + last error survive); the activity meter tied to outcome truth (a turn that ended in an error renders failed — the plan pill stops reading as progress on a dead run); the provider-death degraded signal persisted as a phase.
+- **Status:** in-progress — claim `provenance-audit-symmetry` published; build starting.

@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261029T064411Z-Zuberi-73a05374",
+  "type": "claim",
+  "session": "S030",
+  "agent": "Zuberi",
+  "created": "2026-10-29T06:44:11Z",
+  "issue": "provenance-audit-symmetry",
+  "body": "Claiming the §U item 3 build (provenance & audit symmetry + the meter's UI half, rows B + G, fixes F5).\n\nScope:\n- Backend: a retry-attempt ledger on tool dispatch (per-attempt outcome + count riding the tool_call record); a typed injected-items record per turn (kind/source/label/EXACT rendered text captured inside the composer, emitted as a context_injected obs event per surface); the provider-death degraded signal persisted as a phase in build_agent_phases.\n- Frontend: turn outcome truth — a turn whose reply carries the canonical error renders FAILED (header, plan pill stops reading as progress on a dead run); retry counts + last attempt error visible on tool steps; an inspectable \"injected this turn\" list in the context panel with an opaque fallback for unrecognized kinds.\n- Live proof: a new wire-capture script asserting record==wire symmetry (the items' text appears verbatim in the captured prompt), the retry ledger on a live failing tool, and the degraded phase + error object on a synthesis death.\n\nWhy safe: additive records and frontend honesty; no prompt-text changes on existing paths, no provider/model special-casing; the four chat surfaces' injection behavior is untouched (item 2's guarantees ride as-is).",
+  "paths": ["backend/src/core/models.py", "backend/src/core/agent/tool_dispatch.py", "backend/src/core/agent/loop.py", "backend/src/core/context_builder.py", "backend/src/core/agent_workspace.py", "backend/src/api/routes/chat.py", "frontend/src/types/index.ts", "frontend/src/lib/localmind/agentPhases.ts", "frontend/src/lib/localmind/turnTimeline.ts", "frontend/src/components/chat/TurnView.tsx", "frontend/src/hooks/useLocalMind.ts", "frontend/src/components/layout/CenterPanel.tsx", "scripts/live_test_provenance_symmetry.py", "tests/core/test_tool_dispatch.py", "tests/core/test_provider_death_evidence.py", "frontend/src/lib/localmind/turnTimeline.test.ts", "frontend/src/lib/localmind/agentPhases.test.ts"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
