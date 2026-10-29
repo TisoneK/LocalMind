@@ -137,7 +137,15 @@ from core.agent.text_tools import (
 from core.agent.tool_dispatch import dispatch_with_retry
 from core.agent.tool_schemas import TOOL_DEFINITIONS, tool_defs_for_call
 from core.agent.turn_bus import TurnBus
-from core.agent.turn_outcome import Recovery, TurnOutcome, classify_turn_outcome
+from core.agent.turn_outcome import (
+    Recovery,
+    TurnOutcome,
+    classify_provider_death,
+    classify_turn_outcome,
+    classify_unanswered_call,
+    pair_unanswered_tool_calls,
+    provider_death_answer,
+)
 from core.context_builder import _build_environment_context
 from core.context_compactor import TOOL_RESULT_BUDGET_CHARS, simplify_tool_results
 from core.models import AgentAbortedError, Intent, StreamChunk, ToolResult
@@ -3836,6 +3844,29 @@ class AgentLoop:
         for iteration in range(_iter_hard_cap):
             trace.iterations_used = iteration + 1
 
+            # Done-rule: nothing is owed on a call that never answered. If an
+            # earlier iteration left an assistant tool call without a result
+            # (an abandoned dispatch, a branch that moved on early), the next
+            # provider request would be malformed and the record would be
+            # incomplete. The repair is a recorded unknown-outcome placeholder,
+            # and the repair itself goes on the audit trail.
+            _repaired_calls = pair_unanswered_tool_calls(
+                loop_messages, reason="the loop moved on before it reported a result"
+            )
+            if _repaired_calls:
+                logger.warning(
+                    "[agent.loop] repaired %d unpaired tool call(s) at iteration %d",
+                    len(_repaired_calls),
+                    iteration + 1,
+                )
+                if _obs:
+                    _obs.emit(
+                        "tool_call_unanswered",
+                        tool_call_ids=_repaired_calls,
+                        repaired=len(_repaired_calls),
+                        iteration=iteration + 1,
+                    )
+
             # Past the BASE cap, only continue while the run is
             # still making successful progress. The iteration cap is a failsafe
             # for a failing/stuck loop, not a penalty on a legitimately long task
@@ -4671,9 +4702,43 @@ class AgentLoop:
                     asyncio.ensure_future(_dispatch_and_emit(i, call, inp))
                     for i, (call, inp) in enumerate(valid_calls)
                 ]
+                _task_index = {task: idx for idx, task in enumerate(_batch_tasks)}
                 _results_by_idx: dict[int, tuple] = {}
                 for _fut in asyncio.as_completed(_batch_tasks):
-                    _idx, _res = await _fut
+                    try:
+                        _idx, _res = await _fut
+                    except Exception as _batch_exc:  # noqa: BLE001 — one call never kills the batch
+                        # A raised dispatch leaves this call with no result while
+                        # its siblings may already have taken effect. Record an
+                        # unknown-outcome placeholder instead of losing the call
+                        # (and the whole batch's results with it): the model
+                        # must see that a call happened and that nobody knows
+                        # how it ended.
+                        _idx = _task_index.get(_fut, 0)
+                        _b_call = valid_calls[_idx][0]
+                        _b_name = str(getattr(_b_call, "tool_name", "") or "tool")
+                        _unanswered = classify_unanswered_call(
+                            tool_name=_b_name, error=_batch_exc
+                        )
+                        _res = (_b_name, _unanswered.text, True, 0, None, [])
+                        logger.warning(
+                            "[agent.loop] batch call %s raised (%s) — recorded as %s",
+                            _b_name,
+                            _batch_exc,
+                            "unknown outcome" if _unanswered.unknown else "failed",
+                        )
+                        if _obs:
+                            _obs.emit(
+                                "tool_call",
+                                tool=_b_name,
+                                label="",
+                                status="failed",
+                                output=_truncate_observation(_unanswered.text),
+                                latency_ms=0,
+                                tool_args=valid_calls[_idx][1],
+                                iteration=iteration + 1,
+                                unknown_outcome=_unanswered.unknown,
+                            )
                     _results_by_idx[_idx] = _res
                     # Yield so the SSE bridge flushes the just-emitted tool_call
                     # event to the user now (as-completed streaming).
@@ -5675,12 +5740,33 @@ class AgentLoop:
                                 done=False,
                             )
                     else:
-                        observation = f"[Tool '{tool_name}' returned no result after {retry_count} retries]"
+                        # The retry budget ran out with no result: the last
+                        # attempt timed out or raised, so whether the effect
+                        # landed is unknown — not "it failed".
+                        _unanswered = classify_unanswered_call(
+                            tool_name=tool_name,
+                            timed_out=any(
+                                "timed out" in str(a.get("error", "")) for a in _tool_attempts
+                            ),
+                        )
+                        observation = (
+                            _unanswered.text[:-1]
+                            + f" — no result after {retry_count} "
+                            + f"retr{'y' if retry_count == 1 else 'ies'}]"
+                        )
                         tool_failed = True
                         latency_ms = round((time.monotonic() - t_tool) * 1000)
 
                 except (ValueError, Exception) as exc:
-                    observation = f"[Tool '{tool_name}' failed: {exc}]"
+                    # The same rule as a missing result: a raised dispatch is
+                    # only known-failed when the error happened before the tool
+                    # body could act (argument/shape errors). Otherwise the
+                    # record says the outcome is unknown and forbids a blind
+                    # re-run.
+                    _unanswered = classify_unanswered_call(
+                        tool_name=tool_name, error=exc
+                    )
+                    observation = _unanswered.text
                     tool_failed = True
                     retry_count = 0
                     latency_ms = round((time.monotonic() - t_tool) * 1000)
@@ -6516,27 +6602,21 @@ class AgentLoop:
                         step.tool_name and not step.tool_failed
                         for step in trace.steps
                     )
-                    # Terminal, non-retryable provider deaths (payment/auth)
-                    # preserve evidence too. Live lesson, 2026-10-27 12:45: the
-                    # answer was already in evidence when the account ran dry,
-                    # and the retryable-only gate threw a completed evidence
-                    # run away and told the user to "try again" — known-dead
-                    # advice. Edge-block 403s are structurally excluded: they
+                    # Does this death still leave the turn owing an answer?
+                    # That is a done-rule, not a local judgement — the contract
+                    # names the states and the codes that qualify (see
+                    # core.agent.turn_outcome.classify_provider_death).
+                    # Edge-block 403s are excluded there structurally: they
                     # classify (server_error, retryable=True) and ride the
-                    # retryable path below, never this terminal one.
-                    _terminal_death = (
-                        _normalized_stream_error.get("source") == "model_provider"
-                        and not bool(_normalized_stream_error.get("retryable"))
-                        and _err_code in ("payment_required", "auth_error")
+                    # retryable path below, never the terminal one.
+                    _death_rule = classify_provider_death(
+                        error_code=_err_code,
+                        error_source=str(_normalized_stream_error.get("source") or ""),
+                        retryable=bool(_normalized_stream_error.get("retryable")),
+                        has_successful_evidence=_has_successful_evidence,
                     )
-                    _can_preserve_evidence = (
-                        _has_successful_evidence
-                        and _normalized_stream_error.get("source") == "model_provider"
-                        and (
-                            bool(_normalized_stream_error.get("retryable"))
-                            or _terminal_death
-                        )
-                    )
+                    _terminal_death = _death_rule.terminal
+                    _can_preserve_evidence = _death_rule.preserve_evidence
                     if _can_preserve_evidence:
                         logger.warning(
                             "[agent.loop] iter=%d — provider synthesis failed after "
@@ -6584,16 +6664,13 @@ class AgentLoop:
                             # truth about why it reads raw. The error rides
                             # the final chunk so the honest card (provider
                             # named, code verbatim, no try-again) still shows.
-                            _rescue_text = _extracted
-                            if _terminal_death:
-                                _rescue_text = (
-                                    f"⚠️ {_err_provider or 'The model provider'} returned "
-                                    f"`{_err_code}` while I was writing the answer up, "
-                                    "so here is what the evidence already supports, "
-                                    "as gathered:\n\n" + _extracted
-                                )
                             yield StreamChunk(
-                                text=_rescue_text,
+                                text=provider_death_answer(
+                                    rule=_death_rule,
+                                    provider=_err_provider,
+                                    error_code=_err_code,
+                                    extracted=_extracted,
+                                ),
                                 done=False,
                                 usage=dict(_provider_usage),
                             )
@@ -6611,69 +6688,29 @@ class AgentLoop:
                         # a user-facing response. Instead, build a simple summary
                         # from the tool observations we already have.
                         _tool_count = sum(1 for s in (trace.steps if trace else []) if getattr(s, "tool_name", ""))
-                        # Code-aware reason phrase: a rate limit and an empty
-                        # account are different truths — never call a dead
-                        # balance "rate-limited".
-                        if _terminal_death:
-                            _death_note = (
-                                f"{_err_provider or 'the model provider'} returned "
-                                f"`{_err_code}` (not retryable) on my final write-up"
-                            )
-                        else:
-                            _death_note = (
-                                "the model provider was rate-limited on my final synthesis"
-                            )
-                        if _tool_count > 0:
-                            # Build a simple evidence summary from trace steps
-                            _evidence_lines = []
-                            for s in (trace.steps if trace else []):
-                                _obs_text = getattr(s, "observation", "") or ""
-                                if _obs_text and len(_obs_text.strip()) > 20:
-                                    # Strip page chrome (nav/login/loading junk) so
-                                    # the fallback shows headlines, not a wall of
-                                    # "Subscribe now / LOGOUT". Keep the first ~600
-                                    # chars of the cleaned content.
-                                    _clean = _clean_evidence_text(_obs_text) or _obs_text.strip()
-                                    _evidence_lines.append(_clean[:600])
-                            if _evidence_lines:
-                                _summary = (
-                                    f"Here's what I found ({_death_note}, so this "
-                                    "is the raw evidence):\n\n"
-                                    + "\n\n---\n\n".join(_evidence_lines[:3])
-                                )
-                            elif _terminal_death:
-                                _summary = (
-                                    "I gathered the information you asked for, but "
-                                    f"{_death_note}; this turn can't continue."
-                                )
-                            else:
-                                _summary = (
-                                    "I gathered the information you asked for, but "
-                                    "the model provider was rate-limited. Please "
-                                    "try again in a moment and I'll give you a "
-                                    "clean summary."
-                                )
-                            yield StreamChunk(
-                                text=_summary,
-                                done=False,
-                                usage=dict(_provider_usage),
-                            )
-                        else:
-                            if _terminal_death:
-                                _no_tool_text = (
-                                    f"⚠️ {_err_provider or 'the model provider'} returned "
-                                    f"`{_err_code}` (not retryable); this turn can't continue."
-                                )
-                            else:
-                                _no_tool_text = (
-                                    "The model provider rate-limited my request. "
-                                    "Please try again in a moment."
-                                )
-                            yield StreamChunk(
-                                text=_no_tool_text,
-                                done=False,
-                                usage=dict(_provider_usage),
-                            )
+                        # Build a simple evidence summary from trace steps.
+                        # Strip page chrome (nav/login/loading junk) so the
+                        # fallback shows headlines, not a wall of "Subscribe
+                        # now / LOGOUT". Keep the first ~600 chars of cleaned
+                        # content; the contract decides which of these blocks
+                        # the delivered answer actually uses.
+                        _evidence_blocks: list[str] = []
+                        for s in (trace.steps if trace else []):
+                            _obs_text = getattr(s, "observation", "") or ""
+                            if _obs_text and len(_obs_text.strip()) > 20:
+                                _clean = _clean_evidence_text(_obs_text) or _obs_text.strip()
+                                _evidence_blocks.append(_clean[:600])
+                        yield StreamChunk(
+                            text=provider_death_answer(
+                                rule=_death_rule,
+                                provider=_err_provider,
+                                error_code=_err_code,
+                                evidence_blocks=_evidence_blocks,
+                                tool_count=_tool_count,
+                            ),
+                            done=False,
+                            usage=dict(_provider_usage),
+                        )
                         yield StreamChunk(
                             text="",
                             done=True,
@@ -8195,9 +8232,21 @@ class AgentLoop:
                             return "", False
                 return "", True
             _streak, _streak_tool = same_tool_failure_streak(trace)
-            if iteration + 1 >= effective_max_iter or _streak >= _SAME_TOOL_REPLAN_CAP:
-                # Out of iterations / same-tool spiral — stop honestly rather
-                # than loop the same failure (spec §18 loop protection).
+            if (
+                iteration + 1 >= effective_max_iter
+                or _streak >= _SAME_TOOL_REPLAN_CAP
+                # The floor's own replan budget. A model that answers without
+                # acting (and so never repeats a tool) left the streak at zero
+                # and the floor re-asked on every iteration — 19 replans on a
+                # single failed call. Asking again after the same bounded
+                # budget changes nothing about what the model will do; the
+                # turn closes honestly instead (the same cap the criteria path
+                # uses).
+                or gate_replan_count >= _MAX_TOTAL_GATE_REPLANS
+            ):
+                # Out of iterations / same-tool spiral / replan budget spent —
+                # stop honestly rather than loop the same failure (spec §18
+                # loop protection).
                 trace.gate_summary = f"✗ completion floor: {_floor_note}"
                 return f"\n\n{trace.gate_summary}", True
             revised = await self._replan_for_gate(
