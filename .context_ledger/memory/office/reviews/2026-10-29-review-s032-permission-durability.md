@@ -67,10 +67,20 @@ the trajectory sibling covers row G.
   the pin survived a real server restart; probe D a crash-left `pending` row was
   reconciled to `unknown` on the next boot. PASS.
 
+## Update — front-end selector shipped (same session, owner said "Build selector")
+Row H's "one selector" is now surfaced: **Settings → Agent → "File access (this chat)"**
+(`b9f42aca`) — three options (Read-only / Workspace writes / Full access) wired to
+`GET`/`POST /api/sessions/{id}/permission-mode`, reading the live mode on open, pinning
+optimistically with roll-back, and explaining itself when no chat is open. The chat
+session id is threaded `WorkspaceLayout → RightPanel → SettingsModal`. +2 component
+tests; frontend suite 642 passed; tsc + eslint (`--max-warnings 0`) clean. **Verified in
+the real app** (vite + backend): picking Read-only in the UI persisted `read_only`
+(pinned) to the backend store, confirmed via the API.
+
 ## Still open (follow-ups filed)
-- **Frontend selector** — the mode is fully enforced and API-exposed but not yet
-  surfaced in Settings; row H's "one selector" is backend-complete, UI pending.
 - **Mixed-intent effecting tools** — git (commit vs status), process (start vs
   logs), browse (click vs read) are effect-capable but their effect depends on the
-  sub-command, so they are not yet mode-gated. Needs sub-command classification.
+  sub-command, so they are not yet mode-gated. Needs sub-command classification. (`B-2026-10-29-2`)
+- **Permission audit viewer** — the audit/journal is recorded and API-exposed but not
+  surfaced in the UI. (`B-2026-10-29-3`)
 - Row **D** (spill/shadow fidelity) of §U item 5 remains, by scope, untouched here.

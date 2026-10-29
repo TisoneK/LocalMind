@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-29T12:22:23Z_
+_Regenerated: 2026-10-29T19:00:48Z_
 
 ## Standing params
 - **Core:** 2.2.1 (locked, verified 2026-10-29)
