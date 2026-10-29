@@ -3490,7 +3490,12 @@ class AgentLoop:
         if workspace_context:
             turn_context_parts.append(workspace_context)
             _injected_items.append(
-                {"kind": "workspace_state", "source": "workspace snapshot (git/diff/build)", "text": workspace_context, "chars": len(workspace_context)}
+                {
+                    "kind": "workspace_state",
+                    "source": "workspace snapshot (git/diff/build)",
+                    "text": workspace_context,
+                    "chars": len(workspace_context),
+                }
             )
         if intent_tail:
             _injected_items.append(
@@ -3504,7 +3509,12 @@ class AgentLoop:
         if _todo_state_prompt:
             turn_context_parts.append(_todo_state_prompt)
             _injected_items.append(
-                {"kind": "todo_state", "source": "session todo store", "text": _todo_state_prompt, "chars": len(_todo_state_prompt)}
+                {
+                    "kind": "todo_state",
+                    "source": "session todo store",
+                    "text": _todo_state_prompt,
+                    "chars": len(_todo_state_prompt),
+                }
             )
         # The derived goal route — the ordered sub-goal path
         # (check → prep → write → verify) per top-level goal, so the model
@@ -3513,13 +3523,23 @@ class AgentLoop:
         if _goal_route_prompt:
             turn_context_parts.append(_goal_route_prompt)
             _injected_items.append(
-                {"kind": "goal_route", "source": "goal tree", "text": _goal_route_prompt, "chars": len(_goal_route_prompt)}
+                {
+                    "kind": "goal_route",
+                    "source": "goal tree",
+                    "text": _goal_route_prompt,
+                    "chars": len(_goal_route_prompt),
+                }
             )
         _task_state_prompt = task_state.to_prompt()
         if _task_state_prompt:
             turn_context_parts.append(_task_state_prompt)
             _injected_items.append(
-                {"kind": "task_state", "source": "task state engine", "text": _task_state_prompt, "chars": len(_task_state_prompt)}
+                {
+                    "kind": "task_state",
+                    "source": "task state engine",
+                    "text": _task_state_prompt,
+                    "chars": len(_task_state_prompt),
+                }
             )
         turn_context = "\n\n".join(p for p in turn_context_parts if p)
         # The audit emit: one event, every injected item of the trailing
