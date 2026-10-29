@@ -142,3 +142,28 @@ and using absolute paths (the pattern already in the log) is the fix.
 - **Friction:** every live-test harness here starts its fake provider on a thread inside the harness process and then calls `kill_port(FAKE_PORT)` on the way out. `ThreadingHTTPServer.shutdown()` stops the loop but does not close the listening socket, so netstat still shows the harness's own PID bound to that port and the sweep taskkills the harness — silently, with no traceback, AFTER its PASS line has printed. The proof reads as passed while the shell reports exit 1: `live_test_provider_death_honesty.py`, `live_test_identity_injection.py` and `live_test_provenance_symmetry.py` all print PASS and all exit 1 today for exactly this reason.
 - **Cost:** one confusing diagnosis round ("it printed PASS, why did the command fail?") before the mechanism was visible; a script whose exit code is meaningless is a script CI cannot gate on.
 - **Workaround/status:** `scripts/live_test_done_rules.py` (new) calls `fake.server_close()` before its port sweep, so its exit code is trustworthy. The three older harnesses still carry the flaw — one-line fix each for whoever is next in them; not touched here because they were read-only regression evidence for this session's change.
+
+---
+
+## 2026-10-29 — Jabari / GLM (Z.ai) (S033)
+
+- **Problem:** two live harnesses false-FAILED on an unchanged tree during the independent
+  S031 review — `live_test_done_rules.py` probe B and `live_test_provider_death_honesty.py`
+  probe A — while the identical product code had passed them the day before. Each diagnostic
+  round cost a full server boot + probe cycle before the mechanism was visible.
+- **Cause:** the fake providers key their state machines on **absolute request position**
+  (`request_count == 1` → tool call, next request → death), while the product legitimately
+  makes provider calls outside the loop — probe A's background title refinement
+  (`[title] no classify title — LLM refinement scheduled`), conversation-state and init
+  classification. When one lands inside a probe window it steals the `n=1` slot; the probe's
+  tool call reaches the wrong consumer; the loop then dies evidence-less and every
+  with-evidence assertion false-fails. Same class as the cold-home init-call offset already
+  logged against the provenance harness — that one shifted the counter predictably; this one
+  is a genuine race (timing-dependent, so runs flip between PASS and FAIL on identical code).
+- **Workaround / fix:** re-run on a lucky timeline is NOT a fix. Content-key the fakes (emit
+  the tool call for any request whose messages lack the expected tool result; deliver the
+  death only on a request carrying that result) or disable title refinement / drain scheduled
+  work between probes. Full mechanism + product-residue finding recorded in
+  `office/reviews/2026-10-29-review-s031-independent-jabari.md`.
+- **Prevent next time:** a fake provider shared with this product must never assume it sees
+  only the loop's requests; keyed-on-content is the only stable contract.

@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261029T195700Z-Jabari-45383f47",
+  "type": "release",
+  "session": "S033",
+  "agent": "Jabari",
+  "created": "2026-10-29T19:57:00Z",
+  "issue": "s031-independent-review",
+  "body": "Independent review of the S031 done-rules extension complete. Verdict: PASS with findings - the release stands. Review file: office/reviews/2026-10-29-review-s031-independent-jabari.md (commit 542b9398). Findings parked for the owner: harness request-position state machines race the product's background provider calls (two false-negative live runs, mechanism traced in the server log), and the no-evidence death wording at loop.py:6739-6748 still sits outside the turn contract. No product code touched (read-only claim honored).",
+  "paths": [],
+  "refs": ["20261029T194414Z-Jabari-59e75997", "542b9398"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
