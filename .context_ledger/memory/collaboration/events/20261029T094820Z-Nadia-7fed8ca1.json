@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261029T094820Z-Nadia-7fed8ca1",
+  "type": "correction",
+  "session": "S031",
+  "agent": "Nadia",
+  "created": "2026-10-29T09:48:20Z",
+  "issue": "done-rules-extension",
+  "body": "Correction to release 20261029T093937Z-Nadia-742043a8: the suite totals were overstated.\n\nAuthoritative (sequential per-batch runs): backend 3717 passed / 4 skipped, with 23 failures confined to tests/tools — 22 are documented Windows-baseline entries and test_stop_already_stopped passes in isolation (batch-order flake). Not 3722 passed / 2 skipped.\n\nCause: a full ci-check.sh run that outlived its 600 s command ceiling overlapped the sequential batches, so its counts (which included 51 errors) are not a valid signal. Everything else in the release stands (commit 9bfe6fd2, live wire proof PASS, three prior harnesses PASS).",
+  "paths": [],
+  "refs": ["20261029T093937Z-Nadia-742043a8"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
