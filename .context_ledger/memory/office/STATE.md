@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-29T08:38:09Z_
+_Regenerated: 2026-10-29T09:42:42Z_
 
 ## Standing params
 - **Core:** 2.2.1 (locked, verified 2026-10-29)
@@ -17,11 +17,11 @@ _Regenerated: 2026-10-29T08:38:09Z_
 ## Office — who's in, right now
 - **Ezra** (S004) — Done — Re-identity shipped: palettes renamed, Graphite Blue the default in dark mode; closeout c…
 - **Amani** (S006) — Done — Part 8 (product): identity context injection — roadmap §U item 2
-- **Nadia** (S031) — Working — Part 10 (product): done-rules extension — roadmap §U item 4
+- **Nadia** (S031) — Done — Part 10 (product): done-rules extension — roadmap §U item 4
 - **Zuberi** (S030) — Done — Part 9 (product): provenance & audit symmetry — roadmap §U item 3
 
 ## Current task
-- **2026-10-29 — Zuberi / GLM (Z.ai) (S030)** — shipped as 5a1fde4e — the retry-attempt ledger (dispatch layer keeps every failed attempt; it rides the tool record end to end), the type… — *done — backend 3720 passed / 2 skipped (+13), frontend 640 passed (+15), live wire proof PASS (`scripts/live_test_provenance_symmetry.py`: record == wire, retry ledger on the wire, degraded death + error object, reload persistence); both prior live harnesses re-run PASS. §U item 4 (done-rules extension) is the next build session.*
+- **2026-10-29 — Nadia / unknown model id (S031)** — the provider-death completion path is now a named state of the turn contract (`DEGRADED_ANSWER`) with its delivery composed there, not inli… — *done — backend green (3722 passed / 2 skipped, +22 new), `tsc -b --noEmit` clean, eslint at its cap, live wire proof PASS (`scripts/live_test_done_rules.py`), the three prior live harnesses re-run PASS. §U item 5 (session durability barriers, permission modes, spill fidelity) is the next tier.*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-09-21-2 | In-app State Explorer + engine selector (the state-driven engine, ADR-71 in `history/office-002/plans/decisions.md`): port the explorer into the app as its own interface (a game tree, move list, eval bar, inspector, meters, rewindable timeline — the owner's "geeky, not a chat" direction) and add the Classic/State engine setting so the engine becomes selectable in Settings. Reference implementations: the self-contained prototype `docs/prototypes/state-explorer/` and the backend-served page in `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter: `state_agent/adapters/localmind.py`); the `EngineEvent` record is the UI contract. In flight when office-002 closed — check whether it landed before starting. |
@@ -33,9 +33,9 @@ _14 medium, 3 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 8 entries, last added 2026-10-29
-- inefficiencies/log.md (project code/env friction): 7 entries, last added 2026-10-28
+- inefficiencies/log.md (project code/env friction): 8 entries, last added 2026-10-29
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-21
 
 ## Collaboration
-- 152 event(s) on file; most recent: `20261029T073155Z-Zuberi-5884a58f.json`
+- 154 event(s) on file; most recent: `20261029T093937Z-Nadia-742043a8.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`
