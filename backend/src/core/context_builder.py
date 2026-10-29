@@ -109,11 +109,54 @@ def _intent_fragment_name(intent: Intent) -> str:
     return _SKILL_MAP.get(intent, intent.value.lower())
 
 
+def _record_env_items(
+    items_out: list,
+    *,
+    os_block: str = "",
+    clock_block: str = "",
+    user_ctx_block: str = "",
+    about_block: str = "",
+    paths_block: str = "",
+    shell_line: str = "",
+    workspace_line: str = "",
+    hw_block: str = "",
+    osguide_block: str = "",
+    guidance_block: str = "",
+    tool_section: str = "",
+) -> None:
+    """Append one typed record per injected environment item.
+
+    Called by ``_build_environment_context`` with the EXACT fragments the
+    block renders — the record and the prompt are built from the same
+    variables, so they cannot drift apart. ``source`` names the producer so
+    the audit view can attribute every line. Absent fragments (an empty
+    workspace line, a dropped tool section) are skipped: the record lists
+    what WAS injected, and a missing item reads as absent, not as blank.
+    """
+    def _add(kind: str, source: str, text: str) -> None:
+        if text and text.strip():
+            items_out.append({"kind": kind, "source": source, "text": text, "chars": len(text)})
+
+    _add("environment.os", "platform facts", os_block)
+    _add("environment.clock", "system clock", clock_block)
+    _add("environment.paths", "process environment", paths_block)
+    _add("environment.hardware", "platform facts", hw_block)
+    _add("environment.guidance", "prompt builder", osguide_block)
+    _add("shell_state", "settings: shell tool toggle", shell_line)
+    _add("workspace_folder", "session workspace", workspace_line)
+    _add("user_context.deduced", "user context cache (deduced)", user_ctx_block)
+    _add("user_identity.stated", "user profile (stated in Settings)", about_block)
+    _add("environment.know", "prompt builder", guidance_block)
+    if tool_section.strip():
+        _add("tool_catalog", "tools registry", tool_section)
+
+
 def _build_environment_context(
     session_cwd: str | None = None,
     compact: bool = False,
     include_tool_list: bool = True,
     session_id: str | None = None,
+    items_out: list | None = None,
 ) -> str:
     """Build environment context for the agent — system info, date/time, hardware, tools.
 
@@ -136,6 +179,13 @@ def _build_environment_context(
     workspace folder line so the agent KNOWS where this session's artifact
     files live and defaults its writes there (unless the user asked for a
     specific path).
+
+    ``items_out``: when a list is passed, one record per injected item is
+    appended to it — {kind, source, text, chars} where ``text`` is the EXACT
+    fragment this block carries (captured from the same variables the block
+    renders, so the record and the prompt can never drift apart). This is
+    the audit half of the injected-context guarantee: what the model
+    received is reconstructable per item, with its producer attributed.
     """
     import datetime
     import os
@@ -299,23 +349,41 @@ def _build_environment_context(
     # Compact block for the classify/init call — essentials only, and NO
     # VectorStore count (skips a per-turn DB call the classifier doesn't need).
     if compact:
-        return f"""## Environment
-- {os_info}
-- Current date: {date_str}
-- Current time: {time_str}{tz_str}
-- User context: {_user_line or "not deduced"}
-- Working directory: {cwd_display} (already current for this turn -- do NOT
-  run pwd/Get-Location/cd just to check it)
-- Home: {home_display}
-- {shell_state_line}
-{_workspace_line}
-
-## What You Know
-- Today is {date_str}. Use this to ground time-sensitive requests.
+        _os_block = f"- {os_info}"
+        _clock_block = f"- Current date: {date_str}\n- Current time: {time_str}{tz_str}"
+        _user_ctx_block = f'- User context: {_user_line or "not deduced"}'
+        _paths_block = (
+            f"- Working directory: {cwd_display} (already current for this turn -- do NOT\n"
+            "  run pwd/Get-Location/cd just to check it)\n"
+            f"- Home: {home_display}"
+        )
+        _shell_line_block = f"- {shell_state_line}"
+        _compact_guidance = f"""- Today is {date_str}. Use this to ground time-sensitive requests.
 - You are running on {system} {release}. The user's home is {home_display}
   ({home}); default file operations are relative to there. `~` expands to
   the real path automatically in any tool call.
 - {shell_guidance}"""
+        if items_out is not None:
+            _record_env_items(
+                items_out,
+                os_block=_os_block,
+                clock_block=_clock_block,
+                user_ctx_block=_user_ctx_block,
+                paths_block=_paths_block,
+                shell_line=_shell_line_block,
+                workspace_line=_workspace_line,
+                guidance_block=_compact_guidance,
+            )
+        return f"""## Environment
+{_os_block}
+{_clock_block}
+{_user_ctx_block}
+{_paths_block}
+{_shell_line_block}
+{_workspace_line}
+
+## What You Know
+{_compact_guidance}"""
 
     # ── Memory facts count (if available) ──
     # Boot-path efficiency (bootup-telemetry session): the count is only
@@ -371,26 +439,19 @@ You have access to these tools: {tool_summary}
 - grep_search: Search file contents for text patterns (works without shell)
 """
 
-    context = f"""## Environment
-- {os_info}
-- Hostname: {hostname}
-- User: {username}
-- Current date: {date_str}
-- Current time: {time_str}{tz_str}
-- User context: {_user_line or "not deduced"}
-- About the user: {_about_line}
-- Working directory: {cwd_display} (already current for this turn -- do NOT
-  run pwd/Get-Location/cd just to check it)
-- Home: {home_display}
-- {shell_state_line}
-{_workspace_line}
-- CPU: {processor} ({cpu_count} cores)
-- Python: {py_version}
-- {os_guidance}
-- {common_cmds}{tools_section}
-
-## What You Know
-- Today is {date_str}. Use this to ground all time-sensitive queries.
+    _os_block = f"- {os_info}\n- Hostname: {hostname}\n- User: {username}"
+    _clock_block = f"- Current date: {date_str}\n- Current time: {time_str}{tz_str}"
+    _user_ctx_block = f'- User context: {_user_line or "not deduced"}'
+    _about_block = f"- About the user: {_about_line}"
+    _paths_block = (
+        f"- Working directory: {cwd_display} (already current for this turn -- do NOT\n"
+        "  run pwd/Get-Location/cd just to check it)\n"
+        f"- Home: {home_display}"
+    )
+    _shell_line_block = f"- {shell_state_line}"
+    _hw_block = f"- CPU: {processor} ({cpu_count} cores)\n- Python: {py_version}"
+    _osguide_block = f"- {os_guidance}\n- {common_cmds}"
+    _know_block = f"""- Today is {date_str}. Use this to ground all time-sensitive queries.
 - You are running on {system} {release}. Use {shell_name}-compatible commands ONLY.
   If Windows, NEVER use mkdir -p, ls, cat, grep — use PowerShell equivalents.
 - The user's home directory is {home_display} ({home}). Default file
@@ -398,6 +459,35 @@ You have access to these tools: {tool_summary}
   automatically in any tool call.
 - {shell_guidance}
 - You have {memory_count} facts in memory about this user."""
+    if items_out is not None:
+        _record_env_items(
+            items_out,
+            os_block=_os_block,
+            clock_block=_clock_block,
+            user_ctx_block=_user_ctx_block,
+            about_block=_about_block,
+            paths_block=_paths_block,
+            shell_line=_shell_line_block,
+            workspace_line=_workspace_line,
+            hw_block=_hw_block,
+            osguide_block=_osguide_block,
+            guidance_block=_know_block,
+            tool_section=tools_section or "",
+        )
+
+    context = f"""## Environment
+{_os_block}
+{_clock_block}
+{_user_ctx_block}
+{_about_block}
+{_paths_block}
+{_shell_line_block}
+{_workspace_line}
+{_hw_block}
+{_osguide_block}{tools_section}
+
+## What You Know
+{_know_block}"""
 
     return context
 

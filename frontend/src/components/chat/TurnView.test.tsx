@@ -114,3 +114,67 @@ describe('TurnView', () => {
     expect(screen.queryByText(/·\s+\d/)).toBeNull();
   });
 });
+
+describe('TurnView outcome truth (§U item 3)', () => {
+  it('a failed turn keeps the plan fraction but names the outcome on the pill', () => {
+    const error = { code: 'payment_required', message: 'balance empty', retryable: false };
+    render(
+      <TurnView
+        message={{ toolCalls: [tool('a')], error } as never}
+        todos={[
+          { id: 'plan-1', text: 'one', completed: true, order: 0 },
+          { id: 'plan-2', text: 'two', completed: false, order: 1 },
+          { id: 'plan-3', text: 'three', completed: false, order: 2 },
+        ]}
+      />,
+    );
+    expect(screen.getByText("1/3 plan · didn't finish")).toBeInTheDocument();
+    // The header itself reads as failed (red X), not a green "Ran 1 tool".
+    const view = screen.getByTestId('turn-view');
+    expect(view).toHaveAttribute('data-state', 'failed');
+  });
+
+  it('a successful turn keeps the plain plan pill', () => {
+    render(
+      <TurnView
+        message={{ toolCalls: [tool('a')] }}
+        todos={[
+          { id: 'plan-1', text: 'one', completed: true, order: 0 },
+          { id: 'plan-2', text: 'two', completed: false, order: 1 },
+        ]}
+      />,
+    );
+    expect(screen.getByText('1/2 plan')).toBeInTheDocument();
+  });
+
+  it('expands a retried tool into its attempt ledger', () => {
+    render(
+      <TurnView
+        message={{
+          toolCalls: [
+            tool('a', {
+              retryCount: 2,
+              retryAttempts: [
+                { attempt: 1, error: 'connection refused', waited_ms: 500 },
+                { attempt: 2, error: 'timeout', waited_ms: 1000 },
+              ],
+            }),
+          ],
+        }}
+      />,
+    );
+    // Open the folded turn group, then the tool row itself.
+    fireEvent.click(screen.getByText('Ran 1 tool'));
+    expect(screen.getByText('2 retries')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Ran command'));
+    const ledger = screen.getByTestId('retry-ledger');
+    expect(ledger).toHaveTextContent('Attempt 1 failed: connection refused');
+    expect(ledger).toHaveTextContent('Attempt 2 failed: timeout');
+  });
+
+  it('a first-try tool renders no retry ledger', () => {
+    const { container } = render(<TurnView message={{ toolCalls: [tool('a')] }} />);
+    fireEvent.click(screen.getByText('Ran 1 tool'));
+    expect(container.querySelector('[data-testid="retry-ledger"]')).toBeNull();
+  });
+});

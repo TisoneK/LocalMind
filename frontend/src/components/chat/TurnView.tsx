@@ -76,6 +76,24 @@ function ShellDisabledTip() {
   );
 }
 
+/** The dispatch layer's attempt ledger, expanded under a tool that needed
+ *  retries. Every failed attempt stays visible with its error — recovery
+ *  never erases what actually happened. */
+function RetryLedger({ tool }: { tool: ToolCall }) {
+  const attempts = tool.retryAttempts ?? [];
+  if ((tool.retryCount ?? 0) <= 0 || attempts.length === 0) return null;
+  return (
+    <div className="py-0.5" data-testid="retry-ledger">
+      {attempts.map((a) => (
+        <div key={a.attempt} className="text-[10.5px] leading-snug text-brand-amber">
+          Attempt {a.attempt} failed{a.error ? `: ${a.error}` : ''}
+          {a.waited_ms ? ` — retried after ${formatLatency(a.waited_ms)}` : ''}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function StepRow({ step, depth = 0 }: { step: TurnStep; depth?: number }) {
   const { enter } = useEnterMotion();
   // A failed step opens itself: the error is the thing the user needs to see.
@@ -160,6 +178,7 @@ function StepRow({ step, depth = 0 }: { step: TurnStep; depth?: number }) {
           ) : (
             <>
               <FilePreviewLink tool={step.tool} />
+              <RetryLedger tool={step.tool as ToolCall} />
               {step.kind === 'thought' ? (
                 <ThoughtText text={step.detail ?? ''} />
               ) : step.tool && isTerminalTool(step.tool) ? (
@@ -187,7 +206,7 @@ function StepRow({ step, depth = 0 }: { step: TurnStep; depth?: number }) {
 interface TurnViewProps {
   message: Pick<
     ChatMessage,
-    'acknowledgement' | 'thinking' | 'thinkMs' | 'toolCalls' | 'agentPhases' | 'agentRuns' | 'statusText' | 'performance'
+    'acknowledgement' | 'thinking' | 'thinkMs' | 'toolCalls' | 'agentPhases' | 'agentRuns' | 'statusText' | 'performance' | 'error'
   > & { content?: string };
   todos?: TodoItem[];
   isStreaming?: boolean;
@@ -237,7 +256,10 @@ export const TurnView = memo(function TurnView({ message, todos, isStreaming }: 
     ? `Working · ${elapsed}s`
     : `${turn.summary || 'Done'}${totalMs > 0 ? ` · ${formatLatency(totalMs)}` : ''}`;
   const sub = running ? turn.activeLabel : '';
-  const failed = !running && turn.counts.failed > 0;
+  // Outcome truth drives the header: a run that ended in an error reads as
+  // failed even when every tool row succeeded — the death happened after
+  // the tools (the 12:45 class of failure).
+  const failed = !running && (turn.counts.failed > 0 || turn.state === 'failed');
   const unfinished = !running && turn.counts.unfinished > 0;
 
   return (
@@ -276,7 +298,11 @@ export const TurnView = memo(function TurnView({ message, todos, isStreaming }: 
                   >
                     {running && turn.plan.done < turn.plan.total
                       ? `Plan ${turn.plan.currentIndex + 1}/${turn.plan.total}`
-                      : `${turn.plan.done}/${turn.plan.total} plan`}
+                      : failed
+                        // A meter that reads as progress on a failed run lies
+                        // by omission — name the outcome next to the fraction.
+                        ? `${turn.plan.done}/${turn.plan.total} plan · didn't finish`
+                        : `${turn.plan.done}/${turn.plan.total} plan`}
                   </span>
                 )}
               </span>

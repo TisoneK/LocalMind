@@ -150,6 +150,13 @@ function toolStep(tool: ToolCall, settled: boolean): TurnStep {
   const inputText = tool.input?.trim().toLowerCase() ?? '';
   const repeated = (!!inputText && label.toLowerCase().includes(inputText)) || (!!target && target.length >= 4 && label.includes(target));
   const detail = tool.input && !repeated ? tool.input : undefined;
+  // A recovery stays on the record: "2 retries" on the row, the full
+  // attempt ledger in the expanded detail. A tool that succeeded on its
+  // third try must not read as if the first worked.
+  const retryNote =
+    (tool.retryCount ?? 0) > 0
+      ? `${tool.retryCount} retr${tool.retryCount === 1 ? 'y' : 'ies'}`
+      : undefined;
   return {
     id: `tool:${tool.id}`,
     kind: 'tool',
@@ -159,6 +166,7 @@ function toolStep(tool: ToolCall, settled: boolean): TurnStep {
     ...(notFound ? { note: 'not found' } : {}),
     // Settled turn + tool still marked in flight = it never reported back.
     ...(settled && state === 'pending' && isActiveToolStatus(tool.status) ? { note: 'no result' } : {}),
+    ...(!notFound && retryNote && !(settled && state === 'pending' && isActiveToolStatus(tool.status)) ? { note: retryNote } : {}),
     durationMs: tool.duration,
     tool,
   };
@@ -266,7 +274,7 @@ function plural(n: number, word: string): string {
 export function buildTurn(
   message: Pick<
     ChatMessage,
-    'acknowledgement' | 'thinking' | 'thinkMs' | 'thinkingSegments' | 'toolCalls' | 'agentPhases' | 'agentRuns' | 'statusText'
+    'acknowledgement' | 'thinking' | 'thinkMs' | 'thinkingSegments' | 'toolCalls' | 'agentPhases' | 'agentRuns' | 'statusText' | 'error'
   > & { content?: string },
   opts: { todos?: TodoItem[]; isStreaming?: boolean } = {},
 ): TurnModel {
@@ -355,7 +363,19 @@ export function buildTurn(
   const agents = childRuns.length;
 
   const anyRunning = running.length > 0 || steps.some((s) => s.state === 'running');
-  const state: StepState = anyRunning || streaming ? 'running' : failed > 0 && failed === leaves.length ? 'failed' : 'done';
+  // Outcome truth: the reply itself carries the canonical error object when
+  // the turn ended in a failure (a dead provider, an aborted synthesis).
+  // Tools may ALL have succeeded — the run still did not finish its work,
+  // and every meter reading this state must say so. The old rule
+  // ("failed only when every tool failed") is how a run that died at
+  // synthesis after two good tool calls read as green "2/3 plan · done".
+  const endedInError = !!message.error && !anyRunning && !streaming;
+  const state: StepState =
+    anyRunning || streaming
+      ? 'running'
+      : endedInError || (failed > 0 && failed === leaves.length)
+        ? 'failed'
+        : 'done';
 
   const active = running[0];
   const activeLabel = active
@@ -382,6 +402,9 @@ export function buildTurn(
   if (agents > 0) parts.push(plural(agents, 'agent'));
   if (failed > 0) parts.push(`${failed} failed`);
   if (unfinished > 0) parts.push(`${unfinished} didn't finish`);
+  // The run itself ended in an error — name it in the fold-up, even when
+  // every tool row reads done (the death happened after the tools).
+  if (endedInError) parts.push("didn't finish");
   // A plain reply whose only step was reasoning: name that, not a bare "Done".
   if (parts.length === 0) {
     const thought = steps.find((s) => s.kind === 'thought');

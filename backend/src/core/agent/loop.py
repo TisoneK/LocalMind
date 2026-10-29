@@ -2719,7 +2719,15 @@ class AgentLoop:
             # The classify/init call gets a COMPACT env (no tool
             # prose, no hardware lines) — ~half the tokens of the full block,
             # which matters most on the slow local models this app targets.
-            init_env_context = _build_environment_context(compact=True, session_id=session_id)
+            # The items ledger records exactly what the classifier saw — its
+            # deliberate narrowness (no stated identity, no tool catalog)
+            # becomes an auditable fact instead of a hidden decision.
+            _init_env_items: list = []
+            init_env_context = _build_environment_context(
+                compact=True, session_id=session_id, items_out=_init_env_items
+            )
+            if _init_env_items and _obs:
+                _obs.emit("context_injected", surface="init_classify", items=_init_env_items)
             # Inject the refusal-strengthening reminder
             # into the init prompt (prepended to the env_context) when the
             # pre-init classifier detected pressure on a sensitive topic.
@@ -2925,9 +2933,12 @@ class AgentLoop:
             # Drop the redundant "## Available Tools" prose (the native
             # tools param + in-prompt list already carry it) — saves ~279
             # tokens on every loop iteration; keeps the OS/shell hints.
+            _plan_env_items: list = []
             env_context = _build_environment_context(
-                include_tool_list=False, session_id=session_id
+                include_tool_list=False, session_id=session_id, items_out=_plan_env_items
             )
+            if _plan_env_items and _obs:
+                _obs.emit("context_injected", surface="plan_stream", items=_plan_env_items)
 
             # Collect the plan internally while it streams from the provider.
             plan_chunks: list[str] = []
@@ -3442,25 +3453,49 @@ class AgentLoop:
         # in-prompt list) to save ~279 tokens/iteration. session_id is passed
         # so the Session workspace line lands in the per-iteration context too —
         # free-tier models need the destination
+        # The injected-items ledger for this turn's trailing context: the env
+        # block records its exact rendered fragments; every further part
+        # appended below (intent tail, memory, workspace state, todos, goal
+        # route, task state) is recorded in the same ledger. One
+        # context_injected event carries them all — the audit half of "what
+        # the UI shows is what the model received".
+        _injected_items: list = []
         turn_context_parts = [
             # Context engineering: the intent tail leads the per-iteration context — it
             # varies by intent/turn, so it lives entirely after the stable
             # prefix (byte-identical within a turn, so it caches too).
             *([intent_tail] if intent_tail else []),
-            _build_environment_context(include_tool_list=False, session_id=session_id)
+            _build_environment_context(
+                include_tool_list=False, session_id=session_id, items_out=_injected_items
+            )
         ]
         # LocalMind Caching (2026-08-31): memory + intent history are DYNAMIC
         # (they change per retrieval/turn), so they live here in the trailing
         # turn-context — NOT in the cacheable system prefix above.
         if memory_facts:
-            turn_context_parts.append(
+            _memory_block = (
                 "What you know about this user:\n"
                 + "\n".join(f"- {f}" for f in memory_facts)
             )
+            turn_context_parts.append(_memory_block)
+            _injected_items.append(
+                {"kind": "memory_facts", "source": "memory store", "text": _memory_block, "chars": len(_memory_block)}
+            )
         if intent_history:
-            turn_context_parts.append("Recent intent history: " + ", ".join(intent_history))
+            _ih_text = "Recent intent history: " + ", ".join(intent_history)
+            turn_context_parts.append(_ih_text)
+            _injected_items.append(
+                {"kind": "intent_history", "source": "intent classifier", "text": _ih_text, "chars": len(_ih_text)}
+            )
         if workspace_context:
             turn_context_parts.append(workspace_context)
+            _injected_items.append(
+                {"kind": "workspace_state", "source": "workspace snapshot (git/diff/build)", "text": workspace_context, "chars": len(workspace_context)}
+            )
+        if intent_tail:
+            _injected_items.append(
+                {"kind": "intent_tail", "source": "intent classifier", "text": intent_tail, "chars": len(intent_tail)}
+            )
         # Inject the session's CURRENT todo list (persisted from
         # previous turns). This is the "agent is aware of its own environment"
         # fix — a follow-up like "mark the task as complete" must see what
@@ -3468,16 +3503,30 @@ class AgentLoop:
         _todo_state_prompt = _render_todo_state(todo_state)
         if _todo_state_prompt:
             turn_context_parts.append(_todo_state_prompt)
+            _injected_items.append(
+                {"kind": "todo_state", "source": "session todo store", "text": _todo_state_prompt, "chars": len(_todo_state_prompt)}
+            )
         # The derived goal route — the ordered sub-goal path
         # (check → prep → write → verify) per top-level goal, so the model
         # follows the fastest+safest sequence rather than guessing.
         _goal_route_prompt = _render_goal_route(goal_tree)
         if _goal_route_prompt:
             turn_context_parts.append(_goal_route_prompt)
+            _injected_items.append(
+                {"kind": "goal_route", "source": "goal tree", "text": _goal_route_prompt, "chars": len(_goal_route_prompt)}
+            )
         _task_state_prompt = task_state.to_prompt()
         if _task_state_prompt:
             turn_context_parts.append(_task_state_prompt)
+            _injected_items.append(
+                {"kind": "task_state", "source": "task state engine", "text": _task_state_prompt, "chars": len(_task_state_prompt)}
+            )
         turn_context = "\n\n".join(p for p in turn_context_parts if p)
+        # The audit emit: one event, every injected item of the trailing
+        # context with its exact text — the record the UI (and the export)
+        # can show item by item.
+        if _injected_items and _obs:
+            _obs.emit("context_injected", surface="loop_turn", items=_injected_items)
 
         # Replace or prepend the (stable) system message
         if loop_messages and loop_messages[0]["role"] == "system":
@@ -4398,9 +4447,10 @@ class AgentLoop:
 
                 # Dispatch all valid calls concurrently
                 async def _dispatch_single(tc_name: str, tc_input: str, tc_args: dict):
-                    """Dispatch a single tool and return (name, observation, failed, latency_ms, provider)."""
+                    """Dispatch a single tool and return (name, observation, failed, latency_ms, provider, attempts)."""
                     t_start = time.monotonic()
                     tc_result = None
+                    tc_attempts: list = []
                     try:
                         tc_intent = Intent(tc_name)
                         # Snapshot pre-write content so a diff
@@ -4412,6 +4462,7 @@ class AgentLoop:
                             tc_input,
                             obs=_obs,  # ADR 18 P3: delegation streams into the UI
                             allowed_tool_names=effective_allowed,
+                            collect_attempts=tc_attempts,
                         )
                         # A describe_tool call in a batch loads
                         # the named tool for the rest of this run (metadata
@@ -4490,7 +4541,7 @@ class AgentLoop:
                         tc_failed = True
                     tc_lat = round((time.monotonic() - t_start) * 1000)
                     tc_provider = _tool_provider(tc_result)
-                    return tc_name, tc_obs, tc_failed, tc_lat, tc_provider
+                    return tc_name, tc_obs, tc_failed, tc_lat, tc_provider, tc_attempts
 
                 # Build labels for each tool call
                 # Capture the batch's 'why' ONCE — the started
@@ -4574,7 +4625,7 @@ class AgentLoop:
                 # Model-context assembly below stays in INPUT order (deterministic).
                 async def _dispatch_and_emit(idx: int, call, inp: str):
                     res = await _dispatch_single(call.tool_name, inp, call.tool_args)
-                    tc_name, tc_obs, tc_failed, tc_lat, tc_provider = res
+                    tc_name, tc_obs, tc_failed, tc_lat, tc_provider, tc_attempts = res
                     _syn_id = _syn_ids[idx] if 0 <= idx < len(_syn_ids) else None
                     if _obs:
                         _obs.emit(
@@ -4590,6 +4641,8 @@ class AgentLoop:
                             thought=result.raw_content or "",
                             reasoning=_batch_reasoning,
                             provider=tc_provider,
+                            retry_count=len(tc_attempts),
+                            retry_attempts=tc_attempts or None,
                         )
                     _synth_end(_syn_id, tc_failed)
                     return idx, res
@@ -4610,7 +4663,7 @@ class AgentLoop:
                 # Process all results and add to conversation context
                 any_failed = False
                 tool_messages: list[dict] = []
-                for tc_name, tc_obs, tc_failed, tc_lat, tc_provider in dispatch_results:
+                for tc_name, tc_obs, tc_failed, tc_lat, tc_provider, tc_attempts in dispatch_results:
                     # P0 Step 4 slice 2: bounded head + retrieval pointer for a
                     # large result (indexes the full output so the truncated tail
                     # is recoverable via search_tool_results); plain bounded head
@@ -4632,7 +4685,7 @@ class AgentLoop:
                             tool_input="",  # individual inputs not tracked in parallel
                             observation=_carried,
                             tool_failed=tc_failed,
-                            retry_count=0,
+                            retry_count=len(tc_attempts),
                             latency_ms=tc_lat,
                         )
                     )
@@ -5155,6 +5208,10 @@ class AgentLoop:
                 t_tool = time.monotonic()
                 tool_failed = False
                 retry_count = 0
+                # The dispatch layer appends one entry per failed attempt
+                # (timeout/exception) here — the audit ledger that rides the
+                # tool_call record, so retries are never invisible recovery.
+                _tool_attempts: list = []
                 observation = ""
                 # Bind up front — a pre-assignment exception in
                 # the dispatch try (e.g. `Intent(tool_name)` raising) must not
@@ -5296,6 +5353,7 @@ class AgentLoop:
                                 tool_intent,
                                 tool_input,
                                 allowed_tool_names=effective_allowed,
+                                collect_attempts=_tool_attempts,
                             )
                         except Exception as exc:
                             # A contract execution error (bad args,
@@ -5331,6 +5389,7 @@ class AgentLoop:
                                 tool_intent,
                                 tool_input,
                                 allowed_tool_names=effective_allowed,
+                                collect_attempts=_tool_attempts,
                             )
                         except Exception as exc:
                             # Same unbound-`tool_result` guard as
@@ -5377,6 +5436,7 @@ class AgentLoop:
                             tool_input,
                             adapter=active_adapter,
                             allowed_tool_names=effective_allowed,
+                            collect_attempts=_tool_attempts,
                         )
 
                     # Emit a diff for ANY file-writing tool,
@@ -5625,6 +5685,8 @@ class AgentLoop:
                                             todo_id=_todo_id,
                                             thought=result.raw_content or "", reasoning=_step_reasoning(),
                                             provider=_tool_provider(tool_result),
+                                            retry_count=retry_count,
+                                            retry_attempts=_tool_attempts or None,
                                         )
                         _obs.emit(
                             "fabrication_risk",
@@ -5645,6 +5707,8 @@ class AgentLoop:
                                             todo_id=_todo_id,
                                             thought=result.raw_content or "", reasoning=_step_reasoning(),
                                             provider=_tool_provider(tool_result),
+                                            retry_count=retry_count,
+                                            retry_attempts=_tool_attempts or None,
 
                                         )
 

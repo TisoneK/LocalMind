@@ -187,6 +187,11 @@ class Message(BaseModel):
     # AgentPhase[] shapes) so the Agents tab survives a reload.
     agent_runs: Optional[list] = None
     agent_phases: Optional[list] = None
+    # The injected-context item ledger: what this turn's prompts actually
+    # carried, one record per item with its exact text and producer
+    # (flattened from the request's context_injected obs events). Persisted
+    # so the audit view survives a reload, like the run tree does.
+    injected_items: Optional[list] = None
     # The structured edit diff the live stream rendered (frontend DiffBlock
     # shape: {hunks, language, filePath, additions, deletions}) plus the
     # best-of-N candidate list ({index, strategy, rationale, isWinner}) —
@@ -225,6 +230,13 @@ class ToolResult(BaseModel):
     success: bool = True
     error_type: str = ""
     error_message: str = ""
+    # Audit ledger of the failed attempts that preceded this result inside
+    # the dispatch layer's retry loop — [{"attempt": 2, "error": "...",
+    # "waited_ms": 812}, ...]. Empty when the tool worked first try. A retry
+    # that ended in success is still a retry: the record keeps both the
+    # count and the last attempt's error so recovery never erases what
+    # actually happened.
+    retry_attempts: list = Field(default_factory=list)
 
     # None is the natural "no error" value a tool passes on its success path
     # (e.g. `error_type=None if success else ...`). Without this, that None

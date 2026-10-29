@@ -242,3 +242,48 @@ describe('a check that finds nothing', () => {
     expect(turn.steps.filter((s) => s.kind === 'thought')).toHaveLength(1);
   });
 });
+
+describe('outcome truth (§U item 3)', () => {
+  it('a turn whose reply carries the canonical error reads failed even when all tools passed', () => {
+    const error = { code: 'payment_required', message: 'balance empty', retryable: false };
+    const t = buildTurn(
+      { toolCalls: [tool('a'), tool('b')], error } as never,
+      { isStreaming: false },
+    );
+    expect(t.state).toBe('failed');
+    expect(t.summary).toContain("didn't finish");
+    expect(t.summary).toContain('Ran 2 tools');
+  });
+
+  it('a streaming or running turn never flips failed on an error alone', () => {
+    const error = { code: 'server_error', message: 'x', retryable: true };
+    const t = buildTurn(
+      { toolCalls: [tool('a', { status: 'running' })], error } as never,
+      { isStreaming: true },
+    );
+    expect(t.state).toBe('running');
+  });
+
+  it('without an error the classic all-tools-passed state is done', () => {
+    const t = buildTurn({ toolCalls: [tool('a'), tool('b')] }, { isStreaming: false });
+    expect(t.state).toBe('done');
+    expect(t.summary).not.toContain("didn't finish");
+  });
+
+  it('a tool that recovered after retries carries the retry note', () => {
+    const t = buildTurn(
+      {
+        toolCalls: [
+          tool('a', { retryCount: 2, retryAttempts: [{ attempt: 1, error: 'boom' }, { attempt: 2, error: 'boom 2' }] }),
+        ],
+      },
+      { isStreaming: false },
+    );
+    expect(t.steps[0].note).toBe('2 retries');
+  });
+
+  it('a first-try tool carries no retry note', () => {
+    const t = buildTurn({ toolCalls: [tool('a')] }, { isStreaming: false });
+    expect(t.steps[0].note).toBeUndefined();
+  });
+});

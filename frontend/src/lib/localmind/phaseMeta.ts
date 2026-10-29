@@ -24,4 +24,5 @@ export const PHASE_META: Record<
   orchestrator_replan_done: { icon: '🔄', color: 'text-brand-purple', label: 'Orchestrator replanned' },
   orchestrator_replan_failed: { icon: '🔄', color: 'text-brand-purple', label: 'Orchestrator replan failed' },
   agent_loop_failure: { icon: '✗', color: 'text-brand-red', label: 'Agent loop failed' },
+  agent_loop_degraded: { icon: '⚠', color: 'text-brand-amber', label: 'Provider interrupted' },
 };

@@ -25,7 +25,7 @@ from agents.parent import ParentAgent
 from core.agent.constants import AGENT_ALLOWED_TOOLS, POST_TURN_LLM_BUDGET_S
 from core.agent.loop import AgentLoop, TerminalProviderError
 from core.agent.models import strip_worker_reports
-from core.agent_workspace import build_workspace_artifacts
+from core.agent_workspace import build_workspace_artifacts, collect_injected_items
 from core.anomalies import detect_turn_anomalies
 from core.config import settings
 
@@ -651,6 +651,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         metrics: Optional[dict] = None,
         agent_runs: Optional[list] = None,
         agent_phases: Optional[list] = None,
+        injected_items: Optional[list] = None,
         diff_data: Optional[dict] = None,
         candidates: Optional[list] = None,
     ) -> None:
@@ -673,6 +674,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     metrics=metrics,
                     agent_runs=agent_runs,
                     agent_phases=agent_phases,
+                    injected_items=injected_items,
                     diff_data=diff_data,
                     candidates=candidates,
                 ),
@@ -2075,6 +2077,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                         tool_calls=_collect_tool_calls(collector) or None,
                         agent_runs=agent_runs,
                         agent_phases=agent_phases,
+                        injected_items=collect_injected_items(collector),
                         diff_data=_collect_diff(collector),
                         candidates=_collect_candidates(collector),
                     )
@@ -2120,6 +2123,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 tool_calls=_collect_tool_calls(collector) or None,
                 agent_runs=agent_runs,
                 agent_phases=agent_phases,
+                injected_items=collect_injected_items(collector),
                 diff_data=_collect_diff(collector),
                 candidates=_collect_candidates(collector),
             )
@@ -2263,6 +2267,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             },
             agent_runs=agent_runs,
             agent_phases=agent_phases,
+            injected_items=collect_injected_items(collector),
             diff_data=_collect_diff(collector),
             candidates=_collect_candidates(collector),
         )

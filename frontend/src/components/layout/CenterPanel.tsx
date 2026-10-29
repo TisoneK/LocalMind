@@ -12,7 +12,7 @@ import {
   Loader2,
   X,
 } from 'lucide-react';
-import { ChatMessage as ChatMessageType, DiffData, PerformanceMetrics, ReflectionLesson, PassiveMemory, SessionStats, GoalState } from '@/types';
+import { ChatMessage as ChatMessageType, DiffData, InjectedItem, PerformanceMetrics, ReflectionLesson, PassiveMemory, SessionStats, GoalState } from '@/types';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { WelcomeScreen } from '@/components/chat/WelcomeScreen';
 import { ChatStatsStrip } from '@/components/chat/ChatStatsStrip';
@@ -37,6 +37,74 @@ const BREAKDOWN_LABELS: Record<string, string> = {
   tool_results: 'Tool results',
   turn_additions: 'Loop injections',
 };
+
+// Friendly labels for the typed injected-context items. An unrecognized
+// kind still renders — under its raw kind name with an "opaque" badge —
+// never hidden: the record must show what the model received even when
+// the UI doesn't know the type.
+const INJECTED_KIND_LABELS: Record<string, string> = {
+  'environment.os': 'System',
+  'environment.clock': 'Clock',
+  'environment.paths': 'Paths',
+  'environment.hardware': 'Hardware',
+  'environment.guidance': 'OS guidance',
+  'environment.know': 'What you know',
+  shell_state: 'Shell tool state',
+  workspace_folder: 'Session workspace',
+  'user_context.deduced': 'About you (deduced)',
+  'user_identity.stated': 'About you (stated)',
+  tool_catalog: 'Tool catalog',
+  memory_facts: 'Memory facts',
+  intent_history: 'Intent history',
+  intent_tail: 'Intent tail',
+  workspace_state: 'Workspace state',
+  todo_state: 'Todo list',
+  goal_route: 'Goal route',
+  task_state: 'Task state',
+};
+
+/** One injected item: kind + size on the row; click opens the EXACT text
+ *  with its producer. Unknown kinds render opaque instead of hidden.
+ *  Exported for direct unit testing. */
+export function InjectedItemRow({ item }: { item: InjectedItem }) {
+  const [open, setOpen] = useState(false);
+  const known = !!INJECTED_KIND_LABELS[item.kind];
+  const label = INJECTED_KIND_LABELS[item.kind] ?? item.kind;
+  return (
+    <div className="mb-1 last:mb-0">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 rounded px-0.5 text-left text-[10px] hover:bg-white/[0.03]"
+        title={`${item.source}${item.surface ? ` · surface: ${item.surface}` : ''} — click for the exact text`}
+      >
+        <span className="min-w-0 truncate text-brand-green-soft">
+          {label}
+          {!known && (
+            <span
+              className="ml-1 rounded border border-brand-border px-1 text-[8.5px] text-brand-green-muted"
+              title="Unrecognized item type — shown anyway, never hidden"
+            >
+              opaque
+            </span>
+          )}
+        </span>
+        <span className="shrink-0 font-mono text-brand-green-muted">{item.chars.toLocaleString()} ch</span>
+      </button>
+      {open && (
+        <div className="mt-0.5">
+          <div className="text-[9px] text-brand-green-muted">
+            source: {item.source || 'unknown'}{item.surface ? ` · surface: ${item.surface}` : ''}
+          </div>
+          <pre className="mt-0.5 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded bg-white/[0.03] p-1 font-mono text-[9.5px] text-brand-green-soft">
+            {item.text}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface HealthState {
   status: 'online' | 'offline' | 'checking';
@@ -81,6 +149,11 @@ interface CenterPanelProps {
    *  meter opens a breakdown panel so the user can see WHAT fills the
    *  window — system prompt, tool schemas, history, tool results, ... */
   contextBreakdown?: Record<string, number>;
+  /** Injected-context items recorded for the last turn: every item the
+   *  prompts actually carried, with its exact text and producer. Rendered
+   *  under the per-category shares in the breakdown popover — the audit
+   *  half of "what the UI shows is what the model received". */
+  injectedItems?: InjectedItem[];
   /** Visible log of lessons the self-reflection loop wrote to memory on its
    *  own this session (B-2026-09-15-14) — clicking the lesson badge opens
    *  the list so proactive writes are never silent. */
@@ -121,6 +194,7 @@ export function CenterPanel({
   contextTokens,
   cachedTokens,
   contextBreakdown,
+  injectedItems,
   reflectionLessons,
   passiveMemories,
   fileDiffs,
@@ -386,9 +460,10 @@ export function CenterPanel({
               </span>
             </div>
           )}
-          {/* Per-category breakdown popover (last model call). */}
-          {breakdownOpen && breakdownEntries.length > 0 && (
-            <div className="absolute right-0 top-full mt-1.5 z-30 w-64 rounded-md border border-brand-border bg-brand-bg-panel p-2.5 shadow-xl">
+          {/* Per-category breakdown popover (last model call) + the turn's
+              injected-item ledger — what the prompts actually carried. */}
+          {breakdownOpen && (breakdownEntries.length > 0 || (injectedItems?.length ?? 0) > 0) && (
+            <div className="absolute right-0 top-full mt-1.5 z-30 max-h-[70vh] w-80 overflow-y-auto rounded-md border border-brand-border bg-brand-bg-panel p-2.5 shadow-xl">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[9px] uppercase tracking-wider text-brand-green-muted">
                   Context — last model call
@@ -417,10 +492,28 @@ export function CenterPanel({
                   </div>
                 </div>
               ))}
-              <div className="text-[9px] leading-snug text-brand-green-muted mt-1.5 pt-1.5 border-t border-brand-border">
-                Shares of the last call's prompt, scaled to the provider-reported
-                total. Estimates per category — the total is exact.
-              </div>
+              {breakdownEntries.length > 0 && (
+                <div className="text-[9px] leading-snug text-brand-green-muted mt-1.5 pt-1.5 border-t border-brand-border">
+                  Shares of the last call's prompt, scaled to the provider-reported
+                  total. Estimates per category — the total is exact.
+                </div>
+              )}
+              {(injectedItems?.length ?? 0) > 0 && (
+                <div className="mt-1.5 pt-1.5 border-t border-brand-border" data-testid="injected-items">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-[9px] uppercase tracking-wider text-brand-green-muted">
+                      Injected this turn
+                    </span>
+                  </div>
+                  {injectedItems!.map((it, i) => (
+                    <InjectedItemRow key={`${it.kind}-${it.surface}-${i}`} item={it} />
+                  ))}
+                  <div className="text-[9px] leading-snug text-brand-green-muted mt-1">
+                    Every item this turn's prompts carried, in arrival order, with the
+                    exact text and its producer — the record of what the model received.
+                  </div>
+                </div>
+              )}
             </div>
           )}
           </div>

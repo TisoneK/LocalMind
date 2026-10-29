@@ -204,6 +204,11 @@ async def get_history(session_id: str):
             message["agentRuns"] = m.agent_runs
         if m.agent_phases:
             message["agentPhases"] = m.agent_phases
+        # Restore the injected-context item ledger — what this turn's
+        # prompts actually carried, per item with its producer (the audit
+        # view renders them in the context panel).
+        if getattr(m, "injected_items", None):
+            message["injectedItems"] = m.injected_items
 
         # Add tool calls if present
         if m.tool_name and not m.tool_calls:

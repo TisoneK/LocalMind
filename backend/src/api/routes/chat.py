@@ -230,6 +230,11 @@ def _tool_call_payload(evt, session_id: str) -> dict:
             "reasoning": reasoning,
             "agent": agent,
             "provider": provider,
+            # The dispatch layer's retry ledger — a tool that succeeded on
+            # its third try must not read as if the first worked. Attempts
+            # are [{attempt, error, waited_ms}]; None when first-try.
+            "retry_count": int(data.get("retry_count") or 0),
+            "retry_attempts": data.get("retry_attempts") or None,
         },
     }
 
@@ -793,6 +798,10 @@ async def _event_stream(
                     # on silent runs). MUST be forwarded here or the frontend
                     # renders a blank `why:` on the step cards.
                     _reasoning = evt.data.get("reasoning") or _thought
+                    # the dispatch layer's retry ledger — a recovery must
+                    # stay on the record, not vanish behind the final status.
+                    _retry_count = int(evt.data.get("retry_count") or 0)
+                    _retry_attempts = evt.data.get("retry_attempts") or None
                     # Generate a stable ID from tool name + iteration so the
                     # frontend can match "started" and "done" events for the
                     # same tool call and UPDATE instead of appending duplicates.
@@ -853,6 +862,8 @@ async def _event_stream(
                                 "thought": _thought,
                                 "reasoning": _reasoning,
                                 "agent": _agent,
+                                "retry_count": _retry_count,
+                                "retry_attempts": _retry_attempts,
                             },
                         }
                     )

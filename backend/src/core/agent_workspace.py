@@ -435,6 +435,41 @@ def build_workspace_artifacts(
     return agent_runs, agent_phases
 
 
+def collect_injected_items(collector: ObsCollector) -> Optional[list]:
+    """Flatten the request's ``context_injected`` obs events into one ledger.
+
+    Each event carries the items one prompt surface injected (loop turn,
+    classify call, plan stream); the ledger tags every item with its surface
+    so the audit view shows both WHAT was injected and WHICH prompt carried
+    it. Ordered as the surfaces fired. Returns None when nothing was
+    recorded (trivial turns inject no ledger).
+    """
+    items: list = []
+    try:
+        for evt in collector.history():
+            if evt.type != "context_injected":
+                continue
+            surface = str(evt.data.get("surface") or "")
+            for item in evt.data.get("items") or []:
+                if not isinstance(item, dict):
+                    continue
+                text = str(item.get("text") or "")
+                if not text:
+                    continue
+                items.append(
+                    {
+                        "kind": str(item.get("kind") or "unknown"),
+                        "source": str(item.get("source") or ""),
+                        "text": text,
+                        "chars": int(item.get("chars") or len(text)),
+                        "surface": surface,
+                    }
+                )
+    except Exception:  # the audit ledger must never break persistence
+        return None
+    return items or None
+
+
 def build_agent_phases(collector: ObsCollector) -> list[dict]:
     """Rebuild the phase-strip entries from the request's obs events.
 
@@ -585,6 +620,36 @@ def build_agent_phases(collector: ObsCollector) -> list[dict]:
                     "type": "agent_loop_failure",
                     "label": "Agent loop terminated",
                     "detail": f"Reason: {reason[:120]}" if reason else None,
+                    "timestamp": ts,
+                }
+            )
+        elif evt.type == "agent_loop_degraded":
+            # A provider death the loop survived: the run kept its evidence
+            # and delivered what it supported (or said so honestly). The
+            # phase strip carries it as a first-class outcome — a meter can
+            # then tie its numbers to what actually happened, and the
+            # persisted record shows the death even on a reload.
+            code = str(d.get("provider_error_code") or "")
+            provider = str(d.get("provider") or "")
+            terminal = bool(d.get("terminal"))
+            preserved = bool(d.get("evidence_preserved"))
+            if terminal:
+                label = "Provider died — evidence delivered as gathered"
+            elif preserved:
+                label = "Provider interrupted — partial evidence delivered"
+            else:
+                label = "Provider interrupted the run"
+            detail_parts = []
+            if provider:
+                detail_parts.append(f"provider: {provider}")
+            if code:
+                detail_parts.append(f"code: {code}")
+            phases.append(
+                {
+                    "id": _next_id("degraded"),
+                    "type": "agent_loop_degraded",
+                    "label": label,
+                    "detail": "; ".join(detail_parts) if detail_parts else None,
                     "timestamp": ts,
                 }
             )

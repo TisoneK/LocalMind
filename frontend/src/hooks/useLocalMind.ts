@@ -1029,6 +1029,12 @@ export function useChat(
                   agent: tc.agent || undefined,
                   runId: tc.run_id || tc.runId || undefined,
                   provider: tc.provider || undefined,
+                  // The dispatch layer's retry ledger — a recovery stays on
+                  // the record instead of vanishing behind the final status.
+                  retryCount: tc.retry_count !== undefined ? Number(tc.retry_count) || 0 : undefined,
+                  retryAttempts: Array.isArray(tc.retry_attempts)
+                    ? (tc.retry_attempts as ToolCall['retryAttempts'])
+                    : undefined,
                   timestamp: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }),
                 };
                 // Deduplicate by ID: if a tool_call with the same ID already
@@ -1324,6 +1330,41 @@ export function useChat(
                   });
                   break;
                 }
+                // Provenance & audit symmetry — the backend records every
+                // injected item of the per-turn context with its EXACT text
+                // and producer. Store them on the reply (in arrival order,
+                // one entry per prompt surface) so the context panel can
+                // show what the model actually received, item by item.
+                if (obs.type === 'context_injected') {
+                  const injData = obs.data || obs;
+                  const incoming = Array.isArray(injData.items) ? injData.items : [];
+                  if (incoming.length > 0) {
+                    const surface = String(injData.surface || '');
+                    setMessages((prev) => {
+                      const updated = [...prev];
+                      const last = updated[updated.length - 1];
+                      if (last && last.role === 'assistant') {
+                        const mapped = incoming.map((raw) => {
+                          const it = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+                          const text = String(it.text ?? '');
+                          return {
+                            kind: String(it.kind || 'unknown'),
+                            source: String(it.source || ''),
+                            text,
+                            chars: Number(it.chars ?? text.length),
+                            surface,
+                          };
+                        });
+                        updated[updated.length - 1] = {
+                          ...last,
+                          injectedItems: [...(last.injectedItems || []), ...mapped],
+                        };
+                      }
+                      return updated;
+                    });
+                  }
+                  break;
+                }
                 // Delegation streaming — the
                 // sub-agent's lifecycle shows as one running tool step
                 // ("Delegating to research…") in the Actions panel; the
@@ -1595,6 +1636,7 @@ export function useChat(
                   'orchestrator_replan_done',
                   'orchestrator_replan_failed',
                   'agent_loop_failure',
+                  'agent_loop_degraded',
                 ]);
                 if (PHASE_EVENT_TYPES.has(obs.type)) {
                   const phase = buildAgentPhase(obs.type, obsData);

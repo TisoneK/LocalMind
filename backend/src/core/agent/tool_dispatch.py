@@ -105,6 +105,7 @@ async def dispatch_with_retry(
     adapter=None,
     obs=None,
     allowed_tool_names: frozenset[str] | None = None,
+    collect_attempts: Optional[list] = None,
 ) -> tuple[Optional[ToolResult], bool, int]:
     """
     Dispatch a tool with exponential-backoff retries and a per-tool timeout.
@@ -126,6 +127,13 @@ async def dispatch_with_retry(
         - result:      ToolResult on success or structured failure, None on exhausted retries
         - failed:      True when the result is None or ``result.success`` is False
         - retry_count: number of retries used (0 = succeeded first try)
+
+        ``collect_attempts``: optional list the caller owns; every failed
+        attempt is appended to it as {"attempt", "error", "waited_ms"} so
+        the retry ledger survives even a result of None (all retries
+        exhausted) — the caller can then put it on the tool's audit record.
+        When a ToolResult comes back, the same ledger is also attached to
+        ``result.retry_attempts`` directly.
     """
     effective_allowed = allowed_tool_names if allowed_tool_names is not None else _allowed_tool_names.get()
     if effective_allowed is not None and tool_intent.value not in effective_allowed:
@@ -184,6 +192,11 @@ async def dispatch_with_retry(
 
     timeout_secs = _tool_timeout(tool_intent)
     last_error: Optional[Exception] = None
+    # The attempt ledger: caller-owned when collect_attempts was passed (so
+    # it outlives a None result), otherwise local. Entries are appended
+    # BEFORE the retry sleep so even a caller-side abort between attempts
+    # leaves the failed attempt on the record.
+    attempts: list = collect_attempts if collect_attempts is not None else []
 
     for attempt in range(max_retries + 1):
         try:
@@ -202,11 +215,22 @@ async def dispatch_with_retry(
                     f"[agent.dispatch] tool={tool_intent.value} non-retriable "
                     f"error_type={result.error_type!r} — skipping retries"
                 )
+                if attempts:
+                    result.retry_attempts = list(attempts)
                 return result, True, attempt
+            if result is not None and attempts:
+                result.retry_attempts = list(attempts)
             return result, result is None or not result.success, attempt
         except asyncio.TimeoutError:
             last_error = TimeoutError(
                 f"tool {tool_intent.value} timed out after {timeout_secs:.0f}s"
+            )
+            attempts.append(
+                {
+                    "attempt": attempt + 1,
+                    "error": f"timed out after {timeout_secs:.0f}s",
+                    "waited_ms": int(timeout_secs * 1000),
+                }
             )
             logger.warning(
                 f"[agent.dispatch] tool={tool_intent.value} attempt={attempt + 1} "
@@ -214,6 +238,13 @@ async def dispatch_with_retry(
             )
         except Exception as exc:
             last_error = exc
+            attempts.append(
+                {
+                    "attempt": attempt + 1,
+                    "error": str(exc)[:300],
+                    "waited_ms": int(base_delay * (2**attempt) * 1000) if attempt < max_retries else 0,
+                }
+            )
             if attempt < max_retries:
                 delay = base_delay * (2**attempt)
                 logger.warning(

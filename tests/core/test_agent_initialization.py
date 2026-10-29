@@ -340,6 +340,10 @@ _LIFECYCLE_EVENT_TYPES = frozenset({
     "agent_initialization_done",
     "stage_timing",
     "agent_loop_done",
+    # Passive audit bookkeeping, not work: the injected-items ledger records
+    # what the classify call's prompt carried (no subprocess, no model call,
+    # no loop iteration behind it).
+    "context_injected",
 })
 
 

@@ -279,6 +279,30 @@ export function buildAgentPhase(
         timestamp: ts,
       };
     }
+    case 'agent_loop_degraded': {
+      // A provider death the loop survived: it kept its evidence and
+      // delivered what the evidence supported (or said so honestly). The
+      // strip names it — the run's outcome truth is part of the record.
+      const code = String(data?.provider_error_code ?? '');
+      const provider = String(data?.provider ?? '');
+      const terminal = Boolean(data?.terminal);
+      const preserved = Boolean(data?.evidence_preserved);
+      const label = terminal
+        ? 'Provider died — evidence delivered as gathered'
+        : preserved
+          ? 'Provider interrupted — partial evidence delivered'
+          : 'Provider interrupted the run';
+      const detailParts: string[] = [];
+      if (provider) detailParts.push(`provider: ${provider}`);
+      if (code) detailParts.push(`code: ${code}`);
+      return {
+        id: `phase-degraded-${ts}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'agent_loop_degraded',
+        label,
+        detail: detailParts.length ? detailParts.join('; ') : undefined,
+        timestamp: ts,
+      };
+    }
     default:
       return null;
   }

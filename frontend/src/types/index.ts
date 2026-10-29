@@ -30,6 +30,14 @@ export interface ToolCall {
   provider?: string;
   /** Timestamp when this tool call was first observed (HH:MM format) */
   timestamp?: string;
+  /** How many failed attempts preceded the final outcome inside the
+   *  dispatch layer's retry loop. 0/absent = first-try. A recovery stays
+   *  on the record — a tool that succeeded on its third try must not read
+   *  as if the first worked. */
+  retryCount?: number;
+  /** The attempts ledger: [{attempt, error, waited_ms}] — the last
+   *  attempt's error survives recovery. Absent when first-try. */
+  retryAttempts?: { attempt: number; error: string; waited_ms?: number }[] | null;
 }
 
 export interface ThinkingStep {
@@ -183,6 +191,10 @@ export interface ChatMessage {
    *  server-side from obs events and persisted with the message). The Agents
    *  tab restores the last turn's tree from here on reload. */
   agentRuns?: AgentRun[];
+  /** Injected context items recorded for this turn, in arrival order —
+   *  every prompt surface that injected material reports what it added.
+   *  Rendered inspectable in the context panel; unknown kinds opaque. */
+  injectedItems?: InjectedItem[];
   /** Set on the synthetic user bubble that marks a goal-round boundary in a
    *  live deep dive. Absent on ordinary user messages. */
   goalRound?: GoalRound;
@@ -238,7 +250,8 @@ export interface AgentPhase {
     | 'orchestrator_replan_start'  // orchestrator notified of failure
     | 'orchestrator_replan_done'   // orchestrator produced a new plan
     | 'orchestrator_replan_failed' // orchestrator.replan() raised (non-fatal)
-    | 'agent_loop_failure';  // agent_loop_failure — empty stream / iter cap / criteria unmet at cap
+    | 'agent_loop_failure'   // agent_loop_failure — empty stream / iter cap / criteria unmet at cap
+    | 'agent_loop_degraded'; // agent_loop_degraded — provider died mid-synthesis; the run kept its evidence and delivered what it supported
   /** Human-readable label (e.g., "Verified: file exists at /tmp/foo"). */
   label: string;
   /** Optional detail string — the unmet criteria list, the failed tool,
@@ -261,6 +274,25 @@ export interface BestOfNCandidate {
   strategy: string;
   rationale: string;
   isWinner: boolean;
+}
+
+/** One injected context item, recorded with its EXACT text and producer at
+ *  the moment the backend built the prompt. The audit half of "what the UI
+ *  shows is what the model received": each item is inspectable down to its
+ *  raw bytes, and an unrecognized kind still renders — labeled opaque. */
+export interface InjectedItem {
+  /** Typed kind, e.g. "environment.clock", "user_identity.stated".
+   *  Unknown kinds render as opaque rather than being hidden. */
+  kind: string;
+  /** Which producer injected it ("system clock", "user profile (stated in
+   *  Settings)", "memory store", ...). */
+  source: string;
+  /** The exact text injected into the prompt. */
+  text: string;
+  /** Character count of the injected text. */
+  chars: number;
+  /** Which prompt surface carried it (loop_turn / init_classify / plan_stream). */
+  surface?: string;
 }
 
 /** Structured diff data for rendering DiffBlock in chat messages */

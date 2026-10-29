@@ -65,6 +65,9 @@ CREATE TABLE IF NOT EXISTS messages (
     -- Agent Workspace run tree + phase strip (JSON).
     agent_runs     TEXT,
     agent_phases   TEXT,
+    -- Injected-context item ledger (JSON) — what this turn's prompts
+    -- actually carried, per item, with producer attribution.
+    injected_items TEXT,
     -- Structured edit diff + best-of-N candidates (JSON) — live-streamed
     -- artifacts that now survive a reload.
     diff_data      TEXT,
@@ -309,7 +312,7 @@ class SessionStore:
         except sqlite3.OperationalError:
             pass
         # Agent Workspace run tree + phase strip on messages.
-        for _col in ("agent_runs", "agent_phases"):
+        for _col in ("agent_runs", "agent_phases", "injected_items"):
             try:
                 with self._conn() as conn:
                     conn.execute(f"ALTER TABLE messages ADD COLUMN {_col} TEXT")
@@ -395,8 +398,8 @@ class SessionStore:
             try:
                 conn.execute(
                     """
-                    INSERT INTO messages(session_id, role, content, tool_name, timestamp, file_name, file_path, file_size, file_type, thinking, error, tool_calls, metrics, agent_runs, agent_phases, acknowledgement, diff_data, candidates)
-                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO messages(session_id, role, content, tool_name, timestamp, file_name, file_path, file_size, file_type, thinking, error, tool_calls, metrics, agent_runs, agent_phases, injected_items, acknowledgement, diff_data, candidates)
+                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,  # noqa: E501
                     (
                         session_id,
@@ -414,6 +417,7 @@ class SessionStore:
                         json.dumps(message.metrics) if message.metrics else None,
                         json.dumps(message.agent_runs) if message.agent_runs else None,
                         json.dumps(message.agent_phases) if message.agent_phases else None,
+                        json.dumps(message.injected_items) if message.injected_items else None,
                         message.acknowledgement,  # plain text — stored raw
                         json.dumps(message.diff_data) if message.diff_data else None,
                         json.dumps(message.candidates) if message.candidates else None,
@@ -671,7 +675,7 @@ class SessionStore:
             rows = conn.execute(
                 """
                 SELECT role, content, tool_name, timestamp, file_name, file_path, file_size, file_type,
-                       thinking, error, tool_calls, metrics, agent_runs, agent_phases, acknowledgement,
+                       thinking, error, tool_calls, metrics, agent_runs, agent_phases, injected_items, acknowledgement,
                        diff_data, candidates
                 FROM messages
                 WHERE session_id = ?
@@ -697,6 +701,7 @@ class SessionStore:
                 metrics=self._decode_json(row["metrics"]) if "metrics" in row.keys() else None,
                 agent_runs=self._decode_json(row["agent_runs"]) if "agent_runs" in row.keys() else None,
                 agent_phases=self._decode_json(row["agent_phases"]) if "agent_phases" in row.keys() else None,
+                injected_items=self._decode_json(row["injected_items"]) if "injected_items" in row.keys() else None,
                 acknowledgement=row["acknowledgement"] if "acknowledgement" in row.keys() else None,
                 diff_data=self._decode_json(row["diff_data"]) if "diff_data" in row.keys() else None,
                 candidates=self._decode_json(row["candidates"]) if "candidates" in row.keys() else None,
@@ -716,7 +721,7 @@ class SessionStore:
             rows = conn.execute(
                 """
                 SELECT role, content, tool_name, timestamp, file_name, file_path, file_size, file_type,
-                       thinking, error, tool_calls, metrics, agent_runs, agent_phases, acknowledgement,
+                       thinking, error, tool_calls, metrics, agent_runs, agent_phases, injected_items, acknowledgement,
                        diff_data, candidates
                 FROM messages
                 WHERE session_id = ?
@@ -742,6 +747,7 @@ class SessionStore:
                 metrics=self._decode_json(row["metrics"]) if "metrics" in row.keys() else None,
                 agent_runs=self._decode_json(row["agent_runs"]) if "agent_runs" in row.keys() else None,
                 agent_phases=self._decode_json(row["agent_phases"]) if "agent_phases" in row.keys() else None,
+                injected_items=self._decode_json(row["injected_items"]) if "injected_items" in row.keys() else None,
                 acknowledgement=row["acknowledgement"] if "acknowledgement" in row.keys() else None,
                 diff_data=self._decode_json(row["diff_data"]) if "diff_data" in row.keys() else None,
                 candidates=self._decode_json(row["candidates"]) if "candidates" in row.keys() else None,

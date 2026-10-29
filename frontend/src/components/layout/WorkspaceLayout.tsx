@@ -545,6 +545,15 @@ export function WorkspaceLayout() {
           contextTokens={meterBasisTokens}
           cachedTokens={cachedTokensForMeter}
           contextBreakdown={lastMetrics?.contextBreakdown}
+          injectedItems={(() => {
+            // The last turn's injected-item ledger — what its prompts
+            // actually carried (audit view in the context popover).
+            for (let i = messages.length - 1; i >= 0; i--) {
+              const m = messages[i];
+              if (m.role === 'assistant') return m.injectedItems;
+            }
+            return undefined;
+          })()}
           reflectionLessons={reflectionLessons}
           passiveMemories={passiveMemories}
           fileDiffs={fileDiffs}

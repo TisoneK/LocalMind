@@ -163,7 +163,7 @@ class TestLoopInjectsTodoState:
         mock_adapter.chat_with_tools = chat_with_tools
         mock_adapter.chat = empty_chat
 
-        async def _fake_dispatch(intent, inp, adapter=None, obs=None, allowed_tool_names=None):
+        async def _fake_dispatch(intent, inp, adapter=None, obs=None, allowed_tool_names=None, **kwargs):
             res = await todo_write(inp)
             return res, False, None
 
