@@ -30,3 +30,8 @@ records.
 - A removed summary line MUST have a corresponding permanent entry in
   agents/sessions.md — never delete the only record of a session.
 -->
+
+---
+- **2026-10-29 — Session 10** — Nadia / unknown model id — done-rules extension (§U item 4): provider death became a named contract state (DEGRADED_ANSWER) with its delivery composed in the contract, unanswered calls now leave recorded unknown-outcome results behind a pairing invariant, and the parent completion floor spends the bounded replan budget (19 replans → 2 on a single failed call).
+  Live wire proof: scripts/live_test_done_rules.py.
+  Detail: .context_ledger/memory/office/reviews/2026-10-29-review-s031-done-rules.md

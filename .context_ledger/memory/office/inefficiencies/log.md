@@ -134,3 +134,11 @@ and using absolute paths (the pattern already in the log) is the fix.
 - **Friction:** restore-boot env losses keep recurring per sandbox: this one started with `sqlite_vec` missing from the backend venv (full suite unrunnable until reinstalled) and NO frontend `node_modules` at all (vitest could not start; a bare `npx tsc` then pulled the bogus registry package `tsc@2.0.4` instead of TypeScript). The S006 line repaired the same class of loss earlier today.
 - **Cost:** ~10 minutes of env repair before any verification could run; the `tsc` name collision is a silent trap (npm warns but proceeds).
 - **Workaround/status:** known-good repair sequence recorded — `/home/z/.venv/bin/pip install sqlite-vec duckduckgo_search` for the backend, and `npm ci` from `frontend/` (the repo is an npm workspace, so bins land in the repo-root `node_modules` — call them by absolute path, and use `node_modules/.bin/tsc`, never bare `npx tsc`). Structural fix (a boot-time env doctor) parked; not worth a build session on its own.
+
+---
+
+## 2026-10-29 — Nadia / unknown model id (S031)
+
+- **Friction:** every live-test harness here starts its fake provider on a thread inside the harness process and then calls `kill_port(FAKE_PORT)` on the way out. `ThreadingHTTPServer.shutdown()` stops the loop but does not close the listening socket, so netstat still shows the harness's own PID bound to that port and the sweep taskkills the harness — silently, with no traceback, AFTER its PASS line has printed. The proof reads as passed while the shell reports exit 1: `live_test_provider_death_honesty.py`, `live_test_identity_injection.py` and `live_test_provenance_symmetry.py` all print PASS and all exit 1 today for exactly this reason.
+- **Cost:** one confusing diagnosis round ("it printed PASS, why did the command fail?") before the mechanism was visible; a script whose exit code is meaningless is a script CI cannot gate on.
+- **Workaround/status:** `scripts/live_test_done_rules.py` (new) calls `fake.server_close()` before its port sweep, so its exit code is trustworthy. The three older harnesses still carry the flaw — one-line fix each for whoever is next in them; not touched here because they were read-only regression evidence for this session's change.

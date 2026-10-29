@@ -18,6 +18,7 @@ accordingly).
 | ZCode (zcode) | glm-5.3-flash (per system prompts: 18ae0130-10c3-4a72-ac96-e46e6f4b7bc0 and cf02f3d0-2445-43ea-ae61-da470b683985 — two harness instances; the cf02f3d0 instance's stated name drifts: qwen3.8-flash in S454-S456, S458, S460-S462, S467, and the current office's S002-S004) | 2026-08-31 | 2026-09-15 | 27 |
 | Ezra | GLM (Z.ai — harness states no exact version; owner asked to confirm) | 2026-10-26 | 2026-10-26 | 1 |
 | Ines | unknown (Qoder agent; harness states no model id) | 2026-10-27 | 2026-10-27 | 1 |
+| Nadia | unknown (Freebuff harness states no model id) | 2026-10-29 | 2026-10-29 | 1 |
 
 ## Observations
 

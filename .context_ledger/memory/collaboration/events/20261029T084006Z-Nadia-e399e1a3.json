@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261029T084006Z-Nadia-e399e1a3",
+  "type": "claim",
+  "session": "S031",
+  "agent": "Nadia",
+  "created": "2026-10-29T08:40:06Z",
+  "issue": "done-rules-extension",
+  "body": "Scope: the done-rules extension (§U item 4, row E of the harness guarantee inventory).\n\nTwo deliverables from the roadmap row:\n1. Synthetic results for unanswered calls — a step that fails mid-flight must never leave an unpaired tool call; an unknown-outcome placeholder is recorded so later history stays usable without blindly retrying an operation whose effect is uncertain.\n2. The provider-death completion path (shipped as the item-1 rescue) stated as part of the done contract itself, not as a bolt-on: a turn that lost synthesis with evidence in hand is a first-class done state the contract knows about, not a special case layered on top of it.\n\nHypothesis to confirm by reading: the contract lives in core/agent/turn_outcome.py + completion_judge.py + evidence_grounding.py, and tool-call pairing lives in loop.py/tool_dispatch.py. Will confirm before editing.",
+  "paths": ["backend/src/core/agent/turn_outcome.py", "backend/src/core/agent/completion_judge.py", "backend/src/core/agent/evidence_grounding.py", "backend/src/core/agent/loop.py", "tests/core"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

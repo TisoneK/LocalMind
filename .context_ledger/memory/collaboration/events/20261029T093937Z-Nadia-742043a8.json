@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261029T093937Z-Nadia-742043a8",
+  "type": "release",
+  "session": "S031",
+  "agent": "Nadia",
+  "created": "2026-10-29T09:39:37Z",
+  "issue": "done-rules-extension",
+  "body": "Released: done-rules extension (§U item 4, row E).\n\nLanded in 9bfe6fd2:\n- Provider death is a state of the turn contract (DEGRADED_ANSWER), decided by classify_provider_death() and delivered by provider_death_answer(); the loop no longer carries its own booleans or wording for it.\n- An unanswered call leaves a recorded unknown-outcome result (classify_unanswered_call + the pairing invariant at every iteration head), with a blind re-run forbidden for side-effecting tools; a raised call in a parallel batch no longer kills the sibling results.\n- The parent completion floor spends the bounded replan budget (found by the live proof: 19 gate replans / 43 provider calls on one failed call, 9 after).\n\nVerification: backend 3722 passed / 2 skipped incl. 22 new tests; tsc + eslint clean; live wire proof PASS (scripts/live_test_done_rules.py); the three prior live harnesses re-run PASS.",
+  "paths": [],
+  "refs": ["20261029T084006Z-Nadia-e399e1a3", "9bfe6fd2"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
