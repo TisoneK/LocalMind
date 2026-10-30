@@ -1,0 +1,344 @@
+{
+  "simple_tool_turn": {
+    "agentRuns": [
+      {
+        "id": "parent",
+        "name": "parent",
+        "role": "parent",
+        "task": "List the files in my notes folder",
+        "status": "completed",
+        "depth": 0,
+        "tools": [
+          {
+            "id": "tc-dir_explorer-iter1-570c0e",
+            "name": "dir_explorer",
+            "label": "dir_explorer",
+            "status": "done",
+            "input": "{\"path\": \"/notes\"}",
+            "output": "a.md\nb.md",
+            "duration": 42,
+            "iteration": 1,
+            "todoId": "plan-0",
+            "reasoning": "need to see the files",
+            "provider": "local"
+          }
+        ],
+        "phases": [
+          {
+            "id": "phase-init-start-1",
+            "type": "initializing",
+            "label": "Getting started — understanding your request"
+          },
+          {
+            "id": "phase-ack-2",
+            "type": "acknowledged",
+            "label": "Acknowledged",
+            "detail": "Sure — let me look at your notes folder."
+          },
+          {
+            "id": "phase-init-done-3",
+            "type": "initialized",
+            "label": "Understood — execute mode",
+            "detail": "list notes folder"
+          },
+          {
+            "id": "phase-working-4",
+            "type": "working",
+            "label": "Working — executing the plan"
+          },
+          {
+            "id": "phase-turn-done-5",
+            "type": "turn_done",
+            "label": "Turn complete",
+            "detail": "1 iterations",
+            "iteration": 1
+          }
+        ],
+        "title": "List notes folder",
+        "evidence": [
+          {
+            "tool": "dir_explorer",
+            "iteration": 1,
+            "evidenceChars": 9,
+            "failed": false
+          }
+        ]
+      }
+    ],
+    "agentPhases": []
+  },
+  "parallel_and_iterations": {
+    "agentRuns": [
+      {
+        "id": "parent",
+        "name": "parent",
+        "role": "parent",
+        "task": "Compare two files",
+        "status": "completed",
+        "depth": 0,
+        "tools": [
+          {
+            "id": "tc-file_read-iter1-560578",
+            "name": "file_read",
+            "label": "file_read",
+            "status": "done",
+            "input": "{\"path\": \"a.md\"}",
+            "output": "alpha",
+            "duration": 10,
+            "iteration": 1
+          },
+          {
+            "id": "tc-file_read-iter1-b088b5",
+            "name": "file_read",
+            "label": "file_read",
+            "status": "done",
+            "input": "{\"path\": \"b.md\"}",
+            "output": "beta",
+            "duration": 12,
+            "iteration": 1
+          },
+          {
+            "id": "tc-code_exec-iter2-dad6f8",
+            "name": "code_exec",
+            "label": "code_exec",
+            "status": "failed",
+            "input": "print(diff)",
+            "output": "error_type='runtime'",
+            "duration": 5,
+            "iteration": 2,
+            "retryCount": 2,
+            "retryAttempts": [
+              {
+                "attempt": 1,
+                "error": "boom",
+                "waited_ms": 100
+              },
+              {
+                "attempt": 2,
+                "error": "boom",
+                "waited_ms": 200
+              }
+            ]
+          }
+        ],
+        "phases": [
+          {
+            "id": "phase-working-1",
+            "type": "working",
+            "label": "Working — executing the plan"
+          },
+          {
+            "id": "phase-turn-done-2",
+            "type": "turn_done",
+            "label": "Turn complete",
+            "detail": "2 iterations"
+          }
+        ]
+      }
+    ],
+    "agentPhases": []
+  },
+  "delegation_child_run": {
+    "agentRuns": [
+      {
+        "id": "parent",
+        "name": "parent",
+        "role": "parent",
+        "task": "Research and summarize",
+        "status": "completed",
+        "depth": 0,
+        "tools": [],
+        "phases": [
+          {
+            "id": "phase-working-1",
+            "type": "working",
+            "label": "Working — executing the plan"
+          },
+          {
+            "id": "phase-turn-done-2",
+            "type": "turn_done",
+            "label": "Turn complete",
+            "detail": "1 iterations"
+          }
+        ]
+      },
+      {
+        "id": "child-research-1",
+        "name": "research",
+        "role": "child",
+        "parentId": "parent",
+        "task": "find sources",
+        "status": "completed",
+        "depth": 1,
+        "tools": [
+          {
+            "id": "tc-web_search-iter1-52cc22",
+            "name": "web_search",
+            "label": "web_search",
+            "status": "done",
+            "input": "{\"query\": \"topic\"}",
+            "duration": 300,
+            "iteration": 1,
+            "agent": "research",
+            "provider": "ddg"
+          }
+        ]
+      }
+    ],
+    "agentPhases": []
+  },
+  "replan_and_degraded": {
+    "agentRuns": [
+      {
+        "id": "parent",
+        "name": "parent",
+        "role": "parent",
+        "task": "Fetch the weather",
+        "status": "completed",
+        "depth": 0,
+        "tools": [],
+        "phases": []
+      }
+    ],
+    "agentPhases": [
+      {
+        "id": "phase-plan-1",
+        "type": "plan_created",
+        "label": "Plan built — 2 steps",
+        "detail": "n1 → n2"
+      },
+      {
+        "id": "phase-adv-2",
+        "type": "node_advanced",
+        "label": "n1 ✓ search web",
+        "detail": "status: completed",
+        "iteration": 1
+      },
+      {
+        "id": "phase-gate-fail-3",
+        "type": "gate_failed_replan",
+        "label": "Replanning — search criteria unmet",
+        "detail": "Unmet: no source cited; stale",
+        "iteration": 1
+      },
+      {
+        "id": "phase-orch-start-4",
+        "type": "orchestrator_replan_start",
+        "label": "Orchestrator notified — search failure",
+        "iteration": 1
+      },
+      {
+        "id": "phase-orch-done-5",
+        "type": "orchestrator_replan_done",
+        "label": "Orchestrator replanned — search, confidence 0.75"
+      },
+      {
+        "id": "phase-gate-pass-6",
+        "type": "gate_passed",
+        "label": "Verified — search acceptance gate passed",
+        "iteration": 2
+      },
+      {
+        "id": "phase-degraded-7",
+        "type": "agent_loop_degraded",
+        "label": "Provider died — evidence delivered as gathered",
+        "detail": "provider: bankofai; code: payment_required"
+      }
+    ]
+  },
+  "failed_turn_with_root_error": {
+    "agentRuns": [
+      {
+        "id": "parent",
+        "name": "parent",
+        "role": "parent",
+        "task": "Do the thing",
+        "status": "failed",
+        "depth": 0,
+        "error": "provider_dead",
+        "tools": [
+          {
+            "id": "tc-shell-iter1-44ba5c",
+            "name": "shell",
+            "label": "shell",
+            "status": "failed",
+            "input": "ls",
+            "output": "shell tool is disabled",
+            "duration": 1,
+            "iteration": 1
+          }
+        ],
+        "phases": [
+          {
+            "id": "phase-working-1",
+            "type": "working",
+            "label": "Working — executing the plan"
+          }
+        ]
+      }
+    ],
+    "agentPhases": [
+      {
+        "id": "phase-fail-1",
+        "type": "agent_loop_failure",
+        "label": "Agent loop terminated",
+        "detail": "Reason: criteria unmet at cap"
+      }
+    ]
+  },
+  "context_injected_ledger": {
+    "agentRuns": [],
+    "agentPhases": [],
+    "injectedItems": [
+      {
+        "kind": "environment.clock",
+        "source": "system clock",
+        "text": "2026-10-29 05:00 EAT",
+        "chars": 20,
+        "surface": "init_classify"
+      },
+      {
+        "kind": "user_identity.stated",
+        "source": "user profile (stated in Settings)",
+        "text": "Nairobi, Kenya",
+        "chars": 14,
+        "surface": "loop_turn"
+      },
+      {
+        "kind": "unknown",
+        "text": "opaque blob",
+        "chars": 11,
+        "surface": "loop_turn"
+      }
+    ]
+  },
+  "stringified_node_ids_robustness": {
+    "agentRuns": [
+      {
+        "id": "parent",
+        "name": "parent",
+        "role": "parent",
+        "task": "Plan something",
+        "status": "completed",
+        "depth": 0,
+        "tools": [],
+        "phases": []
+      }
+    ],
+    "agentPhases": [
+      {
+        "id": "phase-plan-1",
+        "type": "plan_created",
+        "label": "Plan built — 3 steps",
+        "detail": "n1 → n2 → n3"
+      },
+      {
+        "id": "phase-adv-2",
+        "type": "node_advanced",
+        "label": "n2 ✗ do a thing",
+        "detail": "status: failed",
+        "iteration": 1
+      }
+    ]
+  }
+}

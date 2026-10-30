@@ -316,23 +316,24 @@ def test_workspace_artifacts_trivial_turn_yields_none():
     assert agent_phases is None
 
 
-def test_workspace_artifacts_lifecycle_only_turn_persists_tree():
-    """A direct turn still narrates the lifecycle on the run — phases make
-    the tree worth persisting so the Agents tab restores it on reload."""
+def test_workspace_artifacts_lifecycle_only_turn_drops_tree():
+    """A direct chat turn — lifecycle narration only, no tool, evidence, child,
+    decision-strip phase or error — persists NO run tree. Lifecycle phases are
+    not "content": the direct-answer persist paths already store agent_runs=None,
+    so counting them here was the one path that kept a tree the runtime (and a
+    reload) did not — it would have let a trivial turn override the last
+    interesting turn's tree on the Agents tab. The guard now agrees with every
+    persist path and with the live projection: a direct turn shows no run node
+    anywhere, and the lifecycle still rides the node when the turn is kept for a
+    real reason (see the tool-turn test below)."""
     c = ObsCollector()
     c.emit("agent_initialization_start", intent="analyze")
     c.emit("agent_initialization_done", mode="direct")
     c.emit("agent_loop_start")
     c.emit("agent_loop_done", direct=True)
     agent_runs, agent_phases = build_workspace_artifacts(c, task="hello")
-    assert agent_runs is not None
-    assert [p["type"] for p in agent_runs[0]["phases"]] == [
-        "initializing",
-        "initialized",
-        "working",
-        "turn_done",
-    ]
-    # the chat strip stays empty for a direct turn (lifecycle moved out)
+    assert agent_runs is None
+    # the chat strip stays empty for a direct turn (no decision history)
     assert agent_phases is None
 
 

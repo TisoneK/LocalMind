@@ -55,16 +55,22 @@ it('the parent run owns delegation and child tool progress', () => {
         },
       },
     }));
+    // The run tree is a projection of the RAW obs stream (the backend yields
+    // every obs event verbatim as {obs_event:{...}} before also bridging
+    // tool_call/tool_status to a top-level `tool_call` for the flat chat
+    // pills). The projection reads the raw copy — the child's tool_call tagged
+    // with its agent.
     onChunk(JSON.stringify({
-      type: 'tool_call',
-      tool_call: {
-        id: 'child-tool-1',
-        name: 'web_search',
-        label: 'Search upstream docs',
-        status: 'started',
-        agent: 'research',
-        run_id: 'child-research-1',
-        tool_args: 'LocalMind agent orchestration',
+      obs_event: {
+        type: 'tool_call',
+        data: {
+          tool: 'web_search',
+          label: 'Search upstream docs',
+          status: 'started',
+          agent: 'research',
+          tool_args: 'LocalMind agent orchestration',
+          iteration: 1,
+        },
       },
     }));
   });

@@ -1,0 +1,92 @@
+{
+  "_comment": "Cross-language contract fixtures for the trajectory projection. Each case is a recorded obs-event stream; both the backend (agent_workspace.build_run_tree / build_agent_phases / collect_injected_items + agent_runtime._collect_tool_calls) and the frontend (turnProjection.projectTrajectory) must project it to the SAME normalized trajectory (trajectory_projection.expected.json). Regenerate expected via scripts/gen_trajectory_expected.py. Keep this the single source so the two ports cannot silently diverge.",
+  "cases": [
+    {
+      "name": "simple_tool_turn",
+      "task": "List the files in my notes folder",
+      "rootError": null,
+      "events": [
+        {"type": "agent_initialization_start", "data": {}},
+        {"type": "agent_initialization_ack", "data": {"acknowledgement": "Sure — let me look at your notes folder."}},
+        {"type": "agent_initialization_done", "data": {"mode": "execute", "objective": "list notes folder", "title": "List notes folder"}},
+        {"type": "agent_loop_start", "data": {}},
+        {"type": "tool_call", "data": {"tool": "dir_explorer", "label": "Exploring (list): /notes", "status": "started", "tool_args": "{\"path\": \"/notes\"}", "iteration": 1, "todo_id": "plan-0", "reasoning": "need to see the files"}},
+        {"type": "tool_call", "data": {"tool": "dir_explorer", "label": "", "status": "done", "output": "a.md\nb.md", "latency_ms": 42, "tool_args": "{\"path\": \"/notes\"}", "iteration": 1, "provider": "local"}},
+        {"type": "evidence_to_parent", "data": {"tool": "dir_explorer", "iteration": 1, "evidence_chars": 9, "failed": false}},
+        {"type": "agent_loop_done", "data": {"intent": "file", "iterations": 1, "iteration": 1}}
+      ]
+    },
+    {
+      "name": "parallel_and_iterations",
+      "task": "Compare two files",
+      "rootError": null,
+      "events": [
+        {"type": "agent_loop_start", "data": {}},
+        {"type": "tool_call", "data": {"tool": "file_read", "label": "Reading a.md", "status": "started", "tool_args": "{\"path\": \"a.md\"}", "iteration": 1}},
+        {"type": "tool_call", "data": {"tool": "file_read", "label": "Reading b.md", "status": "started", "tool_args": "{\"path\": \"b.md\"}", "iteration": 1}},
+        {"type": "tool_call", "data": {"tool": "file_read", "label": "", "status": "done", "output": "alpha", "latency_ms": 10, "tool_args": "{\"path\": \"a.md\"}", "iteration": 1}},
+        {"type": "tool_call", "data": {"tool": "file_read", "label": "", "status": "done", "output": "beta", "latency_ms": 12, "tool_args": "{\"path\": \"b.md\"}", "iteration": 1}},
+        {"type": "tool_call", "data": {"tool": "code_exec", "label": "Running Python", "status": "started", "tool_args": "print(diff)", "iteration": 2}},
+        {"type": "tool_call", "data": {"tool": "code_exec", "label": "", "status": "failed", "output": "error_type='runtime'", "latency_ms": 5, "tool_args": "print(diff)", "iteration": 2, "retry_count": 2, "retry_attempts": [{"attempt": 1, "error": "boom", "waited_ms": 100}, {"attempt": 2, "error": "boom", "waited_ms": 200}]}},
+        {"type": "agent_loop_done", "data": {"intent": "code", "iterations": 2}}
+      ]
+    },
+    {
+      "name": "delegation_child_run",
+      "task": "Research and summarize",
+      "rootError": null,
+      "events": [
+        {"type": "agent_loop_start", "data": {}},
+        {"type": "delegation_started", "data": {"target_agent": "research", "run_id": "child-research-1", "task": "find sources", "depth": 1}},
+        {"type": "tool_call", "data": {"tool": "web_search", "label": "Searching: topic", "status": "started", "tool_args": "{\"query\": \"topic\"}", "iteration": 1, "agent": "research"}},
+        {"type": "tool_call", "data": {"tool": "web_search", "label": "", "status": "done", "output": "results", "latency_ms": 300, "tool_args": "{\"query\": \"topic\"}", "iteration": 1, "agent": "research", "provider": "ddg"}},
+        {"type": "delegation_completed", "data": {"target_agent": "research", "run_id": "child-research-1", "status": "completed"}},
+        {"type": "agent_loop_done", "data": {"intent": "research", "iterations": 1}}
+      ]
+    },
+    {
+      "name": "replan_and_degraded",
+      "task": "Fetch the weather",
+      "rootError": null,
+      "events": [
+        {"type": "plan_nodes_created", "data": {"node_count": 2, "node_ids": ["n1", "n2"]}},
+        {"type": "plan_node_advanced", "data": {"node_id": "n1", "new_status": "completed", "subgoal": "search web", "iteration": 1}},
+        {"type": "agent_loop_gate_failed_replan", "data": {"intent": "search", "unmet": ["no source cited", "stale"], "iteration": 1}},
+        {"type": "orchestrator_replan_start", "data": {"intent": "search", "iteration": 1}},
+        {"type": "orchestrator_replan_done", "data": {"intent": "search", "confidence": 0.75}},
+        {"type": "agent_loop_gate_passed", "data": {"intent": "search", "iteration": 2}},
+        {"type": "agent_loop_degraded", "data": {"provider_error_code": "payment_required", "provider": "bankofai", "terminal": true, "evidence_preserved": true}}
+      ]
+    },
+    {
+      "name": "failed_turn_with_root_error",
+      "task": "Do the thing",
+      "rootError": "provider_dead",
+      "events": [
+        {"type": "agent_loop_start", "data": {}},
+        {"type": "tool_call", "data": {"tool": "shell", "label": "Running command", "status": "started", "tool_args": "ls", "iteration": 1}},
+        {"type": "tool_call", "data": {"tool": "shell", "label": "", "status": "failed", "output": "shell tool is disabled", "latency_ms": 1, "tool_args": "ls", "iteration": 1}},
+        {"type": "agent_loop_failure", "data": {"reason": "criteria unmet at cap", "failure_type": "criteria_unmet"}}
+      ]
+    },
+    {
+      "name": "context_injected_ledger",
+      "task": "What time is it where I am",
+      "rootError": null,
+      "events": [
+        {"type": "context_injected", "data": {"surface": "init_classify", "items": [{"kind": "environment.clock", "source": "system clock", "text": "2026-10-29 05:00 EAT", "chars": 20}]}},
+        {"type": "context_injected", "data": {"surface": "loop_turn", "items": [{"kind": "user_identity.stated", "source": "user profile (stated in Settings)", "text": "Nairobi, Kenya", "chars": 14}, {"kind": "unknown", "source": "", "text": "opaque blob"}]}},
+        {"type": "agent_loop_done", "data": {"intent": "chat", "direct": true}}
+      ]
+    },
+    {
+      "name": "stringified_node_ids_robustness",
+      "task": "Plan something",
+      "rootError": null,
+      "events": [
+        {"type": "plan_nodes_created", "data": {"node_count": 3, "node_ids": "['n1', 'n2', 'n3']"}},
+        {"type": "plan_node_advanced", "data": {"node_id": "n2", "new_status": "failed", "subgoal": "do a thing", "iteration": 1}}
+      ]
+    }
+  ]
+}
