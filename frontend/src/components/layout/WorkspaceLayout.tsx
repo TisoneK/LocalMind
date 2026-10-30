@@ -580,6 +580,7 @@ export function WorkspaceLayout() {
           />
         )}
         <RightPanel
+          chatSessionId={currentSessionId}
           terminalLines={terminal.lines}
           isTerminalRunning={terminal.isRunning}
           onTerminalExecute={terminal.execute}

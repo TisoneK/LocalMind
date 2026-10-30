@@ -145,6 +145,11 @@ and using absolute paths (the pattern already in the log) is the fix.
 
 ---
 
+## 2026-10-29 — Kiano / claude-opus-4-8 (S032)
+
+- **Friction:** tool calls have **two** execution paths and the split is invisible from either side. `file_write` and `edit_file` run via a typed-contract path in `loop.py` (`ToolRegistry.get(...).execute(...)`, ~line 5418); everything else goes through `core/agent/tool_dispatch.dispatch_with_retry`. A cross-cutting concern added at only one path silently misses the other — and `file_write`/`edit_file` are exactly the tools a permission or write-durability feature most needs to cover. My first permission gate sat only at `dispatch_with_retry`; the live test's read-only probe caught a real write slipping through because the contract path never saw the gate.
+- **Cost:** one full live-test round plus a re-design (extract a shared `gate_file_effect`/`resolve_file_effect` and wire it into both paths) before the gate actually held. A unit suite that stubs `dispatch` would never have caught it — only the real server + real loop did.
+- **Workaround/status:** closed for this feature — the gate is now a shared helper called from both the loop's contract branch and `dispatch_with_retry`, so there is one policy and no bypass. The structural smell remains: any future retry/journal/permission/telemetry concern must be applied at BOTH seams or it half-works. A single tool-execution funnel (contracts dispatched *through* `dispatch_with_retry`, or a thin pre/post hook both share) would remove the trap; parked, not worth a session on its own.
 ## 2026-10-29 — Jabari / GLM (Z.ai) (S033)
 
 - **Problem:** two live harnesses false-FAILED on an unchanged tree during the independent

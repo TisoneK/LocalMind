@@ -5415,7 +5415,29 @@ class AgentLoop:
                     # call executing right now) keep the cache intact.
                     _maybe_invalidate_inspection_cache(tool_name, tool_input)
 
-                    if tool_name == "file_write":
+                    # Session permission gate (§U item 5) for the typed-contract
+                    # tools: file_write / edit_file execute here, NOT through
+                    # dispatch_with_retry, so they are gated here with the same
+                    # shared policy. A denied effecting call never reaches its
+                    # contract body; an allowed one's write-ahead journal is
+                    # resolved after the body returns (below).
+                    _perm_gate = None
+                    if tool_name in ("file_write", "edit_file"):
+                        from core.agent.tool_dispatch import gate_file_effect
+
+                        _perm_gate = gate_file_effect(tool_intent)
+
+                    if _perm_gate is not None and not _perm_gate[0].allowed:
+                        tool_result = ToolResult(
+                            content=_perm_gate[0].reason,
+                            source=tool_name,
+                            success=False,
+                            error_type="permission",
+                            error_message=_perm_gate[0].reason,
+                        )
+                        tool_failed = True
+                        retry_count = 0
+                    elif tool_name == "file_write":
                         # Snapshot the pre-write content so a
                         # diff can be emitted for overwrite/new-write even
                         # though the tool replaces the file in place.
@@ -5523,6 +5545,14 @@ class AgentLoop:
                             allowed_tool_names=effective_allowed,
                             collect_attempts=_tool_attempts,
                         )
+
+                    # Close the write-ahead journal for an allowed contract-path
+                    # effecting call (no-op for the dispatch path, which resolves
+                    # its own row, and for a denial, which had no 'pending' row).
+                    if _perm_gate is not None and _perm_gate[0].allowed:
+                        from core.agent.tool_dispatch import resolve_file_effect
+
+                        resolve_file_effect(_perm_gate[2], _perm_gate[1], tool_failed)
 
                     # Emit a diff for ANY file-writing tool,
                     # not just edit_file. file_write replaces the file in

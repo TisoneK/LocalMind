@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Server, Loader2, CheckCircle2, AlertCircle, FileEdit, Palette, Sun, Moon, Monitor, Brain, Cpu, Database, RotateCcw, MessageSquarePlus, Download, Shield, Zap, GitBranch, UserRound } from 'lucide-react';
+import { X, Server, Loader2, CheckCircle2, AlertCircle, FileEdit, Palette, Sun, Moon, Monitor, Brain, Cpu, Database, RotateCcw, MessageSquarePlus, Download, Shield, Zap, GitBranch, UserRound, Lock } from 'lucide-react';
 import { localmindClient } from '@/lib/localmind/client';
 import { Progress } from '@/components/ui/progress';
 import { PAGES, GROUPS, SECTION_PAGE, type PageId } from './settingsPages';
@@ -24,7 +24,19 @@ interface ModelOption {
 interface SettingsModalProps {
   onClose: () => void;
   onSave: () => void;
+  /** The active chat session, for the per-session file-effect mode selector.
+   * Null/absent when no chat is open — the selector then explains it needs one. */
+  sessionId?: string | null;
 }
+
+/** The three file-effect modes (§U item 5), lowest capability first, with the
+ * one-line meaning each shows under it. The backend is the source of truth for
+ * which modes are valid; this is only display copy keyed by mode value. */
+const FILE_EFFECT_MODES: { id: string; label: string; blurb: string }[] = [
+  { id: 'read_only', label: 'Read-only', blurb: 'Reads, searches and answers — never writes, edits, shell or code.' },
+  { id: 'workspace_write', label: 'Workspace writes', blurb: 'May write, but file access stays inside your allowed folders.' },
+  { id: 'full', label: 'Full access', blurb: 'Writes anywhere the OS allows — the folder boundary is lifted.' },
+];
 
 type Status = 'idle' | 'saving' | 'success' | 'error';
 
@@ -34,7 +46,7 @@ const MODE_OPTIONS: { id: ModePref; label: string; icon: typeof Sun }[] = [
   { id: 'system', label: 'System', icon: Monitor },
 ];
 
-export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
+export function SettingsModal({ onClose, onSave, sessionId }: SettingsModalProps) {
   const { theme, mode, custom, tone, setTheme, setMode, setCustomTheme, setTone } = useTheme();
   // Persist appearance to settings.json on every change so
   // the theme/tone/custom palette survive restarts (mirrors adapter/model).
@@ -125,10 +137,62 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
     web_fetch: true,
     memory_op: true,
   });
+  // Per-session file-effect mode (§U item 5). Null until loaded; the fetch is
+  // keyed to the active sessionId so switching chats re-reads the pin.
+  const [fileEffectMode, setFileEffectMode] = useState<string | null>(null);
+  const [fileEffectPinned, setFileEffectPinned] = useState(false);
+  const [fileEffectBusy, setFileEffectBusy] = useState(false);
   // Embed-model download status + progress.
   const [embedStatus, setEmbedStatus] = useState<{ ollama_available: boolean; model_installed: boolean; model_name: string } | null>(null);
   const [embedDownload, setEmbedDownload] = useState<{ status: string; progress: number | null; detail: string } | null>(null);
   const embedPullRef = useRef<{ cancel: () => void } | null>(null);
+
+  // Read the active session's file-effect mode when the modal opens on a chat.
+  // All state writes happen inside the async callback (never synchronously in
+  // the effect body), so switching away to "no session" resets through the
+  // same path.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!sessionId) {
+        if (!cancelled) {
+          setFileEffectMode(null);
+          setFileEffectPinned(false);
+        }
+        return;
+      }
+      try {
+        const payload = await localmindClient.getPermissionMode(sessionId);
+        if (cancelled) return;
+        setFileEffectMode(payload.mode);
+        setFileEffectPinned(payload.pinned);
+      } catch {
+        /* leave the selector unresolved — it renders a neutral state */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+
+  const changeFileEffectMode = useCallback(
+    async (mode: string) => {
+      if (!sessionId || fileEffectBusy) return;
+      const previous = fileEffectMode;
+      setFileEffectMode(mode); // optimistic
+      setFileEffectBusy(true);
+      try {
+        const payload = await localmindClient.setPermissionMode(sessionId, mode);
+        setFileEffectMode(payload.mode);
+        setFileEffectPinned(payload.pinned);
+      } catch {
+        setFileEffectMode(previous); // roll back on failure — fail closed, no false "set"
+      } finally {
+        setFileEffectBusy(false);
+      }
+    },
+    [sessionId, fileEffectMode, fileEffectBusy],
+  );
 
   // Load current settings on mount
   useEffect(() => {
@@ -1132,6 +1196,51 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                 </label>
               ))}
             </div>
+          </section>
+
+          {/* ── File access (per-session file-effect mode, §U item 5) ── */}
+          <section hidden={page !== SECTION_PAGE['File access']}>
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
+              <Lock className="h-4 w-4 text-brand-green" />
+              File access (this chat)
+            </h3>
+            <p className="mb-3 text-xs text-brand-green-muted">
+              How far this chat may reach into your files. The choice is pinned to this chat and
+              saved — it survives a restart and never carries into another chat. The check runs the
+              moment before a tool could change anything.
+            </p>
+            {!sessionId ? (
+              <p className="rounded-lg border border-brand-border px-3 py-2 text-xs text-brand-green-muted">
+                Open or start a chat to set its file access.
+              </p>
+            ) : (
+              <div className="space-y-2" role="radiogroup" aria-label="File access mode">
+                {FILE_EFFECT_MODES.map(({ id, label, blurb }) => {
+                  const active = fileEffectMode === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      disabled={fileEffectBusy}
+                      onClick={() => changeFileEffectMode(id)}
+                      className={`flex w-full flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-colors disabled:opacity-60 ${
+                        active
+                          ? 'border-brand-green bg-brand-green/10'
+                          : 'border-brand-border hover:border-brand-green/30'
+                      }`}
+                    >
+                      <span className={`text-xs font-medium ${active ? 'text-brand-green' : 'text-brand-green-soft'}`}>
+                        {label}
+                        {id === 'workspace_write' && !fileEffectPinned && active ? ' · default' : ''}
+                      </span>
+                      <span className="text-[11px] text-brand-green-muted">{blurb}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           {/* ── Best-of-N Editor (C2 spec step 7) ── */}
