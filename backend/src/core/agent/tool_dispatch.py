@@ -61,6 +61,109 @@ def reset_allowed_tool_names(token) -> None:
     """Restore the previous task-local tool fence."""
     _allowed_tool_names.reset(token)
 
+
+# ── Session-pinned permission mode (§U item 5, rows H + J) ──────────────────
+# The mode is read from the durable store, keyed by the current turn's session
+# id (set as a contextvar by the engine at turn entry — core.session_workspace).
+# Resolution is fail-closed: an *answerer* that is missing or throws (no store,
+# a raised read, a pinned value that is not a known mode) denies the effecting
+# call. The ABSENCE of a session id is NOT an answerer failure — a tool call
+# made outside a session turn (unit tests, bootstrap) resolves to the shipped
+# default, so this gate never regresses today's no-session behaviour.
+
+
+def _perm_store():
+    """The shared SessionStore for permission reads/writes, or None if it
+    cannot be obtained (treated as an answerer failure by callers)."""
+    try:
+        from core.config import settings
+        from storage.db import get_shared_store
+
+        return get_shared_store(settings.localmind_db_path or "./localmind.db")
+    except Exception:
+        return None
+
+
+def _resolve_session_mode(session_id: str):
+    """Return ``(mode, resolve_failed)`` for the session's pinned file-effect
+    mode. ``resolve_failed`` True means the answerer failed and the caller must
+    fail closed; it is never True merely because no mode was pinned."""
+    import core.permission_mode as _pm
+
+    if not session_id:
+        return _pm.DEFAULT_MODE, False  # outside a session turn → default
+    store = _perm_store()
+    if store is None:
+        return None, True  # no store → cannot answer → fail closed
+    try:
+        raw = store.get_permission_mode(session_id)
+    except Exception:
+        return None, True  # read threw → fail closed
+    if raw is None:
+        return _pm.DEFAULT_MODE, False  # no pin → shipped default
+    mode = _pm.coerce_mode(raw)
+    if mode is None:
+        return None, True  # pinned to an unknown value → fail closed
+    return mode, False
+
+
+def gate_file_effect(tool_intent: Intent):
+    """Resolve the current session's mode, decide, and open the write-ahead
+    journal for a file-effecting call. The single permission policy, shared by
+    every tool-execution path so none can bypass it: ``dispatch_with_retry``
+    (shell / code_exec / apply_proposed / …) and the loop's typed-contract path
+    (file_write / edit_file, which do not go through dispatch).
+
+    Returns ``(decision, audit_id, store)``. For a non-effecting intent the
+    decision is an allow and there is no journal (``audit_id``/``store`` None).
+    An allowed effecting call gets a 'pending' journal row (resolve it with
+    ``resolve_file_effect`` after the body returns); a denied call is recorded
+    'done' (its body must not run).
+    """
+    import core.permission_mode as _pm
+
+    if not _pm.is_file_effecting(tool_intent):
+        return _pm.decide(_pm.DEFAULT_MODE, tool_intent), None, None
+
+    from core.session_workspace import current_session_id
+
+    sid = current_session_id() or ""
+    mode, resolve_failed = _resolve_session_mode(sid)
+    if resolve_failed:
+        decision = _pm.deny_fail_closed(
+            tool_intent, "permission mode unavailable — denied (fail-closed)"
+        )
+    else:
+        decision = _pm.decide(mode, tool_intent)
+
+    store = _perm_store() if sid else None
+    audit_id = None
+    if store is not None and sid:
+        audit_id = store.record_permission_decision(
+            session_id=sid,
+            tool=tool_intent.value,
+            mode=(decision.mode.value if decision.mode else ""),
+            decision=decision.decision,
+            reason=decision.reason,
+            fail_closed=decision.fail_closed,
+            outcome="pending" if decision.allowed else "done",
+        )
+    if not decision.allowed:
+        logger.info(
+            "[agent.dispatch] tool=%s denied by permission mode (mode=%s fail_closed=%s)",
+            tool_intent.value,
+            decision.mode.value if decision.mode else "unavailable",
+            decision.fail_closed,
+        )
+    return decision, audit_id, store
+
+
+def resolve_file_effect(store, audit_id, failed: bool) -> None:
+    """Close an allowed effecting call's write-ahead journal row once its body
+    has returned. No-op when there was no journal (non-effecting / no session)."""
+    if audit_id is not None and store is not None:
+        store.resolve_tool_effect(audit_id, "failed" if failed else "done")
+
 # Error types where retrying the identical input is guaranteed to produce
 # the same failure.  On these we return immediately rather than burning
 # the full retry budget on pointless attempts.
@@ -176,6 +279,34 @@ async def dispatch_with_retry(
         except Exception:
             pass  # settings unavailable — allow through
 
+    # ── Session-pinned permission mode + write-ahead journal ────────────────
+    # The shared gate (gate_file_effect) is the one policy for every tool path;
+    # here it covers tools dispatched directly (shell / code_exec /
+    # apply_proposed / objective runs). Only file-effecting intents are gated;
+    # reads/search/web/memory pass through. A denied effecting call returns
+    # before its body runs; an allowed one is journalled 'pending' now and
+    # resolved to 'done'/'failed' by _finish below.
+    decision, _effect_audit_id, _effect_store = gate_file_effect(tool_intent)
+    if not decision.allowed:
+        return (
+            ToolResult(
+                content=decision.reason,
+                source=tool_intent.value,
+                success=False,
+                error_type="permission",
+                error_message=decision.reason,
+            ),
+            True,
+            0,
+        )
+
+    def _finish(result, failed, count):
+        """Resolve the write-ahead journal row for an allowed effecting call,
+        then hand back the dispatch tuple. Every return below goes through it so
+        no exit path leaves a 'pending' row behind on a normal completion."""
+        resolve_file_effect(_effect_store, _effect_audit_id, failed)
+        return result, failed, count
+
     # Set the current adapter + obs so the delegate tools
     # can access them. The sets are conditional on the args being provided
     # (some tests call dispatch_with_retry without them).
@@ -217,10 +348,10 @@ async def dispatch_with_retry(
                 )
                 if attempts:
                     result.retry_attempts = list(attempts)
-                return result, True, attempt
+                return _finish(result, True, attempt)
             if result is not None and attempts:
                 result.retry_attempts = list(attempts)
-            return result, result is None or not result.success, attempt
+            return _finish(result, result is None or not result.success, attempt)
         except asyncio.TimeoutError:
             last_error = TimeoutError(
                 f"tool {tool_intent.value} timed out after {timeout_secs:.0f}s"
@@ -256,4 +387,4 @@ async def dispatch_with_retry(
     logger.error(
         f"[agent.dispatch] tool={tool_intent.value} exhausted {max_retries} retries: {last_error}"
     )
-    return None, True, max_retries
+    return _finish(None, True, max_retries)
