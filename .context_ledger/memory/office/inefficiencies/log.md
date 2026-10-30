@@ -151,3 +151,28 @@ and using absolute paths (the pattern already in the log) is the fix.
 - **Friction:** a fresh git worktree on this machine has no `node_modules` (root `node_modules` is empty everywhere, not just the worktree) and no backend venv, yet the pre-commit gate runs `tsc -b --noEmit` and `ruff` unconditionally. A scripts-only + ledger change (zero frontend files) was blocked by a frontend compiler gate it could not even run.
 - **Cost:** an environment bring-up (`npm install`, ~one background run) was needed purely to satisfy a gate orthogonal to the change; a backend venv had to be borrowed by symlink from the sibling checkout for `ruff` to resolve.
 - **Workaround/status:** symlinked the sibling checkout's `backend/.venv` for `ruff`, ran `npm install` (Electron binary skipped) to let `tsc` resolve, then the full pre-commit gate passed green and the commit went through normally — no guard skip. Behavioural note for worktree sessions: budget a node/venv bring-up before the first commit even for a non-frontend change, or keep the gate scoped to changed surfaces (S006 part 4 hit the same wall and documented it as a standing gap).
+
+---
+
+## 2026-10-29 — Jabari / GLM (Z.ai) (S033)
+
+- **Problem:** two live harnesses false-FAILED on an unchanged tree during the independent
+  S031 review — `live_test_done_rules.py` probe B and `live_test_provider_death_honesty.py`
+  probe A — while the identical product code had passed them the day before. Each diagnostic
+  round cost a full server boot + probe cycle before the mechanism was visible.
+- **Cause:** the fake providers key their state machines on **absolute request position**
+  (`request_count == 1` → tool call, next request → death), while the product legitimately
+  makes provider calls outside the loop — probe A's background title refinement
+  (`[title] no classify title — LLM refinement scheduled`), conversation-state and init
+  classification. When one lands inside a probe window it steals the `n=1` slot; the probe's
+  tool call reaches the wrong consumer; the loop then dies evidence-less and every
+  with-evidence assertion false-fails. Same class as the cold-home init-call offset already
+  logged against the provenance harness — that one shifted the counter predictably; this one
+  is a genuine race (timing-dependent, so runs flip between PASS and FAIL on identical code).
+- **Workaround / fix:** re-run on a lucky timeline is NOT a fix. Content-key the fakes (emit
+  the tool call for any request whose messages lack the expected tool result; deliver the
+  death only on a request carrying that result) or disable title refinement / drain scheduled
+  work between probes. Full mechanism + product-residue finding recorded in
+  `office/reviews/2026-10-29-review-s031-independent-jabari.md`.
+- **Prevent next time:** a fake provider shared with this product must never assume it sees
+  only the loop's requests; keyed-on-content is the only stable contract.

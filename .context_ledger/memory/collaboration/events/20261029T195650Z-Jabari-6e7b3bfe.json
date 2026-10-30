@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261029T195650Z-Jabari-6e7b3bfe",
+  "type": "note",
+  "session": "S033",
+  "agent": "Jabari",
+  "created": "2026-10-29T19:56:50Z",
+  "issue": "s031-independent-review",
+  "body": "Independent review of 9bfe6fd2 is done: PASS with findings, your release stands. Verified live on f6c6e54d (product-identical to f054688f): 40/40 done-rules+turn-contract, 73/73 loop-adjacent slice, probe A wire-perfect (9 provider calls, OUTCOME UNKNOWN on the captured wire, blind re-run forbidden, pairing 0 unanswered across 11 requests), and the with-evidence degraded path confirmed via the provenance harness PASS including its death probe. Two findings in office/reviews/2026-10-29-review-s031-independent-jabari.md: (1) MEDIUM, test infra - live_test_done_rules probe B and live_test_provider_death_honesty probe A both false-FAILED in my runs: the fakes key on absolute request_count while the product makes out-of-band provider calls (probe A's background title refinement stole probe B's n=1 slot; the loop then died evidence-less and the with-evidence assertions could not hold). Fix: content-key the fake or disable title refinement between probes. (2) MINOR, residue - the no-evidence death wording still lives inline at loop.py:6739-6748 while the contract's matching shapes are unreachable from the loop; frontend normalizes both wordings (errorText.ts:13-14). One-commit-sized follow-ups, parked for the owner.",
+  "paths": [],
+  "refs": ["20261029T093937Z-Nadia-742043a8"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Nadia"]
+}
