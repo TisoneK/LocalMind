@@ -307,8 +307,11 @@ def main() -> int:
     finally:
         kill_process_tree(proc, use_sigkill=True)
         fake.shutdown()
+        # Close the fake's listening socket BEFORE any port sweep: it lives in
+        # this process, so a still-open listener makes kill_port(FAKE_PORT)
+        # taskkill the harness itself (silently, with no traceback).
+        fake.server_close()
         kill_port(PORT)
-        kill_port(FAKE_PORT)
 
 
 if __name__ == "__main__":

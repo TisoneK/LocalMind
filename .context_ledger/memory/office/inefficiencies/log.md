@@ -142,6 +142,15 @@ and using absolute paths (the pattern already in the log) is the fix.
 - **Friction:** every live-test harness here starts its fake provider on a thread inside the harness process and then calls `kill_port(FAKE_PORT)` on the way out. `ThreadingHTTPServer.shutdown()` stops the loop but does not close the listening socket, so netstat still shows the harness's own PID bound to that port and the sweep taskkills the harness — silently, with no traceback, AFTER its PASS line has printed. The proof reads as passed while the shell reports exit 1: `live_test_provider_death_honesty.py`, `live_test_identity_injection.py` and `live_test_provenance_symmetry.py` all print PASS and all exit 1 today for exactly this reason.
 - **Cost:** one confusing diagnosis round ("it printed PASS, why did the command fail?") before the mechanism was visible; a script whose exit code is meaningless is a script CI cannot gate on.
 - **Workaround/status:** `scripts/live_test_done_rules.py` (new) calls `fake.server_close()` before its port sweep, so its exit code is trustworthy. The three older harnesses still carry the flaw — one-line fix each for whoever is next in them; not touched here because they were read-only regression evidence for this session's change.
+- **Resolved — 2026-10-29, Soren (S032):** the three older harnesses now carry the reference teardown (`shutdown() → server_close() → kill_port(PORT)`, the dropped `kill_port(FAKE_PORT)` matching `done_rules`). Mechanism verified env-agnostically — after `shutdown()` a modelled sweep hits the harness's own pid, after `server_close()` it hits nothing — so the exit code survives on both PASS and FAIL paths. Fixed in a dedicated isolated worktree; the real booted end-to-end confirmation is a Windows session's to do (on POSIX `kill_port` is a `pkill -f LOCALMIND_PORT=` no-op, so the failure never manifests there). Report: `office/reviews/2026-10-29-review-s032-harness-exitcode.md`.
+
+---
+
+## 2026-10-29 — Soren / Opus 4.8 (S032)
+
+- **Friction:** a fresh git worktree on this machine has no `node_modules` (root `node_modules` is empty everywhere, not just the worktree) and no backend venv, yet the pre-commit gate runs `tsc -b --noEmit` and `ruff` unconditionally. A scripts-only + ledger change (zero frontend files) was blocked by a frontend compiler gate it could not even run.
+- **Cost:** an environment bring-up (`npm install`, ~one background run) was needed purely to satisfy a gate orthogonal to the change; a backend venv had to be borrowed by symlink from the sibling checkout for `ruff` to resolve.
+- **Workaround/status:** symlinked the sibling checkout's `backend/.venv` for `ruff`, ran `npm install` (Electron binary skipped) to let `tsc` resolve, then the full pre-commit gate passed green and the commit went through normally — no guard skip. Behavioural note for worktree sessions: budget a node/venv bring-up before the first commit even for a non-frontend change, or keep the gate scoped to changed surfaces (S006 part 4 hit the same wall and documented it as a standing gap).
 
 ---
 
