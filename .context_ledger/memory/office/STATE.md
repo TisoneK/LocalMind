@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-29T23:42:29Z_
+_Regenerated: 2026-10-30T19:11:34Z_
 
 ## Standing params
 - **Core:** 2.2.1 (locked, verified 2026-10-29)
@@ -20,9 +20,10 @@ _Regenerated: 2026-10-29T23:42:29Z_
 - **Nadia** (S031) — Done — Part 10 (product): done-rules extension — roadmap §U item 4
 - **Rafael** (S032) — Done — Trajectory view → projection of the record — gap-inventory §B/G (1 of 3 parallel wor…
 - **Zuberi** (S030) — Done — Part 9 (product): provenance & audit symmetry — roadmap §U item 3
+- **Jabari** (S033) — Done — Independent review of the S031 done-rules extension (§U item 4, row E) — supervisor-re…
 
 ## Current task
-- **2026-10-29 — Rafael / Opus 4.8 (S032)** — the agent run tree + phase strip are now derived by one deterministic reducer (`frontend/src/lib/localmind/turnProjection.ts`) from the tur… — *done — FE 660/660 (tsc+eslint clean), backend 3749 passed / 2 skipped (ruff clean), live proof PASS (`scripts/live_test_trajectory_projection.py`, fake + `--real deepseek`). Committed `14e18caa` on branch `claude/trajectory-projection-13b286`. Follow-ups B-2026-10-29-1 (flat tool-pills) and B-2026-10-29-2 (async-suite config flake). Awaiting owner review / merge.*
+- **2026-10-29 — Jabari / GLM (Z.ai) (S033)** — supervisor-requested second review pass over the done-rules work: deep-read `backend/src/core/agent/turn_outcome.py`, the `loop.py` diff, `… — *done — verdict **PASS with findings, the S031 release stands** (review `542b9398`); guarantees verified live (40/40 + 73/73 unit, done-rules probe A wire-perfect, degraded path confirmed via the provenance harness PASS). Two findings parked for the owner: (1) harness fakes race the product's background provider calls (two false-negative live runs, mechanism traced); (2) the no-evidence death wording at `loop.py:6739-6748` still sits outside the turn contract with its matching contract shapes unreachable. Read-only claim honored; release event cites claim + review commit.*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-09-21-2 | In-app State Explorer + engine selector (the state-driven engine, ADR-71 in `history/office-002/plans/decisions.md`): port the explorer into the app as its own interface (a game tree, move list, eval bar, inspector, meters, rewindable timeline — the owner's "geeky, not a chat" direction) and add the Classic/State engine setting so the engine becomes selectable in Settings. Reference implementations: the self-contained prototype `docs/prototypes/state-explorer/` and the backend-served page in `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter: `state_agent/adapters/localmind.py`); the `EngineEvent` record is the UI contract. In flight when office-002 closed — check whether it landed before starting. |
@@ -34,9 +35,9 @@ _16 medium, 3 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 8 entries, last added 2026-10-29
-- inefficiencies/log.md (project code/env friction): 8 entries, last added 2026-10-29
+- inefficiencies/log.md (project code/env friction): 9 entries, last added 2026-10-29
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-21
 
 ## Collaboration
-- 155 event(s) on file; most recent: `20261029T094820Z-Nadia-7fed8ca1.json`
+- 158 event(s) on file; most recent: `20261029T195700Z-Jabari-45383f47.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`

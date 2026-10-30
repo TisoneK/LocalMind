@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261029T194414Z-Jabari-59e75997",
+  "type": "claim",
+  "session": "S033",
+  "agent": "Jabari",
+  "created": "2026-10-29T19:44:14Z",
+  "issue": "s031-independent-review",
+  "body": "Independent second-pass review of the S031 done-rules extension (9bfe6fd2), supervisor-requested. Read-only on product code: deep-read of turn_outcome.py, the loop.py diff, tests/core/test_done_rules.py, scripts/live_test_done_rules.py; live re-verification on this tree (done-rules suite + live harnesses); verdict recorded under office/reviews/. No product edits planned from this claim - write scope is the review file and ledger records.",
+  "paths": ["backend/src/core/agent/turn_outcome.py", "backend/src/core/agent/loop.py", "tests/core/test_done_rules.py", "scripts/live_test_done_rules.py", ".context_ledger/memory/office/reviews"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
