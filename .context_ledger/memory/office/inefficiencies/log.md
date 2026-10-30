@@ -150,3 +150,25 @@ and using absolute paths (the pattern already in the log) is the fix.
 - **Friction:** tool calls have **two** execution paths and the split is invisible from either side. `file_write` and `edit_file` run via a typed-contract path in `loop.py` (`ToolRegistry.get(...).execute(...)`, ~line 5418); everything else goes through `core/agent/tool_dispatch.dispatch_with_retry`. A cross-cutting concern added at only one path silently misses the other — and `file_write`/`edit_file` are exactly the tools a permission or write-durability feature most needs to cover. My first permission gate sat only at `dispatch_with_retry`; the live test's read-only probe caught a real write slipping through because the contract path never saw the gate.
 - **Cost:** one full live-test round plus a re-design (extract a shared `gate_file_effect`/`resolve_file_effect` and wire it into both paths) before the gate actually held. A unit suite that stubs `dispatch` would never have caught it — only the real server + real loop did.
 - **Workaround/status:** closed for this feature — the gate is now a shared helper called from both the loop's contract branch and `dispatch_with_retry`, so there is one policy and no bypass. The structural smell remains: any future retry/journal/permission/telemetry concern must be applied at BOTH seams or it half-works. A single tool-execution funnel (contracts dispatched *through* `dispatch_with_retry`, or a thin pre/post hook both share) would remove the trap; parked, not worth a session on its own.
+## 2026-10-29 — Jabari / GLM (Z.ai) (S033)
+
+- **Problem:** two live harnesses false-FAILED on an unchanged tree during the independent
+  S031 review — `live_test_done_rules.py` probe B and `live_test_provider_death_honesty.py`
+  probe A — while the identical product code had passed them the day before. Each diagnostic
+  round cost a full server boot + probe cycle before the mechanism was visible.
+- **Cause:** the fake providers key their state machines on **absolute request position**
+  (`request_count == 1` → tool call, next request → death), while the product legitimately
+  makes provider calls outside the loop — probe A's background title refinement
+  (`[title] no classify title — LLM refinement scheduled`), conversation-state and init
+  classification. When one lands inside a probe window it steals the `n=1` slot; the probe's
+  tool call reaches the wrong consumer; the loop then dies evidence-less and every
+  with-evidence assertion false-fails. Same class as the cold-home init-call offset already
+  logged against the provenance harness — that one shifted the counter predictably; this one
+  is a genuine race (timing-dependent, so runs flip between PASS and FAIL on identical code).
+- **Workaround / fix:** re-run on a lucky timeline is NOT a fix. Content-key the fakes (emit
+  the tool call for any request whose messages lack the expected tool result; deliver the
+  death only on a request carrying that result) or disable title refinement / drain scheduled
+  work between probes. Full mechanism + product-residue finding recorded in
+  `office/reviews/2026-10-29-review-s031-independent-jabari.md`.
+- **Prevent next time:** a fake provider shared with this product must never assume it sees
+  only the loop's requests; keyed-on-content is the only stable contract.
