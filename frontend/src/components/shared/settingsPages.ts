@@ -45,6 +45,7 @@ export const SECTION_PAGE: Record<string, PageId> = {
   'Ollama Server URL': 'local',
   'Agent engine': 'agent',
   Permissions: 'agent',
+  'File access': 'agent',
   'Best-of-N Editor': 'agent',
   'Package installs': 'agent',
 };

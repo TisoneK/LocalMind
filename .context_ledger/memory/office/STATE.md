@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-30T19:11:54Z_
+_Regenerated: 2026-10-30T19:16:07Z_
 
 ## Standing params
 - **Core:** 2.2.1 (locked, verified 2026-10-29)
@@ -18,6 +18,7 @@ _Regenerated: 2026-10-30T19:11:54Z_
 - **Ezra** (S004) — Done — Re-identity shipped: palettes renamed, Graphite Blue the default in dark mode; closeout c…
 - **Amani** (S006) — Done — Part 8 (product): identity context injection — roadmap §U item 2
 - **Nadia** (S031) — Done — Part 10 (product): done-rules extension — roadmap §U item 4
+- **Rafael** (S032) — Done — Trajectory view → projection of the record — gap-inventory §B/G (1 of 3 parallel wor…
 - **Zuberi** (S030) — Done — Part 9 (product): provenance & audit symmetry — roadmap §U item 3
 - **Jabari** (S033) — Done — Independent review of the S031 done-rules extension (§U item 4, row E) — supervisor-re…
 
@@ -30,11 +31,11 @@ _Regenerated: 2026-10-30T19:11:54Z_
 | B-2026-09-21-4 | Benchmark the state engine against Classic (ADR-71 §8): both engines selectable and observable, same tasks, measurable comparison, only then a decision about an `Auto` engine. Ties to B-2026-09-21-2. |
 | B-2026-09-21-5 | Confirmable-refusal rollout (ADR-67): convert every tool that refuses or guesses to "refuse only on a verified fact, name the fact and the confirming flag" — start with delete (`confirm_delete`), the shell tool's destructive/mass-touch commands (replace the substring blocklist), and installs (`scope=system`); record confirming flags in the run trace. Composes with the consequence-tiered ladder work (resolve → verify → assess → confirm → execute → verify → reflect). |
 
-_14 medium, 3 low priority row(s) — see tasks/backlog.md_
+_18 medium, 3 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 8 entries, last added 2026-10-29
-- inefficiencies/log.md (project code/env friction): 10 entries, last added 2026-10-29
+- inefficiencies/log.md (project code/env friction): 11 entries, last added 2026-10-29
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-21
 
 ## Collaboration

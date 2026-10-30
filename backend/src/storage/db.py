@@ -346,6 +346,16 @@ class SessionStore:
                 )
         except sqlite3.OperationalError:
             pass
+        # Durability barrier (§U item 5, row J): reconcile any permission-audit
+        # journal row still 'pending' at store open. A pending row means a
+        # side-effecting tool call was made durable BEFORE its body ran and no
+        # terminal outcome was ever written — i.e. the process was interrupted
+        # mid-call. It recovers as 'unknown', never silently re-executed. The
+        # table may not exist yet on a DB predating migration 014; best-effort.
+        try:
+            self.reconcile_interrupted_effects()
+        except Exception as exc:  # pragma: no cover — defensive
+            logger.debug("[db] effect reconcile skipped: %s", exc)
 
     def _apply_migrations(self, conn):
         """Apply any pending migrations from the migrations directory."""
@@ -816,6 +826,12 @@ class SessionStore:
     def delete_session(self, session_id: str) -> bool:
         with self._conn() as conn:
             conn.execute("DELETE FROM session_writes WHERE session_id = ?", (session_id,))
+            # Permission pin + audit are session-scoped — they never outlive it.
+            try:
+                conn.execute("DELETE FROM session_permissions WHERE session_id = ?", (session_id,))
+                conn.execute("DELETE FROM permission_audit WHERE session_id = ?", (session_id,))
+            except sqlite3.OperationalError:
+                pass  # DB predating migration 014
             result = conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
         return result.rowcount > 0
 
@@ -826,6 +842,11 @@ class SessionStore:
             conn.execute("DELETE FROM actions")
             conn.execute("DELETE FROM observations")
             conn.execute("DELETE FROM session_writes")
+            try:
+                conn.execute("DELETE FROM session_permissions")
+                conn.execute("DELETE FROM permission_audit")
+            except sqlite3.OperationalError:
+                pass
             conn.execute("DELETE FROM sessions")
 
     # ── Durable lightweight write stats ─────────────────
@@ -886,6 +907,144 @@ class SessionStore:
                 )
         except Exception:
             pass
+
+    # ── Session-pinned permission mode + audit/journal (§U item 5) ──────────
+    # The file-effect mode is pinned per session and durable (survives restart,
+    # never crosses sessions). Every permission decision at the tool-execution
+    # seam is recorded here, model-invisible; an allowed side-effecting call is
+    # journalled 'pending' before its body runs and resolved after.
+
+    def get_permission_mode(self, session_id: str) -> Optional[str]:
+        """Return the session's pinned file-effect mode, or None if never set.
+
+        None means "no pin" — the caller maps it to the shipped default. A
+        missing table (DB predating migration 014) also reads as None."""
+        try:
+            with self._conn() as conn:
+                row = conn.execute(
+                    "SELECT mode FROM session_permissions WHERE session_id = ?",
+                    (session_id,),
+                ).fetchone()
+            return row["mode"] if row else None
+        except Exception:
+            return None
+
+    def set_permission_mode(self, session_id: str, mode: str) -> None:
+        """Pin ``mode`` to ``session_id`` (upsert). Validation of the mode
+        value is the caller's job (the route rejects unknown modes); the store
+        persists what it is given."""
+        self.ensure_session(session_id)
+        with self._conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO session_permissions(session_id, mode, updated_at)
+                VALUES(?, ?, ?)
+                ON CONFLICT(session_id) DO UPDATE SET
+                    mode       = excluded.mode,
+                    updated_at = excluded.updated_at
+                """,
+                (session_id, mode, time.time()),
+            )
+
+    def record_permission_decision(
+        self,
+        session_id: str,
+        tool: str,
+        mode: Optional[str],
+        decision: str,
+        reason: str = "",
+        fail_closed: bool = False,
+        outcome: str = "done",
+    ) -> Optional[int]:
+        """Append a permission decision to the audit/journal and return its row
+        id (so an allowed side-effecting call can resolve its 'pending' row
+        later). Best-effort: an audit write must never break the turn, so a
+        failure returns None and enforcement proceeds on the in-memory verdict.
+
+        ``outcome='pending'`` is the write-ahead journal state for an allowed
+        side-effecting call — written BEFORE the tool body runs."""
+        try:
+            with self._conn() as conn:
+                cur = conn.execute(
+                    """
+                    INSERT INTO permission_audit(
+                        session_id, tool, mode, decision, reason, fail_closed,
+                        outcome, created_at, resolved_at)
+                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        session_id or "",
+                        (tool or "")[:60],
+                        (mode or ""),
+                        (decision or "")[:10],
+                        (reason or "")[:300],
+                        1 if fail_closed else 0,
+                        (outcome or "done")[:10],
+                        time.time(),
+                        time.time() if outcome != "pending" else None,
+                    ),
+                )
+                return int(cur.lastrowid)
+        except Exception as exc:  # pragma: no cover — defensive
+            logger.debug("[db] record_permission_decision skipped: %s", exc)
+            return None
+
+    def resolve_tool_effect(self, audit_id: int, outcome: str) -> None:
+        """Resolve a journalled 'pending' effect to its terminal ``outcome``
+        ('done' | 'failed' | 'unknown') once the tool body returns. Best-effort.
+        Only a row still 'pending' is moved, so a reconciled 'unknown' is never
+        overwritten by a late resolve from a since-restarted process."""
+        if audit_id is None:
+            return
+        try:
+            with self._conn() as conn:
+                conn.execute(
+                    "UPDATE permission_audit SET outcome = ?, resolved_at = ? "
+                    "WHERE id = ? AND outcome = 'pending'",
+                    ((outcome or "done")[:10], time.time(), int(audit_id)),
+                )
+        except Exception as exc:  # pragma: no cover — defensive
+            logger.debug("[db] resolve_tool_effect skipped: %s", exc)
+
+    def reconcile_interrupted_effects(self) -> int:
+        """Move every journal row still 'pending' to 'unknown' (the durability
+        barrier's recovery rule). Returns the number reconciled. Called once on
+        store open: a pending row at that point is a call interrupted after its
+        intent was made durable but before a terminal outcome — unknown, never
+        silently re-executed."""
+        with self._conn() as conn:
+            cur = conn.execute(
+                "UPDATE permission_audit SET outcome = 'unknown', resolved_at = ? "
+                "WHERE outcome = 'pending'",
+                (time.time(),),
+            )
+            n = cur.rowcount or 0
+        if n:
+            logger.info("[db] reconciled %d interrupted tool effect(s) → unknown", n)
+        return n
+
+    def list_permission_audit(self, session_id: str, limit: int = 100) -> list[dict]:
+        """Return the session's permission decisions, newest first."""
+        cols = (
+            "id", "session_id", "tool", "mode", "decision", "reason",
+            "fail_closed", "outcome", "created_at", "resolved_at",
+        )
+        try:
+            with self._conn() as conn:
+                rows = conn.execute(
+                    "SELECT id, session_id, tool, mode, decision, reason, fail_closed, "
+                    "outcome, created_at, resolved_at FROM permission_audit "
+                    "WHERE session_id = ? ORDER BY id DESC LIMIT ?",
+                    (session_id, limit),
+                ).fetchall()
+            out = []
+            for r in rows:
+                d = dict(zip(cols, r))
+                d["fail_closed"] = bool(d["fail_closed"])
+                out.append(d)
+            return out
+        except Exception:
+            return []
 
     # ── Per-session observation persistence ──────────────────
     # The Observe panel used to read an in-memory engine dict that died on

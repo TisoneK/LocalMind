@@ -121,6 +121,17 @@ def _tool_call_dict(d: dict) -> dict:
         duration = int(latency_ms) if latency_ms not in (None, "") else None
     except (TypeError, ValueError):
         duration = None
+    # The dispatch layer's retry ledger — a recovery stays on the record so a
+    # tool that succeeded on its third try does not read as if the first worked
+    # (gap inventory §G: "failed and retried attempts retained and visible").
+    # Mirrors chat.py's `_tool_call_payload`, which already carries it live.
+    try:
+        retry_count = int(d.get("retry_count")) if d.get("retry_count") not in (None, "") else None
+    except (TypeError, ValueError):
+        retry_count = None
+    retry_attempts = d.get("retry_attempts")
+    if not isinstance(retry_attempts, list):
+        retry_attempts = None
     return {
         "id": tc_id,
         "name": tool,
@@ -134,6 +145,8 @@ def _tool_call_dict(d: dict) -> dict:
         "reasoning": d.get("reasoning") or d.get("thought"),
         "agent": agent,
         "provider": d.get("provider") or None,
+        "retryCount": retry_count,
+        "retryAttempts": retry_attempts,
     }
 
 
@@ -380,9 +393,13 @@ def build_run_tree(
             # the parent node so the reloaded run tree heads the turn the same
             # way the live UI does (no extra model call — rides this event).
             if evt.type == "agent_initialization_done":
-                _title = str(d.get("title", "")).strip()
+                # Collapse whitespace + cap at 40 — identical to the frontend's
+                # cleanTitle (turnProjection.ts) so a weak model echoing a
+                # multi-line blob as the title yields the same heading on the
+                # live projection and the persisted/reloaded one.
+                _title = " ".join(str(d.get("title", "")).split())[:40]
                 if _title:
-                    runs[0]["title"] = _title[:40]
+                    runs[0]["title"] = _title
             phase = _lifecycle_phase(evt.type, d, _next_id)
             if phase:
                 # Child lifecycle events carry an `agent` tag (forwarded by
@@ -416,22 +433,27 @@ def build_workspace_artifacts(
     """Build the run tree + phase strip for persistence with a message.
 
     Returns (agent_runs, agent_phases); both are None when there is nothing
-    worth restoring. The run tree is only persisted when it has actual content
-    (tools, evidence, children, or an error) — a bare parent-only node for a
-    trivial chat turn would override the last interesting turn's tree on the
-    Agents tab after reload.
+    worth restoring. The run tree is only persisted when the turn did real work
+    — a tool, evidence, a delegated child, a decision-strip phase, or an error.
+    A bare parent-only node whose only phases are lifecycle narration (a direct
+    chat answer "worked" for an instant) is dropped: the direct-answer persist
+    paths already store no tree, so counting lifecycle phases here made this the
+    one path that kept one, and the live view then showed a run node that a
+    reload could not (the trajectory must be reconstructable from the record on
+    EVERY path, not show a node one path invented). Lifecycle narration still
+    rides the run node when the turn is kept for a real reason.
     """
     runs = build_run_tree(collector, task=task, root_error=root_error)
     root = runs[0]
+    agent_phases = build_agent_phases(collector) or None
     has_content = bool(
         root_error
         or root.get("tools")
         or root.get("evidence")
-        or root.get("phases")
+        or agent_phases
         or len(runs) > 1
     )
     agent_runs = runs if has_content else None
-    agent_phases = build_agent_phases(collector) or None
     return agent_runs, agent_phases
 
 

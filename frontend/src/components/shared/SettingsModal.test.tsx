@@ -21,6 +21,8 @@ vi.mock('@/lib/localmind/client', () => ({
     selectModel: vi.fn(),
     setAppearance: vi.fn(),
     setIdentity: vi.fn(),
+    getPermissionMode: vi.fn(),
+    setPermissionMode: vi.fn(),
   },
 }));
 
@@ -54,6 +56,49 @@ describe('SettingsModal', () => {
     mockClient.setLocalSettings.mockResolvedValue({ embed_model: '', num_ctx: 0, updated: [], message: 'ok' });
     mockClient.selectModel.mockResolvedValue(undefined);
     mockClient.setAppearance.mockResolvedValue({ theme: 'custom', mode: 'dark', custom_theme: null, tone: 1, message: 'ok' });
+    mockClient.getPermissionMode.mockResolvedValue({
+      session_id: 's1', mode: 'workspace_write', pinned: false, default: 'workspace_write',
+      modes: ['read_only', 'workspace_write', 'full'],
+    });
+    mockClient.setPermissionMode.mockResolvedValue({
+      session_id: 's1', mode: 'read_only', pinned: true, default: 'workspace_write',
+      modes: ['read_only', 'workspace_write', 'full'], message: 'Permission mode updated',
+    });
+  });
+
+  it('the file-access selector reads the session mode and pins a new one', async () => {
+    mockClient.getSettings.mockResolvedValue(settingsPayload());
+    mockClient.getOllamaUrl.mockResolvedValue({ url: 'http://localhost:11434' });
+
+    render(<SettingsModal onClose={() => {}} onSave={() => {}} sessionId="s1" />);
+    await screen.findByRole('heading', { name: 'Settings' });
+    await goTo('Agent');
+
+    // It read the active session's current mode on open.
+    await waitFor(() => expect(mockClient.getPermissionMode).toHaveBeenCalledWith('s1'));
+
+    // The default (workspace_write) renders checked; read_only does not.
+    const workspace = screen.getByRole('radio', { name: /Workspace writes/i });
+    const readOnly = screen.getByRole('radio', { name: /Read-only/i });
+    await waitFor(() => expect(workspace).toHaveAttribute('aria-checked', 'true'));
+    expect(readOnly).toHaveAttribute('aria-checked', 'false');
+
+    // Picking read-only pins it via the API for this session.
+    await userEvent.click(readOnly);
+    expect(mockClient.setPermissionMode).toHaveBeenCalledWith('s1', 'read_only');
+    await waitFor(() => expect(readOnly).toHaveAttribute('aria-checked', 'true'));
+  });
+
+  it('the file-access selector explains itself when no chat is open', async () => {
+    mockClient.getSettings.mockResolvedValue(settingsPayload());
+    mockClient.getOllamaUrl.mockResolvedValue({ url: 'http://localhost:11434' });
+
+    render(<SettingsModal onClose={() => {}} onSave={() => {}} />);
+    await screen.findByRole('heading', { name: 'Settings' });
+    await goTo('Agent');
+
+    expect(screen.getByText(/Open or start a chat to set its file access/i)).toBeInTheDocument();
+    expect(mockClient.getPermissionMode).not.toHaveBeenCalled();
   });
 
   it('switching to the Custom theme shows the palette editor and persists', async () => {

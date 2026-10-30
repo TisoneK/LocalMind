@@ -19,13 +19,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { classifyClientIntent, localmindClient } from '@/lib/localmind/client';
 import { estimateTokens, isActiveToolStatus } from '@/lib/localmind/progress';
 import {
-  LIFECYCLE_PHASE_RANK,
   _buildToolInputPreview,
   _buildToolLabel,
   _isPromptLeak,
   _toolToIntent,
-  buildAgentPhase,
 } from '@/lib/localmind/agentPhases';
+import { projectTrajectory, type ProjectionEvent } from '@/lib/localmind/turnProjection';
 import type {
   ChatMessage,
   Session,
@@ -295,47 +294,10 @@ interface ChatState {
   onTerminalEvent?: (event: TerminalEventData) => void;
 }
 
-function updateAgentRun(runs: AgentRun[], runId: string, patch: Partial<AgentRun>): AgentRun[] {
-  return runs.map((run) => run.id === runId ? { ...run, ...patch } : run);
-}
-
-/** Close the turn's root run and every run still running beneath it, stamped at `now`. */
-function finishTurnRuns(runs: AgentRun[], rootRunId: string, now: number): AgentRun[] {
-  const ours = new Set<string>([rootRunId]);
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const r of runs) {
-      if (r.parentId && ours.has(r.parentId) && !ours.has(r.id)) {
-        ours.add(r.id);
-        grew = true;
-      }
-    }
-  }
-  return runs.map((r) =>
-    ours.has(r.id) && r.status === 'running'
-      ? { ...r, status: 'completed' as AgentRunStatus, completedAt: r.completedAt ?? now }
-      : r,
-  );
-}
-
-function attachToolToAgentRun(runs: AgentRun[], rootRunId: string, tool: ToolCall): AgentRun[] {
-  const target = tool.runId
-    ? runs.find((run) => run.id === tool.runId)
-    : tool.agent
-      ? [...runs].reverse().find((run) => run.role !== 'parent' && run.name === tool.agent && run.status === 'running')
-      : undefined;
-  const targetId = (target || runs.find((item) => item.id === rootRunId))?.id;
-  if (!targetId) return runs;
-  return runs.map((run) => {
-    if (run.id !== targetId) return run;
-    const existingIndex = run.tools.findIndex((item) => item.id === tool.id);
-    const tools = [...run.tools];
-    if (existingIndex >= 0) tools[existingIndex] = { ...tools[existingIndex], ...tool };
-    else tools.push(tool);
-    return { ...run, tools };
-  });
-}
+// The agent run tree is projected from the recorded obs stream
+// (turnProjection.projectTrajectory) now, so the imperative run-tree mutators
+// that used to live here (updateAgentRun / finishTurnRuns / attachToolToAgentRun)
+// are gone — the projection owns the tree, live and on reload alike.
 
 export function useChat(
   sessionId: string | null,
@@ -763,44 +725,14 @@ export function useChat(
       setLastMetrics(null);
       setActiveToolCalls([]);
       setLiveObservation(null);
-      const rootRunId = `parent-${Date.now()}`;
-      const runTree: AgentRun[] = [{
-        id: rootRunId,
-        name: 'parent',
-        role: 'parent',
-        task: message,
-        status: 'running',
-        depth: 0,
-        startedAt: Date.now(),
-        tools: [],
-      }];
-      // ACCUMULATE per-turn run groups instead of wiping the
-      // workspace every turn. Finalize any run still marked running from a
-      // prior/interrupted turn, then append this turn's tree. Keep only the
-      // most recent MAX_WORKSPACE_TURNS parent turns (+ their descendants) so a
-      // long session doesn't grow the DOM unbounded — older turns are pruned.
-      setAgentRuns((prev) => {
-        const finalized = prev.map((r) =>
-          r.status === 'running'
-            ? { ...r, status: 'completed' as AgentRunStatus, completedAt: r.completedAt ?? Date.now() }
-            : r,
-        );
-        const combined = [...finalized, ...runTree];
-        const rootIds = combined.filter((r) => !r.parentId).map((r) => r.id);
-        const keptRoots = new Set(rootIds.slice(-MAX_WORKSPACE_TURNS));
-        // Keep a run if its ancestor chain terminates at a kept root.
-        const byId = new Map(combined.map((r) => [r.id, r] as const));
-        const isKept = (run: AgentRun): boolean => {
-          let cur: AgentRun | undefined = run;
-          const seen = new Set<string>();
-          while (cur && cur.parentId && !seen.has(cur.id)) {
-            seen.add(cur.id);
-            cur = byId.get(cur.parentId);
-          }
-          return Boolean(cur && keptRoots.has(cur.id));
-        };
-        return combined.filter(isKept);
-      });
+      // The agent run tree + phase strip are now a PROJECTION of the turn's
+      // recorded obs stream (turnProjection.ts) — the same projection the
+      // backend persists (agent_workspace.py) and the reload renders, instead
+      // of the imperative accumulator this used to be. `rootRunId` is this
+      // turn's parent id; `turnRecord` is the record it projects from. See
+      // `applyTrajectory` below. Reassigned per goal-continuation round so each
+      // round's bubble projects its own trajectory.
+      let rootRunId = `parent-${Date.now()}`;
 
       let currentContent = '';
       let thinkingContent = '';
@@ -839,6 +771,109 @@ export function useChat(
         if (!turnSettled) setLastMetrics(update);
       };
       const toolsUsedSet = new Set<string>();
+
+      // ── Trajectory as a projection of the record ──────────────────────────
+      // The run tree + phase strip + acknowledgement + injected-item ledger are
+      // derived from this turn's recorded obs stream by the SAME projection the
+      // backend persists (turnProjection.projectTrajectory ≡ agent_workspace),
+      // instead of being accumulated event-by-event. `turnRecord` is the record;
+      // `applyTrajectory` re-projects it and writes the result to the streaming
+      // message and the Agents-tab run list. A cross-language contract test
+      // (turnProjection.contract.test.ts) keeps the two projections in lockstep.
+      const turnRecord: ProjectionEvent[] = [];
+      let turnRootError: string | null = null;
+      // Which run ids the current turn's projection owns, so re-projecting
+      // replaces this turn's subtree in the Agents tab without wiping the prior
+      // turns it accumulates (pruned to MAX_WORKSPACE_TURNS).
+      let currentTurnRunIds = new Set<string>();
+      const pruneWorkspace = (combined: AgentRun[]): AgentRun[] => {
+        const rootIds = combined.filter((r) => !r.parentId).map((r) => r.id);
+        const keptRoots = new Set(rootIds.slice(-MAX_WORKSPACE_TURNS));
+        const byId = new Map(combined.map((r) => [r.id, r] as const));
+        const isKept = (run: AgentRun): boolean => {
+          let cur: AgentRun | undefined = run;
+          const seen = new Set<string>();
+          while (cur && cur.parentId && !seen.has(cur.id)) {
+            seen.add(cur.id);
+            cur = byId.get(cur.parentId);
+          }
+          return Boolean(cur && keptRoots.has(cur.id));
+        };
+        return combined.filter(isKept);
+      };
+      const applyTrajectory = (settled = false) => {
+        const proj = projectTrajectory(turnRecord, {
+          task: message,
+          rootId: rootRunId,
+          now: Date.now(),
+          rootError: turnRootError,
+          settled,
+        });
+        // Agents tab (session-level, accumulates recent turns): swap this turn's
+        // subtree for the fresh projection, finalize any still-running runs from
+        // a prior/interrupted turn, keep the rest, prune.
+        setAgentRuns((prev) => {
+          const prior = prev
+            .filter((r) => !currentTurnRunIds.has(r.id))
+            .map((r) =>
+              r.status === 'running'
+                ? { ...r, status: 'completed' as AgentRunStatus, completedAt: r.completedAt ?? Date.now() }
+                : r,
+            );
+          currentTurnRunIds = new Set(proj.agentRuns.map((r) => r.id));
+          return pruneWorkspace([...prior, ...proj.agentRuns]);
+        });
+        // The streaming assistant message carries its own turn's projection.
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last && last.role === 'assistant') {
+            updated[updated.length - 1] = {
+              ...last,
+              agentRuns: proj.agentRuns,
+              agentPhases: proj.agentPhases,
+              ...(proj.acknowledgement ? { acknowledgement: proj.acknowledgement } : {}),
+              ...(proj.injectedItems ? { injectedItems: proj.injectedItems } : {}),
+            };
+          }
+          return updated;
+        });
+      };
+      /** Record one trajectory-shaping obs event and re-project the turn. */
+      const recordTrajectory = (type: string, data: Record<string, unknown>) => {
+        turnRecord.push({ type, data });
+        applyTrajectory(false);
+      };
+      // obs event types the trajectory projection consumes (everything
+      // agent_workspace.build_run_tree / build_agent_phases reads). tool_status
+      // is excluded — the backend projection ignores it too.
+      const TRAJECTORY_OBS_TYPES = new Set<string>([
+        'tool_call',
+        'delegation_started',
+        'delegation_completed',
+        'evidence_to_parent',
+        'context_injected',
+        'agent_initialization_start',
+        'agent_initialization_understanding',
+        'agent_initialization_ack',
+        'agent_initialization_done',
+        'agent_planning_done',
+        'agent_thinker_start',
+        'agent_thinker_done',
+        'agent_loop_start',
+        'agent_loop_done',
+        'plan_nodes_created',
+        'plan_node_advanced',
+        'agent_loop_gate_passed',
+        'agent_loop_gate_failed_replan',
+        'orchestrator_replan_start',
+        'orchestrator_replan_done',
+        'orchestrator_replan_failed',
+        'agent_loop_failure',
+        'agent_loop_degraded',
+      ]);
+      // Seed the Agents tab with this turn's running parent node immediately.
+      applyTrajectory(false);
 
       const abortFn = localmindClient.streamChat(
         message,
@@ -1064,7 +1099,10 @@ export function useChat(
                   toolsUsedSet.add(toolCall.name);
                 }
                 setActiveToolCalls([...toolCalls]);
-                setAgentRuns((prev) => attachToolToAgentRun(prev, rootRunId, toolCall));
+                // The run tree is projected from the obs stream (see the raw
+                // `tool_call` obs event in the obs_event case) — not attached
+                // imperatively here. This case still owns the flat chat tool
+                // pills (message.toolCalls) + the live Observe panel.
                 setLiveObservation((prev) => ({
                   intent: _toolToIntent(toolCall.name, prev?.intent || currentIntent || 'chat'),
                   confidence: prev?.confidence ?? currentConfidence ?? 0,
@@ -1111,7 +1149,7 @@ export function useChat(
                   toolsUsedSet.add(toolCall.name);
                 }
                 setActiveToolCalls([...toolCalls]);
-                setAgentRuns((prev) => attachToolToAgentRun(prev, rootRunId, toolCalls[idx !== -1 ? idx : toolCalls.length - 1]));
+                // Run tree is projected from the obs stream, not attached here.
                 setMessages((prev) => {
                   const updated = [...prev];
                   const last = updated[updated.length - 1];
@@ -1226,225 +1264,32 @@ export function useChat(
                   }
                   break;
                 }
-                // Active-agent lifecycle narration (bootup-telemetry session):
-                // attach the initialization / planning / thinker / loop phases
-                // to the PARENT run so the Agents tab's active agent node
-                // shows the whole turn. The chat phase strip keeps ONLY the
-                // Decision history (plan/gate/orchestrator) — see
-                // PHASE_EVENT_TYPES below.
-                const RUN_LIFECYCLE_TYPES = new Set([
-                  'agent_initialization_start',
-                  'agent_initialization_understanding',
-                  'agent_initialization_ack',
-                  'agent_initialization_done',
-                  'agent_planning_done',
-                  'agent_thinker_start',
-                  'agent_thinker_done',
-                  'agent_loop_start',
-                  'agent_loop_done',
-                ]);
-                // The classify call names the turn ("Fetch Weather"); use it as
-                // the parent run's heading instead of "Turn N" (rides the
-                // existing init event — no extra model call).
-                if (obs.type === 'agent_initialization_done') {
-                  // Sanitize the classify title before it heads
-                  // the turn — a weak model can echo the raw user message (a
-                  // pasted 6KB JSON blob became the turn title). Collapse
-                  // whitespace to one line and hard-cap the length so the turn
-                  // heading is always a short label, never a wall of text.
-                  const rawTitle = String((obs.data || obs).title || '').replace(/\s+/g, ' ').trim();
-                  const title = rawTitle.length > 48 ? `${rawTitle.slice(0, 47)}…` : rawTitle;
-                  if (title) {
-                    setAgentRuns((prev) => updateAgentRun(prev, rootRunId, { title }));
+                // ── Trajectory obs events → the projection ───────────────────
+                // Run tree, phase strip, acknowledgement and the injected-item
+                // ledger are a PROJECTION of the recorded obs stream now
+                // (turnProjection.projectTrajectory ≡ agent_workspace.py),
+                // replacing the imperative accumulation that used to live here
+                // (lifecycle phases, ack, evidence, context_injected,
+                // delegation child runs). recordTrajectory appends the event
+                // and re-projects, so the live view matches what the backend
+                // persists and the reload renders — see the contract test.
+                if (TRAJECTORY_OBS_TYPES.has(obs.type)) {
+                  recordTrajectory(obs.type, (obs.data || obs) as Record<string, unknown>);
+                  // These shaped the trajectory only; the lifecycle events fall
+                  // through to the Observe-metrics block below (they carry
+                  // intent/latency), but ack / evidence / context_injected /
+                  // delegation do not — keep them out of that block so it does
+                  // not zero the Observe panel's context-token reading.
+                  if (
+                    obs.type === 'agent_initialization_ack' ||
+                    obs.type === 'evidence_to_parent' ||
+                    obs.type === 'context_injected' ||
+                    obs.type === 'delegation_started' ||
+                    obs.type === 'delegation_completed' ||
+                    obs.type === 'tool_call'
+                  ) {
+                    break;
                   }
-                }
-                if (RUN_LIFECYCLE_TYPES.has(obs.type)) {
-                  const runPhase = buildAgentPhase(obs.type, obs.data || obs);
-                  if (runPhase) {
-                    const phaseAgent = String((obs.data || obs).agent || '');
-                    setAgentRuns((prev) => {
-                      // Route to the owning run: child lifecycle events carry
-                      // an `agent` tag (ChildObsProxy) → the running child of
-                      // that name; untagged events → the parent. Mirrors
-                      // attachToolToAgentRun's matching.
-                      const target = phaseAgent
-                        ? [...prev].reverse().find((r) => r.role !== 'parent' && r.name === phaseAgent && r.status === 'running')
-                        : prev.find((r) => r.id === rootRunId);
-                      if (!target) return prev;
-                      // Canonical narrative order — the loop emits some events
-                      // out of story order (loop_start before init), so sort
-                      // by the same rank the backend uses on persistence.
-                      const phases = [...(target.phases || []), runPhase]
-                        .sort((a, b) => (LIFECYCLE_PHASE_RANK[a.type] ?? 99) - (LIFECYCLE_PHASE_RANK[b.type] ?? 99));
-                      return updateAgentRun(prev, target.id, { phases });
-                    });
-                  }
-                }
-                // The acknowledgement is the Agent's opening line —
-                // route it to the assistant message's `acknowledgement` field
-                // (rendered as the opening line above the thinking block).
-                // It is ALSO a run-lifecycle phase (handled above) so the
-                // workspace node narrates it.
-                // agent_initialization_understanding is intentionally NOT
-                // mirrored to the chat message here: it already reaches the
-                // user through the thinking_token channel into the message's
-                // thinking row of the turn view. The run node above narrates it for
-                // the Agents tab.
-                if (obs.type === 'agent_initialization_ack') {
-                  const ackData = obs.data || obs;
-                  const ackText = String(ackData.acknowledgement || '').slice(0, 180);
-                  if (ackText) {
-                    setMessages((prev) => {
-                      const updated = [...prev];
-                      const last = updated[updated.length - 1];
-                      if (last && last.role === 'assistant') {
-                        updated[updated.length - 1] = { ...last, acknowledgement: ackText };
-                      }
-                      return updated;
-                    });
-                  }
-                  break;
-                }
-                // agent_initialization_understanding is intentionally NOT
-                // mirrored to the workspace run here: it already reaches the
-                // user through the thinking_token channel into the message's
-                // thinking row (the Thinker's assessment lives
-                // on the thinking surface, not the workspace).
-                // Evidence boundary — tool results are handed to
-                // the parent model. Record as an EvidenceEntry on the parent
-                // run so the Agent Workspace can show evidence flowing in.
-                if (obs.type === 'evidence_to_parent') {
-                  const evData = obs.data || obs;
-                  const entry = {
-                    tool: String(evData.tool || 'unknown'),
-                    iteration: Number(evData.iteration || 0),
-                    evidenceChars: Number(evData.evidence_chars || 0),
-                    failed: Boolean(evData.failed),
-                    timestamp: Date.now(),
-                  };
-                  setAgentRuns((prev) => {
-                    const run = prev.find((r) => r.id === rootRunId);
-                    if (!run) return prev;
-                    const evidence = [...(run.evidence || []), entry];
-                    return updateAgentRun(prev, rootRunId, { evidence });
-                  });
-                  break;
-                }
-                // Provenance & audit symmetry — the backend records every
-                // injected item of the per-turn context with its EXACT text
-                // and producer. Store them on the reply (in arrival order,
-                // one entry per prompt surface) so the context panel can
-                // show what the model actually received, item by item.
-                if (obs.type === 'context_injected') {
-                  const injData = obs.data || obs;
-                  const incoming = Array.isArray(injData.items) ? injData.items : [];
-                  if (incoming.length > 0) {
-                    const surface = String(injData.surface || '');
-                    setMessages((prev) => {
-                      const updated = [...prev];
-                      const last = updated[updated.length - 1];
-                      if (last && last.role === 'assistant') {
-                        const mapped = incoming.map((raw) => {
-                          const it = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
-                          const text = String(it.text ?? '');
-                          return {
-                            kind: String(it.kind || 'unknown'),
-                            source: String(it.source || ''),
-                            text,
-                            chars: Number(it.chars ?? text.length),
-                            surface,
-                          };
-                        });
-                        updated[updated.length - 1] = {
-                          ...last,
-                          injectedItems: [...(last.injectedItems || []), ...mapped],
-                        };
-                      }
-                      return updated;
-                    });
-                  }
-                  break;
-                }
-                // Delegation streaming — the
-                // sub-agent's lifecycle shows as one running tool step
-                // ("Delegating to research…") in the Actions panel; the
-                // child's own tool_call events (forwarded by the backend,
-                // tagged with `agent`) render as their own cards interleaved.
-                // The card name is `delegate→<agent>` (NOT plain "delegate")
-                // so it can't collide with the parent's own delegate tool
-                // step in the name-based done dedup.
-                if (obs.type === 'delegation_started' || obs.type === 'delegation_completed') {
-                  const obsDel = obs.data || obs;
-                  const agentName = String(obsDel.target_agent || 'sub-agent');
-                  const delId = `delegation-${obsDel.run_id || agentName}`;
-                  const delName = `delegate→${agentName}`;
-                  if (obs.type === 'delegation_started') {
-                    const childRunId = String(obsDel.run_id || `child-${agentName}-${Date.now()}`);
-                    const childTask = String(obsDel.task || '');
-                    const childDepth = Number(obsDel.depth || 1);
-                    setAgentRuns((prev) => {
-                      if (prev.some((run) => run.id === childRunId)) return prev;
-                      return [
-                        ...prev,
-                        {
-                          id: childRunId,
-                          name: agentName,
-                          role: 'child' as const,
-                          parentId: rootRunId,
-                          task: childTask,
-                          status: 'running' as const,
-                          depth: childDepth,
-                          startedAt: Date.now(),
-                          tools: [],
-                        },
-                      ];
-                    });
-                    const delCall: ToolCall = {
-                      id: delId,
-                      name: delName,
-                      label: `Delegating to ${agentName}…`,
-                      status: 'running' as const,
-                      input: String(obsDel.task || ''),
-                    };
-                    const existsIdx = toolCalls.findIndex((t) => t.id === delId);
-                    if (existsIdx !== -1) {
-                      toolCalls[existsIdx] = { ...toolCalls[existsIdx], ...delCall };
-                    } else {
-                      toolCalls.push(delCall);
-                    }
-                    setActiveToolCalls([...toolCalls]);
-                  } else {
-                    const childRunId = String(obsDel.run_id || `child-${agentName}`);
-                    const childStatus = obsDel.status === 'completed'
-                      ? 'completed' as const
-                      : obsDel.status === 'timed_out'
-                        ? 'timed_out' as const
-                        : 'failed' as const;
-                    setAgentRuns((prev) => updateAgentRun(prev, childRunId, {
-                      status: childStatus,
-                      completedAt: Date.now(),
-                      error: obsDel.error_type ? String(obsDel.error_type) : undefined,
-                    }));
-                    const doneStatus = obsDel.status === 'completed' ? 'done' as const : 'failed' as const;
-                    const doneIdx = toolCalls.findIndex((t) => t.id === delId);
-                    if (doneIdx !== -1) {
-                      toolCalls[doneIdx] = {
-                        ...toolCalls[doneIdx],
-                        status: doneStatus,
-                        duration: toolCalls[doneIdx].duration || 0,
-                      };
-                    } else {
-                      toolCalls.push({
-                        id: delId,
-                        name: delName,
-                        label: `Delegated to ${agentName}`,
-                        status: doneStatus,
-                        input: '',
-                      });
-                    }
-                    setActiveToolCalls([...toolCalls]);
-                  }
-                  break;
                 }
                 // The dispatcher used to emit
                 // thinking_start/thinking_done with the internal routing
@@ -1618,53 +1463,14 @@ export function useChat(
                   }
                 }
 
-                // Frontend Phase Visibility. Handle the
-                // backend obs events that surface the agent's DECISION
-                // history. Each appends a phase entry to the LAST assistant
-                // message's `agentPhases` array — the strip renders in
-                // ChatMessage between the thinking block and tool cards.
-                // The lifecycle narration (initialization/planning/thinker/
-                // loop) moved to the Agents-tab run node (RUN_LIFECYCLE_TYPES
-                // above) — the chat strip keeps the plan/gate/orchestrator
-                // set only.
-                const PHASE_EVENT_TYPES = new Set([
-                  'plan_nodes_created',
-                  'plan_node_advanced',
-                  'agent_loop_gate_passed',
-                  'agent_loop_gate_failed_replan',
-                  'orchestrator_replan_start',
-                  'orchestrator_replan_done',
-                  'orchestrator_replan_failed',
-                  'agent_loop_failure',
-                  'agent_loop_degraded',
-                ]);
-                if (PHASE_EVENT_TYPES.has(obs.type)) {
-                  const phase = buildAgentPhase(obs.type, obsData);
-                  if (phase) {
-                    setMessages((prev) => {
-                      // Find the LAST assistant message — that's the one
-                      // currently streaming this turn.
-                      const lastAssistantIdx = [...prev]
-                        .reverse()
-                        .findIndex((m) => m.role === 'assistant');
-                      if (lastAssistantIdx === -1) return prev;
-                      const realIdx = prev.length - 1 - lastAssistantIdx;
-                      const target = prev[realIdx];
-                      const existingPhases = target.agentPhases ?? [];
-                      // Dedupe by phase.id (some events fire once per turn).
-                      if (existingPhases.some((p) => p.id === phase.id)) {
-                        return prev;
-                      }
-                      const updated: ChatMessage = {
-                        ...target,
-                        agentPhases: [...existingPhases, phase],
-                      };
-                      const next = [...prev];
-                      next[realIdx] = updated;
-                      return next;
-                    });
-                  }
-                }
+                // The chat phase strip (plan/gate/orchestrator/failure/
+                // degraded decision history) and the lifecycle narration are
+                // part of the trajectory projection now — recorded at the top
+                // of this case and written to message.agentPhases / the run
+                // tree by applyTrajectory. These events still fall through the
+                // Observe-metrics block above (they carry intent/iteration),
+                // then land here. The imperative buildAgentPhase append that
+                // used to live here is gone.
                 break;
               }
 
@@ -1692,6 +1498,14 @@ export function useChat(
                 toolCalls.splice(0, toolCalls.length);
                 toolsUsedSet.clear();
                 setActiveToolCalls([]);
+                // This round projects its own trajectory: a fresh record and a
+                // fresh parent id, so the new bubble's run tree is this round's
+                // (earlier rounds' trees stay in their own bubbles and in the
+                // Agents tab's accumulation).
+                turnRecord.length = 0;
+                turnRootError = null;
+                currentTurnRunIds = new Set<string>();
+                rootRunId = `parent-${Date.now()}-r${round.round}`;
                 setMessages((prev) => {
                   const now = Date.now();
                   const stamp = new Date().toLocaleTimeString('en-GB', {
@@ -1733,7 +1547,10 @@ export function useChat(
                 // closes after the post-answer services: the run's clock stops at the answer
                 // (closing it at stream close stretched every duration by the reflection time and
                 // left the Agents view "running" after the reply), and the task list re-syncs now.
-                setAgentRuns((prev) => finishTurnRuns(prev, rootRunId, Date.now()));
+                // Settle the trajectory projection: the parent run reads
+                // completed/failed and the message's tree matches what the
+                // backend persists for this finished turn.
+                applyTrajectory(true);
                 window.dispatchEvent(new CustomEvent('localmind:todo-refetch'));
                 streamStartedAtRef.current = null;
                 streamingSessionRef.current = null;
@@ -1828,6 +1645,11 @@ export function useChat(
                     }
                     return updated;
                   });
+                  // The turn ended in failure — settle the trajectory so its
+                  // parent run reads "failed" (not a premature "completed"),
+                  // matching what the backend persists for a dead turn.
+                  turnRootError = String((err as ModelError).code || 'error');
+                  applyTrajectory(true);
                   break;
                 }
                 // Legacy path (old backends send a plain string): keep the
@@ -2137,7 +1959,10 @@ export function useChat(
             abortRef.current = null;
           }
           if (!turnSettled) {
-            setAgentRuns((prev) => finishTurnRuns(prev, rootRunId, Date.now()));
+            // The stream ended without a `done` (abort / early close) — settle
+            // the trajectory projection so the parent run doesn't read
+            // "running" forever.
+            applyTrajectory(true);
           }
           // Finalize the closure-owned list synchronously, then publish the
           // same snapshot to both the Actions state and assistant message.
@@ -2174,11 +1999,8 @@ export function useChat(
           streamStartedAtRef.current = null;
           streamingSessionRef.current = null;
           abortRef.current = null;
-          setAgentRuns((prev) => updateAgentRun(prev, rootRunId, {
-            status: 'failed',
-            completedAt: Date.now(),
-            error: 'The parent agent stream failed.',
-          }));
+          turnRootError = turnRootError || 'The parent agent stream failed.';
+          applyTrajectory(true);
           setMessages((prev) => {
             const updated = [...prev];
             const last = updated[updated.length - 1];
