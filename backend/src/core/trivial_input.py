@@ -670,15 +670,23 @@ def is_conversational_question(message: str, history: Optional[list[object]] = N
                 and not _CONVERSATIONAL_FOLLOWUP_RE.match(cleaned)
             ):
                 return False
+            # The REFERENT of a short follow-up is the most recent assistant
+            # turn, so only that turn's tool calls make it mid-task. Scanning
+            # the whole window meant one older tool-using turn dragged every
+            # later follow-up into the agent loop — "Don't you?" about a plain
+            # text reply was answered as if it were a request to act.
             has_assistant_answer = False
-            for item in history:
+            latest_assistant_ran_tools = False
+            for item in reversed(list(history)):
                 role = item.get("role") if isinstance(item, dict) else getattr(item, "role", "")
-                tool_calls = item.get("tool_calls") if isinstance(item, dict) else getattr(item, "tool_calls", None)
-                if tool_calls:
-                    return False
-                if getattr(role, "value", role) == "assistant":
-                    has_assistant_answer = True
-            if not has_assistant_answer:
+                if getattr(role, "value", role) != "assistant":
+                    continue
+                has_assistant_answer = True
+                latest_assistant_ran_tools = bool(
+                    item.get("tool_calls") if isinstance(item, dict) else getattr(item, "tool_calls", None)
+                )
+                break
+            if latest_assistant_ran_tools or not has_assistant_answer:
                 return False
 
     # Must not reference anything that needs tools, live data, or system
@@ -713,6 +721,61 @@ def is_conversational_question(message: str, history: Optional[list[object]] = N
     if _is_local_discovery(cleaned):
         return False
 
+    return True
+
+
+# A question about THIS conversation — what was just said, what the user
+# asked, what the assistant replied. It must be answered from the visible
+# transcript, never by calling a memory tool and never from long-term memory:
+# on 2026-10-31 "Did you answer that from memory?" and "Did I ask about that?"
+# each ran `Memory: list` and answered by dumping four stored facts.
+_CONVERSATION_RECALL_RE = re.compile(
+    r"(?:"
+    r"\bwhat\s+(?:did|was|were)\s+(?:i|you)\b.{0,40}?"
+    r"\b(?:say|said|reply|replied|answer|answered|ask|asked|mean|meant|mention|mentioned)\b"
+    r"|\bdid\s+(?:i|you)\b.{0,40}\b(?:say|said|ask|asked|answer|answered|reply|replied|mean|meant|mention|mentioned)\b"
+    r"|\b(?:your|my)\s+(?:last|previous|earlier|first)\s+(?:reply|answer|message|response|question)\b"
+    r"|\bwhat\s+was\s+(?:your|my)\s+(?:reply|answer|question|message|response)\b"
+    r")",
+    re.IGNORECASE,
+)
+# Words that name the conversation itself. They are stripped before the
+# tool-signal keyword guard runs ("memory" is a blocked keyword — the very
+# word that must not push this question into the tool lane).
+_RECALL_SUBJECT_RE = re.compile(
+    r"\b(?:memory|memories|remember|recall|conversation|chat|history|stored|store)\b",
+    re.IGNORECASE,
+)
+
+
+def is_conversation_recall_question(message: str) -> bool:
+    """True when the message asks WHAT WAS SAID in this conversation.
+
+    These questions have a single correct source: the transcript above them.
+    LocalMind answered them with a memory lookup instead — printing stored
+    facts the user never asked about, and contradicting its own previous
+    sentence — so they are recognised deterministically and routed to the
+    transcript lane, which carries the recent turns and no tools.
+
+    Conservative: a file, URL or local-discovery reference still needs the
+    agent loop ("what did I write to app.py?" is a file question, not a
+    transcript one).
+    """
+    if not message or not message.strip():
+        return False
+    text = message.strip()
+    if len(text) > 300:
+        return False
+    if not _CONVERSATION_RECALL_RE.search(text):
+        return False
+    if _CONVERSATIONAL_FILE_EXT_RE.search(text) or _CONVERSATIONAL_URL_RE.search(text):
+        return False
+    if _is_local_discovery(text):
+        return False
+    # Blocked keywords still mean "this needs a tool" — except the ones that
+    # merely name the conversation being asked about.
+    if _CONVERSATIONAL_BLOCKED_RE.search(_RECALL_SUBJECT_RE.sub(" ", text)):
+        return False
     return True
 
 
@@ -1313,6 +1376,8 @@ async def conversational_response(
     history: Optional[list[dict]] = None,
     todo_state: Optional[list[dict]] = None,
     memory_facts: Optional[list[str]] = None,
+    transcript_only: bool = False,
+    first_user_message: str = "",
 ) -> AsyncIterator[StreamChunk]:
     """
     Stream a direct chat response for a conversational question.
@@ -1331,18 +1396,43 @@ async def conversational_response(
         memory_facts: the session's most recent stored memories, so
             referential follow-ups ("What's it?") resolve against what was
             actually remembered.
+        transcript_only: the question is about THIS conversation ("what did
+            you reply before that?"). The answer may only come from the
+            transcript above it — long-term memory is withheld, because it
+            never answers a question about the chat itself and mentioning it
+            produced the irrelevant four-fact dump the user called out.
+        first_user_message: the first thing the user said in this session,
+            quoted so "what did I ask first?" is answered, not guessed.
 
     Yields:
         StreamChunk — the model's direct answer, streamed token by token.
     """
     todo_block = _render_conversational_todos(todo_state)
-    memory_block = _render_conversational_memories(memory_facts)
+    memory_block = "" if transcript_only else _render_conversational_memories(memory_facts)
+    transcript_block = ""
+    if transcript_only:
+        transcript_block = (
+            "THIS QUESTION IS ABOUT THE CONVERSATION ITSELF. Answer it from the "
+            "recent messages above: quote what was actually said, in the words it "
+            "was said. Never call a tool, never mention stored memory or a memory "
+            "store, and never claim you cannot see the conversation.\n"
+        )
+        if first_user_message:
+            transcript_block += (
+                "The FIRST thing the user said in this conversation was: "
+                f'"{first_user_message.strip()[:500]}"\n'
+            )
+        transcript_block += (
+            "If the transcript above does not settle it, say what you can see and "
+            "ask one short clarifying question — do not guess.\n"
+        )
     async for chunk in _direct_chat_response(
         message,
         adapter,
         history,
         system_prompt=(
             active_capability_note()
+            + transcript_block
             + "You are in a conversation with the user. "
             "Respond naturally and keep the flow going.\n"
             # Brevity contract for casual conversation: a wellbeing check or

@@ -1342,6 +1342,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 approves_pending_offer,
                 continues_prior_work,
                 conversational_response,
+                is_conversation_recall_question,
                 is_conversational_question,
                 is_trivial_input,
                 trivial_response,
@@ -1364,16 +1365,18 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # null) makes a strict OpenAI-compatible validator reject the
                 # whole request — Cerebras 400s the turn with
                 # "messages.2.user.tool_calls: property '...' is unsupported".
-                _hist_dicts = []
-                for h in _hist[-4:]:
+                _hist_all: list[dict] = []
+                for h in _hist:
                     if not h.content:
                         continue
                     _h_dict: dict = {"role": h.role.value, "content": h.content}
                     _h_calls = getattr(h, "tool_calls", None)
                     if h.role.value == "assistant" and _h_calls:
                         _h_dict["tool_calls"] = _h_calls
-                    _hist_dicts.append(_h_dict)
+                    _hist_all.append(_h_dict)
+                _hist_dicts = _hist_all[-4:]
             except Exception:
+                _hist_all = []
                 _hist_dicts = []
 
             # Recent stored memories for referential follow-ups
@@ -1389,11 +1392,25 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             # talk: it must reach the agent loop, not the no-tools chat shortcut.
             _approves_offer = approves_pending_offer(message, _hist_dicts)
             _is_trivial = is_trivial_input(message, _hist_dicts) and not _approves_offer
+            # A question about the CONVERSATION ("what did you reply before
+            # that?", "did I ask about that?") is answered from the transcript
+            # and nothing else. It used to take the agent lane, run
+            # `Memory: list`, and answer from four stored facts the user never
+            # asked about — or contradict its own last sentence.
+            _is_recall = is_conversation_recall_question(message)
             _is_conv = (
                 (not _is_trivial)
                 and not _approves_offer
-                and not continues_prior_work(message, _hist_dicts)
-                and is_conversational_question(message, _hist_dicts)
+                # A conversation-recall question wins over continues_prior_work:
+                # the previous turn having run a tool does not make "what did
+                # you just reply?" a task to act on.
+                and (
+                    _is_recall
+                    or (
+                        not continues_prior_work(message, _hist_dicts)
+                        and is_conversational_question(message, _hist_dicts)
+                    )
+                )
             )
             if _is_trivial or _is_conv:
                 _path = "trivial" if _is_trivial else "conversational"
@@ -1465,12 +1482,20 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                         memory_facts=_recent_memories,
                     )
                 else:
+                    # A recall question reads the transcript, so it gets the
+                    # wider window (as many turns as the lane carries) and no
+                    # long-term memory at all.
+                    _recall_first_user = next(
+                        (m["content"] for m in _hist_all if m["role"] == "user"), ""
+                    )
                     _stream = conversational_response(
                         message,
                         _adapter,
-                        _hist_dicts,
-                        todo_state=current_todos,
-                        memory_facts=_recent_memories,
+                        _hist_all[-16:] if _is_recall else _hist_dicts,
+                        todo_state=None if _is_recall else current_todos,
+                        memory_facts=[] if _is_recall else _recent_memories,
+                        transcript_only=_is_recall,
+                        first_user_message=_recall_first_user if _is_recall else "",
                     )
                 async for _chunk in _stream:
                     if not _fast_first_byte_seen and (_chunk.thinking or _chunk.text):

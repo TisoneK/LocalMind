@@ -392,3 +392,27 @@ class TestSubjectHintKeys:
 
     def test_subject_without_hint_is_unchanged(self):
         assert _canonical_key("I prefer concise answers") == _canonical_key("I prefer concise answers")
+
+    def test_name_facts_share_one_identity_in_both_voices(self):
+        """A name correction must REPLACE the name fact, not sit beside it.
+
+        Field failure (2026-10-31): the store held two name facts — one saying
+        the pronunciation was "tee-SONE", one saying "Tyson" — because only
+        first-person phrasing ("my name is …") mapped to `subject:name`. The
+        third-person form the memory tool writes back hashed to a
+        content-derived key, so the correction appended a second row and every
+        recall returned a contradiction.
+        """
+        for statement in (
+            "User's name is Tisone",
+            "The user's name is Tisone",
+            "The user is called Tisone",
+            "my name is Tisone",
+            "the user prefers to be addressed as Tisone",
+        ):
+            assert _canonical_key(statement) == "subject:name", statement
+
+    def test_a_name_correction_lands_on_the_same_row_as_the_original(self):
+        original = _canonical_key('User\'s name is Tisone, pronounced likely "tee-SONE"')
+        corrected = _canonical_key("User's name is Tisone, pronounced like Tyson")
+        assert original == corrected == "subject:name"

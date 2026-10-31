@@ -61,6 +61,7 @@ AUTH_ERROR = "auth_error"
 PAYMENT_REQUIRED = "payment_required"
 MODEL_NOT_FOUND = "model_not_found"
 CONTEXT_OVERFLOW = "context_overflow"
+INVALID_REQUEST = "invalid_request"
 TIMEOUT = "timeout"
 SERVER_ERROR = "server_error"
 NETWORK_ERROR = "network_error"
@@ -92,6 +93,11 @@ _MESSAGES: dict[str, str] = {
         "The conversation is too long for the selected model's context "
         "window. Start a new chat or switch to a model with a larger "
         "context."
+    ),
+    INVALID_REQUEST: (
+        "This model provider rejected the shape of the request it was sent, "
+        "so it can't answer this conversation. Another provider is being "
+        "tried."
     ),
     TIMEOUT: "The model provider took too long to respond. Try again.",
     SERVER_ERROR: (
@@ -224,6 +230,12 @@ _KEYWORD_RULES: list[tuple[tuple[str, ...], str, bool]] = [
       "gateway"), SERVER_ERROR, True),
     (("connection", "econnrefused", "network", "unreachable", "ssl", "dns",
       "refused"), NETWORK_ERROR, True),
+    # Last: a provider refusing a field in the payload is NOT the conversation's
+    # fault, and every context/auth/rate rule above must get first claim on the
+    # text (a 400 that means "context length exceeded" stays context_overflow).
+    (("is unsupported", "unsupported property", "unsupported_property",
+      "is not supported", "invalid_request_error", "unexpected keyword",
+      "additional properties"), INVALID_REQUEST, False),
 ]
 
 

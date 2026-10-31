@@ -249,6 +249,40 @@ def _audit_breakdown(messages: list[dict], tools: list[dict] | None) -> dict:
     }
 
 
+def normalize_messages_for_wire(messages: list[dict]) -> list[dict]:
+    """Reduce every message to the fields its role may legally carry.
+
+    Lenient OpenAI-compatible servers ignore a key a role cannot use; a strict
+    validator rejects the WHOLE request over one of them. Cerebras does exactly
+    that for a history that carried ``tool_calls`` on a user turn:
+    "messages.2.user.tool_calls: property 'messages.2.user.tool_calls' is
+    unsupported" — so a payload every other provider accepted ended the turn on
+    this one. Field failure, 2026-10-31.
+
+    Chat-completions shape: ``tool_calls`` belongs to an assistant turn that
+    actually called a tool; ``tool_call_id`` belongs to a ``tool`` result; a
+    user or system turn carries neither. Anything else is left untouched.
+    """
+    out: list[dict] = []
+    for m in messages or []:
+        if not isinstance(m, dict):
+            out.append(m)
+            continue
+        role = str(m.get("role") or "").lower()
+        msg = {k: v for k, v in m.items() if k not in ("tool_calls", "tool_call_id")}
+        msg["role"] = role
+        if role == "assistant":
+            calls = m.get("tool_calls")
+            if calls:
+                msg["tool_calls"] = calls
+        elif role == "tool":
+            call_id = m.get("tool_call_id")
+            if call_id:
+                msg["tool_call_id"] = call_id
+        out.append(msg)
+    return out
+
+
 def _audit_record(
     payload: dict,
     adapter_name: str,
@@ -1647,7 +1681,7 @@ class OpenAICompatAdapter(BaseAdapter):
         # input bloat starved the output budget, truncating final answers to a
         # few tokens. Re-add only behind a per-provider "no native tools" flag
         # if such a provider is ever configured.
-        enhanced_messages = list(messages)
+        enhanced_messages = normalize_messages_for_wire(messages)
 
         # Root cause found via real-model testing:
         # DeepSeek-v4-flash-free (via Zen) and possibly other providers
@@ -2362,7 +2396,7 @@ class OpenAICompatAdapter(BaseAdapter):
         usage_metadata: dict = {}
         payload = {
             "model": self._model,
-            "messages": messages,
+            "messages": normalize_messages_for_wire(messages),
             "temperature": temperature,
             "stream": True,
             "stream_options": {"include_usage": True},

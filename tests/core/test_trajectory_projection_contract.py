@@ -72,8 +72,12 @@ def _project(case):
     )
 
 
-_FIXTURE_CASES = json.loads(_FIXTURE.read_text())["cases"]
-_EXPECTED_DATA = json.loads(_EXPECTED.read_text())
+# Explicit UTF-8: both fixtures carry em-dashes in the phase labels, and the
+# platform default on Windows is cp1252 — a bare read_text() decodes them to
+# replacement characters, so the comparison failed on encoding rather than on
+# the projection the contract is about.
+_FIXTURE_CASES = json.loads(_FIXTURE.read_text(encoding="utf-8"))["cases"]
+_EXPECTED_DATA = json.loads(_EXPECTED.read_text(encoding="utf-8"))
 
 
 @pytest.mark.parametrize("case", _FIXTURE_CASES, ids=[c["name"] for c in _FIXTURE_CASES])

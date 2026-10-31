@@ -25,6 +25,7 @@ from typing import Any, AsyncIterator, Callable
 from core.error_normalizer import (
     AUTH_ERROR,
     CONTEXT_OVERFLOW,
+    INVALID_REQUEST,
     MODEL_NOT_FOUND,
     NETWORK_ERROR,
     PAYMENT_REQUIRED,
@@ -44,6 +45,11 @@ _COOLDOWN_SECONDS: dict[str, float] = {
     PAYMENT_REQUIRED: 900.0,
     AUTH_ERROR: 900.0,
     MODEL_NOT_FOUND: 900.0,
+    # A strict validator refused the payload (Cerebras: "...user.tool_calls ...
+    # is unsupported"). Another provider accepts the same conversation, so
+    # switch — but only briefly, since this is a payload bug on OUR side that a
+    # restart may already have fixed.
+    INVALID_REQUEST: 60.0,
     SERVER_ERROR: 30.0,
     NETWORK_ERROR: 20.0,
     TIMEOUT: 20.0,
@@ -61,6 +67,7 @@ _PROBLEM_PHRASE: dict[str, str] = {
     PAYMENT_REQUIRED: "is out of quota",
     AUTH_ERROR: "rejected the key",
     MODEL_NOT_FOUND: "doesn't have that model",
+    INVALID_REQUEST: "rejected the request format",
     SERVER_ERROR: "is having trouble",
     NETWORK_ERROR: "isn't reachable",
     TIMEOUT: "is too slow to answer",
@@ -285,7 +292,13 @@ class FailoverAdapter:
                     # Not something another provider can fix: surface it as it is.
                     return _error_stream(payload)
                 window = retry_window_seconds(payload) if code == RATE_LIMIT else None
-                waitable = code not in (AUTH_ERROR, PAYMENT_REQUIRED, MODEL_NOT_FOUND)
+                waitable = code not in (
+                    AUTH_ERROR,
+                    PAYMENT_REQUIRED,
+                    MODEL_NOT_FOUND,
+                    # Waiting cannot teach a strict validator to accept the payload.
+                    INVALID_REQUEST,
+                )
                 if single and waitable:
                     # Nothing to switch to: wait the time the provider asked for (or back off).
                     if window is not None:

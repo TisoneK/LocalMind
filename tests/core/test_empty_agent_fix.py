@@ -79,7 +79,10 @@ class TestP3MemoryWeaving:
 
     def test_chat_md_frames_memory_as_knowledge(self):
         chat_path = _PROMPTS_DIR / "chat.md"
-        content = chat_path.read_text().lower()
+        # Explicit UTF-8: the prompt files contain en-dashes, and the platform
+        # default on Windows is cp1252, so a bare read_text() dies on them
+        # (UnicodeDecodeError) instead of checking what the file says.
+        content = chat_path.read_text(encoding="utf-8").lower()
         # Should frame facts as things the agent knows, not data from a store
         assert "know" in content, "chat.md should frame memory as knowledge"
 

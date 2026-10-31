@@ -400,7 +400,20 @@ _KEY_STOPWORDS = frozenset(
 _SINGLE_VALUED_SUBJECTS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\b(?:live|living|based|located|hometown|city|country|town|region)\b", re.IGNORECASE), "location"),
     (re.compile(r"\b(?:time ?zone|utc|gmt)\b", re.IGNORECASE), "timezone"),
-    (re.compile(r"\b(?:my name|call me|i am called|i'm called)\b", re.IGNORECASE), "name"),
+    # Both voices: facts reach the store BOTH first-person ("my name is …", how
+    # the user says it) and third-person ("User's name is …", how the memory
+    # tool writes it back). Only the first-person forms were listed, so a
+    # correction written in the third person hashed to a CONTENT-derived key
+    # ("fact:s-name-tisone") and sat next to the fact it was meant to replace —
+    # two name facts, one calling the pronunciation "tee-SONE", the other
+    # "Tyson", each contradicting the other on every recall. Field report,
+    # 2026-10-31: "it created another memory on top of another memory".
+    (re.compile(
+        r"\b(?:my name|call me|i am called|i'm called"
+        r"|user'?s name|user is (?:called|named)"
+        r"|prefers? to be (?:called|addressed|known as))\b",
+        re.IGNORECASE,
+    ), "name"),
     (re.compile(r"\b(?:e-?mail)\b", re.IGNORECASE), "email"),
     (re.compile(r"\b(?:phone|mobile) (?:number|no)\b", re.IGNORECASE), "phone"),
     (re.compile(r"\b(?:company|employer|works? (?:at|for))\b", re.IGNORECASE), "employer"),
