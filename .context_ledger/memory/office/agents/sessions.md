@@ -22,3 +22,13 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Notes:** .context_ledger/memory/office/sessions/<date>-<N>/notes.md  (or "none")
 - **Report:** .context_ledger/memory/office/reviews/YYYY-MM-DD-review.md
 -->
+
+---
+## 2026-10-31 — Session 1
+- **Agent:** Kofi | **Model:** unknown (harness states no model ID) | **Platform:** Windows 10.0.26300 x64, local repo | **Role:** engineer | **Core:** 2.2.1
+- **Task:** Fix `storage.vector` "Vector batch write failed: Dimension mismatch … Expected 768 dimensions but received 1024" (memory writes failing at runtime while startup reported healthy), and repair the local memory DB without data loss.
+- **Commits:** 4 by this session (6aa08d40 claim, 92398247 product fix, this ledger close; plus peer commit c199cbd1 from the shared checkout that carried this session's review + parking-lot edits)
+- **Outcome:** done — vec0 table DDL is now the startup ground truth (empty stale index rebuilt, populated index trusted over meta, genuine mismatch refused loudly), runtime length guards, chat-model embed fallback removed, reset script fixed (it had been masking a failed DROP and reporting a false "dims match"); local DB repaired (4 facts re-embedded at 1024) and live-verified through `npm start` + `POST/GET /api/memory`.
+- **Open items:** parking-lot P-2026-10-31-1 (reset script has no cloud-embedder probe path). Pre-repair DB backup at `C:\Users\tison\LocalMind\localmind.db.bak-20261031`.
+- **Notes:** none
+- **Report:** .context_ledger/memory/office/reviews/2026-10-31-review.md

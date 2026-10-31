@@ -30,3 +30,8 @@ records.
 - A removed summary line MUST have a corresponding permanent entry in
   agents/sessions.md — never delete the only record of a session.
 -->
+
+---
+- **2026-10-31 — Session 1** — Kofi / unknown (harness states no model ID) — fixed the dimension mismatch that silently stopped memory writes; table DDL is now the startup ground truth and the reset script no longer reports false matches.
+  Root cause: startup compared the embedder only against `vector_meta.dim`, while sqlite-vec enforces the frozen vec0 table dim; the reset tool repeated the meta-only check and its swallowed DROP left the stale table in place.
+  Detail: .context_ledger/memory/office/reviews/2026-10-31-review.md

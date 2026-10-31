@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-31T08:26:54Z_
+_Regenerated: 2026-10-31T08:48:42Z_
 
 ## Standing params
 - **Core:** 2.2.1 (locked, verified 2026-10-31)
@@ -15,7 +15,7 @@ _Regenerated: 2026-10-31T08:26:54Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-- **Kofi** (S001) — Working — Fix the `storage.vector` embedding dimension mismatch at startup (768 expected vs 1024 re…
+- **Nadia** (S002) — Working — Diagnose Cerebras `messages.2.user.tool_calls is unsupported` provider error from a paste…
 
 ## Current task
 - **—** — none — no session in progress — *idle*
@@ -30,9 +30,9 @@ _15 medium, 1 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 0 entries
-- inefficiencies/log.md (project code/env friction): 0 entries
+- inefficiencies/log.md (project code/env friction): 2 entries, last added 2026-10-31
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-21
 
 ## Collaboration
-- 158 event(s) on file; most recent: `20261029T195700Z-Jabari-45383f47.json`
+- 161 event(s) on file; most recent: `20261031T084616Z-Kofi-60d42920.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`

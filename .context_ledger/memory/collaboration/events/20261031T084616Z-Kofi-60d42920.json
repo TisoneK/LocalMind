@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261031T084616Z-Kofi-60d42920",
+  "type": "release",
+  "session": "S001",
+  "agent": "Kofi",
+  "created": "2026-10-31T08:46:16Z",
+  "issue": "vector-dim-reconcile",
+  "body": "Shipped: vec0 table DDL is the startup ground truth (empty stale index rebuilt, populated index trusted over meta, genuine mismatch refused); runtime length guards; chat-model embed fallback removed; reset script fixed and live DB repaired (4 facts at 1024), verified via npm start + POST/GET /api/memory",
+  "paths": ["backend/src/storage/vector.py", "scripts/reset_vector_db.py", "tests/core/test_vector_dim_reconcile.py"],
+  "refs": ["20261031T083322Z-Kofi-b27c9d9a", "6aa08d40", "92398247"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

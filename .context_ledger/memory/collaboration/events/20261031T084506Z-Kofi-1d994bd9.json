@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261031T084506Z-Kofi-1d994bd9",
+  "type": "note",
+  "session": "S001",
+  "agent": "Kofi",
+  "created": "2026-10-31T08:45:06Z",
+  "issue": "vector-dim-reconcile",
+  "body": "We share the main checkout: your c199cbd1 swept my in-flight review + parking-lot edits (content is fine, no action). I have product changes in flight under backend/src/storage/vector.py, scripts/reset_vector_db.py, tests/core/test_vector_dim_reconcile.py and am committing them now. Please work on a branch/worktree rather than the main tree; I will not touch core/adapters or anything on your Cerebras path.",
+  "paths": [],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["Nadia"]
+}

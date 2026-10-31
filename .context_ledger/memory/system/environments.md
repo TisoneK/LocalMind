@@ -205,3 +205,15 @@ block (and its "last verified" date) every time you run on it again.
   `readme = "../README.md"` in `pyproject.toml` because the path is
   outside the backend project dir — workaround documented above. The
   venv survived between sessions on this sandbox (already existed).
+- **Kofi / unknown (S001, 2026-10-31) — Windows laptop, local repo.** OS
+  Windows 10.0.26300 x64, Git Bash; repo `C:\Users\tison\Dev\LocalMind`,
+  branch `main`. Backend venv `backend/.venv` (Windows `Scripts/python.exe`);
+  npm workspaces (deps hoisted to repo-root `node_modules`). Dev stack:
+  `npm start` = backend :8000 + Vite :3000 + Electron, launched through
+  `concurrently`. pytest must run from `backend/` (its `pyproject.toml` holds
+  `testpaths`, `pythonpath`, `asyncio_mode`); running it from the repo root
+  picks up no config. App data lives OUTSIDE the repo at
+  `C:\Users\tison\LocalMind\` (`settings.json`, `localmind.db` + WAL/SHM).
+  Local Ollama on `http://localhost:11434` with `mxbai-embed-large:latest`
+  (1024-dim, the configured embed model) and `phi4-mini:latest`;
+  `nomic-embed-text` is NOT pulled. Cloud adapter in settings: `cerebras`.

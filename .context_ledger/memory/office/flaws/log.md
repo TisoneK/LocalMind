@@ -31,3 +31,11 @@ names them), and roll-up candidates.
   a template, a rule>
 - **Status:** open | fixed in package <commit-sha or date>
 -->
+
+---
+## 2026-10-31 — Kofi / unknown (harness states no model ID)
+- **Flaw:** Two live sessions sharing one checkout collide on the ledger surface: a peer's `chore(ledger)` commit swept this session's uncommitted review report and parking-lot row (its `git add .context_ledger/` staged both sessions' edits), so work-in-progress was committed under the wrong session — and the same index sweep can capture in-flight product changes.
+- **Symptom:** This session's `office/reviews/2026-10-31-review.md` and parking-lot entry appeared in a peer's check-in commit (`c199cbd1`) they did not author; the peer's next staged product files sat in the shared index while this session was about to commit.
+- **Root cause:** The kickoff's check-in flow writes to the shared main checkout before mode is decided ("decide the mode from evidence, not from an empty board"), and `ledger-guard` attributes by count of live sessions but cannot tell whose staged files are whose. Nothing forces the second arriving session into a worktree, and a broad `git add .context_ledger/` is the documented way to stage memory.
+- **Suggested fix:** (a) Once the roster shows a second live row, have `ledger-guard` refuse a ledger commit whose diff includes files another live session has touched in its own check-in window, or (b) make the kickoff require an isolated worktree/branch for the later arrival before its first ledger write, and (c) have `ledger-mem`/`ledger-guard` print which session each staged path belongs to at commit time.
+- **Status:** open

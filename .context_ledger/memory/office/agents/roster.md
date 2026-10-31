@@ -52,7 +52,6 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Kofi | S001 | unknown (harness states no model ID) | Fix the `storage.vector` embedding dimension mismatch at startup (768 expected vs 1024 received) | Working | Phase 2 check-in; root-cause investigation next |
 | Nadia | S002 | unknown (harness states no model ID) | Diagnose Cerebras `messages.2.user.tool_calls is unsupported` provider error from a pasted chat export | Working | Phase 2 check-in; tracing provider message shaping next |
 
 **Keep your Status cells current — that is what the board is for.** The
