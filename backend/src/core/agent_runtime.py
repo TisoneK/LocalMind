@@ -1358,11 +1358,21 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 _hist = await asyncio.to_thread(self._store.get_history, session_id)
                 # tool_calls rides along: a follow-up right after a turn that
                 # ran tools is mid-task, not small talk (continues_prior_work).
-                _hist_dicts = [
-                    {"role": h.role.value, "content": h.content, "tool_calls": getattr(h, "tool_calls", None)}
-                    for h in _hist[-4:]
-                    if h.content
-                ]
+                # It is attached ONLY to an assistant turn that actually called
+                # a tool: these dicts are forwarded verbatim to the provider on
+                # the fast path, and a `tool_calls` key on a user message (even
+                # null) makes a strict OpenAI-compatible validator reject the
+                # whole request — Cerebras 400s the turn with
+                # "messages.2.user.tool_calls: property '...' is unsupported".
+                _hist_dicts = []
+                for h in _hist[-4:]:
+                    if not h.content:
+                        continue
+                    _h_dict: dict = {"role": h.role.value, "content": h.content}
+                    _h_calls = getattr(h, "tool_calls", None)
+                    if h.role.value == "assistant" and _h_calls:
+                        _h_dict["tool_calls"] = _h_calls
+                    _hist_dicts.append(_h_dict)
             except Exception:
                 _hist_dicts = []
 

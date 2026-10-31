@@ -964,6 +964,38 @@ def history_fallback_system_note() -> str:
     return " ".join(parts)
 
 
+def _provider_safe_history(history: Optional[list]) -> list[dict]:
+    """History reduced to the fields each role may legally carry on the wire.
+
+    The fast path forwards the caller's history dicts to the provider, and
+    those dicts also carry display metadata (``tool_calls``) on EVERY turn.
+    Only an assistant turn may carry it in an OpenAI-compatible payload: a
+    strict validator rejects the whole request otherwise (Cerebras 400s with
+    "messages.2.user.tool_calls: property '...' is unsupported"), which killed
+    every fast-path turn that followed a tool-using one. Non-conversational
+    rows (system/tool) are dropped — the parent loop's own prompt builder keeps
+    the same USER/ASSISTANT-only rule, and the fast path supplies its own
+    system prompt.
+    """
+    safe: list[dict] = []
+    for item in history or []:
+        if isinstance(item, dict):
+            role = str(item.get("role") or "").lower()
+            content = item.get("content") or ""
+            calls = item.get("tool_calls")
+        else:
+            role = str(getattr(item.role, "value", item.role) or "").lower() if hasattr(item, "role") else ""
+            content = getattr(item, "content", "") or ""
+            calls = getattr(item, "tool_calls", None)
+        if role not in ("user", "assistant"):
+            continue
+        msg: dict = {"role": role, "content": content}
+        if role == "assistant" and calls:
+            msg["tool_calls"] = calls
+        safe.append(msg)
+    return safe
+
+
 async def _direct_chat_response(
     message: str,
     adapter,
@@ -1008,7 +1040,9 @@ async def _direct_chat_response(
         # Include the last few turns for context. Assistant turns are stripped
         # of internal evidence-recap blocks — the model must never read that
         # format back, or it starts mimicking it into its own answers.
-        messages.extend(strip_worker_reports_from_history(history[-4:]))
+        messages.extend(
+            strip_worker_reports_from_history(_provider_safe_history(history[-4:]))
+        )
 
     messages.append({"role": "user", "content": message})
 

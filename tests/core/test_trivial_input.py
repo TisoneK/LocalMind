@@ -397,6 +397,53 @@ async def test_conversational_response_streams_direct_chat():
 
 
 @pytest.mark.asyncio
+async def test_history_tool_calls_never_reach_provider_on_user_turns():
+    """A user-role history dict carrying ``tool_calls`` must not be forwarded.
+
+    Field failure (2026-10-31, Cerebras/qwen-3.8-27b): the fast path forwarded
+    the history dicts built by agent_runtime — which stamp ``tool_calls`` on
+    EVERY turn, null included — so a user message reached the provider with
+    that key and the whole turn died with
+    "messages.2.user.tool_calls: property 'messages.2.user.tool_calls' is
+    unsupported". Only an assistant turn may carry tool_calls; the call ids
+    must still survive on the assistant turn so tool context is preserved.
+    """
+    seen: dict = {}
+
+    async def mock_chat(messages, intent="chat", **kwargs):
+        seen["messages"] = messages
+        yield MagicMock(text="I said hi.", done=False)
+        yield MagicMock(text="", done=True)
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat = mock_chat
+
+    history = [
+        {"role": "user", "content": "recall the weather", "tool_calls": None},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "tc-1",
+                    "type": "function",
+                    "function": {"name": "memory_op", "arguments": "{}"},
+                }
+            ],
+        },
+        {"role": "user", "content": "Did i ask about that?", "tool_calls": None},
+    ]
+
+    [c async for c in conversational_response("What was your reply before that?", mock_adapter, history)]
+
+    for m in seen["messages"]:
+        if m["role"] == "user":
+            assert "tool_calls" not in m, f"user message carried tool_calls: {m}"
+    assistant = [m for m in seen["messages"] if m["role"] == "assistant"]
+    assert assistant and assistant[-1]["tool_calls"][0]["id"] == "tc-1"
+
+
+@pytest.mark.asyncio
 async def test_conversational_response_fallback_on_adapter_error():
     """Adapter failure yields a minimal fallback + done — no pipeline fall-through."""
 
