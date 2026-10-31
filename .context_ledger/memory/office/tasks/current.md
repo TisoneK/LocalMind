@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — no session in progress
-- **Status:** idle
+- **Session:** 2026-10-31 — Rosa / GLM (Z.ai sandbox)
+- **Task:** B-2026-10-31-24 — turn-close attribution + honest completion contract (owner-observed "Working" window; audit §1.3)
+- **Status:** in-progress
