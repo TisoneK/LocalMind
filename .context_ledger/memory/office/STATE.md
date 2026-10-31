@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-31T11:42:28Z_
+_Regenerated: 2026-10-31T11:48:32Z_
 
 ## Standing params
 - **Core:** 2.3.2 (locked, verified 2026-10-31)
@@ -17,10 +17,9 @@ _Regenerated: 2026-10-31T11:42:28Z_
 ## Office — who's in, right now
 - **Nadia** (S002) — Done — Fix the Cerebras `messages.2.user.tool_calls is unsupported` payload rejection and the co…
 - **Tobias** (S004) — Working — Pull latest main and verify the app runs
-- **Zara** (S005) — Working — Fix the renderer crash `Cannot read properties of undefined (reading 'retryAttempts')` (o…
 
 ## Current task
-- **2026-10-31 — Zara / GLM (Z.ai sandbox)** — Fix the renderer crash from the owner's screenshot: `Cannot read properties of undefined (reading 'retryAttempts')` — locate the unguarde… — *in-progress*
+- **—** — none — no session in progress — *idle*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-10-31-1 | In-app State Explorer + engine selector (ADR-71): port the explorer into the app as its own interface (game tree, move list, eval bar, inspector, meters, rewindable timeline) and add the Classic/State engine setting. Reference: `docs/prototypes/state-explorer/`, `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter `state_agent/adapters/localmind.py`); `EngineEvent` is the UI contract. Check whether the in-flight port landed before starting. |
