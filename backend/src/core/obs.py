@@ -11,13 +11,23 @@ The Engine receives an optional ObsSubscription at process() call time.
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 
 
 @dataclass
 class ObsEvent:
     type: str
     data: dict
+    # Wall-clock ms stamped at EMIT time. The persisted workspace rebuild
+    # (agent_workspace.build_run_tree / build_agent_phases) must read THIS —
+    # stamping at rebuild time wrote the same "now" onto every phase, tool
+    # record and run boundary, so a stored turn showed startedAt ==
+    # completedAt (and every phase sharing one timestamp) regardless of how
+    # long the turn actually ran. The live frontend keeps its own arrival
+    # clock; this field is for durable reconstruction only and does not ride
+    # to_sse_dict.
+    ts: int = field(default_factory=lambda: int(time.time() * 1000))
 
     def to_sse_dict(self) -> dict:
         return {"obs_event": {"type": self.type, "data": self.data}}

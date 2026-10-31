@@ -150,15 +150,17 @@ def _tool_call_dict(d: dict) -> dict:
     }
 
 
-def _lifecycle_phase(evt_type: str, d: dict, next_id) -> Optional[dict]:
+def _lifecycle_phase(evt_type: str, d: dict, next_id, ts: Optional[int] = None) -> Optional[dict]:
     """Build an AgentPhase entry for a RUN-lifecycle obs event.
 
     Attached to the parent run's ``phases`` (Agents tab, inside the active
     agent node) — mirrors the frontend's buildAgentPhase cases for the same
     event types. ``next_id(prefix)`` is a per-build counter (deterministic ids
-    like build_agent_phases). Returns None for events with nothing useful.
+    like build_agent_phases). ``ts`` is the source event's emit-time stamp —
+    pass it so the persisted phase carries WHEN it happened, not when the
+    rebuild ran. Returns None for events with nothing useful.
     """
-    ts = _now_ms()
+    ts = ts if ts is not None else _now_ms()
     iteration = d.get("iteration") if d.get("iteration") not in (None, "") else None
     if evt_type == "agent_initialization_start":
         return {
@@ -279,6 +281,15 @@ def build_run_tree(
     obs events (initialization/planning/thinker/loop) append phase entries to
     the parent run's ``phases`` so the active agent node narrates the turn.
     """
+    # The run boundary must reflect the turn, not the rebuild: when the caller
+    # doesn't supply explicit times, derive them from the event stream itself
+    # (first event emitted = the turn started doing something, last event = the
+    # end of what it did). Falling back to _now_ms() for BOTH ends wrote one
+    # instant onto a turn that may have run for minutes (live export
+    # 2026-10-31: startedAt == completedAt on a ~100 s turn).
+    _evts = collector.history()
+    _first_ts = _evts[0].ts if _evts else None
+    _last_ts = _evts[-1].ts if _evts else None
     runs: list[dict] = [
         {
             "id": root_id,
@@ -287,8 +298,12 @@ def build_run_tree(
             "task": task,
             "status": "failed" if root_error else "completed",
             "depth": 0,
-            "startedAt": started_at if started_at is not None else _now_ms(),
-            "completedAt": completed_at if completed_at is not None else _now_ms(),
+            "startedAt": started_at
+            if started_at is not None
+            else (_first_ts if _first_ts is not None else _now_ms()),
+            "completedAt": completed_at
+            if completed_at is not None
+            else (_last_ts if _last_ts is not None else _now_ms()),
             "error": root_error,
             "tools": [],
             "phases": [],
@@ -331,8 +346,9 @@ def build_run_tree(
                 return
         tools.append(tc)
 
-    for evt in collector.history():
+    for evt in _evts:
         d = evt.data
+        _evt_ts = getattr(evt, "ts", None)
         if evt.type == "tool_call":
             _attach_tool(_tool_call_dict(d))
         elif evt.type == "delegation_started":
@@ -348,7 +364,7 @@ def build_run_tree(
                         "task": str(d.get("task", "")),
                         "status": "running",
                         "depth": int(d.get("depth", 1)),
-                        "startedAt": _now_ms(),
+                        "startedAt": _evt_ts if _evt_ts is not None else _now_ms(),
                         "tools": [],
                     }
                 )
@@ -373,7 +389,7 @@ def build_run_tree(
                 else "failed"
             )
             target["status"] = status
-            target["completedAt"] = _now_ms()
+            target["completedAt"] = _evt_ts if _evt_ts is not None else _now_ms()
             if d.get("error_type"):
                 target["error"] = str(d["error_type"])
         elif evt.type == "evidence_to_parent":
@@ -385,7 +401,7 @@ def build_run_tree(
                     "iteration": int(d.get("iteration", 0) or 0),
                     "evidenceChars": int(d.get("evidence_chars", 0) or 0),
                     "failed": bool(d.get("failed")),
-                    "timestamp": _now_ms(),
+                    "timestamp": _evt_ts if _evt_ts is not None else _now_ms(),
                 }
             )
         elif evt.type in RUN_LIFECYCLE_TYPES:
@@ -400,7 +416,7 @@ def build_run_tree(
                 _title = " ".join(str(d.get("title", "")).split())[:40]
                 if _title:
                     runs[0]["title"] = _title
-            phase = _lifecycle_phase(evt.type, d, _next_id)
+            phase = _lifecycle_phase(evt.type, d, _next_id, ts=_evt_ts)
             if phase:
                 # Child lifecycle events carry an `agent` tag (forwarded by
                 # ChildObsProxy) — attach to that child run; untagged events
@@ -510,7 +526,10 @@ def build_agent_phases(collector: ObsCollector) -> list[dict]:
 
     for evt in collector.history():
         d = evt.data
-        ts = _now_ms()
+        # The strip must carry the event's emit time, not the rebuild's
+        # clock — stamping here wrote one instant onto every phase of a
+        # stored turn (the persisted twin of the run-tree bug above).
+        ts = getattr(evt, "ts", None) or _now_ms()
         iteration = (
             d.get("iteration")
             if d.get("iteration") not in (None, "")
