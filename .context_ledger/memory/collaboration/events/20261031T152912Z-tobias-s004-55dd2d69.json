@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261031T152912Z-tobias-s004-55dd2d69",
+  "type": "claim",
+  "session": "S004",
+  "agent": "tobias-s004",
+  "created": "2026-10-31T15:29:13Z",
+  "issue": "pull-run-round2",
+  "body": "Second pull round: c768e9e7->627da817 (turn-close attribution), verify build/tests and live app.",
+  "paths": [".context_ledger/memory/office/"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

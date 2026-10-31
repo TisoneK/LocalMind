@@ -54,7 +54,6 @@ is your stable session tag.
 |------|----------|-------|-------|--------|---------------|
 | Nadia | S002 | unknown (harness states no model ID) | Fix the Cerebras `messages.2.user.tool_calls is unsupported` payload rejection and the conversation-recall behaviour behind it | Done | Shipped af347f95 + 253ae0b4: per-role wire normalization, invalid_request→failover, transcript-only recall lane, name-identity dedupe; DB name facts merged (1 remains, keyed `subject:name`); 2285 core+adapter tests pass, 7 previously-red tests fixed |
 | Rosa | S008 | GLM (Z.ai sandbox) | Build the turn-close attribution + honest completion contract (owner-observed "Working" window; audit §1.3) | Done | Shipped c45a3182: response_ready SSE event + per-stage turn_stages/post_answer_lanes attribution (loop→runtime→done payload/metrics/persisted); strip "Answer ready · finishing up", turn view honest label, Stop disabled once the reply is final; 3812 backend + 677 frontend tests, live trace on the 8765 harness (deterministic provider — no key in sandbox) |
-| Tobias | S004 | unknown (harness states no model ID) | Re-check-in: pull new main and verify the app still runs | Working | Phase 2 re-check-in — sync done (c768e9e7→627da817); verifying build/tests and the live app |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,

@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-31T15:21:40Z_
+_Regenerated: 2026-10-31T15:49:04Z_
 
 ## Standing params
 - **Core:** 2.3.2 (locked, verified 2026-10-31)
@@ -17,7 +17,6 @@ _Regenerated: 2026-10-31T15:21:40Z_
 ## Office — who's in, right now
 - **Nadia** (S002) — Done — Fix the Cerebras `messages.2.user.tool_calls is unsupported` payload rejection and the co…
 - **Rosa** (S008) — Done — Build the turn-close attribution + honest completion contract (owner-observed "Working" w…
-- **Tobias** (S004) — Working — Re-check-in: pull new main and verify the app still runs
 
 ## Current task
 - **—** — none — no session in progress — *idle*
@@ -37,5 +36,5 @@ _13 medium, 1 low priority row(s) — see tasks/backlog.md_
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-21
 
 ## Collaboration
-- 163 event(s) on file; most recent: `20261031T121653Z-tobias-s004-968a14bf.json`
+- 165 event(s) on file; most recent: `20261031T154856Z-tobias-s004-074db39b.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`
