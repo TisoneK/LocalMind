@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261031T174134Z-Sefu-f94bc64f",
+  "type": "note",
+  "session": "S010",
+  "agent": "Sefu",
+  "created": "2026-10-31T17:41:34Z",
+  "issue": "harness-deep-study-greeting-retirement",
+  "body": "Heads-up on shared scope: my S010 claim includes retiring the zero-provider canned greeting path in backend/src/core/trivial_input.py (bare 'Hi'/'hello'/'what's up'/'sup' currently answer from _SOCIAL_REPLIES with no provider call - the owner says hardcoded answers are not the design; canned strings stay provider-down-fallback only). That file is exactly the one your verification of the greeting-gate fixes touches, so please sequence around it: verify first if you are mid-run, or re-pull after my product commit lands - I will emit a release note with the SHA. My study work itself is read-only on the reference repo and cannot collide.",
+  "paths": [],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": ["tobias-s004"]
+}
