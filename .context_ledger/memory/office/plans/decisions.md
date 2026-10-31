@@ -12,15 +12,14 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
 - **Consequences:** <trade-offs accepted; what future agents must respect>
 -->
 
----
-## Carried from office-002 (closed 2026-09-21) — decisions still in force
+## Carried from office-002 and office-003 — decisions still in force
 
 - **Index:** the full ADR text (ADR-1 through ADR-61, carried into office-002
   from office-001; then ADR-62 through ADR-71, written in office-002 — note
   that ADR-66 was used twice on the same day: passive context writes, and the
   turn bus) is frozen verbatim at `history/office-002/plans/decisions.md` and
-  preserved in git history. Do not relitigate them; to reverse one, append a
-  superseding ADR here. New decisions in this office start at ADR-72.
+  preserved in git history. ADR-72 was written in office-003 and is reproduced
+  below. Do not relitigate them; to reverse one, append a superseding ADR here.
 - **Binding guardrail set (from `memory/workflows/active.md`, carried
   verbatim):** the ADR-34 event order; the `Hi`→zero-provider-call boundary;
   the thinking-aware-timeout fixes it builds on; ADR-40 (live-verify tool
@@ -76,7 +75,7 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
   `LOCALMIND_HOME` only; no secrets in tracked files, ever; closeout clears its
   own residue and leaves `git status` clean.
 - Earlier permanent summaries: `history/office-001.md` (the Parent-only
-  architecture era) and `history/office-002.md` (this office's record).
+  architecture era), `history/office-002.md`, and `history/office-003.md`.
 
 ---
 ## ADR-72: The state engine is environment-agnostic and owns its own architecture; LocalMind is its first adapter (2026-09-21)

@@ -30,11 +30,3 @@ records.
 - A removed summary line MUST have a corresponding permanent entry in
   agents/sessions.md — never delete the only record of a session.
 -->
-
----
-- **2026-10-29 — Session 10** — Nadia / unknown model id — done-rules extension (§U item 4): provider death became a named contract state (DEGRADED_ANSWER) with its delivery composed in the contract, unanswered calls now leave recorded unknown-outcome results behind a pairing invariant, and the parent completion floor spends the bounded replan budget (19 replans → 2 on a single failed call).
-  Live wire proof: scripts/live_test_done_rules.py.
-  Detail: .context_ledger/memory/office/reviews/2026-10-29-review-s031-done-rules.md
-- **2026-10-29 — Session 11** — Kiano / claude-opus-4-8 — permission modes + durability barriers (§U item 5, rows H + J): three named file-effect modes (read_only / workspace_write / full) pinned per session and durable, enforced at one shared seam across both tool-execution paths, fail-closed, with a model-invisible audit that doubles as a write-ahead journal (allowed call pending→done; a crash-left pending → unknown on store open, never re-executed); full lifts the workspace path boundary.
-  Live proof: scripts/live_test_permission_durability.py (real server; read_only denies, workspace allows+journals, pin survives restart, interrupted→unknown). Front-end selector also shipped (b9f42aca): Settings → Agent → "File access (this chat)", verified in the real app.
-  Detail: .context_ledger/memory/office/reviews/2026-10-29-review-s032-permission-durability.md
