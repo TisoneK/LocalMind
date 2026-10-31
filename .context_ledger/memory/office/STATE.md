@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-31T08:48:42Z_
+_Regenerated: 2026-10-31T09:35:29Z_
 
 ## Standing params
 - **Core:** 2.2.1 (locked, verified 2026-10-31)
@@ -15,7 +15,7 @@ _Regenerated: 2026-10-31T08:48:42Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-- **Nadia** (S002) — Working — Diagnose Cerebras `messages.2.user.tool_calls is unsupported` provider error from a paste…
+- **Nadia** (S002) — Done — Fix the Cerebras `messages.2.user.tool_calls is unsupported` payload rejection and the co…
 
 ## Current task
 - **—** — none — no session in progress — *idle*
@@ -29,7 +29,7 @@ _Regenerated: 2026-10-31T08:48:42Z_
 _15 medium, 1 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
-- flaws/log.md (protocol/.context_ledger friction): 0 entries
+- flaws/log.md (protocol/.context_ledger friction): 1 entry, last added 2026-10-31
 - inefficiencies/log.md (project code/env friction): 2 entries, last added 2026-10-31
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-21
 

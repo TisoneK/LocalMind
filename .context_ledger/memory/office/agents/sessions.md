@@ -32,3 +32,13 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** parking-lot P-2026-10-31-1 (reset script has no cloud-embedder probe path). Pre-repair DB backup at `C:\Users\tison\LocalMind\localmind.db.bak-20261031`.
 - **Notes:** none
 - **Report:** .context_ledger/memory/office/reviews/2026-10-31-review.md
+
+---
+## 2026-10-31 — Session 2
+- **Agent:** Nadia | **Model:** unknown (harness states no model ID) | **Platform:** Windows 10.0.26300 x64, local repo | **Role:** engineer | **Core:** 2.2.1
+- **Task:** Diagnose and fix the two failures in the owner's 11:27–11:36 chat export: (1) Cerebras rejecting the payload with `messages.2.user.tool_calls: property '...' is unsupported` (non-retryable dead end), (2) the behavioural failures — conversation-recall answered by a memory dump, "Don't you?" read against the wrong referent, contradictory name facts.
+- **Commits:** 3 by this session (c199cbd1 check-in, 253ae0b4 fast-path history fix, af347f95 wire normalization + recall lane + memory identity); ledger close in this commit.
+- **Outcome:** done — (a) `tool_calls` now rides only an assistant turn that called a tool, both where history dicts are built and at the adapter boundary for every provider call (`normalize_messages_for_wire`); (b) a 400 naming an unsupported property classifies as new `invalid_request` and the failover adapter switches providers with the history intact instead of stopping at "switch model" (no wait, 60s cooldown); (c) conversation-recall questions ("did you answer that from memory?", "what was your reply before that?") route to a transcript-only lane with memory withheld and no tools, quoting the first user message when asked, and a short follow-up resolves against the most recent assistant reply only; (d) third-person name facts ("User's name is …") now hash to `subject:name`, so a correction replaces the fact instead of appending a duplicate. Memory DB cleanup: merged the two name facts into one (correct pronunciation "like Tyson" + the keep-the-profile-caveat instruction) and deleted the empty `source for EPL table` placeholder; the surviving name fact was re-written under `subject:name`. Backups: `localmind.db.bak-20261031-nadia` (mine), `localmind.db.bak-20261031` (Kofi).
+- **Open items:** the EPL source was deleted as an empty placeholder — re-add it with the actual URL if wanted. Two test-harness encoding bugs fixed along the way (fixtures/prompt files read as cp1252 on Windows). Acceptance items that need a live provider run remain unverified end-to-end (see notes).
+- **Notes:** none
+- **Report:** .context_ledger/memory/office/reviews/2026-10-31-review.md
