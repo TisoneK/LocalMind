@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "id": "20261031T173941Z-Sefu-58140b67",
+  "type": "claim",
+  "session": "S010",
+  "agent": "Sefu",
+  "created": "2026-10-31T17:39:41Z",
+  "issue": "harness-deep-study-greeting-retirement",
+  "body": "Light-path claim: (1) exhaustive study of the owner-provided external harness reference - prompt engineering, thinker construction, end-to-end request processing, and every supporting aspect, recorded as a reference-only review doc in LocalMind terms; (2) retire the zero-provider canned greeting path (bare 'Hi' must reach the model like any other turn - owner: hardcoded answers are not the design; canned strings stay provider-down-fallback only); (3) apply the study's first concrete prompt-architecture fixes where they map to queued row B-2026-10-31-25.",
+  "paths": [
+    "backend/src/core/trivial_input.py",
+    "backend/src/core/agent_runtime.py",
+    "backend/tests",
+    ".context_ledger/memory/office/reviews"
+  ],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

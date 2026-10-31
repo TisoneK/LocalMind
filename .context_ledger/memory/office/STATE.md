@@ -15,11 +15,12 @@ _Regenerated: 2026-10-31T16:54:59Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
+- **Sefu** (S010) — Working — Exhaustive study of the owner-provided external harness reference + retire the zero-provider canned greeting path + first prompt-architecture fixes toward B-2026-10-31-25
 - **Nadia** (S002) — Done — Fix the Cerebras `messages.2.user.tool_calls is unsupported` payload rejection and the co…
 - **Rosa** (S008) — Done — Build the turn-close attribution + honest completion contract (owner-observed "Working" w…
 
 ## Current task
-- **—** — none — no session in progress — *idle*
+- **Sefu** (S010) — harness-deep-study-greeting-retirement — study + greeting retirement + prompt-architecture slice — *in progress*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-10-31-1 | In-app State Explorer + engine selector (ADR-71): port the explorer into the app as its own interface (game tree, move list, eval bar, inspector, meters, rewindable timeline) and add the Classic/State engine setting. Reference: `docs/prototypes/state-explorer/`, `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter `state_agent/adapters/localmind.py`); `EngineEvent` is the UI contract. Check whether the in-flight port landed before starting. |
