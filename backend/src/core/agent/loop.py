@@ -345,9 +345,63 @@ def _per_call_timeout_for(active_adapter) -> float:
     return PER_CALL_TIMEOUT_SECS
 
 
+# ── Harness-injected user-role notes: the marker registry ────────────────────
+# Every user-role message the LOOP itself writes (nudges, recovery blocks, gate
+# and replan cards, stage cards, iteration context) is a NOTE, not the user
+# speaking. The wire format is plain user text, so provenance is carried IN
+# BAND: a bracketed tag line. Every consumer that needs "the user's original
+# request" (_user_message_text) and every shape check (_is_harness_injected)
+# reads this ONE registry — tags must never be scattered literals again.
+#
+# Canonical note shape: "\n[TAG] ..." — the leading newline keeps a real user
+# message that happens to open with "[URGENT]" from ever matching. Recovery
+# prose keeps its plain-prefix shape in _HARNESS_USER_PREFIXES below; a new
+# injection site must either use harness_note() / _stage_card() (which enforce
+# the registry) or register its tag here before it ships.
+_HARNESS_NOTE_TAGS: tuple[str, ...] = (
+    # Gate / consult / evidence blocks:
+    "ACCEPTANCE GATE",
+    "THINKER ANALYSIS",
+    "EVIDENCE SUFFICIENT",
+    # Recovery and floor blocks:
+    "ACTION NARRATION",
+    "RECOVERY",
+    "VERIFICATION",
+    "GROUNDING CHECK FAILED",
+    "COMPLETION FLOOR",
+    # Loop-discipline nudges:
+    "PROGRESS CHECK",
+    "DIVERGENT STOP",
+    # Per-iteration injected context (observation log + failure hint):
+    "ITERATION CONTEXT",
+    # Stage-card tags passed to _stage_card():
+    "STAGE: CONTINUE",
+    "TOOL COMMITMENT",
+    "FORCE-TOOL",
+    "SYNTHESIZE",
+    "EVIDENCE GROUNDING",
+    "ZERO-TOOL",
+)
+
+_TAG_TOKENS: tuple[str, ...] = tuple(f"[{tag}]" for tag in _HARNESS_NOTE_TAGS)
+
+
+def harness_note(tag: str, body: str) -> str:
+    """Build a canonical harness note: "\n[TAG] <body>".
+
+    The one builder for loop-injected user-role text. Fails loud on an
+    unregistered tag — a note whose tag no consumer recognizes is exactly the
+    masquerade bug this registry exists to prevent."""
+    if tag not in _HARNESS_NOTE_TAGS:
+        raise ValueError(
+            f"unregistered harness note tag {tag!r} — add it to _HARNESS_NOTE_TAGS"
+        )
+    return f"\n[{tag}] {body}"
+
+
 # Sentences the loop writes into user-role messages itself (nudges, recovery,
-# replan prompts). Bracket-tagged blocks ("\n[ACTION NARRATION] ...") are
-# recognised by shape instead — see `_is_harness_injected`.
+# replan prompts) that carry no bracket tag. Bracket-tagged blocks
+# ("\n[ACTION NARRATION] ...") are recognised via the registry instead.
 _HARNESS_USER_PREFIXES = (
     "SYNTHESIS REMINDER",
     "You reasoned about this task but returned no answer",
@@ -357,8 +411,6 @@ _HARNESS_USER_PREFIXES = (
     "You tried to call tool",
     "Your tool call for",
     "CRITICAL: You just output time-sensitive data",
-    "[PROGRESS CHECK]",
-    "[DIVERGENT STOP]",
     "[Tool result]:",
 )
 
@@ -367,12 +419,18 @@ def _is_harness_injected(content: str) -> bool:
     """True for a user-role message the LOOP wrote (a nudge, a recovery, a gate
     or replan block), not something the user typed.
 
-    Every bracket-tagged harness block opens with a newline then ``[TAG]``; a
-    real user message that happens to start with ``[URGENT]`` has no leading
-    newline, so it is never mistaken for one."""
+    Recognition is registry-driven: a message whose text opens with a leading
+    newline and a bracket (the canonical note shape, "\n[TAG] ..."), or that
+    opens with any registered tag token (covers legacy flush-start blocks like
+    the Thinker analysis), or that matches a known unbracketed recovery
+    sentence. A real user message that happens to start with "[URGENT]" has a
+    registered-tag check standing behind it, so it is never mistaken for a
+    note."""
     if content.startswith("\n["):
         return True
     text = content.lstrip()
+    if text.startswith(_TAG_TOKENS):
+        return True
     return text.startswith(_HARNESS_USER_PREFIXES)
 
 
@@ -391,7 +449,15 @@ def _user_message_text(messages: list[dict], limit: Optional[int] = 200) -> str:
     for msg in reversed(messages):
         if isinstance(msg, dict) and msg.get("role") == "user":
             content = str(msg.get("content", ""))
-            if "[ACCEPTANCE GATE]" in content or "[THINKER ANALYSIS]" in content:
+            # A registered tag at the START OF A LINE marks a harness note:
+            # cards ride inside longer user-role messages on some paths, so a
+            # startswith-only check would miss them — but a tag the USER
+            # mentioned mid-sentence ("check [TOOL COMMITMENT] in the docs")
+            # must keep counting as the user's own words.
+            if any(
+                content.lstrip().startswith(token) or f"\n{token}" in content
+                for token in _TAG_TOKENS
+            ):
                 continue
             if _is_harness_injected(content):
                 continue
@@ -476,8 +542,14 @@ _DECISION_ANSWER = (
 def _stage_card(tag: str, stage: str, decision: str, loop_messages: list, trace) -> str:
     """A structured stage instruction: goal, what ran so far, one decision.
 
-    Keeps the leading ``\n[TAG]`` shape every loop-injected block has, so
-    `_is_harness_injected` and the already-nudged checks recognise it."""
+    Emits the canonical note shape ("\n[TAG] ...") so `_is_harness_injected`
+    and the already-nudged checks recognise it; the tag must be registered in
+    `_HARNESS_NOTE_TAGS` — an unregistered tag would produce a note no
+    consumer can tell apart from the user's own words."""
+    if tag not in _HARNESS_NOTE_TAGS:
+        raise ValueError(
+            f"unregistered stage-card tag {tag!r} — add it to _HARNESS_NOTE_TAGS"
+        )
     goal = _user_message_text(loop_messages)
     ran = [
         f"{getattr(st, 'tool_name', '')} ({'failed' if getattr(st, 'tool_failed', False) else 'ok'})"
@@ -526,7 +598,7 @@ def _thinker_context_block(analysis) -> str:
     # an exact standalone token ("[THINKER ANALYSIS]") so the skip check
     # matches.
     parts = [
-        "[THINKER ANALYSIS]",
+        "\n[THINKER ANALYSIS]",
         "Your analysis of the evidence so far — reason from this, do not repeat it to the user",
     ]
     if analysis.facts:
@@ -4221,7 +4293,11 @@ class AgentLoop:
                 trimmed_log = observation_log
                 if len(observation_log) > _OBS_LOG_TOTAL_CAP:
                     trimmed_log = "…[earlier observations truncated]\n" + observation_log[-_OBS_LOG_TOTAL_CAP:]
-                context_content = f"{trimmed_log}{failure_hint}\nIteration {iteration + 1}/{_iter_hard_cap}. "
+                context_content = (
+                    "\n[ITERATION CONTEXT] Harness note — progress log for your "
+                    "next step, not the user speaking.\n"
+                    f"{trimmed_log}{failure_hint}\nIteration {iteration + 1}/{_iter_hard_cap}. "
+                )
                 # Refresh the task-state progress/budget lines
                 # into the per-iteration context (criteria stay in the
                 # system prompt; only progress changes per iteration).
