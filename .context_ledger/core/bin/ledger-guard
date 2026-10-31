@@ -111,7 +111,7 @@ cmd_remind() {
   _r=$MEMORY_DIR/office/agents/roster.md
   if [ -f "$_r" ]; then
     say "Board (rows not Done):"
-    grep -E '^\| *[^|-][^|]*\| *S[0-9]+ ' "$_r" | awk -F'|' '{ gsub(/^ +| +$/, "", $2); gsub(/^ +| +$/, "", $3); gsub(/^ +| +$/, "", $6); gsub(/^ +| +$/, "", $7); if ($6 != "Done") print "  - " $2 " (" $3 ") " $6 ": " substr($7, 1, 100) }'
+    grep -E '^\| *[^|-][^|]*\| *(S[0-9]+|OF[0-9]+SS[0-9]+) ' "$_r" | awk -F'|' '{ gsub(/^ +| +$/, "", $2); gsub(/^ +| +$/, "", $3); gsub(/^ +| +$/, "", $6); gsub(/^ +| +$/, "", $7); if ($6 != "Done") print "  - " $2 " (" $3 ") " $6 ": " substr($7, 1, 100) }'
   fi
   _c=$MEMORY_DIR/office/tasks/current.md
   if [ -f "$_c" ]; then
@@ -121,7 +121,16 @@ cmd_remind() {
   fi
   _me=$(resolve_session); _rc=$?
   case "$_rc" in
-    0) if [ -n "$_me" ]; then heartbeat_write "$_me"; say "You are: $_me (commits get a Ledger-Session trailer; this prompt refreshed your heartbeat)"
+    0) if [ -n "$_me" ]; then
+         heartbeat_write "$_me"
+         say "You are: $_me (commits get a Ledger-Session trailer; this prompt refreshed your heartbeat)"
+         # Resume-proof exit reminder: if your own row is still open, you owe a
+         # clock-out. This line re-appears every turn — including the first turn
+         # after a resume, when the open-session obligation has dropped out of
+         # context — so the most-forgotten step stops depending on memory.
+         if roster_open_rows | awk -F'|' -v me="$_me" '$2 == me { f = 1 } END { exit !f }'; then
+           say "OPEN SESSION — your row $_me is still live. Before you STOP (easy to miss right after a resume): run the Exit checklist — log agents/sessions.md, clear tasks/current.md, \`ledger-mem prune\`, \`ledger-state generate\` — then CLOCK OUT: remove your roster row + \`ledger-guard release $_me\`. A left-behind live row is the most common flaw."
+         fi
        else say "No session registered in this checkout yet -- your check-in commit registers you."; fi ;;
     1) say "Several sessions are live in this checkout ($(live_sessions | tr '\n' ' ')) and LEDGER_SESSION is not set -- prefix your commits: LEDGER_SESSION=S<NNN> git commit ..." ;;
     *) say "LEDGER_SESSION is set but is not a codename (S<NNN>)." ;;
@@ -145,7 +154,11 @@ sessions_dir() {
   case "$_sc" in /*) ;; *) _sc=$PROJECT_DIR/$_sc ;; esac
   printf '%s/ledger-sessions\n' "$_sc"
 }
-valid_codename() { case "$1" in S[0-9][0-9][0-9]|S[0-9][0-9][0-9][0-9]) return 0 ;; esac; return 1; }
+valid_codename() {
+  # legacy office-local S<NNN>, or structured OF<oo>SS<ss> (office+session,
+  # globally unique). Both are accepted everywhere; cohorts generate the latter.
+  printf '%s' "${1:-}" | grep -Eq '^(S[0-9]{3,4}|OF[0-9]+SS[0-9]+)$'
+}
 now_s() { date +%s; }
 sess_field() { sed -n "s/^$2=//p" "$1" | head -n1 | tr -d '\r'; }
 
@@ -187,7 +200,7 @@ resolve_session() {
 roster_open_rows() { # name|codename|status for every row that is not Done
   _rr=$MEMORY_DIR/office/agents/roster.md
   [ -f "$_rr" ] || return 0
-  grep -E '^\| *[^|-][^|]*\| *S[0-9]+ ' "$_rr" | awk -F'|' '{ for (i = 2; i <= 6; i++) gsub(/^ +| +$/, "", $i); if ($6 != "Done") print $2 "|" $3 "|" $6 }'
+  grep -E '^\| *[^|-][^|]*\| *(S[0-9]+|OF[0-9]+SS[0-9]+) ' "$_rr" | awk -F'|' '{ for (i = 2; i <= 6; i++) gsub(/^ +| +$/, "", $i); if ($6 != "Done") print $2 "|" $3 "|" $6 }'
 }
 
 stale_rows() { # roster rows still open whose registered session has gone quiet

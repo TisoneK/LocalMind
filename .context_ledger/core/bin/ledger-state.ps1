@@ -49,6 +49,10 @@ function Usage {
     '             STATE.md itself. Called at check-in (kickoff Phase 2)',
     '             and at exit (ledger-gates run exit).',
     '',
+    '  reconcile  after merging sibling/concurrent branches: regenerate',
+    '             STATE.md from the union-merged sources, then report any',
+    '             file under memory/office/ that still has conflict markers.',
+    '',
     'Exit codes: 0 ok; 2 usage/error'
   ) | ForEach-Object { Say $_ }
   exit 2
@@ -125,7 +129,7 @@ function RosterBlock {
     $c = $line.Split('|')
     if ($c.Count -lt 4) { continue }
     $name = $c[1].Trim(); $code = $c[2].Trim()
-    if ($code -notmatch '^[Ss][0-9]+$') { continue }
+    if ($code -notmatch '^([Ss][0-9]+|OF[0-9]+SS[0-9]+)$') { continue }
     $doing = if ($c.Count -ge 5) { $c[4].Trim() } else { '' }
     $status = if ($c.Count -ge 6) { $c[5].Trim() } else { '' }
     $rows += [pscustomobject]@{ Name = $name; Code = $code; Status = $status; Doing = $doing }
@@ -239,11 +243,52 @@ function Invoke-Generate {
   Say 'ledger-state: wrote STATE.md'
 }
 
+# reconcile - the defined bookkeeping-merge step for sibling cohorts and any
+# concurrent branches. The append-only logs union-merge automatically
+# (.gitattributes merge=union), so after a merge the only ledger file left to
+# fix is the derived STATE.md: regenerate it, then name any file under
+# memory/office/ that STILL carries conflict markers for hand resolution.
+# STATE.md itself is excluded - it is the thing we just rewrote.
+function Invoke-Reconcile {
+  if (-not (Test-Path -LiteralPath $officeDir)) { Die 'no memory/office/ directory - is this a bootstrapped project?' }
+  Invoke-Generate
+  $marked = @()
+  foreach ($file in (Get-ChildItem -LiteralPath $officeDir -Recurse -File -Filter *.md -ErrorAction SilentlyContinue)) {
+    if ($file.Name -eq 'STATE.md') { continue }
+    $hit = $false
+    foreach ($line in [IO.File]::ReadLines($file.FullName)) {
+      if ($line -match '^<<<<<<< ' -or $line -eq '=======' -or $line -match '^>>>>>>> ') { $hit = $true; break }
+    }
+    if ($hit) { $marked += $file.FullName }
+  }
+  if ($marked.Count -gt 0) {
+    Say ''
+    Say 'ledger-state: conflict markers REMAIN in:'
+    foreach ($m in $marked) { Say "  - $m" }
+    Say ''
+    Say 'The append-only logs (sessions.md, flaws/log.md, inefficiencies/log.md,'
+    Say 'plans/decisions.md) should union-merge automatically via .gitattributes'
+    Say '(merge=union). If one is listed above, the union driver is not active for'
+    Say "this checkout - resolve it by keeping BOTH sides' entries. roster.md and"
+    Say 'tasks/ are edit-in-place: keep every still-live row, drop the markers.'
+    Say 'Then re-run: ledger-state reconcile.'
+    exit 2
+  }
+  Say 'ledger-state: reconciled - STATE.md regenerated; no conflict markers left under memory/office/.'
+  Say 'Review the merge, then: git add the resolved files + STATE.md and commit.'
+}
+
 switch ($Command) {
   'generate' {
     if ($RestArgs -contains '-h' -or $RestArgs -contains '--help') { Usage }
     if ($RestArgs.Count -gt 0) { Die "unknown argument '$($RestArgs[0])'" }
     Invoke-Generate
+    exit 0
+  }
+  'reconcile' {
+    if ($RestArgs -contains '-h' -or $RestArgs -contains '--help') { Usage }
+    if ($RestArgs.Count -gt 0) { Die "unknown argument '$($RestArgs[0])'" }
+    Invoke-Reconcile
     exit 0
   }
   { $_ -in @('', '-h', '--help', 'help') } { Usage }

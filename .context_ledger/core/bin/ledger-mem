@@ -150,7 +150,7 @@ check_roster() {
       if (n < 4) next
       name = c[2]; code = c[3]
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", name); gsub(/^[[:space:]]+|[[:space:]]+$/, "", code)
-      if (code !~ /^[Ss][0-9]+$/) next
+      if (code !~ /^([Ss][0-9]+|OF[0-9]+SS[0-9]+)$/) next
       nseen[name]++; nwhere[name] = nwhere[name] " " FNR
       cseen[code]++; cwhere[code] = cwhere[code] " " FNR
       st = (n >= 7) ? c[6] : ""
@@ -231,10 +231,11 @@ check_roster_stale() {
       code = c[3]
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", code)
       if (code ~ /^[Ss][0-9]+$/) { sub(/^[Ss]/, "", code); print code }
+      else if (code ~ /^OF[0-9]+SS[0-9]+$/) { sub(/^OF[0-9]+SS/, "", code); print code }
     }
   ' "$_r" | sort -u); do
     if grep -Eq "^## .*Session $_num([^0-9]|$)" "$_s"; then
-      say "WARN roster.md: codename S$_num is still on the board, but a Session $_num entry already exists in agents/sessions.md — the session logged itself done without clocking out; remove the row"
+      say "WARN roster.md: a codename for session $_num is still on the board, but a Session $_num entry already exists in agents/sessions.md — the session logged itself done without clocking out; remove the row"
     fi
   done
   return 0

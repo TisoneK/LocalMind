@@ -27,7 +27,16 @@ time. The name is how the team and the supervisor refer to you; the codename
 is your stable session tag.
 
 - **Name** — a human name you choose.
-- **Codename** — your session tag `S<NNN>` (N = your session number).
+- **Codename** — your session tag. Use the structured form
+  **`OF<oo>SS<ss>`**: office number + session number
+  (e.g. `OF01SS07` = office 1, session 7). The office number is how many
+  offices have been frozen into `.context_ledger/history/` plus one (the
+  current office); the session number is the next free one (the board's
+  highest plus one, cross-checked against the last `Session N` in
+  `agents/sessions.md`). This makes a codename unique across offices and the
+  whole fleet, not just within this board. Legacy office-local `S<NNN>`
+  codenames are still valid and still read everywhere — don't rewrite old
+  rows — but new sessions take the structured form.
 - **Model** — the model you're running. A fingerprint, not an identity:
   several agents can share one model, and a harness marker from a system
   prompt appears in every session on that harness. Never adopt an
@@ -47,7 +56,7 @@ is your stable session tag.
   - `Blocked` → what you're waiting on, and from whom.
 
 <!-- TEMPLATE — one row per person in this office:
-| <Name> | S<NNN> | <model id> | <what you're doing> | Working | <stage reached / shipped outcome / blocker> |
+| <Name> | OF<oo>SS<ss> | <model id> | <what you're doing> | Working | <stage reached / shipped outcome / blocker> |
 -->
 
 | Name | Codename | Model | Doing | Status | Status detail |

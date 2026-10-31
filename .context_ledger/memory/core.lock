@@ -1,20 +1,20 @@
 # written by ledger-sync — the last-known-good core version.
 # Do not edit by hand. If core fails verify, `ledger-sync rollback`
 # restores the version recorded here from git history.
-version=2.2.1
+version=2.3.2
 verified=2026-10-31
-installed_version=2.2.1
-installed_from_version=2.2.0
+source_kind=upstream
+source_state=in-sync
+source_url=https://github.com/TisoneK/context-ledger.git
+source_path=/home/z/my-project/context-ledger
+source_ref=main
+source_commit=703ba5ec83e18fc85f617f3f45bb72be12d7311d
+source_version=2.3.2
+source_checked=2026-10-31
+installed_version=2.3.2
+installed_from_version=2.2.1
 installed_kind=upstream
 installed_url=https://github.com/TisoneK/context-ledger.git
 installed_path=/home/z/my-project/context-ledger
-installed_commit=a8cf5bdbc8ff5fa62851651244c280a8fdf90723
-installed_on=2026-10-27
-source_kind=upstream
-source_state=behind
-source_url=https://github.com/TisoneK/context-ledger.git
-source_path=C:/Users/tison/Dev/context-ledger
-source_ref=main
-source_commit=462cd602197f2163abf6524f823f06e13583590a
-source_version=2.3.1
-source_checked=2026-10-31
+installed_commit=703ba5ec83e18fc85f617f3f45bb72be12d7311d
+installed_on=2026-10-31

@@ -1,4 +1,6 @@
 Protocol floor (re-injected by ledger-guard every turn - it survives context compaction):
+- Read the user's WHOLE message first: if it carries several points, enumerate them (park the list in `tasks/current.md`) and address or defer each - attention slides to the last point/question unless you list them. Chat is the most volatile store you have; harvest the points into the ledger.
+- Think past the literal: act on what is actually wanted, not the surface words. Directing other agents? Give the goal + interface + quality bar, not a procedure; let the protocol do what it enforces (they self-name, check in, run gates); supervise for drift. Still confirm calls that are genuinely the supervisor's.
 - Check in on the roster BEFORE the deep read; keep your row's Status/detail current; clock out (remove your row) only when actually leaving.
 - Before each next action: `ledger-gates checkpoint`. Before each commit: stage, then `ledger-gates run pre-commit`; the git hook refuses a commit whose staged tree has no fresh pass.
 - Never read a gate through `| tail`/`| head` or in an `&&` chain behind a pipe - read the verdict line. A red gate is a stop, not noise.
@@ -6,4 +8,5 @@ Protocol floor (re-injected by ledger-guard every turn - it survives context com
 - Append-only logs (sessions.md, flaws/log.md, decisions.md): re-read the file tail first, append, never edit a past entry.
 - Corrections, flaws and decisions are recorded when they happen, not when asked. Keep `office/tasks/current.md` true.
 - Identity: your check-in commit registers your codename; every commit gets a `Ledger-Session:` trailer. If several agents are live in this checkout, prefix commits with `LEDGER_SESSION=S<NNN>`. Push-check (pre-push + CI) rejects mixed-surface commits and edited append-only logs.
+- EXIT / clock out: if you still hold a live roster row (check right after any resume — this is the most-forgotten step), before you stop run the Exit checklist (log the session entry, clear `tasks/current.md`, prune, regenerate STATE) and CLOCK OUT — remove your row + `ledger-guard release <codename>`. More work arrived after you clocked out? Check back in first (same codename) and extend your entry.
 - No secret values in tracked files. Commit AND push; a user reminder to push is a logged failure.

@@ -44,6 +44,7 @@ function Usage {
     '  emit TYPE --session ID --agent ID --issue ID [metadata] [--body-file FILE]',
     '  status [--session ID] [--issue ID]',
     '  check  [--session ID] [--issue ID]   integration-readiness gate',
+    '  cohort open|list|status ...          pre-allocate codenames for siblings',
     '',
     'Metadata: --paths CSV --refs/--re CSV --option ID --selected ID --owner ID',
     '          --participants CSV --to CSV (note recipients) --body TEXT --body-file FILE',
@@ -60,6 +61,9 @@ $scriptDir = $PSScriptRoot
 $coreDir = (Resolve-Path (Join-Path $scriptDir '..')).Path
 $ledgerDir = Split-Path -Parent $coreDir
 $eventDir = Join-Path $ledgerDir 'memory/collaboration/events'
+$officeDir = Join-Path $ledgerDir 'memory/office'
+$historyDir = Join-Path $ledgerDir 'history'
+$archiveDir = Join-Path $ledgerDir 'archive'
 
 function Validate-Value { param([string]$Name, [string]$Value)
   if ([string]::IsNullOrWhiteSpace($Value) -or $Value.Contains("`n") -or $Value.Contains("`r")) {
@@ -152,7 +156,7 @@ function Get-FirstBodyLine { param([IO.FileInfo]$File)
 }
 
 function Emit { param([string]$EventType, [string[]]$EventArgs)
-  if ($EventType -notin @('note','claim','proposal','assessment','agreement','correction','handoff','release')) {
+  if ($EventType -notin @('note','claim','proposal','assessment','agreement','correction','handoff','release','cohort')) {
     Die "unknown event type '$EventType'"
   }
   $o = Parse-Options $EventArgs
@@ -168,12 +172,14 @@ function Emit { param([string]$EventType, [string[]]$EventArgs)
     if ($o.owner -eq 'none') { Die 'agreement requires --owner' }
     if ($o.participants -eq 'none') { Die 'agreement requires --participants' }
   }
+  if ($EventType -eq 'cohort' -and $o.participants -eq 'none') { Die 'cohort requires --participants (the reserved codenames)' }
   if ($o.bodyFile -and $o.body) { Die 'use either --body or --body-file, not both' }
   if ($o.bodyFile) {
     if (-not (Test-Path -LiteralPath $o.bodyFile -PathType Leaf)) { Die "body file not found: $($o.bodyFile)" }
     $body = Get-Content -Encoding UTF8 -LiteralPath $o.bodyFile -Raw
   } elseif ($o.body) { $body = $o.body }
   elseif ($EventType -eq 'claim') { $body = 'Intent and evidence: describe the intended change and why this scope is safe.' }
+  elseif ($EventType -eq 'cohort') { $body = 'Sibling cohort: codenames pre-allocated together so the wave cannot race the board.' }
   elseif ($EventType -eq 'note') { Die 'note requires --body or --body-file -- say what you want your peers to know' }
   else { Die "$EventType requires --body-file or --body with evidence and reasoning" }
 
@@ -214,6 +220,8 @@ function Emit { param([string]$EventType, [string[]]$EventArgs)
   Say "created collaboration event: .context_ledger/memory/collaboration/events/$id.json"
   if ($EventType -eq 'note') {
     Say 'publish it in a chore(ledger): commit so your peers see it -- a note carries no obligation'
+  } elseif ($EventType -eq 'cohort') {
+    # Cohort-Open prints the full commit + spawn-brief guidance itself.
   } else {
     Say 'publish it in a separate chore(ledger): commit before changing the claimed product scope'
   }
@@ -282,6 +290,172 @@ function Status { param([string[]]$StatusArgs)
   Say "Everything else is a note plus your own claim/release -- you're on the same team, not bidding against each other."
 }
 
+# --- Sibling cohorts: pre-allocated codenames ---------------------------
+# A cohort is a wave of sibling agents a parent spawns together. The ledger
+# otherwise models serial arrival, so N siblings scanning the same board at
+# once race for one codename. 'cohort open' reserves a contiguous block up
+# front in ONE write (a reserved roster row per member + one cohort event);
+# each sibling is handed its codename and claims its reserved row in place at
+# check-in instead of scanning. See ledger-schema.md -> 'Sibling cohorts'.
+function Cohort-Usage {
+  @(
+    'ledger-collab cohort -- pre-allocate codenames for a wave of sibling agents',
+    '',
+    '  open --count N [--agent NAME] [--task TEXT] [--cohort ID] [--session ID]',
+    '        reserve N contiguous codenames: a reserved roster row per member',
+    '        + one cohort event. Commit both, push, THEN spawn the siblings.',
+    '  list  list recorded cohorts and their members.',
+    '  status [--cohort ID]  each member codename and its current board state.',
+    '',
+    'Exit codes: 0 ok; 2 usage/error'
+  ) | ForEach-Object { Say $_ }
+  exit 2
+}
+# current office number = (highest frozen office on record) + 1. Mirrors the
+# sh cohort_office_num / ledger-history max_office_num; records are permanent.
+function Get-CohortOfficeNum {
+  $max = 0
+  $globs = @((Join-Path $historyDir 'office-*.md'), (Join-Path $historyDir 'office-*'), (Join-Path $archiveDir 'office-*.tar.gz'))
+  foreach ($g in $globs) {
+    foreach ($p in (Get-ChildItem -Path $g -ErrorAction SilentlyContinue)) {
+      $b = $p.BaseName -replace '\..*$', ''
+      if ($b -match '^office-0*([0-9]+)$') { $n = [int]$Matches[1]; if ($n -gt $max) { $max = $n } }
+    }
+  }
+  return ($max + 1)
+}
+# highest session number on the board or in the duty log, reading the session
+# number out of BOTH codename forms: legacy S<n> and structured OF<oo>SS<n>.
+function Get-CohortNextNum {
+  $roster = Join-Path $officeDir 'agents/roster.md'
+  $sessions = Join-Path $officeDir 'agents/sessions.md'
+  $max = 0
+  if (Test-Path -LiteralPath $roster) {
+    foreach ($line in Get-Content -Encoding UTF8 -LiteralPath $roster) {
+      if ($line -notmatch '^\s*\|') { continue }
+      $cells = $line -split '\|'
+      if ($cells.Count -lt 4) { continue }
+      $code = $cells[2].Trim()
+      if ($code -match '^[Ss]([0-9]+)$') { $n = [int]$Matches[1]; if ($n -gt $max) { $max = $n } }
+      elseif ($code -match '^OF[0-9]+SS([0-9]+)$') { $n = [int]$Matches[1]; if ($n -gt $max) { $max = $n } }
+    }
+  }
+  if (Test-Path -LiteralPath $sessions) {
+    foreach ($line in Get-Content -Encoding UTF8 -LiteralPath $sessions) {
+      if ($line -match '^##\s.*[Ss]ession\s+([0-9]+)') { $n = [int]$Matches[1]; if ($n -gt $max) { $max = $n } }
+    }
+  }
+  return ($max + 1)
+}
+function Get-CohortRosterRow { param([string]$Roster, [string]$Want)
+  if (-not (Test-Path -LiteralPath $Roster)) { return '' }
+  foreach ($line in Get-Content -Encoding UTF8 -LiteralPath $Roster) {
+    if ($line -notmatch '^\s*\|') { continue }
+    $cells = $line -split '\|'
+    if ($cells.Count -lt 6) { continue }
+    if ($cells[2].Trim().ToLower() -eq $Want.ToLower()) {
+      return "$($cells[1].Trim()) [$($cells[5].Trim())]"
+    }
+  }
+  return ''
+}
+function Cohort-Open { param([string[]]$OptArgs)
+  $count = ''; $agent = 'parent'; $task = ''; $cohort = ''; $session = ''
+  for ($i = 0; $i -lt $OptArgs.Count; $i++) {
+    switch ($OptArgs[$i]) {
+      '--count'   { if ($i+1 -ge $OptArgs.Count) { Die '--count needs a value' }; $count = $OptArgs[++$i] }
+      '--agent'   { if ($i+1 -ge $OptArgs.Count) { Die '--agent needs a value' }; $agent = $OptArgs[++$i] }
+      '--task'    { if ($i+1 -ge $OptArgs.Count) { Die '--task needs a value' }; $task = $OptArgs[++$i] }
+      '--cohort'  { if ($i+1 -ge $OptArgs.Count) { Die '--cohort needs a value' }; $cohort = $OptArgs[++$i] }
+      '--session' { if ($i+1 -ge $OptArgs.Count) { Die '--session needs a value' }; $session = $OptArgs[++$i] }
+      '-h'        { Cohort-Usage }
+      '--help'    { Cohort-Usage }
+      default     { Die "unknown argument '$($OptArgs[$i])' (try: ledger-collab cohort --help)" }
+    }
+  }
+  if ($count -notmatch '^[0-9]+$') { Die 'cohort open requires --count N (a positive integer)' }
+  $countN = [int]$count
+  if ($countN -lt 1) { Die '--count must be at least 1' }
+  if ($countN -gt 50) { Die "--count $countN is implausibly large (cap 50) -- split the dispatch" }
+  Validate-Id 'agent' $agent
+  if (-not $task) { $task = '(unspecified)' }
+  $roster = Join-Path $officeDir 'agents/roster.md'
+  if (-not (Test-Path -LiteralPath $roster)) { Die "no roster at $roster -- is this a bootstrapped project?" }
+  if (-not $cohort) { $cohort = 'C-' + [DateTime]::UtcNow.ToString("yyyyMMddTHHmmss'Z'") }
+  Validate-Id 'cohort' $cohort
+  $base = Get-CohortNextNum
+  $office = Get-CohortOfficeNum
+  # structured OF<oo>SS<ss> codename: office + session, globally unique
+  # (legacy S<NNN> still accepted everywhere).
+  $codesArr = @(); for ($k = 0; $k -lt $countN; $k++) { $codesArr += ('OF{0:D2}SS{1:D2}' -f $office, ($base + $k)) }
+  $codes = $codesArr -join ','
+  # append one reserved roster row per member, after the last table row
+  $lines = @(Get-Content -Encoding UTF8 -LiteralPath $roster)
+  $lastIdx = -1
+  for ($j = 0; $j -lt $lines.Count; $j++) { if ($lines[$j] -match '^\s*\|') { $lastIdx = $j } }
+  $rows = @()
+  for ($s = 1; $s -le $countN; $s++) {
+    $rows += "| (cohort $cohort slot $s) | $($codesArr[$s-1]) | - | reserved - cohort $cohort ($s/$countN) | Reserved | opened by $agent for: $task; the assigned sibling claims this row in place at check-in |"
+  }
+  if ($lastIdx -ge 0) {
+    $out = @(); for ($j = 0; $j -lt $lines.Count; $j++) { $out += $lines[$j]; if ($j -eq $lastIdx) { $out += $rows } }
+  } else { $out = @($lines + $rows) }
+  [IO.File]::WriteAllText($roster, (($out -join "`n") + "`n"))
+  # record the cohort as one immutable event (attribution + member list)
+  $sess = if ($session) { $session } else { $cohort }
+  Emit 'cohort' @('--agent', $agent, '--session', $sess, '--issue', $cohort, '--participants', $codes, '--body', $task)
+  Say ''
+  Say "cohort $cohort -- reserved $countN codename(s): $codes"
+  Say 'Reserved roster rows written; cohort event recorded. Commit BOTH ledger surfaces in one chore(ledger): commit, push, THEN spawn the siblings:'
+  Say '  git add .context_ledger/memory/office/agents/roster.md .context_ledger/memory/collaboration/events/'
+  Say "  git commit -m `"chore(ledger): open cohort $cohort -- reserve $codes`" && git push"
+  Say 'If the push is rejected a peer checked in meanwhile: revert the rows (git checkout -- the roster) and re-run -- one re-read, not N.'
+  Say ''
+  Say 'Hand each sibling ONE codename in its spawn brief:'
+  foreach ($c in $codesArr) {
+    Say "  - `"You are <pick a real name>, codename $c, cohort $cohort. Read .context_ledger/kickoff.md and follow it. At check-in, CLAIM the reserved row for $c in the roster IN PLACE (your name + Status Working) -- do NOT scan for a free number.`""
+  }
+}
+function Cohort-List {
+  $files = @(Get-ChildItem -LiteralPath $eventDir -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -eq '.json' })
+  $n = 0
+  foreach ($f in $files) {
+    if ((Get-Field $f 'type') -ne 'cohort') { continue }
+    $n++
+    Say "- $(Get-Field $f 'issue') -- opened by $(Get-Field $f 'agent') -- members: $(Get-Field $f 'participants')"
+    $body = Get-FirstBodyLine $f; if ($body) { Say "    task: $body" }
+  }
+  if ($n -eq 0) { Say '(none)' }
+}
+function Cohort-Status { param([string[]]$OptArgs)
+  $id = ''
+  for ($i = 0; $i -lt $OptArgs.Count; $i++) {
+    switch ($OptArgs[$i]) {
+      '--cohort' { if ($i+1 -ge $OptArgs.Count) { Die '--cohort needs a value' }; $id = $OptArgs[++$i] }
+      '-h'       { Cohort-Usage }
+      '--help'   { Cohort-Usage }
+      default    { Die "unknown argument '$($OptArgs[$i])'" }
+    }
+  }
+  $roster = Join-Path $officeDir 'agents/roster.md'
+  $files = @(Get-ChildItem -LiteralPath $eventDir -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -eq '.json' })
+  $n = 0
+  foreach ($f in $files) {
+    if ((Get-Field $f 'type') -ne 'cohort') { continue }
+    $ci = Get-Field $f 'issue'
+    if ($id -and $ci -ne $id) { continue }
+    $n++
+    Say "cohort $ci -- opened by $(Get-Field $f 'agent')"
+    foreach ($c in (($(Get-Field $f 'participants')) -split ',')) {
+      $c = $c.Trim(); if (-not $c) { continue }
+      $row = Get-CohortRosterRow $roster $c
+      if (-not $row) { Say "  $c -- (not on the board -- clocked out, or never claimed)" }
+      else { Say "  $c -- $row" }
+    }
+  }
+  if ($n -eq 0) { Say '(no matching cohort)' }
+}
+
 if ($Command -in @('', '-h', '--help', 'help')) { Usage }
 switch ($Command) {
   'emit' {
@@ -294,6 +468,18 @@ switch ($Command) {
     if ($Type) { $statusArgs += $Type }
     if ($null -ne $Extra) { $statusArgs += $Extra }
     Status $statusArgs
+  }
+  'cohort' {
+    $sub = $Type
+    $subArgs = @()
+    if ($null -ne $Extra) { $subArgs = @($Extra) }
+    switch ($sub) {
+      'open'   { Cohort-Open $subArgs }
+      'list'   { Cohort-List }
+      'status' { Cohort-Status $subArgs }
+      { $_ -in @('', '-h', '--help', 'help') } { Cohort-Usage }
+      default  { Die "unknown cohort subcommand '$sub' (try: ledger-collab cohort --help)" }
+    }
   }
   'check' {
     $checkArgs = @()

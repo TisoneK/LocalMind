@@ -5,10 +5,10 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-31T10:17:21Z_
+_Regenerated: 2026-10-31T10:20:14Z_
 
 ## Standing params
-- **Core:** 2.2.1 (locked, verified 2026-10-31)
+- **Core:** 2.3.2 (locked, verified 2026-10-31)
 - **Target:** Resilience + ZCode-import program (set by owner 2026-09-12, S471; full map: `office/reviews/2026-09-12-review-s471.md`). DONE at setting: the provider-stall watchdog on chat turns (`e32e08a1` — no-first-byte stall names the provider at 5s, switch-model offer at 30s, no abort). NEXT, in priority order: (1) **MCP client support** (stdio + streamable-HTTP transports, `mcp__server__tool` naming — the tool surface stops being the boundary); (2) **read-only Explorer subagent** — a Parent TOOL, not a peer: read-only sandbox, returns bounded conclusions with `file:line` refs, not dumps; (3) **fresh-eyes acceptance judge** — read-only, re-reads a finished deliverable against the original request, structured per-item verdicts (deepens ADR-18; the loop never grades its own work); (4) **plugin-style skill packaging** — versioned, namespaced `plugin:skill`, seed manifest, bundleable scripts/.mcp.json/commands. Tier-2 backlog candidates: web_fetch prompt-distillation, background-exec completion re-invocation, structured clarifying questions, plan mode. LocalMind has exactly one active agent: the Parent; live multi-agent delegation stays parked compatibility residue (the explorer/judge are read-only Parent tools, not peers). **Do NOT regress:** the ADR-34 event order, the `Hi`→zero-provider-call boundary (S206), Session 31-33 fixes (thinking-aware timeouts build on them), the ADR-40 guardrail (live-verify tool SELECTION on a weak model + cerebras before any further schema cut), the ADR-41 default (z.ai thinking ON — never re-add a thinking-disable for GLM; GLM-4.5-flash has no effort/budget param, timeout scaling is the lever), the S471 watchdog fall-through (once a first byte lands, the heartbeat must return to the truthful prior branches — never stall-shame a healthy stream), or the Parent-only scope. A chat-message target overrides this standing Target.
 - **Scope:** discovery + review + fix all safe issues
 - **Push policy:** push to main directly after each commit
@@ -16,10 +16,9 @@ _Regenerated: 2026-10-31T10:17:21Z_
 
 ## Office — who's in, right now
 - **Nadia** (S002) — Done — Fix the Cerebras `messages.2.user.tool_calls is unsupported` payload rejection and the co…
-- **Amara** (S003) — Working — Upgrade the vendored core 2.2.1 → 2.3.2 via ledger-sync (owner-ordered)
 
 ## Current task
-- **2026-10-31 — Amara / GLM (Z.ai sandbox)** — Upgrade the vendored core 2.2.1 → 2.3.2 (`ledger-sync update` from the sibling clone), adopt the 2.3.0 union-merge `.gitattributes` rules… — *in-progress*
+- **—** — none — no session in progress — *idle*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-10-31-1 | In-app State Explorer + engine selector (ADR-71): port the explorer into the app as its own interface (game tree, move list, eval bar, inspector, meters, rewindable timeline) and add the Classic/State engine setting. Reference: `docs/prototypes/state-explorer/`, `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter `state_agent/adapters/localmind.py`); `EngineEvent` is the UI contract. Check whether the in-flight port landed before starting. |

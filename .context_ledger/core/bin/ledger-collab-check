@@ -262,14 +262,14 @@ check() {
 
         if (type != "note" && type != "claim" && type != "proposal" &&
             type != "assessment" && type != "agreement" && type != "correction" &&
-            type != "handoff" && type != "release") {
+            type != "handoff" && type != "release" && type != "cohort") {
           fail(file[e] " has unknown type \x27" type "\x27"); continue
         }
 
         # reference resolution: an event ref must share session+issue; else a
-        # SHA. Notes are informal — their --re may be a path, URL, event, or
-        # commit, so they are exempt from this check.
-        if (type != "note") {
+        # SHA. Notes and cohort reservations are informal — they carry no refs
+        # and no obligations, so they are exempt from this check.
+        if (type != "note" && type != "cohort") {
           n = split(F[e,"refs"], arr, ",")
           for (i = 1; i <= n; i++) {
             r = arr[i]; if (r == "none" || r == "") continue

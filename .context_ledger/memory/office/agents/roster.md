@@ -53,7 +53,6 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Nadia | S002 | unknown (harness states no model ID) | Fix the Cerebras `messages.2.user.tool_calls is unsupported` payload rejection and the conversation-recall behaviour behind it | Done | Shipped af347f95 + 253ae0b4: per-role wire normalization, invalid_request→failover, transcript-only recall lane, name-identity dedupe; DB name facts merged (1 remains, keyed `subject:name`); 2285 core+adapter tests pass, 7 previously-red tests fixed |
-| Amara | S003 | GLM (Z.ai sandbox) | Upgrade the vendored core 2.2.1 → 2.3.2 via ledger-sync (owner-ordered) | Working | Step 3 check-in — claim pushed; next: ledger-sync update from the sibling clone |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,

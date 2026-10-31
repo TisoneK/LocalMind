@@ -202,7 +202,7 @@ Each event is one immutable JSON document (`collab-event.schema.json` v1):
 {
   "schema": 1,
   "id": "<UTC-timestamp-agent-random>",
-  "type": "note | claim | proposal | assessment | agreement | correction | handoff | release",
+  "type": "note | claim | proposal | assessment | agreement | correction | handoff | release | cohort",
   "session": "<shared-collaboration-session-id>",
   "agent": "<stable-agent-id>",
   "created": "<UTC timestamp>",
@@ -221,9 +221,11 @@ Each event is one immutable JSON document (`collab-event.schema.json` v1):
 always present. Type-specific requirements: `paths` (non-empty) for a
 `claim`; `option` for a `proposal`; `refs` for an `assessment`,
 `agreement`, `correction`, `handoff`, or `release`; an `agreement` also
-requires `selected`, `owner`, and at least two distinct `participants`.
-A `note` requires none of the type-specific fields — a body is all it
-needs. The full document schema is `core/schemas/collab-event.schema.json`.
+requires `selected`, `owner`, and at least two distinct `participants`; a
+`cohort` requires `participants` (the reserved codenames) with `issue`
+holding the cohort id. A `note` requires none of the type-specific fields —
+a body is all it needs. The full document schema is
+`core/schemas/collab-event.schema.json`.
 Legacy markdown events (`<event-id>.md`, written by pre-0.22.0 cores) are
 still read by `status` and `check` — never rewritten.
 
@@ -262,6 +264,37 @@ The everyday event is **note**; the rest are the formal trail.
    the agreement and stating what is complete, pending, and verified.
 7. **release** — declare a claim or handoff complete, referencing the
    relevant event and commit(s), with verification results.
+8. **cohort** — a reservation record for a wave of sibling agents (see
+   "Sibling cohorts" below). Like a note it carries no obligation and never
+   gates `check`; `issue` holds the cohort id, `participants` the reserved
+   codenames. You don't emit this by hand — `cohort open` writes it.
+
+### Sibling cohorts — pre-allocated codenames
+
+When one parent fans a multi-item task into N sibling sessions at once (one
+per item, each its own worktree, archived together), they are a **cohort**,
+not serial arrivals. N siblings scanning the board at the same instant race
+for one codename *every* time, and their exit checklists conflict on the
+shared logs *every* time. Don't improvise around it:
+
+```bash
+# the PARENT, once, before spawning anyone — reads the board a single time
+sh .context_ledger/core/bin/ledger-collab cohort open --count 4 \
+  --agent <parent-name> --task "short description of the wave"
+# -> writes a Reserved roster row per member + one cohort event, and prints
+#    each member's codename + a ready-made spawn-brief line. Commit BOTH
+#    (roster + event) and push BEFORE spawning the siblings.
+sh .context_ledger/core/bin/ledger-collab cohort list
+sh .context_ledger/core/bin/ledger-collab cohort status --cohort <cohort-id>
+```
+
+Each **sibling** is handed one codename in its brief and, at check-in,
+**claims its reserved row in place** (its name + Status `Working`) — it never
+scans for a free number, so the race cannot happen. When the wave's branches
+come back, the append-only logs union-merge automatically (`merge=union` in
+`.gitattributes`); the parent merges the branches and runs
+`ledger-state reconcile` to regenerate `STATE.md` and flag anything still
+conflicting. Full mechanics: `ledger-schema.md` → "Sibling cohorts".
 
 ### Peer agreement rule
 

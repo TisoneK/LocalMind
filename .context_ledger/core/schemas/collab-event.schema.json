@@ -15,7 +15,7 @@
       "pattern": "^[0-9]{8}T[0-9]{6}Z-[A-Za-z0-9._:-]+-[0-9A-Fa-f]{1,16}$",
       "description": "UTC timestamp + agent + random suffix; also the filename stem (<id>.json)."
     },
-    "type":         { "enum": ["note", "claim", "proposal", "assessment", "agreement", "correction", "handoff", "release"] },
+    "type":         { "enum": ["note", "claim", "proposal", "assessment", "agreement", "correction", "handoff", "release", "cohort"] },
     "session":      { "type": "string", "pattern": "^[A-Za-z0-9._:-]+$" },
     "agent":        { "type": "string", "pattern": "^[A-Za-z0-9._:-]+$" },
     "created":      { "type": "string", "format": "date-time" },
@@ -37,7 +37,7 @@
     "participants": {
       "type": "array", "uniqueItems": true,
       "items": { "type": "string", "pattern": "^[A-Za-z0-9._:-]+$" },
-      "description": "agreement: agents who accepted (>= 2 distinct). note: --to addressees."
+      "description": "agreement: agents who accepted (>= 2 distinct). note: --to addressees. cohort: the pre-allocated member codenames (issue holds the cohort id)."
     }
   },
   "allOf": [
@@ -76,6 +76,10 @@
     {
       "if": { "properties": { "type": { "const": "release" } }, "required": ["type"] },
       "then": { "required": ["refs"], "properties": { "refs": { "minItems": 1 } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "cohort" } }, "required": ["type"] },
+      "then": { "required": ["participants"], "properties": { "participants": { "minItems": 1 } } }
     }
   ]
 }

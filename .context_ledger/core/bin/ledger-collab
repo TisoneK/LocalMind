@@ -15,6 +15,7 @@
 #   emit TYPE --session ID --agent ID --issue ID [metadata] [--body-file FILE]
 #   status [--session ID] [--issue ID]
 #   check  [--session ID] [--issue ID]   integration-readiness gate
+#   cohort open|list|status …            pre-allocate codenames for siblings
 #
 # Metadata:
 #   --paths CSV       repo-relative paths or logical scopes
@@ -33,6 +34,8 @@
 #   The other seven are the formal trail; the proposal/assessment/agreement
 #   ceremony is reserved for a genuine conflict (same paths, incompatible
 #   changes), not the common case.
+#   cohort — a reservation record for a wave of sibling agents (see the
+#           `cohort` command); carries no obligation, like a note.
 # check validates the event trail for integration readiness.
 
 set -u
@@ -48,6 +51,9 @@ PROJECT_DIR=$(dirname -- "$LEDGER_DIR")
 MEMORY_DIR=$LEDGER_DIR/memory
 COLLAB_DIR=$MEMORY_DIR/collaboration
 EVENT_DIR=$COLLAB_DIR/events
+OFFICE_DIR=$MEMORY_DIR/office
+HISTORY_DIR=$LEDGER_DIR/history
+ARCHIVE_DIR=$LEDGER_DIR/archive
 
 validate_value() {
   _label=$1; _value=$2
@@ -135,7 +141,7 @@ first_body_line() {
 }
 
 usage() {
-  sed -n '14,36p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '14,39p' "$0" | sed 's/^# \{0,1\}//'
   exit 2
 }
 
@@ -192,7 +198,7 @@ emit() {
   TYPE=${1:-}; [ -n "$TYPE" ] || usage
   shift
   case "$TYPE" in
-    claim|proposal|assessment|agreement|correction|handoff|release|note) ;;
+    claim|proposal|assessment|agreement|correction|handoff|release|note|cohort) ;;
     *) die "unknown event type '$TYPE'" ;;
   esac
 
@@ -237,6 +243,8 @@ emit() {
       [ "$SELECTED" != none ] || die "agreement requires --selected"
       [ "$OWNER" != none ] || die "agreement requires --owner"
       [ "$PARTICIPANTS" != none ] || die "agreement requires --participants" ;;
+    cohort)
+      [ "$PARTICIPANTS" != none ] || die "cohort requires --participants (the reserved codenames)" ;;
   esac
   if [ -n "$BODY_FILE" ] && [ -n "$BODY" ]; then
     die "use either --body or --body-file, not both"
@@ -248,6 +256,7 @@ emit() {
   if [ -z "$BODY_FILE" ] && [ -z "$BODY" ]; then
     case "$TYPE" in
       claim) BODY="Intent and evidence: describe the intended change and why this scope is safe." ;;
+      cohort) BODY="Sibling cohort: codenames pre-allocated together so the wave cannot race the board." ;;
       note) die "note requires --body or --body-file — say what you want your peers to know" ;;
       *) die "$TYPE requires --body-file or --body with evidence and reasoning" ;;
     esac
@@ -287,11 +296,11 @@ emit() {
   } > "$TMP" || { rm -f "$TMP"; die "could not write event"; }
   mv "$TMP" "$TARGET" || { rm -f "$TMP"; die "could not publish event"; }
   say "created collaboration event: .context_ledger/memory/collaboration/events/$ID.json"
-  if [ "$TYPE" = note ]; then
-    say "publish it in a chore(ledger): commit so your peers see it — a note carries no obligation"
-  else
-    say "publish it in a separate chore(ledger): commit before changing the claimed product scope"
-  fi
+  case "$TYPE" in
+    note) say "publish it in a chore(ledger): commit so your peers see it — a note carries no obligation" ;;
+    cohort) : ;;  # cohort_open prints the full commit + spawn-brief guidance itself
+    *) say "publish it in a separate chore(ledger): commit before changing the claimed product scope" ;;
+  esac
 }
 
 released() { # $1 = claim event FILE
@@ -391,10 +400,231 @@ status() {
   say "Everything else is a note plus your own claim/release — you're on the same team, not bidding against each other."
 }
 
+# --- Sibling cohorts: pre-allocated codenames ---------------------------
+#
+# A cohort is a wave of sibling agents a parent spawns together — one
+# session per item of a multi-item task, each in its own worktree. The
+# ledger otherwise models serial arrival, so N siblings that scan the same
+# board at once race for one codename (the S016/S017 collision, N-fold).
+# `cohort open` ends the race by reserving a contiguous block of codenames
+# up front in ONE write by the parent: it appends a reserved roster row per
+# member and records one immutable cohort event for attribution. Each
+# sibling is handed its codename in its spawn brief and, at check-in,
+# CLAIMS its reserved row in place (its name + Status Working) — it never
+# scans for a free number. See ledger-schema.md → "Sibling cohorts".
+
+cohort_usage() {
+  say "ledger-collab cohort — pre-allocate codenames for a wave of sibling agents"
+  say ""
+  say "  open --count N [--agent NAME] [--task TEXT] [--cohort ID] [--session ID]"
+  say "        reserve N contiguous codenames: a reserved roster row per member"
+  say "        + one cohort event. Commit both, push, THEN spawn the siblings"
+  say "        with the printed briefs."
+  say "  list  list recorded cohorts and their members."
+  say "  status [--cohort ID]  each member's codename and its current board state."
+  say ""
+  say "Exit codes: 0 ok; 2 usage/error"
+  exit 2
+}
+
+# current office number = (highest frozen office on record) + 1. Mirrors
+# ledger-history max_office_num; the records in history/ and archive/ are
+# permanent, so the sequence is always derivable with no state file.
+cohort_office_num() {
+  _max=0
+  for _p in "$HISTORY_DIR"/office-*.md "$HISTORY_DIR"/office-*/ "$ARCHIVE_DIR"/office-*.tar.gz; do
+    [ -e "$_p" ] || continue
+    _b=$(basename "$_p"); _b=${_b%%.*}
+    _n=$(printf '%s' "$_b" | sed -n 's/^office-0*\([0-9][0-9]*\)$/\1/p')
+    case "$_n" in ''|*[!0-9]*) continue ;; esac
+    [ "$_n" -gt "$_max" ] && _max=$_n
+  done
+  echo $((_max + 1))
+}
+
+# highest session number currently on the board or in the duty log, read once
+# so a cohort's block is contiguous and cannot race a peer. Reads the session
+# number out of BOTH codename forms: legacy S<n> and structured OF<oo>SS<n>.
+cohort_next_num() {
+  _roster=$OFFICE_DIR/agents/roster.md
+  _sessions=$OFFICE_DIR/agents/sessions.md
+  _max=0
+  if [ -f "$_roster" ]; then
+    _m=$(awk -F'|' '
+      /^[[:space:]]*\|/ {
+        code=$3; gsub(/^[[:space:]]+|[[:space:]]+$/, "", code)
+        if (code ~ /^[Ss][0-9]+$/) { n=substr(code,2)+0; if (n>mx) mx=n }
+        else if (code ~ /^OF[0-9]+SS[0-9]+$/) { c=code; sub(/^OF[0-9]+SS/, "", c); n=c+0; if (n>mx) mx=n }
+      }
+      END { print mx+0 }' "$_roster")
+    [ "$_m" -gt "$_max" ] && _max=$_m
+  fi
+  if [ -f "$_sessions" ]; then
+    _m=$(awk '
+      match($0, /^##[[:space:]].*[Ss]ession[[:space:]]+[0-9]+/) {
+        s=$0; sub(/.*[Ss]ession[[:space:]]+/, "", s); sub(/[^0-9].*/, "", s)
+        n=s+0; if (n>mx) mx=n
+      }
+      END { print mx+0 }' "$_sessions")
+    [ "$_m" -gt "$_max" ] && _max=$_m
+  fi
+  echo $((_max + 1))
+}
+
+# name [status] for a codename from the roster, or empty if absent.
+cohort_roster_row() {
+  [ -f "$1" ] || return 0
+  awk -F'|' -v want="$2" '
+    /^[[:space:]]*\|/ {
+      code=$3; gsub(/^[[:space:]]+|[[:space:]]+$/, "", code)
+      if (tolower(code) == tolower(want)) {
+        name=$2; status=$6
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", name); gsub(/^[[:space:]]+|[[:space:]]+$/, "", status)
+        printf "%s [%s]\n", name, status
+        exit
+      }
+    }
+  ' "$1"
+}
+
+cohort_open() {
+  _count=""; _agent="parent"; _task=""; _cohort=""; _session=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --count)   [ $# -ge 2 ] || die "--count needs a value"; _count=$2; shift 2 ;;
+      --agent)   [ $# -ge 2 ] || die "--agent needs a value"; _agent=$2; shift 2 ;;
+      --task)    [ $# -ge 2 ] || die "--task needs a value"; _task=$2; shift 2 ;;
+      --cohort)  [ $# -ge 2 ] || die "--cohort needs a value"; _cohort=$2; shift 2 ;;
+      --session) [ $# -ge 2 ] || die "--session needs a value"; _session=$2; shift 2 ;;
+      -h|--help) cohort_usage ;;
+      *) die "unknown argument '$1' (try: ledger-collab cohort --help)" ;;
+    esac
+  done
+  case "$_count" in
+    ''|*[!0-9]*) die "cohort open requires --count N (a positive integer)" ;;
+  esac
+  [ "$_count" -ge 1 ] || die "--count must be at least 1"
+  [ "$_count" -le 50 ] || die "--count $_count is implausibly large (cap 50) — split the dispatch"
+  validate_id agent "$_agent"
+  [ -n "$_task" ] || _task="(unspecified)"
+  validate_body "$_task"
+  _roster=$OFFICE_DIR/agents/roster.md
+  [ -f "$_roster" ] || die "no roster at $_roster — is this a bootstrapped project?"
+  [ -n "$_cohort" ] || _cohort="C-$(date -u +%Y%m%dT%H%M%SZ)"
+  validate_id cohort "$_cohort"
+  _base=$(cohort_next_num)
+  _office=$(cohort_office_num)
+  # contiguous reserved codenames, read from the board in one shot. Structured
+  # OF<oo>SS<ss> form: office number + session number, globally unique across
+  # offices and the fleet (legacy S<NNN> is still accepted everywhere).
+  _codes=""; _k=0
+  while [ "$_k" -lt "$_count" ]; do
+    _code=$(printf 'OF%02dSS%02d' "$_office" "$((_base + _k))")
+    _codes="${_codes:+$_codes,}$_code"
+    _k=$((_k + 1))
+  done
+  # append one reserved roster row per member, after the last table row
+  _tmp=$_roster.$$.tmp
+  awk -v codes="$_codes" -v cohort="$_cohort" -v agent="$_agent" -v task="$_task" -v count="$_count" '
+    function flush(   nn, cc, ii) {
+      nn = split(codes, cc, ",")
+      for (ii = 1; ii <= nn; ii++)
+        printf "| (cohort %s slot %d) | %s | - | reserved - cohort %s (%d/%d) | Reserved | opened by %s for: %s; the assigned sibling claims this row in place at check-in |\n", cohort, ii, cc[ii], cohort, ii, count, agent, task
+      done_rows = 1
+    }
+    /^[[:space:]]*\|/ { last = NR }
+    { line[NR] = $0 }
+    END {
+      for (i = 1; i <= NR; i++) { print line[i]; if (i == last) flush() }
+      if (!done_rows) flush()
+    }
+  ' "$_roster" > "$_tmp" || { rm -f "$_tmp"; die "could not stage reserved roster rows"; }
+  mv "$_tmp" "$_roster" || { rm -f "$_tmp"; die "could not write roster"; }
+  # record the cohort as one immutable event (attribution + member list)
+  emit cohort --agent "$_agent" --session "${_session:-$_cohort}" --issue "$_cohort" \
+    --participants "$_codes" --body "$_task"
+  say ""
+  say "cohort $_cohort — reserved $_count codename(s): $_codes"
+  say "Reserved roster rows written; cohort event recorded. Commit BOTH ledger surfaces in one chore(ledger): commit, push, THEN spawn the siblings:"
+  say "  git add .context_ledger/memory/office/agents/roster.md .context_ledger/memory/collaboration/events/"
+  say "  git commit -m \"chore(ledger): open cohort $_cohort — reserve $_codes\" && git push"
+  say "If the push is rejected a peer checked in meanwhile: revert the rows (git checkout -- the roster) and re-run — one re-read, not N."
+  say ""
+  say "Hand each sibling ONE codename in its spawn brief:"
+  _oldifs=$IFS; IFS=,
+  for _c in $_codes; do
+    IFS=$_oldifs
+    say "  - \"You are <pick a real name>, codename $_c, cohort $_cohort. Read .context_ledger/kickoff.md and follow it. At check-in, CLAIM the reserved row for $_c in the roster IN PLACE (your name + Status Working) — do NOT scan for a free number.\""
+    _oldifs=$IFS; IFS=,
+  done
+  IFS=$_oldifs
+}
+
+cohort_list() {
+  [ -d "$EVENT_DIR" ] || { say "no cohorts yet"; return 0; }
+  _n=0
+  for _f in "$EVENT_DIR"/*.json; do
+    [ -f "$_f" ] || continue
+    [ "$(field type "$_f")" = cohort ] || continue
+    _n=$((_n + 1))
+    say "- $(field issue "$_f") — opened by $(field agent "$_f") — members: $(field participants "$_f")"
+    _body=$(first_body_line "$_f"); [ -n "$_body" ] && say "    task: $_body"
+  done
+  [ "$_n" -gt 0 ] || say "(none)"
+}
+
+cohort_status() {
+  _id=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --cohort) [ $# -ge 2 ] || die "--cohort needs a value"; _id=$2; shift 2 ;;
+      -h|--help) cohort_usage ;;
+      *) die "unknown argument '$1'" ;;
+    esac
+  done
+  [ -d "$EVENT_DIR" ] || { say "no cohorts yet"; return 0; }
+  _roster=$OFFICE_DIR/agents/roster.md
+  _n=0
+  for _f in "$EVENT_DIR"/*.json; do
+    [ -f "$_f" ] || continue
+    [ "$(field type "$_f")" = cohort ] || continue
+    _ci=$(field issue "$_f")
+    [ -z "$_id" ] || [ "$_ci" = "$_id" ] || continue
+    _n=$((_n + 1))
+    say "cohort $_ci — opened by $(field agent "$_f")"
+    _codes=$(field participants "$_f")
+    _oldifs=$IFS; IFS=,
+    for _c in $_codes; do
+      IFS=$_oldifs
+      _row=$(cohort_roster_row "$_roster" "$_c")
+      if [ -z "$_row" ]; then
+        say "  $_c — (not on the board — clocked out, or never claimed)"
+      else
+        say "  $_c — $_row"
+      fi
+      _oldifs=$IFS; IFS=,
+    done
+    IFS=$_oldifs
+  done
+  [ "$_n" -gt 0 ] || say "(no matching cohort)"
+}
+
+cohort() {
+  _sub=${1:-}; [ $# -gt 0 ] && shift
+  case "$_sub" in
+    open)   cohort_open "$@" ;;
+    list)   cohort_list "$@" ;;
+    status) cohort_status "$@" ;;
+    ''|-h|--help|help) cohort_usage ;;
+    *) die "unknown cohort subcommand '$_sub' (try: ledger-collab cohort --help)" ;;
+  esac
+}
+
 CMD=${1:-}; [ $# -gt 0 ] && shift
 case "$CMD" in
   emit)   emit "$@" ;;
   status) status "$@" ;;
+  cohort) cohort "$@" ;;
   check)  sh "$SCRIPT_DIR/ledger-collab-check" check "$@" ;;
   ''|-h|--help|help) usage ;;
   *) die "unknown command '$CMD' (try: ledger-collab help)" ;;

@@ -170,12 +170,12 @@ function Check-Event { param([IO.FileInfo]$File)
     if (-not (Get-Field $File $key)) { Fail "$($File.Name) is missing $key" }
   }
   if (-not (Valid-Id $id)) { Fail "$($File.Name) has invalid id '$id'" }
-  if ($type -notin @('note','claim','proposal','assessment','agreement','correction','handoff','release')) {
+  if ($type -notin @('note','claim','proposal','assessment','agreement','correction','handoff','release','cohort')) {
     Fail "$($File.Name) has unknown type '$type'"; return
   }
-  # Notes are informal -- their --re may be a path, URL, event, or commit, so
-  # they are exempt from reference validation (and carry no requirements).
-  if ($type -ne 'note') {
+  # Notes and cohort reservations are informal -- they carry no refs and no
+  # obligations, so they are exempt from reference validation.
+  if ($type -notin @('note','cohort')) {
     foreach ($ref in (Refs $File)) {
       $target = @(Event-By-Id $ref)
       if ($target.Count -gt 0) {

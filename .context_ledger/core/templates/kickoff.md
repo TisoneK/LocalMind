@@ -190,6 +190,18 @@ Full rules for names, codenames, roster-edit etiquette, and identity
 "The live office" table and "Office lifecycle" — this file only tells you
 *when*, not *how*; don't re-derive the how here.
 
+**Were you spawned as part of a sibling cohort** (your brief handed you a
+specific codename and a cohort id)? Then do **not** scan for the next free
+number — your parent already reserved it. Find the `Reserved` roster row for
+your codename and **claim it in place**: set your name and Status `Working`
+in that row, don't add a second. If you are the **parent** dispatching a
+wave, reserve the block first with
+`sh .context_ledger/core/bin/ledger-collab cohort open --count N`
+(commit + push the reserved rows and cohort event before spawning anyone),
+and when the wave's branches come back, merge them and run
+`ledger-state reconcile`. Full mechanics: `ledger-schema.md` →
+"Sibling cohorts".
+
 **Office past `office_size` sessions (default 20)?** It's full — close it
 now, as part of check-in, before the deep read:
 `sh .context_ledger/core/bin/ledger-history close` (dry run, then

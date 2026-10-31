@@ -42,3 +42,13 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** the EPL source was deleted as an empty placeholder — re-add it with the actual URL if wanted. Two test-harness encoding bugs fixed along the way (fixtures/prompt files read as cp1252 on Windows). Acceptance items that need a live provider run remain unverified end-to-end (see notes).
 - **Notes:** none
 - **Report:** .context_ledger/memory/office/reviews/2026-10-31-review.md
+
+---
+## 2026-10-31 — Session 3
+- **Agent:** Amara | **Model:** GLM (Z.ai sandbox) | **Platform:** Linux sandbox (Z.ai), local repo | **Role:** engineer | **Core:** 2.3.2 (upgraded from 2.2.1 this session)
+- **Task:** Upgrade the vendored core 2.2.1 → 2.3.2 (owner-ordered) — `ledger-sync update` from the sibling clone, plus the 2.3.0 union-merge `.gitattributes` adoption the changelog mandates for existing projects.
+- **Commits:** 2 (d8799cd5 check-in, this release commit)
+- **Outcome:** done — pre-flight verified the vendored tree byte-identical to its installed 2.2.1 source (a8cf5bd) and read the 2.2.2/2.3.0/2.3.1/2.3.2 changelog entries (all same-major, backward-compatible; no `--major` needed); `ledger-sync update` swapped the core from the sibling clone (upstream, in-sync @ 703ba5e), LF-normalized, manifest-re-verified, relocked (core.lock provenance: installed_from_version=2.2.1, source in-sync); `.context_ledger/.gitattributes` gained the four `merge=union` append-only-log rules with the local binary-asset overrides preserved (B-2026-08-30-17 guard stays); post-verify: `ledger-sync verify` clean (ps1 parse skipped — no PowerShell in this sandbox; the manifest covers it, and the release notes themselves carry the unrun-ps1 caveat), vendored tree byte-identical to upstream 2.3.2, `ledger-mem check` passed, new tooling smoke-tested (`ledger-state reconcile`, `ledger-collab cohort` present in usage).
+- **Open items:** none. Note for future sessions: 2.3.1's structured codenames (`OF<oo>SS<ss>`) are minted by the new tooling — this session checked in under the legacy `S003` form pre-upgrade, which every tool accepts; 2.3.2's clock-out reminder only fires via `ledger-guard remind` on a resumed line.
+- **Notes:** none
+- **Report:** none — routine ledger upgrade; outcome recorded here and in the shared worklog.

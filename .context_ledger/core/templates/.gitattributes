@@ -25,3 +25,18 @@ memory/**            text eol=lf
 *.json text eol=lf
 *.conf text eol=lf
 *.lock text eol=lf
+
+# --- Append-only ledger logs: union-merge on conflict --------------------
+# These files are append-only — new entries go at the end, past entries are
+# never edited — so concurrent sessions and sibling cohorts ALWAYS conflict
+# on them at merge time (each branch appended its own rows). git's built-in
+# union driver keeps BOTH sides' appended entries and drops the conflict
+# markers: the hand recipe ("union the logs") made automatic and identical on
+# every platform, so sibling branches merge clean with no per-file surgery.
+# After the merge, regenerate the derived digest with `ledger-state reconcile`
+# — STATE.md is a derived view and is NOT union-merged (union would corrupt
+# it); reconcile regenerates it from the now-merged sources.
+memory/office/agents/sessions.md     merge=union
+memory/office/flaws/log.md           merge=union
+memory/office/inefficiencies/log.md  merge=union
+memory/office/plans/decisions.md     merge=union

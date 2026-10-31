@@ -9,6 +9,9 @@
 #
 # Commands:
 #   generate   regenerate memory/office/STATE.md from the current files
+#   reconcile  after a merge of sibling/concurrent branches: regenerate
+#              STATE.md from the (union-merged) sources, then flag any file
+#              under memory/office/ that still carries conflict markers
 #
 # Exit codes: 0 ok · 2 usage/error
 
@@ -32,6 +35,10 @@ usage() {
   say "             Safe to run any time; it never touches anything but"
   say "             STATE.md itself. Called at check-in (kickoff Phase 2)"
   say "             and at exit (ledger-gates run exit)."
+  say ""
+  say "  reconcile  after merging sibling/concurrent branches: regenerate"
+  say "             STATE.md from the union-merged sources, then report any"
+  say "             file under memory/office/ that still has conflict markers."
   say ""
   say "Exit codes: 0 ok; 2 usage/error"
   exit 2
@@ -106,7 +113,7 @@ roster_block() {
       if (n < 4) next
       name = c[2]; code = c[3]
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", name); gsub(/^[[:space:]]+|[[:space:]]+$/, "", code)
-      if (code !~ /^[Ss][0-9]+$/) next
+      if (code !~ /^([Ss][0-9]+|OF[0-9]+SS[0-9]+)$/) next
       doing = (n >= 5) ? c[5] : ""; gsub(/^[[:space:]]+|[[:space:]]+$/, "", doing)
       status = (n >= 6) ? c[6] : ""; gsub(/^[[:space:]]+|[[:space:]]+$/, "", status)
       printf "%s|%s|%s|%s\n", name, code, status, doing
@@ -233,9 +240,41 @@ generate() {
   say "ledger-state: wrote $(basename "$OUT")"
 }
 
+# reconcile — the defined bookkeeping-merge step for sibling cohorts and any
+# concurrent branches. The append-only logs union-merge automatically
+# (.gitattributes merge=union), so after a merge the only ledger file left to
+# fix is the derived STATE.md: regenerate it from the now-merged sources.
+# Then scan memory/office/ for any file that STILL carries conflict markers
+# (a log whose union driver was not active, or an edit-in-place file like
+# roster.md / tasks that git could not auto-resolve) and name it for hand
+# resolution. STATE.md is excluded from the scan — it is the thing we just
+# rewrote.
+reconcile() {
+  [ $# -eq 0 ] || { case "$1" in -h|--help) usage ;; *) die "unknown argument '$1'" ;; esac; }
+  [ -d "$OFFICE_DIR" ] || die "no memory/office/ directory — is this a bootstrapped project?"
+  generate
+  _marked=$(grep -rlE '^<<<<<<< |^=======$|^>>>>>>> ' "$OFFICE_DIR" 2>/dev/null | grep -v '/STATE\.md$' || true)
+  if [ -n "$_marked" ]; then
+    say ""
+    say "ledger-state: conflict markers REMAIN in:"
+    printf '%s\n' "$_marked" | while IFS= read -r _m; do [ -n "$_m" ] && say "  - $_m"; done
+    say ""
+    say "The append-only logs (sessions.md, flaws/log.md, inefficiencies/log.md,"
+    say "plans/decisions.md) should union-merge automatically via .gitattributes"
+    say "(merge=union). If one is listed above, the union driver is not active for"
+    say "this checkout — resolve it by keeping BOTH sides' entries. roster.md and"
+    say "tasks/ are edit-in-place: keep every still-live row, drop the markers."
+    say "Then re-run: ledger-state reconcile."
+    return 2
+  fi
+  say "ledger-state: reconciled — STATE.md regenerated; no conflict markers left under memory/office/."
+  say "Review the merge, then: git add the resolved files + STATE.md and commit."
+}
+
 CMD=${1:-}; [ $# -gt 0 ] && shift
 case "$CMD" in
-  generate) generate "$@" ;;
+  generate)  generate "$@" ;;
+  reconcile) reconcile "$@" ;;
   ''|-h|--help|help) usage ;;
   *) die "unknown command '$CMD' (try: ledger-state help)" ;;
 esac
