@@ -3,7 +3,11 @@
 Session: Nora (S009). The external analysis recommended DeepSeek Harness
 ("DSH", https://github.com/deepseek-ai/deepseek-harness) as an architectural
 reference for prompt construction, context building and execution
-observability. Per the owner's standing ruling, this is a STUDY of design
+observability. > 2026-11-01 (Sefu, S010): this sketch is superseded as the office's deep
+> reference by `2026-11-01-external-harness-deep-study.md` — full request
+> lifecycle, prompt gap table (G1-G8), thinker design, adoption queue.
+
+Per the owner's standing ruling, this is a STUDY of design
 principles only — no DSH vocabulary, names, or structures are to be carried
 into LocalMind artifacts; what we adopt gets expressed in LocalMind's own
 terms at implementation time.
