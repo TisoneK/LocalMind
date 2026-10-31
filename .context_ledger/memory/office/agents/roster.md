@@ -52,6 +52,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
+| Kofi | S001 | unknown (harness states no model ID) | Fix the `storage.vector` embedding dimension mismatch at startup (768 expected vs 1024 received) | Working | Phase 2 check-in; root-cause investigation next |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
