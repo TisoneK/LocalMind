@@ -60,6 +60,7 @@ out of the queue, not into the void.
 
 | ID | Summary |
 |----|---------|
+| P-2026-10-31-1 | Teach `scripts/reset_vector_db.py` the cloud embedder path. It probes Ollama only, so a cloud-only setup (Ollama unreachable, OpenAI-compatible embedder configured) cannot use the repair tool to rebuild a stale index — VectorStore's own startup reconciliation handles that state, but the script exits with "Could not determine actual dim". Mirror `VectorStore._probe_cloud_dim` and record the cloud backend id when re-embedding. Context: 2026-10-31 vector dimension review (`office/reviews/2026-10-31-review.md`). |
 
 ## Someday
 
