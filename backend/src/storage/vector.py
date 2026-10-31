@@ -378,14 +378,21 @@ def _embed_cached(norm_text: str, mode: str, url: str, model: str) -> tuple:
             resp = httpx.post(
                 post_url, json={"model": model, "prompt": norm_text}, timeout=_EMBED_TIMEOUT
             )
-            if resp.status_code != 200:
-                resp = httpx.post(
+            if resp.status_code == 200:
+                data = resp.json().get("embedding")
+                result = tuple(data) if data else None
+            else:
+                # Never retry with the chat model: its vectors belong to a
+                # different space (and usually a different dimension), so the
+                # "fallback" silently corrupted any live index it wrote into.
+                logger.warning(
+                    "[embed] %s returned %s for embed model %r — is the model "
+                    "pulled? Check OLLAMA_EMBED_MODEL (the chat model is not a "
+                    "substitute embedder).",
                     post_url,
-                    json={"model": settings.ollama_model, "prompt": norm_text},
-                    timeout=_EMBED_TIMEOUT,
+                    resp.status_code,
+                    model,
                 )
-            data = resp.json().get("embedding")
-            result = tuple(data) if data else None
     except Exception as exc:
         logger.warning("Embedding request failed: %s", exc)
     finally:
@@ -628,6 +635,24 @@ def _get_connection(db_path: str) -> sqlite3.Connection:
         return _pool[key]
 
 
+def _vec_table_dim(conn: sqlite3.Connection) -> int | None:
+    """Dimension the live vec0 table was created with (None if absent).
+
+    sqlite-vec freezes a vec0 table's dimension at CREATE time and
+    `CREATE VIRTUAL TABLE IF NOT EXISTS` never alters it — so the table's
+    own DDL, not vector_meta, is the ground truth for what an INSERT will
+    accept. A stale meta row otherwise lets startup look healthy while every
+    write fails at runtime with "Dimension mismatch".
+    """
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'vector_embeddings'"
+    ).fetchone()
+    if not row or not row[0]:
+        return None
+    match = re.search(r"float\[(\d+)\]", row[0])
+    return int(match.group(1)) if match else None
+
+
 # ── VectorStore ────────────────────────────────────────────────────────────────
 
 
@@ -731,6 +756,14 @@ class VectorStore:
         except Exception:
             return 0
 
+    def _vector_row_count(self, conn: sqlite3.Connection) -> int:
+        """Vectors actually present. Facts can exist without vectors (a reset
+        keeps the text and drops the index), and those rows claim no space."""
+        try:
+            return conn.execute("SELECT COUNT(*) FROM vector_embeddings").fetchone()[0]
+        except Exception:
+            return 0
+
     def _meta_get(self, conn: sqlite3.Connection, key: str) -> str | None:
         row = conn.execute("SELECT value FROM vector_meta WHERE key = ?", (key,)).fetchone()
         return row["value"] if row else None
@@ -824,6 +857,78 @@ class VectorStore:
     def _connect(self) -> sqlite3.Connection:
         return _get_connection(self._db_path)
 
+    def _reconcile_vec_dim(
+        self, conn: sqlite3.Connection, stored_dim: int | None
+    ) -> tuple[int | None, tuple[int, int] | None]:
+        """Make vector_meta agree with the live vec0 table.
+
+        The table's frozen DDL is authoritative about what INSERTs accept, so
+        a meta row that disagrees with it is what lets startup pass while every
+        write fails at runtime. An empty index is rebuilt at the dimension the
+        configured embedder produces; a populated one is trusted over the meta
+        row. Returns (effective_stored_dim, mismatch), where a non-None
+        mismatch means stored vectors and the active embedder occupy different
+        spaces and writes must stay refused.
+        """
+        table_dim = _vec_table_dim(conn)
+        if table_dim is None or stored_dim == table_dim:
+            return stored_dim, None
+
+        vector_rows = conn.execute("SELECT COUNT(*) FROM vector_embeddings").fetchone()[0]
+        actual_dim = self._probe_embed_dim()
+
+        if vector_rows == 0:
+            # No vectors to lose: rebuild the empty index at the dimension the
+            # active embedder returns. The recorded backend id describes a
+            # space with no vectors left, so drop it rather than let it block
+            # the rebuild behind the embedding-space guard.
+            expected = actual_dim or stored_dim or table_dim
+            conn.execute("DROP TABLE IF EXISTS vector_embeddings")
+            conn.execute("DELETE FROM vector_meta WHERE key = 'embed_backend_id'")
+            conn.execute(
+                "INSERT OR REPLACE INTO vector_meta(key, value) VALUES ('dim', ?)",
+                (str(expected),),
+            )
+            if actual_dim is not None:
+                mode, url, model, _ = _current_backend(self._base_url)
+                conn.execute(
+                    "INSERT OR REPLACE INTO vector_meta(key, value) VALUES ('embed_backend_id', ?)",
+                    (_backend_id(mode, url, model),),
+                )
+            conn.commit()
+            logger.warning(
+                "[vector] repaired empty vec index: table dim=%d, vector_meta dim=%s "
+                "-> rebuilt at dim=%d",
+                table_dim,
+                stored_dim,
+                expected,
+            )
+            return expected, None
+
+        if actual_dim is None or actual_dim == table_dim:
+            # The stored vectors define the space actually present; a probe
+            # that agrees (or cannot run) means only the meta row was stale.
+            conn.execute(
+                "INSERT OR REPLACE INTO vector_meta(key, value) VALUES ('dim', ?)",
+                (str(table_dim),),
+            )
+            conn.commit()
+            logger.warning(
+                "[vector] corrected stale vector_meta dim: %s -> %d (from vec index)",
+                stored_dim,
+                table_dim,
+            )
+            return table_dim, None
+
+        logger.error(
+            "[vector] DIM MISMATCH — vec index holds dim=%d vectors but %s now "
+            "returns dim=%d. Run: python scripts/reset_vector_db.py --yes",
+            table_dim,
+            settings.ollama_embed_model,
+            actual_dim,
+        )
+        return table_dim, (table_dim, actual_dim)
+
     def _init_db(self) -> None:
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         try:
@@ -854,6 +959,19 @@ class VectorStore:
             conn.commit()
             row = conn.execute("SELECT value FROM vector_meta WHERE key = 'dim'").fetchone()
             stored_dim = int(row["value"]) if row else None
+
+            # sqlite-vec's table DDL is the authority on the embedding space
+            # actually on disk — reconcile it with vector_meta before any
+            # readiness decision, or a stale meta row yields a store that looks
+            # healthy at startup and rejects every write at runtime.
+            stored_dim, dim_conflict = self._reconcile_vec_dim(conn, stored_dim)
+            if dim_conflict is not None:
+                self._dim_mismatch = dim_conflict
+                if self._cloud_usable() and self._bind_to_cloud(conn, dim_conflict[0]):
+                    # The configured index backend is the one that wrote these
+                    # vectors — the Ollama probe is irrelevant to it.
+                    self._dim_mismatch = None
+                return
 
             # Restart continuity: an index already written by the currently
             # configured cloud backend stays on that backend — Ollama coming
@@ -894,7 +1012,11 @@ class VectorStore:
                         ollama_id = _backend_id(
                             "ollama", self._base_url.rstrip("/"), settings.ollama_embed_model
                         )
-                        if recorded is not None and recorded != ollama_id:
+                        if (
+                            recorded is not None
+                            and recorded != ollama_id
+                            and self._vector_row_count(conn) > 0
+                        ):
                             logger.error(
                                 "[vector] index was written by backend %r — refusing "
                                 "to extend it with a different embedding space. "
@@ -1212,6 +1334,21 @@ class VectorStore:
             if self._dim is None:
                 self._set_dim(conn, len(pairs[0][1]))
 
+            # Runtime space guard: the embedder answering now may differ from
+            # the one that created the index (model swapped, wrong model
+            # pulled). sqlite-vec would otherwise reject the whole batch with
+            # "Dimension mismatch" after the transaction was already open.
+            wrong_dim = next((len(vec) for _, vec in pairs if len(vec) != self._dim), None)
+            if wrong_dim is not None:
+                logger.error(
+                    "[vector] embedder now returns dim=%d but the index is dim=%d — "
+                    "batch refused. Run: python scripts/reset_vector_db.py --yes",
+                    wrong_dim,
+                    self._dim,
+                )
+                self._dim_mismatch = (self._dim, wrong_dim)
+                return 0
+
             # BEGIN IMMEDIATE, not plain BEGIN: the dedup SELECT below takes a
             # WAL read snapshot, and a deferred BEGIN's upgrade to a write lock
             # FAILS INSTANTLY with "database is locked" (SQLITE_BUSY) if any
@@ -1314,6 +1451,15 @@ class VectorStore:
         if vec_raw is None:
             return []
         vec = vec_raw if _is_normalised(vec_raw) else _normalise(vec_raw)
+        if self._dim is not None and len(vec) != self._dim:
+            logger.error(
+                "[vector] query embedded at dim=%d but the index is dim=%d — "
+                "recall skipped. Run: python scripts/reset_vector_db.py --yes",
+                len(vec),
+                self._dim,
+            )
+            self._dim_mismatch = (self._dim, len(vec))
+            return []
         try:
             conn = self._connect()
             total = conn.execute("SELECT COUNT(*) FROM vector_facts").fetchone()[0]

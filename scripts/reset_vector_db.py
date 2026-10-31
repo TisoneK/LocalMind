@@ -12,11 +12,14 @@ the frozen schema — causing silent write failures or cryptic errors.
 WHAT THIS SCRIPT DOES
 ──────────────────────
 1. Probe the currently-configured embed model to get its actual dim.
-2. Read the dim stored in vector_meta.
-3. If they match: exit cleanly — nothing to fix.
-4. If they differ:
+2. Read the dim recorded in vector_meta AND the dim frozen in the vec0 table's
+   DDL — the table is what sqlite-vec enforces, so a stale meta row must not
+   mask a real mismatch.
+3. If the vec0 table already matches the embedder: exit cleanly (a stale meta
+   row alone is repaired by VectorStore at startup).
+4. Otherwise:
    a. Export all stored facts (text only — embeddings are recomputed fresh).
-   b. Drop vector_embeddings, embed_cache, and the 'dim' row in vector_meta.
+   b. Drop vector_embeddings, embed_cache, and the dim row in vector_meta.
    c. Re-embed all facts at the correct dim and re-insert them.
 
 USAGE
@@ -34,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import re
 import sqlite3
 import struct
 import sys
@@ -75,7 +79,7 @@ def _probe_dim(base_url: str, embed_model: str) -> int | None:
 
 
 def _get_stored_dim(db_path: str) -> int | None:
-    """Read the dim frozen in vector_meta, or None if the table/row doesn't exist."""
+    """Read the dim recorded in vector_meta, or None if the table/row doesn't exist."""
     try:
         conn = sqlite3.connect(db_path)
         row = conn.execute(
@@ -83,6 +87,28 @@ def _get_stored_dim(db_path: str) -> int | None:
         ).fetchone()
         conn.close()
         return int(row[0]) if row else None
+    except Exception:
+        return None
+
+
+def _get_vec_table_dim(db_path: str) -> int | None:
+    """Read the dim frozen into the vec0 table's DDL, or None if it doesn't exist.
+
+    This is the dimension sqlite-vec actually enforces on INSERT — vector_meta
+    can say something else (a stale row), and comparing only the meta row is
+    how this script once reported "dims match" while every write failed.
+    """
+    try:
+        conn = sqlite3.connect(db_path)
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master "
+            "WHERE type = 'table' AND name = 'vector_embeddings'"
+        ).fetchone()
+        conn.close()
+        if not row or not row[0]:
+            return None
+        match = re.search(r"float\[(\d+)\]", row[0])
+        return int(match.group(1)) if match else None
     except Exception:
         return None
 
@@ -102,15 +128,23 @@ def _export_facts(db_path: str) -> list[tuple[str, str, str]]:
 
 
 def _drop_vector_tables(db_path: str) -> None:
-    """Drop the virtual table, embed cache, and stored dim so _init_db starts fresh."""
+    """Drop the virtual table, embed cache, and stored dim/backend so a fresh
+    index can be built at the probed dimension.
+
+    The sqlite-vec extension must be loaded on THIS connection: without its
+    module, `DROP TABLE vector_embeddings` fails and the old table survives,
+    which made a later `CREATE VIRTUAL TABLE IF NOT EXISTS` silently keep the
+    stale dimension. The failure is no longer swallowed for that reason.
+    """
+    import sqlite_vec
+
     conn = sqlite3.connect(db_path)
-    # sqlite-vec virtual tables must be dropped before their shadow tables vanish
-    try:
-        conn.execute("DROP TABLE IF EXISTS vector_embeddings")
-    except Exception:
-        pass
+    conn.enable_load_extension(True)
+    sqlite_vec.load(conn)
+    conn.enable_load_extension(False)
+    conn.execute("DROP TABLE IF EXISTS vector_embeddings")
     conn.execute("DELETE FROM embed_cache")
-    conn.execute("DELETE FROM vector_meta WHERE key = 'dim'")
+    conn.execute("DELETE FROM vector_meta WHERE key IN ('dim', 'embed_backend_id')")
     conn.commit()
     conn.close()
 
@@ -145,12 +179,14 @@ def run(db_path: str, probe_only: bool, yes: bool) -> None:
     print()
 
     stored_dim = _get_stored_dim(db_path)
-    if stored_dim is None:
-        print("  vector_meta has no 'dim' row — DB is uninitialised or already clean.")
-        print("  Nothing to reset.")
+    table_dim = _get_vec_table_dim(db_path)
+    if stored_dim is None and table_dim is None:
+        print("  vector_meta has no 'dim' row and no vec0 table — DB is")
+        print("  uninitialised or already clean. Nothing to reset.")
         return
 
-    print(f"  Stored dim : {stored_dim}")
+    print(f"  vector_meta dim : {stored_dim}")
+    print(f"  vec0 table dim  : {table_dim}")
     print(f"  Probing actual dim from Ollama…", end=" ", flush=True)
     actual_dim = _probe_dim(base_url, embed_model)
     if actual_dim is None:
@@ -160,11 +196,22 @@ def run(db_path: str, probe_only: bool, yes: bool) -> None:
     print(actual_dim)
     print()
 
-    if actual_dim == stored_dim:
-        print("  Dims match — no mismatch detected. Nothing to reset.")
+    if table_dim == actual_dim:
+        # The index already enforces the right dimension — only the meta row
+        # may be stale, and VectorStore repairs that at startup without
+        # touching any vectors.
+        if stored_dim != actual_dim:
+            print(f"  vector_meta dim={stored_dim} is stale, but the vec0 index")
+            print(f"  already matches the embedder (dim={actual_dim}); LocalMind")
+            print("  corrects the meta row at startup. Nothing to reset.")
+        else:
+            print("  Dims match — no mismatch detected. Nothing to reset.")
         return
 
-    print(f"  MISMATCH: stored={stored_dim}  actual={actual_dim}")
+    print(
+        f"  MISMATCH: vec0 index={table_dim}  embedder={actual_dim}  "
+        f"vector_meta={stored_dim}"
+    )
     print()
 
     if probe_only:
@@ -205,10 +252,25 @@ def run(db_path: str, probe_only: bool, yes: bool) -> None:
         "INSERT OR REPLACE INTO vector_meta(key, value) VALUES ('dim', ?)",
         (str(actual_dim),),
     )
+    # Re-embedded vectors come from this Ollama backend: record its identity so
+    # restarts know which embedding space the index actually holds.
+    from storage.vector import _backend_id
+
+    conn.execute(
+        "INSERT OR REPLACE INTO vector_meta(key, value) VALUES ('embed_backend_id', ?)",
+        (_backend_id("ollama", base_url, embed_model),),
+    )
     conn.execute(f"""
         CREATE VIRTUAL TABLE IF NOT EXISTS vector_embeddings
         USING vec0(embedding float[{actual_dim}])
     """)
+    created_sql = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'vector_embeddings'"
+    ).fetchone()[0]
+    if f"float[{actual_dim}]" not in created_sql:
+        conn.close()
+        print(f"  ERROR: vec0 table was not rebuilt at dim={actual_dim} — aborting.")
+        sys.exit(1)
     conn.commit()
 
     ok = 0
