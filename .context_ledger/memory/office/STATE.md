@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-31T09:35:29Z_
+_Regenerated: 2026-10-31T10:17:21Z_
 
 ## Standing params
 - **Core:** 2.2.1 (locked, verified 2026-10-31)
@@ -16,9 +16,10 @@ _Regenerated: 2026-10-31T09:35:29Z_
 
 ## Office — who's in, right now
 - **Nadia** (S002) — Done — Fix the Cerebras `messages.2.user.tool_calls is unsupported` payload rejection and the co…
+- **Amara** (S003) — Working — Upgrade the vendored core 2.2.1 → 2.3.2 via ledger-sync (owner-ordered)
 
 ## Current task
-- **—** — none — no session in progress — *idle*
+- **2026-10-31 — Amara / GLM (Z.ai sandbox)** — Upgrade the vendored core 2.2.1 → 2.3.2 (`ledger-sync update` from the sibling clone), adopt the 2.3.0 union-merge `.gitattributes` rules… — *in-progress*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-10-31-1 | In-app State Explorer + engine selector (ADR-71): port the explorer into the app as its own interface (game tree, move list, eval bar, inspector, meters, rewindable timeline) and add the Classic/State engine setting. Reference: `docs/prototypes/state-explorer/`, `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter `state_agent/adapters/localmind.py`); `EngineEvent` is the UI contract. Check whether the in-flight port landed before starting. |

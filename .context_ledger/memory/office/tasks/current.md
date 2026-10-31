@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — no session in progress
-- **Status:** idle
+- **Session:** 2026-10-31 — Amara / GLM (Z.ai sandbox)
+- **Task:** Upgrade the vendored core 2.2.1 → 2.3.2 (`ledger-sync update` from the sibling clone), adopt the 2.3.0 union-merge `.gitattributes` rules, verify, release.
+- **Status:** in-progress
