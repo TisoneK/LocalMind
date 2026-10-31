@@ -75,3 +75,12 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Report:** none — single-site fix; root cause, repro and verification recorded here and in the shared worklog.
 
 ---
+## 2026-10-31 — Session 6
+- **Agent:** Maya | **Model:** GLM (Z.ai sandbox) | **Platform:** Linux sandbox (Z.ai), local repo | **Role:** engineer | **Core:** 2.3.2
+- **Task:** The owner-approved follow-up to the Session 4 crash fix: a friendlier recovery than the full-screen Reload-or-Reset wall ("Yes that sound really cool" in reply to the offer).
+- **Commits:** 3 by this session (3748dc51 check-in, 4f688dd3 product + changelog, this ledger close).
+- **Outcome:** done — built the scoped recovery flow: new `RecoveryBoundary` class component wrapping each of the three workspace regions in `WorkspaceLayout` (sidebar, conversation panel incl. StateExplorer, side panel). A crash now shows a compact card naming the region; **Try again** remounts just the crashed subtree with no page reload (the conversation, composer draft and other panels keep their state); **Copy details** writes a paste-ready crash report — error, JS stack, React component stack, environment (`lib/localmind/crashReport.ts`) — and lays the report out on the card when the clipboard refuses; a region that crashes twice in a row without a clean re-mount says so (crash streak resets when a recovery actually lands); **Full reload** stays as the last resort. The top-level `AppErrorBoundary` keeps Reload / Reset view and gains the same Copy details. CHANGELOG: Added entry for the recovery flow, plus the previously-missing Fixed entry for Session 4's Thought-row crash (05551ec4 shipped without one). Honest scope note: a conversation-panel crash still resets the composer draft (panel-local state) — everything else survives, which the card's Try again cannot be blamed for losing.
+- **Verification:** 10 new tests (RecoveryBoundary 8, AppErrorBoundary copy-report 1, crashReport 2 — jsdom's unforgeable `Location.reload` needed a whole-object stub); full frontend suite 674 passed / 66 files, `tsc` clean. Push was rejected once (Tobias's session-log commit landed mid-build, ledger files only, no collision) — rebased, smoke re-run, pushed clean.
+- **Open items:** none. Sandbox note: the MultiEdit tool applied a partial batch despite reporting atomic failure — caught by post-edit grep + tsc before commit; verify file state after multi-edit batches here.
+- **Notes:** none
+- **Report:** none — the design and its limits are recorded here and in the shared worklog.

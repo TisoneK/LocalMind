@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-10-31 — Maya / GLM (Z.ai sandbox)
-- **Task:** Friendlier renderer crash recovery than the current full-screen Reload / Reset view wall — scoped retry, preserved context, copyable error details. Follow-up the owner approved after the 05551ec4 Thought-row crash fix.
-- **Status:** in-progress
+- **Session:** —
+- **Task:** none — no session in progress
+- **Status:** idle
