@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-31T13:35:33Z_
+_Regenerated: 2026-10-31T14:37:06Z_
 
 ## Standing params
 - **Core:** 2.3.2 (locked, verified 2026-10-31)
@@ -16,10 +16,10 @@ _Regenerated: 2026-10-31T13:35:33Z_
 
 ## Office — who's in, right now
 - **Nadia** (S002) — Done — Fix the Cerebras `messages.2.user.tool_calls is unsupported` payload rejection and the co…
-- **Rosa** (S008) — Working — Build B-2026-10-31-24 — turn-close attribution + honest completion contract (owner-obse…
+- **Rosa** (S008) — Done — Build the turn-close attribution + honest completion contract (owner-observed "Working" w…
 
 ## Current task
-- **2026-10-31 — Rosa / GLM (Z.ai sandbox)** — B-2026-10-31-24 — turn-close attribution + honest completion contract (owner-observed "Working" window; audit §1.3) — *in-progress*
+- **—** — none — no session in progress — *idle*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-10-31-1 | In-app State Explorer + engine selector (ADR-71): port the explorer into the app as its own interface (game tree, move list, eval bar, inspector, meters, rewindable timeline) and add the Classic/State engine setting. Reference: `docs/prototypes/state-explorer/`, `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter `state_agent/adapters/localmind.py`); `EngineEvent` is the UI contract. Check whether the in-flight port landed before starting. |
@@ -27,7 +27,6 @@ _Regenerated: 2026-10-31T13:35:33Z_
 | B-2026-10-31-3 | Benchmark the state engine against Classic (ADR-71 §8): both engines selectable and observable, same tasks, measurable comparison, only then a decision about an `Auto` engine. Ties to B-2026-10-31-1. |
 | B-2026-10-31-4 | Confirmable-refusal rollout (ADR-67): convert every tool that refuses or guesses to "refuse only on a verified fact, name the fact and the confirming flag" — start with delete (`confirm_delete`), the shell tool's destructive/mass-touch commands (replace the substring blocklist), and installs (`scope=system`); record confirming flags in the run trace. |
 | B-2026-10-31-21 | Perspective & speaker-identity consistency (external audit 2026-10-31): the turn's reasoning got the relationship right ("they are my creator") while the reply reversed it ("As your creator…"). Add the exact exchange to a regression/eval set and evaluate a bounded read-only consistency check (same shape as the reply-is-pending judge) on replies that assert a relationship — who speaks, who is addressed, polarity preserved; nudge only, never a pronoun-replacement rule. Full context: `office/reviews/2026-10-31-external-audit-intake.md` §1.1. |
-| B-2026-10-31-24 | Turn-close attribution + honest completion contract (owner-observed 2026-10-31; audit §1.3): the reply is fully on screen while the turn still reports Working/Deep diving and Stop stays live. Instrument per-stage timestamps (turn_started → turn_completed) plus tokens and which post-answer lanes ran (completion judge ≤8s gate, acceptance gate, memory lanes); attribute the window; then decide the contract — a RESPONSE_READY vs COMPLETED display distinction, Stop honesty, whether post-turn lanes may hold the SSE open (ties B-2026-10-31-5 / ADR-66b). Include the prompt-size breakdown (547 → 6.7K tok across two short turns — what is injected per section; 92% cache hit). |
 
 _13 medium, 1 low priority row(s) — see tasks/backlog.md_
 
