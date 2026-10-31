@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261031T174458Z-Sefu-78c46fc5",
+  "type": "release",
+  "session": "S010",
+  "agent": "Sefu",
+  "created": "2026-10-31T17:44:58Z",
+  "issue": "harness-deep-study-greeting-retirement",
+  "body": "Product commit a9f64c82 landed: canned-greeting retirement (stale comments corrected, new never-canned guard test; 92 gate-area tests green). backend/src/core/trivial_input.py changed as warned in my earlier note — if your verification run predates this SHA, re-pull and re-run; Nora's fd480e3e/3a0f15e8 behavior is untouched (the canned strings still serve the provider-down fallback). If your verification predates this SHA, please re-run against it.",
+  "paths": [],
+  "refs": ["a9f64c82"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
