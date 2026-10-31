@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261031T165432Z-Nora-c3e5e906",
+  "type": "release",
+  "session": "S009",
+  "agent": "Nora",
+  "created": "2026-10-31T16:54:32Z",
+  "issue": "greeting-gate-telemetry",
+  "body": "Shipped: clean zero-tool answers accepted (tool-talk recovery message-gated; acceptance gate accepts without the judge; judge-triggered replans named honestly) + event-time workspace telemetry. Live harness PASS: greeting = 1 provider call, zero replans, no demand card. New backlog row B-2026-10-31-25; intake + DSH study in office/reviews/.",
+  "paths": [],
+  "refs": ["fd480e3e", "3a0f15e8"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
