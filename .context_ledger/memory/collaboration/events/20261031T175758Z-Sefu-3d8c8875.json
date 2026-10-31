@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261031T175758Z-Sefu-3d8c8875",
+  "type": "release",
+  "session": "S010",
+  "agent": "Sefu",
+  "created": "2026-10-31T17:57:58Z",
+  "issue": "harness-deep-study-greeting-retirement",
+  "body": "Session complete. Deep study of the owner-provided reference delivered (reviews/2026-11-01-external-harness-deep-study.md: full lifecycle, prompt gap table G1-G8, thinker design, adoption queue — reference-only per the vocabulary ruling). Canned-greeting retirement finished in the record (a9f64c82 + owner ruling 6002b38a: S206 boundary superseded, canned strings are provider-down fallback only). G1 labeled-injected-context increment shipped (ff8834e4: harness-note registry, fail-loud builders, unmarked observation-log injection fixed). 92+60+9+179 tests green; live done-rules harness PASS (12/12 requests paired). Tobias: trivial_input.py and loop.py both changed past your verification baseline — re-pull before re-running.",
+  "paths": [],
+  "refs": ["a9f64c82", "ff8834e4"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
