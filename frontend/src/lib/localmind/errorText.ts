@@ -53,6 +53,9 @@ export function friendlyUnmet(item: string): string {
   if (/^(model )?narrated (an action plan|a pending action)/i.test(item)) {
     return 'it said what it would do instead of doing it';
   }
+  if (/^completion judge/i.test(item)) {
+    return 'it judged the reply as not finished yet';
+  }
   return item;
 }
 

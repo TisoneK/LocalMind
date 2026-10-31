@@ -6846,6 +6846,17 @@ class AgentLoop:
                 # user as a garbled "Approach" thinking block. Tool-talk is only
                 # a failure when the turn is SUPPOSED to use tools (agent
                 # intents); a conversational turn must never get the correction.
+                #
+                # The intent gate alone is not enough: a greeting the
+                # classifier MISROUTES into an agent intent (live export
+                # 2026-10-31: "Hey sup LM?" → analyze) still lands here, and
+                # the reply's "thanks for checking in" matched the
+                # checking-…-in/for/on/about narration pattern, so the same
+                # user-role demand was injected into a greeting. The recovery
+                # therefore also requires the user's message to actually
+                # imply a tool action (or approve one) — the same condition
+                # the action-narration detector below uses; an analysis-only
+                # request never gets it.
                 if (
                     intent in AGENT_INTENTS
                     and _is_tool_talk(initial_buffer)
@@ -6856,6 +6867,17 @@ class AgentLoop:
                     # impossible (no schemas) and burns the recovery budget
                     # before the acceptance gate can FORCE_TOOL properly.
                     and not _answer_only_call_used
+                    and (
+                        _message_implies_tool_action(
+                            reformulated_message or _user_message_text(loop_messages) or ""
+                        )
+                        or _message_is_action_approval(
+                            reformulated_message or _user_message_text(loop_messages) or ""
+                        )
+                    )
+                    and not _should_skip_workspace_state(
+                        reformulated_message or _user_message_text(loop_messages) or ""
+                    )
                 ):
                     trace.tool_talk_recoveries += 1
                     logger.warning(
@@ -8008,34 +8030,69 @@ class AgentLoop:
             # unchanged (return the legacy model-assertion path below).
             _floor_note = parent_completion_floor_note(trace) if is_parent else None
             if _floor_note is None:
-                # Zero-tool success shapes (injected-context gate): turns
-                # whose answer is fully grounded in context the loop itself
-                # injects (current date/time — the environment context block
-                # carries the clock into every turn) and clean policy
-                # declines of violation-shaped requests carry NO tool
-                # evidence by design. The narration detectors below exist to
-                # catch narrated-but-unexecuted ACTIONS, so a grounded
-                # answer or a refusal that narrates nothing is accepted.
-                # The detectors still win when the text commits to a tool
-                # action — "I'll write that to a file" is narration even
-                # when it quotes the injected date.
+                # Zero-tool turns: a clean answer with nothing narrated is
+                # accepted outright. This used to cover only the
+                # injected-context success shapes (answers grounded in the
+                # loop's own clock/context injection, and clean policy
+                # declines) — but the narration detectors below exist to
+                # catch narrated-but-unexecuted ACTIONS, and every zero-tool
+                # "is it really done?" question the detectors don't catch is
+                # one the reply-pending judge cannot answer from evidence
+                # either (its evidence digest is empty). So the same accept
+                # now covers every clean zero-tool reply.
                 if is_parent and not any(
                     getattr(s, "tool_name", "") for s in getattr(trace, "steps", []) or []
                 ):
                     _final_text = getattr(trace, "final_response", "") or ""
                     from core.agent.injected_context_gate import (
-                        zero_tool_turn_is_valid,
+                        answer_grounded_in_injected_context,
+                        answer_is_policy_decline,
+                        request_matches_decline_class,
+                        request_matches_grounded_class,
+                        request_matches_identity_class,
+                        request_matches_system_fact_class,
                     )
 
+                    # A zero-tool turn whose request asks an injected-context
+                    # fact (date/time, machine fact, identity) or a
+                    # policy-violation shape keeps its class check: the
+                    # answer must actually be grounded / an honest decline,
+                    # or the fabricated-content recovery below still fires.
+                    _msg = reformulated_message or ""
+                    _claims_context = (
+                        request_matches_grounded_class(_msg)
+                        or request_matches_system_fact_class(_msg)
+                        or request_matches_identity_class(_msg)
+                        or request_matches_decline_class(_msg)
+                    )
+                    _class_ok = (
+                        not _claims_context
+                        or answer_grounded_in_injected_context(_msg, _final_text)
+                        or answer_is_policy_decline(_msg, _final_text)
+                    )
                     if (
                         _final_text.strip()
                         and not prose_commits_to_tool_action(_final_text)
                         and not narrates_pending_action(_final_text)
-                        and zero_tool_turn_is_valid(
-                            message=reformulated_message or "",
-                            answer=_final_text,
-                        )
+                        and _class_ok
                     ):
+                        # A no-tool decision is a valid execution outcome. On
+                        # a zero-tool turn the reply-pending judge has an
+                        # EMPTY evidence digest — nothing groundable, so it
+                        # re-judges the bare text, and on a plain greeting it
+                        # read "pending", forced a [TOOL COMMITMENT] replan
+                        # for an action nobody promised, and burned two extra
+                        # model calls re-answering the same greeting (live
+                        # export 2026-10-31: "Hey sup LM?" → 4 model calls,
+                        # 0 tools, ~100 s, intent misrouted to analyze, and a
+                        # visible self-doubt spiral in the thinking). Every
+                        # zero-tool false-positive the judge could catch — a
+                        # promised-but-untaken follow-up — is already caught
+                        # deterministically by the two detectors above, so a
+                        # clean zero-tool answer is accepted whatever the
+                        # intent said. The judge keeps its real job on turns
+                        # where tools DID run: catching an answer that ends
+                        # by promising a next step it never took.
                         return "", True
                 # The prose-tool-commitment
                 # detector. Distinct from the completion floor (which fires
@@ -8091,12 +8148,25 @@ class AgentLoop:
                             for m in (loop_messages or [])
                         )
                         if not _already_nudged and iteration + 1 < effective_max_iter:
+                            # Name the REAL trigger. The phrase detector and
+                            # the completion judge share this nudge site; a
+                            # hardcoded prose-commitment reason here wrote a
+                            # false "committed to a tool action" card (and the
+                            # matching replan loop) over a plain greeting whose
+                            # actual trigger was the judge — the model then
+                            # spent its visible reasoning doubting a commitment
+                            # it never made.
+                            _unmet_reason = (
+                                "model committed to a tool action in prose but emitted no tool_call"
+                                if _commits
+                                else "completion judge judged the reply still pending"
+                            )
                             if obs:
                                 obs.emit(
                                     "agent_loop_gate_failed_replan",
-                                    intent=intent.value,
+                                    intent=getattr(intent, "value", None) or "unknown",
                                     iteration=iteration + 1,
-                                    unmet=["model committed to a tool action in prose but emitted no tool_call"],
+                                    unmet=[_unmet_reason],
                                 )
                             loop_messages.append(
                                 {

@@ -67,6 +67,7 @@ describe('friendlyUnmet', () => {
   it('rewords loop jargon and keeps real criteria verbatim', () => {
     expect(friendlyUnmet('model narrated an action plan but made zero tool calls')).toMatch(/instead of doing it/);
     expect(friendlyUnmet('narrated a pending action without a tool call')).toMatch(/instead of doing it/);
+    expect(friendlyUnmet('completion judge judged the reply still pending')).toMatch(/not finished yet/);
     expect(friendlyUnmet('file exists at /tmp/a')).toBe('file exists at /tmp/a');
   });
 });
