@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-31T11:50:14Z_
+_Regenerated: 2026-10-31T12:01:37Z_
 
 ## Standing params
 - **Core:** 2.3.2 (locked, verified 2026-10-31)
@@ -16,11 +16,10 @@ _Regenerated: 2026-10-31T11:50:14Z_
 
 ## Office — who's in, right now
 - **Nadia** (S002) — Done — Fix the Cerebras `messages.2.user.tool_calls is unsupported` payload rejection and the co…
-- **Tobias** (S004) — Working — Pull latest main and verify the app runs
-- **Maya** (S006) — Working — Friendlier crash recovery: replace the full-screen Reload-or-Reset wall with a scoped, st…
+- **Tobias** (S004) — Done — Pull latest main and verify the app runs
 
 ## Current task
-- **2026-10-31 — Maya / GLM (Z.ai sandbox)** — Friendlier renderer crash recovery than the current full-screen Reload / Reset view wall — scoped retry, preserved context, copyable erro… — *in-progress*
+- **—** — none — no session in progress — *idle*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-10-31-1 | In-app State Explorer + engine selector (ADR-71): port the explorer into the app as its own interface (game tree, move list, eval bar, inspector, meters, rewindable timeline) and add the Classic/State engine setting. Reference: `docs/prototypes/state-explorer/`, `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter `state_agent/adapters/localmind.py`); `EngineEvent` is the UI contract. Check whether the in-flight port landed before starting. |
@@ -36,5 +35,5 @@ _15 medium, 1 low priority row(s) — see tasks/backlog.md_
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-21
 
 ## Collaboration
-- 161 event(s) on file; most recent: `20261031T084616Z-Kofi-60d42920.json`
+- 162 event(s) on file; most recent: `20261031T113848Z-tobias-s004-ded0bc3b.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`
