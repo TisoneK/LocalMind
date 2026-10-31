@@ -24,6 +24,7 @@ import {
 import { localmindClient, getPersistedSettings } from '@/lib/localmind/client';
 import { isActiveToolStatus } from '@/lib/localmind/progress';
 import { exportSessions, copySessionsToClipboard, type ExportFormat } from '@/lib/localmind/exportChats';
+import { RecoveryBoundary } from '@/components/shared/RecoveryBoundary';
 
 export function WorkspaceLayout() {
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
@@ -489,7 +490,10 @@ export function WorkspaceLayout() {
       <div className="flex flex-1 min-h-0">
       {/* Left Panel */}
       <div style={{ width: leftPanelWidth }} className="shrink-0 relative">
-        <LeftPanel
+        {/* A crash in the sidebar stays in the sidebar: the conversation and the
+            side panel keep working, and Try again remounts just this region. */}
+        <RecoveryBoundary label="The sidebar">
+          <LeftPanel
           sessions={sessions}
           files={files}
           models={models}
@@ -509,6 +513,7 @@ export function WorkspaceLayout() {
           fileDiffs={fileDiffs}
           isStreaming={isStreaming}
         />
+        </RecoveryBoundary>
         {/* Left resize handle */}
         <div
           className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-brand-green/30 transition-colors"
@@ -518,6 +523,9 @@ export function WorkspaceLayout() {
 
       {/* Center Panel - flex: 1 */}
       <div className="flex-1 min-w-0 min-h-0">
+        {/* A crash in the conversation stays here: the sidebar and side panel keep
+            working, and Try again remounts just this region (a full reload stays available below the card). */}
+        <RecoveryBoundary label="The conversation panel">
         {engine === 'state' ? (
           <StateExplorer />
         ) : (
@@ -563,6 +571,7 @@ export function WorkspaceLayout() {
           goal={goal}
         />
         )}
+        </RecoveryBoundary>
       </div>
 
       {/* Right Panel - 320px, collapsible */}
@@ -579,6 +588,7 @@ export function WorkspaceLayout() {
             onMouseDown={() => setIsResizingRight(true)}
           />
         )}
+        <RecoveryBoundary label="The side panel">
         <RightPanel
           chatSessionId={currentSessionId}
           terminalLines={terminal.lines}
@@ -619,6 +629,7 @@ export function WorkspaceLayout() {
           width={rightPanelWidth}
           onModelsRefresh={refreshModels}
         />
+        </RecoveryBoundary>
       </div>
       </div>
     </div>
