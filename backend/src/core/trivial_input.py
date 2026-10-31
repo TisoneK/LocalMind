@@ -121,7 +121,11 @@ def active_capability_note() -> str:
 # answer to "How are you?" is a wrong reply, not a fast one. They fall to
 # is_conversational_question (opener "how", no blocked keywords) and get a
 # real model answer with conversation context. True greeting gestures
-# ("hi", "hello", "what's up", "sup") keep the zero-provider canned path.
+# ("hi", "hello", "what's up", "sup") route to trivial_response, which
+# answers from the MODEL on one call (owner ruling 2026-11-01: a hardcoded
+# answer is "not ethical or my design at all"). No input class answers from
+# a canned string while the provider is healthy — the canned warm lines are
+# the provider-down fallback only (S448 ruling, restated below).
 _GREETINGS = [
     r"hi+",
     r"hello+",
@@ -206,12 +210,15 @@ _TRIVIAL_RE = re.compile(
 _TRIVIAL_PUNCT = "!.?.,;:"
 
 # Deterministic replies for PURE SOCIAL intents (greeting /
-# farewell / thanks / acknowledgment). These carry no information request —
-# the user said "hi" and expects a greeting, NOT a rate-limit error card when
-# the free-tier provider is throttled. Yielding a canned reply here means the
-# short-circuit NEVER touches the LLM for these inputs: instant, offline-safe,
-# and immune to 429s. "yes_no" and conversational questions stay on the LLM
-# path (they can be context-dependent).
+# farewell / thanks / acknowledgment) — the DEGRADED PATH ONLY. On a healthy
+# provider these strings must never be yielded: every social gesture is
+# answered by the model via trivial_response (owner rulings S448 "then you
+# have all the answers" and 2026-11-01 "hardcoded answers are not ethical or
+# my design at all"). They exist so a dead/rate-limited provider still can't
+# turn "hi" into an error card: the fallback streams the warm line with the
+# synthetic flag (no fabricated provider tokens) instead. "yes_no" and
+# conversational questions never take even the fallback — they surface the
+# honest provider-dead text (they can be context-dependent).
 _SOCIAL_REPLIES: dict[str, str] = {
     "greeting": "Hi! I'm LocalMind, your local AI assistant. How can I help you today?",
     "farewell": "Goodbye! Feel free to come back anytime.",

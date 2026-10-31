@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from core.trivial_input import (
+    _SOCIAL_REPLIES,
     conversational_intent,
     conversational_response,
     is_conversational_question,
@@ -763,6 +764,32 @@ async def test_all_social_intents_go_through_the_model():
         assert text, f"{msg!r} must still yield visible text"
         assert any(getattr(c, "done", False) for c in chunks)
     assert calls == 5
+
+
+@pytest.mark.asyncio
+async def test_healthy_greeting_reply_is_never_a_canned_string():
+    """Owner ruling 2026-11-01: a hardcoded answer is 'not ethical or my
+    design at all'. On a healthy provider the reply text must NEVER be one
+    of the degraded-path warm lines — the model's own words only. (The
+    one-call assertions above already force model-first; this pins the
+    stronger invariant in case a future path reintroduces a string with a
+    synthetic call-shaped usage.)"""
+
+    async def mock_chat(messages, intent="chat", **kwargs):
+        yield MagicMock(text="A warm one-line reply.", done=False, error=None, usage=None)
+        yield MagicMock(text="", done=True, error=None, usage={})
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat = MagicMock(side_effect=mock_chat)
+
+    for msg in ["hi", "hello", "hey", "what's up", "sup", "good morning"]:
+        chunks = [c async for c in trivial_response(msg, mock_adapter)]
+        text = "".join(c.text for c in chunks if getattr(c, "text", ""))
+        for canned in _SOCIAL_REPLIES.values():
+            assert text != canned, (
+                f"{msg!r} was answered with the hardcoded warm line — the "
+                "zero-provider canned path must stay retired"
+            )
 
 
 @pytest.mark.asyncio

@@ -1442,11 +1442,13 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # decided WHICH messages paid it — every phrasing the regex
                 # missed stalled the turn 5-15s (measured live: 8.7s on
                 # "How are you" vs 3.4s with a "?"). Routing is the intent
-                # decision: a message is either trivial (canned), clearly
-                # conversational (this path — answer now), or interpretive
-                # (the parent-agent loop, where the Thinker consults run
-                # concurrently with tool work). A conversational turn never
-                # needs a second reasoning pass to answer warmly.
+                # decision: a message is either trivial (one-call MODEL reply
+                # via trivial_response — the canned warm lines are the
+                # provider-down fallback only, never the healthy answer),
+                # clearly conversational (this path — answer now), or
+                # interpretive (the parent-agent loop, where the Thinker
+                # consults run concurrently with tool work). A conversational
+                # turn never needs a second reasoning pass to answer warmly.
                 # v3 export: the reasoning the fast path streams (the
                 # conversational model's own thinking) is part of the turn —
                 # collect it so the persisted assistant message carries what
@@ -1540,9 +1542,10 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     yield _chunk
 
                 # generate stage done — measured from before the stream
-                # started until the stream finished. Even the trivial
-                # canned-reply path ran "generation" logic (string lookup),
-                # so report done with the measured latency.
+                # started until the stream finished. Both fast-path legs
+                # (trivial and conversational) stream from the model, so the
+                # latency here is a real provider measurement on every turn
+                # that reaches this point.
                 _gen_ms = round((time.monotonic() - _gen_start) * 1000)
                 collector.emit(
                     "stage_timing", stage="generate", latency_ms=_gen_ms, status="done"
