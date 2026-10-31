@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261031T121653Z-tobias-s004-968a14bf",
+  "type": "release",
+  "session": "S004",
+  "agent": "tobias-s004",
+  "created": "2026-10-31T12:16:53Z",
+  "issue": "pull-and-run-check",
+  "body": "Pull-and-run verification done: 3784 tests pass (22 documented Windows baseline), app healthy on the merged tree.",
+  "paths": [".context_ledger/memory/office/", "tests/core/test_provenance_ledger.py"],
+  "refs": ["41319835"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

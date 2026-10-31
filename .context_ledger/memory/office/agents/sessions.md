@@ -62,6 +62,7 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** none. Note: the collaboration claim was emitted after the product fix (the light-path claim should have preceded it) — recorded here rather than hidden.
 - **Notes:** none
 - **Report:** `.context_ledger/memory/office/reviews/2026-10-31-review.md`
+- **Follow-up (same session):** the owner then asked to pull the remote fix. Merged `05551ec4` (Thought-row renderer crash fix) as `ea3dc4ce`, resolving the roster conflict (both rows kept) and repairing a union-merge splice that had folded Zara's entry into this one. Afterwards merged `4f688dd3` (scoped crash recovery) with Maya's clock-out. Post-merge verification: `TurnView.test.tsx` + `RecoveryBoundary` suites pass, `vite build` rebuilt, exit gate green on the merged tree (3784 passed, 22 documented Windows baseline, tsc + eslint clean); the app runs in dev mode against the fixed source (backend 8000 healthy, Vite 3000, Electron).
 
 ---
 ## 2026-10-31 — Session 5
@@ -72,3 +73,5 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** the error boundary did its job (contained a render crash rather than a white screen); a friendlier recovery than full Reload would be a separate ask, not part of this fix.
 - **Notes:** none
 - **Report:** none — single-site fix; root cause, repro and verification recorded here and in the shared worklog.
+
+---
