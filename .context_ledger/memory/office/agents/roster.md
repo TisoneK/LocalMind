@@ -53,7 +53,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Nadia | S002 | unknown (harness states no model ID) | Fix the Cerebras `messages.2.user.tool_calls is unsupported` payload rejection and the conversation-recall behaviour behind it | Done | Shipped af347f95 + 253ae0b4: per-role wire normalization, invalid_request→failover, transcript-only recall lane, name-identity dedupe; DB name facts merged (1 remains, keyed `subject:name`); 2285 core+adapter tests pass, 7 previously-red tests fixed |
-| Tobias | S004 | unknown (harness states no model ID) | Pull latest main and verify the app runs | Working | Phase 2 check-in — sync done; starting Phase 3 orientation |
+| Tobias | S004 | unknown (harness states no model ID) | Pull latest main and verify the app runs | Done | Shipped 41319835: pulled 798f9e48→79ae1d61, core 2.3.2 verified, backend boots (health 200, 39 tools), frontend build passes, 3783 tests pass with only the documented Windows baseline failing, and the already-running live app answers `status: ok`; fixed the one new flaky test from the pull |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,

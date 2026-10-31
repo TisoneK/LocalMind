@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261031T113848Z-tobias-s004-ded0bc3b",
+  "type": "claim",
+  "session": "S004",
+  "agent": "tobias-s004",
+  "created": "2026-10-31T11:38:48Z",
+  "issue": "pull-and-run-check",
+  "body": "Pull latest main (ff to 79ae1d61), verify backend boots and the live app is healthy; fix one new flaky test.",
+  "paths": [".context_ledger/memory/office/", "tests/core/test_provenance_ledger.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
