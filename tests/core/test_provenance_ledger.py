@@ -20,6 +20,8 @@ Two records that used to vanish behind a final status:
 
 from __future__ import annotations
 
+import datetime
+
 import pytest
 
 from core.agent.tool_dispatch import dispatch_with_retry
@@ -165,7 +167,20 @@ async def test_exhausted_retries_hand_the_ledger_to_the_caller(monkeypatch):
 # ── injected-items ledger ─────────────────────────────────────────────────────
 
 
-def test_items_do_not_change_the_rendered_block():
+def test_items_do_not_change_the_rendered_block(monkeypatch):
+    # The rendered block carries the wall clock at minute granularity, so two
+    # back-to-back builds can straddle a minute and differ. Freeze it: any
+    # remaining difference is a real recording side effect.
+    fixed = datetime.datetime(
+        2026, 1, 2, 3, 4, tzinfo=datetime.timezone(datetime.timedelta(hours=3))
+    )
+
+    class _FrozenDateTime(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed if tz is None else fixed.astimezone(tz)
+
+    monkeypatch.setattr(datetime, "datetime", _FrozenDateTime)
     without = _build_environment_context()
     items: list = []
     with_items = _build_environment_context(items_out=items)
