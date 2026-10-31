@@ -62,3 +62,13 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** none. Note: the collaboration claim was emitted after the product fix (the light-path claim should have preceded it) — recorded here rather than hidden.
 - **Notes:** none
 - **Report:** `.context_ledger/memory/office/reviews/2026-10-31-review.md`
+
+---
+## 2026-10-31 — Session 5
+- **Agent:** Zara | **Model:** GLM (Z.ai sandbox) | **Platform:** Linux sandbox (Z.ai), local repo | **Role:** engineer | **Core:** 2.3.2
+- **Task:** Fix the renderer crash from the owner's screenshot: `Cannot read properties of undefined (reading 'retryAttempts')` behind the app's error-boundary screen ("LocalMind hit a problem showing this screen").
+- **Commits:** 3 by this session (63502404 check-in, 05551ec4 product fix, this ledger close).
+- **Outcome:** done — root cause: TurnView's expanded step row rendered `RetryLedger` unconditionally with `step.tool as ToolCall`; a Thought step carries no `tool`, and the cast hid the nullability lie, so expanding any Thought row (a click — reasoning rows are expandable) read `.retryAttempts` off undefined and killed the renderer. Fix: `RetryLedger` takes `tool?: ToolCall` and bails when absent; the call site passes `step.tool` without the cast, so TypeScript now enforces what the comment claims. Reproduced before fixing: two new tests in `TurnView.test.tsx` failed at TurnView.tsx:83 with the owner's exact message, pass after. Audited the sibling path (`flatTools` → `toolLabel` at turnTimeline.ts:384) — safe, leaves are tool steps only; every other `.retryAttempts` read is guarded. Suite: frontend 664 passed / 64 files (+2), `tsc` clean.
+- **Open items:** the error boundary did its job (contained a render crash rather than a white screen); a friendlier recovery than full Reload would be a separate ask, not part of this fix.
+- **Notes:** none
+- **Report:** none — single-site fix; root cause, repro and verification recorded here and in the shared worklog.

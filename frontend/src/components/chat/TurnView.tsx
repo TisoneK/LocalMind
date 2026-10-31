@@ -78,8 +78,10 @@ function ShellDisabledTip() {
 
 /** The dispatch layer's attempt ledger, expanded under a tool that needed
  *  retries. Every failed attempt stays visible with its error — recovery
- *  never erases what actually happened. */
-function RetryLedger({ tool }: { tool: ToolCall }) {
+ *  never erases what actually happened. Steps without a tool (a Thought row)
+ *  have no ledger: absent means none, never a crash. */
+function RetryLedger({ tool }: { tool?: ToolCall }) {
+  if (!tool) return null;
   const attempts = tool.retryAttempts ?? [];
   if ((tool.retryCount ?? 0) <= 0 || attempts.length === 0) return null;
   return (
@@ -178,7 +180,7 @@ function StepRow({ step, depth = 0 }: { step: TurnStep; depth?: number }) {
           ) : (
             <>
               <FilePreviewLink tool={step.tool} />
-              <RetryLedger tool={step.tool as ToolCall} />
+              <RetryLedger tool={step.tool} />
               {step.kind === 'thought' ? (
                 <ThoughtText text={step.detail ?? ''} />
               ) : step.tool && isTerminalTool(step.tool) ? (

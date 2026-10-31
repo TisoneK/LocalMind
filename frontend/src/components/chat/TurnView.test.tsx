@@ -178,3 +178,44 @@ describe('TurnView outcome truth (§U item 3)', () => {
     expect(container.querySelector('[data-testid="retry-ledger"]')).toBeNull();
   });
 });
+
+describe('TurnView thought rows', () => {
+  it('expanding a Thought row shows the reasoning and must not crash the renderer', () => {
+    // The owner's crash: a Thought step carries no tool, and the expanded row
+    // unconditionally rendered RetryLedger — "Cannot read properties of
+    // undefined (reading 'retryAttempts')" took down the whole screen.
+    render(
+      <TurnView
+        message={{
+          thinking: 'Considering which file to read first.',
+          thinkMs: 1200,
+          toolCalls: [tool('a')],
+        }}
+      />,
+    );
+    // Open the folded turn group, then the Thought row itself.
+    fireEvent.click(screen.getByText('Ran 1 tool'));
+    fireEvent.click(screen.getByText('Thought'));
+    expect(screen.getByTestId('thought-text')).toHaveTextContent('Considering which file to read first.');
+    expect(screen.queryByTestId('retry-ledger')).toBeNull();
+    // The turn group is still alive and intact after the expansion.
+    expect(screen.getByTestId('turn-view')).toBeInTheDocument();
+  });
+
+  it('a retried tool keeps its attempt ledger while an expanded Thought shows none', () => {
+    render(
+      <TurnView
+        message={{
+          thinking: 'Planning the shell call.',
+          thinkMs: 1200,
+          toolCalls: [tool('a', { retryCount: 1, retryAttempts: [{ attempt: 1, error: 'boom' }] })],
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByText('Ran 1 tool'));
+    fireEvent.click(screen.getByText('Thought'));
+    expect(screen.queryByTestId('retry-ledger')).toBeNull();
+    fireEvent.click(screen.getByText('Ran command'));
+    expect(screen.getByTestId('retry-ledger')).toHaveTextContent('Attempt 1 failed: boom');
+  });
+});
