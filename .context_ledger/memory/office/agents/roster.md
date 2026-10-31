@@ -54,6 +54,7 @@ is your stable session tag.
 |------|----------|-------|-------|--------|---------------|
 | Nadia | S002 | unknown (harness states no model ID) | Fix the Cerebras `messages.2.user.tool_calls is unsupported` payload rejection and the conversation-recall behaviour behind it | Done | Shipped af347f95 + 253ae0b4: per-role wire normalization, invalid_request→failover, transcript-only recall lane, name-identity dedupe; DB name facts merged (1 remains, keyed `subject:name`); 2285 core+adapter tests pass, 7 previously-red tests fixed |
 | Tobias | S004 | unknown (harness states no model ID) | Pull latest main and verify the app runs | Working | Phase 2 check-in — sync done; starting Phase 3 orientation |
+| Zara | S005 | GLM (Z.ai sandbox) | Fix the renderer crash `Cannot read properties of undefined (reading 'retryAttempts')` (owner's screenshot) | Working | Check-in pushed; next: locate the unguarded read, failing test, fix |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,

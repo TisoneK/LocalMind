@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — no session in progress
-- **Status:** idle
+- **Session:** 2026-10-31 — Zara / GLM (Z.ai sandbox)
+- **Task:** Fix the renderer crash from the owner's screenshot: `Cannot read properties of undefined (reading 'retryAttempts')` — locate the unguarded read, add a failing test, fix, run the frontend suite.
+- **Status:** in-progress
