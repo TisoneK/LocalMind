@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261031T163117Z-Nora-cff35e83",
+  "type": "claim",
+  "session": "S009",
+  "agent": "Nora",
+  "created": "2026-10-31T16:31:17Z",
+  "issue": "greeting-gate-telemetry",
+  "body": "Light-path claim: fix the false-positive execution gate on zero-tool conversational turns (greeting regression), honest gate-replan attribution, event-timestamped workspace telemetry (agentRuns startedAt==completedAt bug), greeting regression matrix. External-analysis immediate priorities P1-P4.",
+  "paths": ["backend/src/core/agent/loop.py", "backend/src/core/obs.py", "backend/src/core/agent_workspace.py", "backend/src/core/agent_runtime.py", "frontend/src/lib/localmind/errorText.ts"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
