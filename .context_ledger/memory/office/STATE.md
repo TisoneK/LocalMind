@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-31T18:32:47Z_
+_Regenerated: 2026-10-31T19:05:56Z_
 
 ## Standing params
 - **Core:** 2.3.2 (locked, verified 2026-10-31)
@@ -19,7 +19,7 @@ _Regenerated: 2026-10-31T18:32:47Z_
 - **Rosa** (S008) — Done — Build the turn-close attribution + honest completion contract (owner-observed "Working" w…
 - **Tobias** (S004) — Working — Pull the latest main again and verify the greeting-gate + workspace-telemetry fixes run c…
 - **Sefu** (S010) — Done — Exhaustive study of the owner-provided external harness reference + retire the zero-provi…
-- **Zuri** (S011) — Working — INVESTIGATION (owner brief 2026-11-01): full execution observability — map the complete…
+- **Zuri** (S011) — Done — INVESTIGATION (owner brief 2026-11-01): full execution observability — map the complete…
 
 ## Current task
 - **—** — none — no session in progress — *idle*
@@ -30,14 +30,15 @@ _Regenerated: 2026-10-31T18:32:47Z_
 | B-2026-10-31-3 | Benchmark the state engine against Classic (ADR-71 §8): both engines selectable and observable, same tasks, measurable comparison, only then a decision about an `Auto` engine. Ties to B-2026-10-31-1. |
 | B-2026-10-31-4 | Confirmable-refusal rollout (ADR-67): convert every tool that refuses or guesses to "refuse only on a verified fact, name the fact and the confirming flag" — start with delete (`confirm_delete`), the shell tool's destructive/mass-touch commands (replace the substring blocklist), and installs (`scope=system`); record confirming flags in the run trace. |
 | B-2026-10-31-21 | Perspective & speaker-identity consistency (external audit 2026-10-31): the turn's reasoning got the relationship right ("they are my creator") while the reply reversed it ("As your creator…"). Add the exact exchange to a regression/eval set and evaluate a bounded read-only consistency check (same shape as the reply-is-pending judge) on replies that assert a relationship — who speaks, who is addressed, polarity preserved; nudge only, never a pronoun-replacement rule. Full context: `office/reviews/2026-10-31-external-audit-intake.md` §1.1. |
+| B-2026-11-01-26 | Full execution-trace capability (owner brief 2026-11-01, investigation `office/reviews/2026-11-01-full-execution-observability-investigation.md`): persist the per-turn event stream as a durable record (turn_id + seq; existing ObsEvent shape), add the missing boundaries — adapter-level per-call stamps (submit / first byte / last byte, per-call usage + payload size/hash, every path), `path_selected` decision events (incl. negative decisions), context-assembly start/end, `stage_skipped` for never-attempted stages — persist `context_breakdown` + `post_answer_lanes` (wire-only today), one clock discipline (epoch-ms everywhere; monotonic only as labelled deltas), export gains `traceRef` + history endpoint exposes persisted stage maps, State Explorer renders the trace. Do NOT widen the SSE contract before the stream persists; projections stay folds of the stream. Build order in the report's Deliverable 7. The brief's own gate: "Before we try to make LocalMind faster, smarter or more capable, we need to be able to observe it accurately." |
 
-_14 medium, 1 low priority row(s) — see tasks/backlog.md_
+_13 medium, 1 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
-- flaws/log.md (protocol/.context_ledger friction): 1 entry, last added 2026-10-31
-- inefficiencies/log.md (project code/env friction): 2 entries, last added 2026-10-31
+- flaws/log.md (protocol/.context_ledger friction): 2 entries, last added 2026-11-01
+- inefficiencies/log.md (project code/env friction): 3 entries, last added 2026-11-01
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-21
 
 ## Collaboration
-- 171 event(s) on file; most recent: `20261031T175758Z-Sefu-3d8c8875.json`
+- 172 event(s) on file; most recent: `20261031T185724Z-Zuri-b307bfca.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`
