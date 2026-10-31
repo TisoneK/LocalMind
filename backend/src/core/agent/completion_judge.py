@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any, Iterable, Optional
 
 from core.agent.turn_bus import TurnBus
@@ -78,6 +79,10 @@ async def _ask(adapter, request: str, reply: str, evidence: str) -> str:
 
 async def _run_lane(bus: TurnBus, adapter, request: str, reply: str, evidence: str, step: int) -> None:
     started_under = bus.goal_version  # a replan while we run makes this verdict stale
+    # Turn-close attribution: the lane's wall time rides the verdict fact, so
+    # the turn-close window can name the judge's share instead of leaving it
+    # as unexplained silence on the wire.
+    _t0 = time.monotonic()
     try:
         raw = await asyncio.wait_for(_ask(adapter, request, reply, evidence), timeout=JUDGE_TIMEOUT_S)
         verdict = "pending" if raw.strip().upper().startswith("PENDING") else (
@@ -86,8 +91,10 @@ async def _run_lane(bus: TurnBus, adapter, request: str, reply: str, evidence: s
     except Exception as exc:  # noqa: BLE001 — a failed judge must never fail the turn
         logger.debug("[completion_judge] unjudged: %s", exc)
         verdict = "unjudged"
+    elapsed_ms = round((time.monotonic() - _t0) * 1000)
     bus.publish(
-        SOURCE, "verdict", {"verdict": verdict, "reply_chars": len(reply)},
+        SOURCE, "verdict",
+        {"verdict": verdict, "reply_chars": len(reply), "elapsed_ms": elapsed_ms},
         step=step, goal_version=started_under, grounded_in=(f"reply@step{step}",),
     )
 

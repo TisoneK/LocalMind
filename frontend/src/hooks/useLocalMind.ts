@@ -49,11 +49,11 @@ import type {
 const MAX_WORKSPACE_TURNS = 10;
 
 // Visible log of the self-reflection loop's autonomous memory writes
-// (B-2026-09-15-14) — capped so a long session doesn't grow the popover
+// — capped so a long session doesn't grow the popover
 // unbounded; oldest lessons drop off, newest kept.
 const MAX_REFLECTION_LESSONS = 20;
 
-// Same cap for the passive-context log (B-2026-09-15-15) — facts the agent
+// Same cap for the passive-context log — facts the agent
 // picked up incidentally and stored on its own.
 const MAX_PASSIVE_MEMORIES = 20;
 
@@ -259,6 +259,9 @@ interface ChatState {
    *  mode and the inline DiffBlock in chat. */
   fileDiffs: Record<string, DiffData>;
   isStreaming: boolean;
+  /** Turn-close attribution: the open turn's response_ready marker has
+   *  landed — the reply is final, the turn is only closing out. */
+  isResponseReady: boolean;
   currentIntent?: string;
   currentConfidence?: number;
   activeToolCalls: ToolCall[];
@@ -266,11 +269,11 @@ interface ChatState {
   liveObservation: ObservationData | null;
   lastMetrics: PerformanceMetrics | null;
   /** Visible log of lessons the self-reflection loop wrote to memory on its
-   *  own this session (B-2026-09-15-14) — accumulates across turns, unlike
+   *  own this session — accumulates across turns, unlike
    *  lastMetrics, so the user can review every autonomous write. */
   reflectionLessons: ReflectionLesson[];
   /** Visible log of durable self-facts the agent stored on its own from
-   *  incidental conversation signals this session (B-2026-09-15-15) —
+   *  incidental conversation signals this session —
    *  accumulates across turns, per-session like the memory rows they
    *  mirror. */
   passiveMemories: PassiveMemory[];
@@ -309,6 +312,11 @@ export function useChat(
   // mode and the inline DiffBlock in chat (message.diffData).
   const [fileDiffs, setFileDiffs] = useState<Record<string, DiffData>>({});
   const [isStreaming, setIsStreaming] = useState(false);
+  // Turn-close attribution: the backend's response_ready SSE marker landed
+  // for the open turn — the reply on screen is final, the turn is only
+  // closing out (verification lanes, persistence). Drives the honest
+  // "answer ready · finishing up" strip label and the disabled Stop button.
+  const [isResponseReady, setIsResponseReady] = useState(false);
   const [currentIntent, setCurrentIntent] = useState<string | undefined>();
   const [currentConfidence, setCurrentConfidence] = useState<number | undefined>();
   const [activeToolCalls, setActiveToolCalls] = useState<ToolCall[]>([]);
@@ -497,6 +505,7 @@ export function useChat(
       if (silenceMs > 120000) {
         console.warn(`[useChat] force-resetting isStreaming after ${Math.round(silenceMs / 1000)}s of silence`);
         setIsStreaming(false);
+        setIsResponseReady(false);
         streamingSessionRef.current = null;
         abortRef.current = null;
         setActiveToolCalls((prev) =>
@@ -709,6 +718,7 @@ export function useChat(
         return [...prev, userMsg, assistantMsg];
       });
       setIsStreaming(true);
+      setIsResponseReady(false);
       streamStartedAtRef.current = Date.now();
       // Stats split: this turn belongs to the effective session and gets a
       // fresh turn number so the accumulation effect can attribute it.
@@ -1421,6 +1431,16 @@ export function useChat(
                       && typeof _providerUsage.context_breakdown === 'object')
                       ? _providerUsage.context_breakdown as Record<string, number>
                       : undefined;
+                    // Turn-close attribution rides provider_usage on the
+                    // turn_complete observation.
+                    const _stages = (_providerUsage.turn_stages
+                      && typeof _providerUsage.turn_stages === 'object')
+                      ? _providerUsage.turn_stages as Record<string, number>
+                      : undefined;
+                    const _lanes = (_providerUsage.post_answer_lanes
+                      && typeof _providerUsage.post_answer_lanes === 'object')
+                      ? _providerUsage.post_answer_lanes as Record<string, Record<string, unknown>>
+                      : undefined;
                     if (_tokens > 0 || _latency > 0) {
                       const _elapsed_s = _latency / 1000;
                       // tokens_approx is the RESPONSE (completion) token count.
@@ -1457,6 +1477,12 @@ export function useChat(
                           contextBreakdown: _breakdown && Object.keys(_breakdown).length > 0
                             ? _breakdown
                             : prev?.contextBreakdown,
+                          turnStages: _stages && Object.keys(_stages).length > 0
+                            ? _stages
+                            : prev?.turnStages,
+                          postAnswerLanes: _lanes && Object.keys(_lanes).length > 0
+                            ? _lanes
+                            : prev?.postAnswerLanes,
                         };
                       });
                     }
@@ -1531,12 +1557,21 @@ export function useChat(
                 break;
               }
 
+              case 'response_ready': {
+                // Turn-close attribution: the reply on screen is final; only
+                // turn close-out (verification lanes, persistence) remains.
+                // The stages/lanes attribution rides the metrics carrier.
+                setIsResponseReady(true);
+                break;
+              }
+
               case 'done': {
                 // The answer is complete: free the input now. The stream may
                 // stay open a while for post-answer services and the final flush.
                 turnSettled = true;
                 thinkPause();  // the reasoning clock stops with the answer
                 setIsStreaming(false);
+                setIsResponseReady(false);
                 // The done payload carries the final goal snapshot (it may be
                 // null when the goal was cleared/blocked during the turn), so
                 // the meter settles without a refetch.
@@ -1688,6 +1723,15 @@ export function useChat(
                   && typeof m.context_breakdown === 'object')
                   ? m.context_breakdown as Record<string, number>
                   : undefined;
+                // Turn-close attribution rides the final metrics event.
+                const _mStages = (m.turn_stages
+                  && typeof m.turn_stages === 'object')
+                  ? m.turn_stages as Record<string, number>
+                  : undefined;
+                const _mLanes = (m.post_answer_lanes
+                  && typeof m.post_answer_lanes === 'object')
+                  ? m.post_answer_lanes as Record<string, Record<string, unknown>>
+                  : undefined;
                 if (_tokens > 0 || _latency > 0) {
                   const _elapsed_s = _latency / 1000;
                   setLastMetrics((prev) => {
@@ -1714,6 +1758,12 @@ export function useChat(
                       contextBreakdown: _mBreakdown && Object.keys(_mBreakdown).length > 0
                         ? _mBreakdown
                         : prev?.contextBreakdown,
+                      turnStages: _mStages && Object.keys(_mStages).length > 0
+                        ? _mStages
+                        : prev?.turnStages,
+                      postAnswerLanes: _mLanes && Object.keys(_mLanes).length > 0
+                        ? _mLanes
+                        : prev?.postAnswerLanes,
                     };
                   });
                 }
@@ -1722,7 +1772,7 @@ export function useChat(
 
               case 'reflection_lesson': {
                 // The self-reflection loop's autonomous memory write, made
-                // visible per the owner's decision (B-2026-09-15-14): every
+                // visible per the owner's decision: every
                 // lesson it stores on its own shows up here, not just in the
                 // memory store. Accumulates for the session — unlike
                 // lastMetrics, this is a log, not a last-turn snapshot.
@@ -1745,10 +1795,10 @@ export function useChat(
               }
 
               case 'passive_memory': {
-                // Passive context awareness (B-2026-09-15-15): the agent
+                // Passive context awareness: the agent
                 // stored a durable fact about the user it picked up from
                 // incidental conversation — no "remember this" trigger.
-                // Same visible-write rule as reflection_lesson (ADR-64):
+                // Same visible-write rule as reflection_lesson:
                 // proactive memory writes accumulate here for the session so
                 // the user can audit what the agent decided to remember.
                 const passive = parsed.memory || {};
@@ -1996,6 +2046,7 @@ export function useChat(
         // onError
         () => {
           setIsStreaming(false);
+          setIsResponseReady(false);
           streamStartedAtRef.current = null;
           streamingSessionRef.current = null;
           abortRef.current = null;
@@ -2045,6 +2096,7 @@ export function useChat(
     abortRef.current = null;
     streamingSessionRef.current = null;
     setIsStreaming(false);
+    setIsResponseReady(false);
     streamStartedAtRef.current = null;
     setAgentRuns((prev) => prev.map((run) => run.status === 'running'
       ? { ...run, status: 'canceled' as const, completedAt: Date.now() }
@@ -2084,7 +2136,7 @@ export function useChat(
     sessionStatsSeededForRef.current = null;
   }, [applySessionStats]);
 
-  return { messages, fileDiffs, isStreaming, currentIntent, currentConfidence, activeToolCalls, agentRuns, liveObservation, lastMetrics, reflectionLessons, passiveMemories, elapsedMs, sessionStats, goal, send, abort, steer, setMessages, resetSession, onTerminalEvent };
+  return { messages, fileDiffs, isStreaming, isResponseReady, currentIntent, currentConfidence, activeToolCalls, agentRuns, liveObservation, lastMetrics, reflectionLessons, passiveMemories, elapsedMs, sessionStats, goal, send, abort, steer, setMessages, resetSession, onTerminalEvent };
 }
 
 export * from './useTerminal';

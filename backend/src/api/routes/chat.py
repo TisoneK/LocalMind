@@ -349,7 +349,7 @@ def _bridge_todo_event(evt, session_id) -> list[str]:
 
 
 def _dedicated_proactive_writes(evt) -> list[str]:
-    """Dedicated SSE for the proactive memory writes (ADR-64's visible-log
+    """Dedicated SSE for the proactive memory writes (the visible-log
     surface: reflection lessons + passive context).
 
     The generic obs_event wrapper is never matched by the frontend for an
@@ -961,6 +961,14 @@ async def _event_stream(
                     yield extra
 
             if hasattr(chunk, "metadata") and chunk.metadata:
+                # The loop/runtime's RESPONSE_READY marker — the reply on
+                # screen is final, only close-out remains. Own top-level SSE
+                # type so the frontend can distinguish "answer ready —
+                # finishing up" from an indistinguishable Working.
+                _response_ready = chunk.metadata.get("response_ready")
+                if _response_ready:
+                    yield _sse({"type": "response_ready", **_response_ready})
+                    _last_sent_time = time.monotonic()
                 if "goal" in chunk.metadata:
                     goal_round = chunk.metadata.get("goal_round")
                     if goal_round:
@@ -1173,12 +1181,23 @@ async def _event_stream(
                             "context_breakdown": (
                                 evt.data.get("provider_usage") or {}
                             ).get("context_breakdown", {}),
+                            # Turn-close attribution: per-stage wall-clock
+                            # stamps and the post-answer lane records
+                            # (acceptance gate, completion judge,
+                            # rescue/synthesis) that ran between the last
+                            # token and the terminal done.
+                            "turn_stages": (
+                                evt.data.get("provider_usage") or {}
+                            ).get("turn_stages", {}),
+                            "post_answer_lanes": (
+                                evt.data.get("provider_usage") or {}
+                            ).get("post_answer_lanes", {}),
                         },
                     }
                 )
-            # B-2026-09-15-14 / B-2026-09-15-15 — proactive memory writes
+            # Proactive memory writes
             # (self-reflection lesson, passive context) must be visible, not
-            # silent (owner decision 2026-09-18, P-2026-09-16-36 §2, ADR-64).
+            # silent (owner decision 2026-09-18).
             # The generic obs_event wrapper above is never matched by the
             # frontend for an unrecognized type (the reason context_breakdown
             # got its own dedicated `metrics` event), so each fires as its own

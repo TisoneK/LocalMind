@@ -62,6 +62,9 @@ interface ChatMessageProps {
   message: ChatMessageType;
   /** Whether this message is currently being streamed (keeps the turn view live) */
   isStreaming?: boolean;
+  /** Turn-close attribution: the backend's response_ready marker landed — the reply
+   *  on screen is final and the turn is only finishing up. */
+  responseReady?: boolean;
   /** Re-send the user prompt that produced this assistant reply (regenerate).
    *  Only provided for assistant messages that have a preceding user prompt. */
   onRetry?: () => void;
@@ -537,7 +540,7 @@ function parseGoalRoundPrompt(content: string): GoalRound | null {
   };
 }
 
-export function ChatMessage({ message, isStreaming, onRetry, onEdit, fileDiffs, todos }: ChatMessageProps) {
+export function ChatMessage({ message, isStreaming, responseReady, onRetry, onEdit, fileDiffs, todos }: ChatMessageProps) {
   const isUser = message.role === 'user';
   // Clickable file-result chips open an inline preview dialog
   // (text/code/markdown/office docs parsed server-side, images as data URLs).
@@ -645,7 +648,7 @@ export function ChatMessage({ message, isStreaming, onRetry, onEdit, fileDiffs, 
               tools, parallel batches and sub-agents — as one live activity
               (see TurnView) instead of separate stacked blocks. */}
           {!isUser && (
-            <TurnView message={message} todos={todos} isStreaming={isStreaming} />
+            <TurnView message={message} todos={todos} isStreaming={isStreaming} responseReady={responseReady} />
           )}
 
           {/* Canonical error card — a failed reply renders this

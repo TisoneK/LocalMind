@@ -150,7 +150,7 @@ export function WorkspaceLayout() {
       // Non-fatal — default to new chat.
     });
   }, [sessions, sessionsLoading]);
-  const { messages, fileDiffs, isStreaming, activeToolCalls, agentRuns, liveObservation, lastMetrics, reflectionLessons, passiveMemories, elapsedMs, sessionStats, goal, send, abort, steer, setMessages, resetSession } =
+  const { messages, fileDiffs, isStreaming, isResponseReady, activeToolCalls, agentRuns, liveObservation, lastMetrics, reflectionLessons, passiveMemories, elapsedMs, sessionStats, goal, send, abort, steer, setMessages, resetSession } =
     useChat(currentSessionId, handleTerminalEvent);
   const { actions: apiActions, refresh: refreshActions } = useActions(currentSessionId, isStreaming);
   const { files, refresh: refreshFiles } = useFileTree();
@@ -533,6 +533,7 @@ export function WorkspaceLayout() {
           messages={messages}
           title={sessions.find((x) => x.id === currentSessionId)?.title}
           isStreaming={isStreaming}
+          responseReady={isResponseReady}
           health={health}
           onSend={handleSend}
           onRetry={handleRetry}

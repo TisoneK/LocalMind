@@ -2027,6 +2027,18 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # chunk below (the runtime rebuilds that chunk, dropping loop metadata).
         _switch_to_agent: Optional[dict] = None
         usage: dict[str, int] = {}
+        # Turn-close attribution (runtime side): the loop stamps
+        # turn_started/response_ready and the lane records; the runtime adds
+        # what only it can see — first_token, last_token, agent_loop_finished,
+        # turn_completed — and merges both into the terminal usage, which
+        # already reaches the done payload, the turn_complete metrics and the
+        # persisted metrics.
+
+        def _rt_now_ms() -> int:
+            return int(time.time() * 1000)
+
+        _turn_stages: dict = {"turn_started": _rt_now_ms()}
+        _response_ready_seen = False
         try:
             async for chunk in parent.run(
                 messages=prompt_messages,
@@ -2077,6 +2089,8 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 if getattr(chunk, "metadata", None) and chunk.metadata.get("switch_to_agent"):
                     _switch_to_agent = chunk.metadata["switch_to_agent"]
                 if chunk.thinking:
+                    if not _turn_stages.get("first_token"):
+                        _turn_stages["first_token"] = _rt_now_ms()
                     if chunk.thinking == "start":
                         # Phase boundary — separate reasoning phases like the
                         # frontend does, but only once content exists.
@@ -2119,6 +2133,9 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     yield chunk
                     return
                 if chunk.text:
+                    if not _turn_stages.get("first_token"):
+                        _turn_stages["first_token"] = _rt_now_ms()
+                    _turn_stages["last_token"] = _rt_now_ms()
                     # Text from a later iteration (after tools ran) must not run into the text
                     # before it: "...install it and retry." + "I found the file..." read as
                     # "retry.I found". Streamed iterations carry no trailing break of their own.
@@ -2133,12 +2150,44 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     response_chunks.append(chunk.text)
                     if chunk.done:
                         yield chunk.model_copy(update={"done": False})
+                        # The loop finished — stamp it on every turn shape,
+                        # then emit the fallback marker only when the loop
+                        # didn't already pass one (text+done in one chunk).
+                        _turn_stages.setdefault("agent_loop_finished", _rt_now_ms())
+                        if not _response_ready_seen:
+                            _response_ready_seen = True
+                            _turn_stages.setdefault("response_ready", _rt_now_ms())
+                            yield StreamChunk(
+                                text="",
+                                done=False,
+                                metadata={"response_ready": {
+                                    "stages": dict(_turn_stages),
+                                    "lanes": dict(usage.get("post_answer_lanes") or {}),
+                                }},
+                            )
                         continue
                 # The parent runtime owns the transport completion marker.
                 # Child loop completion is an internal boundary and must not
                 # create duplicate user-facing `done` events.
                 if chunk.done:
+                    # The loop finished — stamp it on every turn shape, then
+                    # emit the fallback marker only when the loop didn't
+                    # already pass one.
+                    _turn_stages.setdefault("agent_loop_finished", _rt_now_ms())
+                    if not _response_ready_seen:
+                        _response_ready_seen = True
+                        _turn_stages.setdefault("response_ready", _rt_now_ms())
+                        yield StreamChunk(
+                            text="",
+                            done=False,
+                            metadata={"response_ready": {
+                                "stages": dict(_turn_stages),
+                                "lanes": dict(usage.get("post_answer_lanes") or {}),
+                            }},
+                        )
                     continue
+                if getattr(chunk, "metadata", None) and chunk.metadata.get("response_ready"):
+                    _response_ready_seen = True
                 yield chunk
         except TerminalProviderError as exc:
             collector.emit("agent_loop_error", error=exc.raw[:120], terminal=True)
@@ -2279,6 +2328,15 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # so the Agents tab and phase visibility survive a reload.
         agent_runs, agent_phases = build_workspace_artifacts(collector, task=message)
         _thinking_text = "".join(thinking_parts) or None
+        # Turn-close attribution: the turn's record is written — close-out is
+        # done. Merge the runtime stamps over the loop's (the loop already put
+        # its stages into usage via the terminal chunk) so every consumer —
+        # persisted metrics, turn_complete, the metrics SSE event, the done
+        # payload — sees one complete stage map.
+        _turn_stages["turn_completed"] = _rt_now_ms()
+        _merged_stages = dict(usage.get("turn_stages") or {})
+        _merged_stages.update(_turn_stages)
+        usage["turn_stages"] = _merged_stages
         self._persist_assistant(
             session_id,
             final_text,
@@ -2299,6 +2357,9 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # this turn (same source the kernel ready log records).
                 "model": active_parent_model() or "(default)",
                 "provider": settings.localmind_adapter,
+                # Turn-close attribution: per-stage wall-clock stamps so a
+                # reloaded conversation can attribute the turn-close window.
+                "turn_stages": dict(_merged_stages),
             },
             agent_runs=agent_runs,
             agent_phases=agent_phases,

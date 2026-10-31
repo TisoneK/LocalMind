@@ -179,6 +179,16 @@ describe('buildTurn', () => {
     const thinking = buildTurn({ toolCalls: [tool('a')], content: '' }, { isStreaming: true });
     expect(thinking.activeLabel).toBe('Thinking about the result');
   });
+
+  it('says the answer is ready while the turn only finishes up', () => {
+    // response_ready landed: the reply on screen is final, the loop is only
+    // closing out — the label must not keep claiming the answer is writing.
+    const t = buildTurn(
+      { toolCalls: [tool('a')], content: 'Based on the results…' },
+      { isStreaming: true, responseReady: true },
+    );
+    expect(t.activeLabel).toBe('Answer ready — finishing up');
+  });
 });
 
 

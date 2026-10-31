@@ -58,6 +58,7 @@ from core.agent.agent_filters import (
     _filter_system_leaks,
     _filter_tool_injection,
 )
+from core.agent.completion_judge import SOURCE as _COMPLETION_JUDGE_SOURCE
 from core.agent.completion_judge import reply_is_pending
 from core.agent.constants import (
     AGENT_ALLOWED_TOOLS,
@@ -164,6 +165,33 @@ logger = logging.getLogger(__name__)
 _message_implies_tool_action_fn = None
 
 
+def _turn_now_ms() -> int:
+    """Wall-clock ms for turn-stage stamps (turn-close attribution)."""
+    return int(time.time() * 1000)
+
+
+def _response_ready_chunk(stages: dict, lanes: dict) -> StreamChunk:
+    """The RESPONSE_READY marker.
+
+    Yielded by the loop the moment the reply on screen is final — the
+    acceptance gate, the completion judge and any rescue/synthesis have
+    finished, and only turn close-out remains. The transport bridges it
+    to a `response_ready` SSE event so the UI can say "answer ready —
+    finishing up" instead of an indistinguishable Working, and Stop can
+    be honest about no longer being able to change the reply. The stage
+    stamps and lane records ride the terminal chunk's usage (the
+    established provider_usage channel), so the done payload, the
+    turn_complete metrics and the persisted metrics all carry the
+    attribution without a new state path.
+    """
+    stages.setdefault("response_ready", _turn_now_ms())
+    return StreamChunk(
+        text="",
+        done=False,
+        metadata={"response_ready": {"stages": dict(stages), "lanes": dict(lanes)}},
+    )
+
+
 def _message_implies_tool_action(message: str) -> bool:
     """Return True if the user's message implies a tool/file/code action.
 
@@ -187,7 +215,7 @@ def _message_is_action_approval(message: str) -> bool:
     """Return True if the message approves a previously narrated pending action.
 
     Wraps core.trivial_input.message_is_action_approval via lazy import.
-    Used by the replan gate (B-2026-09-15-8) to escalate on approval tokens
+    Used by the replan gate to escalate on approval tokens
     ("go ahead", "do it") that message_implies_tool_action() alone would
     miss, since an approval doesn't itself mention any tool/file keyword.
     """
@@ -2359,6 +2387,14 @@ class AgentLoop:
         # Provider usage is carried through every streamed chunk and tool-call
         # result so the Engine can report real prompt/completion counts.
         _provider_usage: dict[str, int] = {}
+        # Turn-close attribution: wall-clock stage stamps and the post-answer
+        # lanes (acceptance gate, completion judge, rescue/synthesis) that ran
+        # between the last visible token and the terminal done. They ride the
+        # provider_usage channel — the terminal chunk already forwards it to
+        # the runtime, the done payload and the turn_complete metrics — so no
+        # new state crosses the boundary.
+        _turn_stages: dict = {"turn_started": _turn_now_ms()}
+        _post_lanes: dict = {}
         _obs = obs  # may be None — all obs.emit() calls guarded below
         _loop_start_time = time.monotonic()  # wall-clock cap baseline
 
@@ -4122,6 +4158,9 @@ class AgentLoop:
                     if _obs:
                         _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
                     yield StreamChunk(text=_done_text, done=False)
+                    yield _response_ready_chunk(_turn_stages, _post_lanes)
+                    _provider_usage["turn_stages"] = dict(_turn_stages)
+                    _provider_usage["post_answer_lanes"] = dict(_post_lanes)
                     yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                     return
 
@@ -6704,6 +6743,9 @@ class AgentLoop:
                                 done=False,
                                 usage=dict(_provider_usage),
                             )
+                            yield _response_ready_chunk(_turn_stages, _post_lanes)
+                            _provider_usage["turn_stages"] = dict(_turn_stages)
+                            _provider_usage["post_answer_lanes"] = dict(_post_lanes)
                             yield StreamChunk(
                                 text="",
                                 done=True,
@@ -6741,6 +6783,9 @@ class AgentLoop:
                             done=False,
                             usage=dict(_provider_usage),
                         )
+                        yield _response_ready_chunk(_turn_stages, _post_lanes)
+                        _provider_usage["turn_stages"] = dict(_turn_stages)
+                        _provider_usage["post_answer_lanes"] = dict(_post_lanes)
                         yield StreamChunk(
                             text="",
                             done=True,
@@ -7106,6 +7151,9 @@ class AgentLoop:
                                 source="reasoning_or_observations",
                             )
                         yield StreamChunk(text=_extracted, done=False)
+                        yield _response_ready_chunk(_turn_stages, _post_lanes)
+                        _provider_usage["turn_stages"] = dict(_turn_stages)
+                        _provider_usage["post_answer_lanes"] = dict(_post_lanes)
                         yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                         return
 
@@ -7160,6 +7208,9 @@ class AgentLoop:
                                 chars=len(_synth_answer),
                             )
                         yield StreamChunk(text=_synth_answer, done=False)
+                        yield _response_ready_chunk(_turn_stages, _post_lanes)
+                        _provider_usage["turn_stages"] = dict(_turn_stages)
+                        _provider_usage["post_answer_lanes"] = dict(_post_lanes)
                         yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                         return
 
@@ -7172,6 +7223,7 @@ class AgentLoop:
                     # Try ONE deterministic post-loop synthesis from the tool
                     # evidence before falling back to the empty message.
                     # This does NOT count against the recovery budget.
+                    _post_lanes["evidence_synthesis"] = {"ran": True}
                     async for _post_synth_chunk in self._post_loop_synthesis_from_evidence(
                         loop_messages=loop_messages,
                         observation_log=observation_log,
@@ -7183,6 +7235,9 @@ class AgentLoop:
                     ):
                         if _post_synth_chunk.text:
                             yield _post_synth_chunk
+                            yield _response_ready_chunk(_turn_stages, _post_lanes)
+                            _provider_usage["turn_stages"] = dict(_turn_stages)
+                            _provider_usage["post_answer_lanes"] = dict(_post_lanes)
                             yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                             return
                     # Post-loop synthesis also failed. Produce
@@ -7211,6 +7266,9 @@ class AgentLoop:
                     # the whole turn), but we don't pretend the work happened.
                     self._emit_failure_memory(trace, intent, _obs)  # record a failure memory
                     yield StreamChunk(text=_empty_msg, done=False)
+                    yield _response_ready_chunk(_turn_stages, _post_lanes)
+                    _provider_usage["turn_stages"] = dict(_turn_stages)
+                    _provider_usage["post_answer_lanes"] = dict(_post_lanes)
                     yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                     return
 
@@ -7393,6 +7451,11 @@ class AgentLoop:
                     # The model saying "done" is not enough — gate
                     # the claim against the success criteria (replan or honest
                     # report). Only finish when the gate is satisfied or capped.
+                    # Turn-close attribution: the gate (and the completion
+                    # judge it blocks on) is a post-answer lane — time it and
+                    # read the judge's verdict fact back so the close can be
+                    # attributed.
+                    _gate_t0 = _turn_now_ms()
                     _gate_suffix, _gate_final = await self._acceptance_gate_at_final_answer(
                         trace=trace,
                         iteration=iteration,
@@ -7413,6 +7476,18 @@ class AgentLoop:
                         tools_withheld=_answer_only_call_used,
                         bus=_bus,
                     )
+                    _post_lanes["acceptance_gate"] = {
+                        "ran": True,
+                        "passed": bool(_gate_final),
+                        "replans": _gate_replan_count,
+                        "elapsed_ms": _turn_now_ms() - _gate_t0,
+                    }
+                    if _bus is not None:
+                        _judge_fact = _bus.latest(
+                            "verdict", source=_COMPLETION_JUDGE_SOURCE, step=iteration
+                        )
+                        if _judge_fact:
+                            _post_lanes["completion_judge"] = dict(_judge_fact.value or {})
                     if not _gate_final:
                         _gate_replan_count += 1
                         _bus.replan()  # everything said about the old plan is now stale
@@ -7442,6 +7517,7 @@ class AgentLoop:
                     # the tool without writing an answer — synthesize the real
                     # content from evidence so the reply isn't just "✓ n/n".
                     if not full_text.strip():
+                        _post_lanes["evidence_synthesis"] = {"ran": True}
                         _synth = await self._synthesize_final_from_trace(
                             trace, intent,
                             reformulated_message or _user_message_text(loop_messages),
@@ -7468,6 +7544,7 @@ class AgentLoop:
                         # Try one focused synthesis call before
                         # the deterministic report — the free-tier model often
                         # ends a tool-bearing turn with a bare heading.
+                        _post_lanes["rescue_synthesis"] = {"ran": True}
                         async for _rescue_chunk in self._rescue_final_answer(
                             loop_messages=loop_messages,
                             observation_log=observation_log,
@@ -7476,6 +7553,9 @@ class AgentLoop:
                             provider_usage=_provider_usage,
                         ):
                             yield _rescue_chunk
+                    yield _response_ready_chunk(_turn_stages, _post_lanes)
+                    _provider_usage["turn_stages"] = dict(_turn_stages)
+                    _provider_usage["post_answer_lanes"] = dict(_post_lanes)
                     yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                     return
 
@@ -7565,6 +7645,10 @@ class AgentLoop:
                 # Gate the model's "done" claim (replan or honest
                 # report) BEFORE the turn-end events — the loop is only done
                 # when the gate is satisfied or the caps force an honest close.
+                # Turn-close attribution: same lane attribution as the
+                # short-reply gate above — the gate and its judge are
+                # post-answer work.
+                _gate_t0 = _turn_now_ms()
                 _gate_suffix, _gate_final = await self._acceptance_gate_at_final_answer(
                     trace=trace,
                     iteration=iteration,
@@ -7585,6 +7669,18 @@ class AgentLoop:
                     tools_withheld=_answer_only_call_used,
                     bus=_bus,
                 )
+                _post_lanes["acceptance_gate"] = {
+                    "ran": True,
+                    "passed": bool(_gate_final),
+                    "replans": _gate_replan_count,
+                    "elapsed_ms": _turn_now_ms() - _gate_t0,
+                }
+                if _bus is not None:
+                    _judge_fact = _bus.latest(
+                        "verdict", source=_COMPLETION_JUDGE_SOURCE, step=iteration
+                    )
+                    if _judge_fact:
+                        _post_lanes["completion_judge"] = dict(_judge_fact.value or {})
                 if not _gate_final:
                     _gate_replan_count += 1
                     _bus.replan()  # everything said about the old plan is now stale
@@ -7626,6 +7722,7 @@ class AgentLoop:
                 # Gate passed but no model answer — synthesize the
                 # real content from tool evidence (not just "✓ n/n criteria met").
                 if not full_text.strip():
+                    _post_lanes["evidence_synthesis"] = {"ran": True}
                     _synth = await self._synthesize_final_from_trace(
                         trace, intent,
                         reformulated_message or _user_message_text(loop_messages),
@@ -7654,6 +7751,7 @@ class AgentLoop:
                     # Try one focused synthesis call before
                     # the deterministic report — the free-tier model often
                     # ends a tool-bearing turn with a bare heading.
+                    _post_lanes["rescue_synthesis"] = {"ran": True}
                     async for _rescue_chunk in self._rescue_final_answer(
                         loop_messages=loop_messages,
                         observation_log=observation_log,
@@ -7686,6 +7784,9 @@ class AgentLoop:
                 # silent tool run never advanced the cursor, so without this
                 # the executed step stays 'pending' in the Todos panel.
                 _complete_current_plan_step()
+                yield _response_ready_chunk(_turn_stages, _post_lanes)
+                _provider_usage["turn_stages"] = dict(_turn_stages)
+                _provider_usage["post_answer_lanes"] = dict(_post_lanes)
                 yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                 return
 
@@ -7872,7 +7973,7 @@ class AgentLoop:
         gate_replan_count: int = 0,
         # Mutable flag for gate→loop zero-tool force signal
         gate_force_tool: list[bool] | None = None,
-        # The turn bus: the completion judge runs as a lane on it (ADR-66).
+        # The turn bus: the completion judge runs as a lane on it.
         bus: Optional[TurnBus] = None,
         # True when the reply being gated came from an
         # answer-only call (tool schemas withheld). Changes the recovery
@@ -8032,7 +8133,7 @@ class AgentLoop:
                     # → core.agent_runtime → core.agent.loop). An explicit
                     # approval of an already-narrated action ("go ahead")
                     # escalates even when the approval itself names no
-                    # tool/file (B-2026-09-15-8).
+                    # tool/file.
                     and (
                         _message_implies_tool_action(reformulated_message or "")
                         or _message_is_action_approval(reformulated_message or "")
@@ -8090,7 +8191,7 @@ class AgentLoop:
                         or "error" in (getattr(s, "observation", "") or "").lower()
                         for s in getattr(trace, "steps", []) or []
                     )
-                    # Conversational-turn guard (B-2026-09-15-8): a zero-tool
+                    # Conversational-turn guard: a zero-tool
                     # turn whose user message never implied a tool action (and
                     # wasn't an approval of one already narrated) doesn't get
                     # judged for pending-action narration — same cyber-café

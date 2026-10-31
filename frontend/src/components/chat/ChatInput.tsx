@@ -26,6 +26,10 @@ interface ChatInputProps {
   onAbort: () => void;
   onSteer?: (message: string) => void;
   isStreaming: boolean;
+  /** Turn-close attribution: the backend's response_ready marker landed — the reply
+   *  on screen is final and only turn close-out remains. Stop becomes
+   *  honest: it can no longer change the reply, so it is disabled. */
+  responseReady?: boolean;
   /** Retained for the call site; no longer used since the per-message tool
    *  selector was removed. */
   sessionId?: string;
@@ -44,7 +48,7 @@ interface ChatInputProps {
   footer?: ReactNode;
 }
 
-export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onChatModeChange, prefill, onEditSend, onEditCancel, footer }: ChatInputProps) {
+export function ChatInput({ onSend, onAbort, onSteer, isStreaming, responseReady, chatMode, onChatModeChange, prefill, onEditSend, onEditCancel, footer }: ChatInputProps) {
   const [input, setInput] = useState('');
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -248,8 +252,13 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, chatMode, onC
             {isStreaming ? (
               <button
                 onClick={handleAbort}
-                className="rounded-full p-2 bg-brand-red text-white hover:bg-brand-red/80 transition-colors"
-                title="Stop generating"
+                disabled={responseReady}
+                className={`rounded-full p-2 transition-colors ${
+                  responseReady
+                    ? 'cursor-not-allowed bg-brand-border text-brand-green-faint'
+                    : 'bg-brand-red text-white hover:bg-brand-red/80'
+                }`}
+                title={responseReady ? 'Answer ready — finishing up' : 'Stop generating'}
               >
                 <Square className="h-3.5 w-3.5" />
               </button>

@@ -125,6 +125,10 @@ interface CenterPanelProps {
   /** The open chat's title, shown in the header. */
   title?: string;
   isStreaming: boolean;
+  /** Turn-close attribution: the backend's response_ready marker landed — the reply
+   *  is final, the turn is only closing out. Drives the honest strip label,
+   *  the disabled Stop button and the turn view's "Answer ready" line. */
+  responseReady?: boolean;
   health: HealthState;
   onSend: (message: string, tool?: string) => void;
   /** Re-run a failed turn in place. Falls back to `onSend` when not provided. */
@@ -155,11 +159,11 @@ interface CenterPanelProps {
    *  half of "what the UI shows is what the model received". */
   injectedItems?: InjectedItem[];
   /** Visible log of lessons the self-reflection loop wrote to memory on its
-   *  own this session (B-2026-09-15-14) — clicking the lesson badge opens
+   *  own this session — clicking the lesson badge opens
    *  the list so proactive writes are never silent. */
   reflectionLessons?: ReflectionLesson[];
   /** Visible log of durable self-facts the agent stored on its own from
-   *  incidental conversation signals (B-2026-09-15-15) — same audit surface
+   *  incidental conversation signals — same audit surface
    *  as the reflection lessons. */
   passiveMemories?: PassiveMemory[];
   /** Per-path diff hunks captured this turn (preview Diff mode). */
@@ -182,6 +186,7 @@ export function CenterPanel({
   messages,
   title,
   isStreaming,
+  responseReady,
   health,
   onSend,
   onRetry: onRetryTurn,
@@ -369,7 +374,7 @@ export function CenterPanel({
     if (breakdownEntries.length > 0) setBreakdownOpen((o) => !o);
   };
 
-  // Reflection-lesson log (B-2026-09-15-14): visible surface for the
+  // Reflection-lesson log: visible surface for the
   // self-reflection loop's autonomous memory writes. Owner decision
   // 2026-09-18 — proactive writes must never be silent, so every lesson the
   // loop stores shows up here, newest first.
@@ -379,7 +384,7 @@ export function CenterPanel({
     if (lessons.length > 0) setLessonsOpen((o) => !o);
   };
 
-  // Passive-context log (B-2026-09-15-15): visible surface for durable
+  // Passive-context log: visible surface for durable
   // self-facts the agent stored on its own from incidental conversation
   // signals — no "remember this" trigger. Same audit rule as the lessons.
   const [passiveOpen, setPassiveOpen] = useState(false);
@@ -523,7 +528,7 @@ export function CenterPanel({
             <span className="text-[10px] text-brand-green-muted">{memoryCount}</span>
           </div>
           {/* Reflection-lesson badge: the visible log for the self-reflection
-              loop's own autonomous memory writes (B-2026-09-15-14). Hidden
+              loop's own autonomous memory writes. Hidden
               when no lesson has been noted this session — nothing to click. */}
           {lessons.length > 0 && (
             <div className="relative">
@@ -572,7 +577,7 @@ export function CenterPanel({
           )}
           {/* Passive-memory badge: the visible log for durable self-facts the
               agent picked up from incidental conversation and stored on its
-              own (B-2026-09-15-15). Hidden until the first passive write. */}
+              own. Hidden until the first passive write. */}
           {passives.length > 0 && (
             <div className="relative">
               <div
@@ -719,6 +724,7 @@ export function CenterPanel({
                   key={msg.id}
                   message={msg}
                   isStreaming={isStreaming && msg === messages[messages.length - 1] && msg.role === 'assistant'}
+                  responseReady={responseReady && msg === messages[messages.length - 1] && msg.role === 'assistant'}
                   onRetry={prompt ? () => (onRetryTurn ?? onSend)(prompt) : undefined}
                   // Only your latest message can be rewritten (older ones would branch the chat).
                   onEdit={
@@ -799,6 +805,7 @@ export function CenterPanel({
         onAbort={onAbort}
         onSteer={onSteer}
         isStreaming={isStreaming}
+        responseReady={responseReady}
         sessionId={sessionId}
         chatMode={chatMode}
         onChatModeChange={onChatModeChange}
@@ -810,6 +817,7 @@ export function CenterPanel({
             stats={sessionStats}
             live={lastMetrics}
             isStreaming={isStreaming}
+            responseReady={responseReady}
             elapsedMs={elapsedMs}
             goal={goal}
           />

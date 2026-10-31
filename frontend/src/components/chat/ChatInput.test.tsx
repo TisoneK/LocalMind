@@ -64,6 +64,26 @@ describe('ChatInput', () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
+  it('stops offering Stop once the answer is ready', async () => {
+    const onAbort = vi.fn();
+    render(
+      <ChatInput
+        onSend={() => {}}
+        onAbort={onAbort}
+        isStreaming={true}
+        responseReady={true}
+      />,
+    );
+
+    // The reply on screen is final — Stop can no longer change it, so the
+    // honest control is a disabled button named for what is actually left.
+    const stop = screen.getByTitle('Answer ready — finishing up');
+    expect(stop).toBeDisabled();
+    expect(screen.queryByTitle('Stop generating')).not.toBeInTheDocument();
+    await userEvent.click(stop);
+    expect(onAbort).not.toHaveBeenCalled();
+  });
+
   it('steers from the main composer while streaming', async () => {
     const onSteer = vi.fn();
     const onAbort = vi.fn();

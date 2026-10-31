@@ -276,7 +276,7 @@ export function buildTurn(
     ChatMessage,
     'acknowledgement' | 'thinking' | 'thinkMs' | 'thinkingSegments' | 'toolCalls' | 'agentPhases' | 'agentRuns' | 'statusText' | 'error'
   > & { content?: string },
-  opts: { todos?: TodoItem[]; isStreaming?: boolean } = {},
+  opts: { todos?: TodoItem[]; isStreaming?: boolean; responseReady?: boolean } = {},
 ): TurnModel {
   const steps: TurnStep[] = [];
   const streaming = !!opts.isStreaming;
@@ -384,7 +384,12 @@ export function buildTurn(
       : toolLabel(active.tool as ToolCall, 'running')
     : streaming && (message.content ?? '').trim()
       ? // The reply itself is streaming in: say so, not "thinking about the result".
-        'Writing the answer'
+        // Turn-close attribution: once the backend's response_ready marker
+        // landed, the reply on screen is final — the loop is only finishing
+        // up (verification lanes, close-out). Say that instead of "Writing".
+        opts.responseReady
+        ? 'Answer ready — finishing up'
+        : 'Writing the answer'
       : streaming
       ? // Between tools the model is reading the result; the backend's status text
         // at that point is the previous tool's "Done — …" line, which reads as stale.

@@ -655,11 +655,21 @@ export interface PerformanceMetrics {
    *  tool schemas, history, ...), scaled to the provider-reported prompt total.
    *  Absent/empty when the turn never reached the agent loop (fast path). */
   contextBreakdown?: Record<string, number>;
+  /** Turn-close attribution: per-stage wall-clock stamps of the turn
+   *  (turn_started → first_token → last_token → response_ready →
+   *  agent_loop_finished → turn_completed), ms since epoch. The
+   *  last_token → response_ready → turn_completed gaps ARE the
+   *  post-answer window the status strip used to blur into "Working". */
+  turnStages?: Record<string, number>;
+  /** Turn-close attribution: which post-answer lanes ran and what each
+   *  cost (acceptance_gate, completion_judge, rescue_synthesis,
+   *  evidence_synthesis). Empty when the turn closed with no lanes. */
+  postAnswerLanes?: Record<string, Record<string, unknown>>;
 }
 
 /** A durable self-fact the agent picked up incidentally — from ordinary
  *  conversation with no "remember this" trigger — and stored to memory on
- *  its own (B-2026-09-15-15). Same visible-log surface and owner decision as
+ *  its own. Same visible-log surface and owner decision as
  *  ReflectionLesson: silent learning is unauditable, so every autonomous
  *  memory write shows up here. */
 export interface PassiveMemory {
@@ -673,7 +683,7 @@ export interface PassiveMemory {
 
 /** A pattern-level lesson the self-reflection loop noticed and stored to
  *  memory on its own — the visible-log surface for proactive memory writes
- *  (owner decision 2026-09-18, B-2026-09-15-14: silent learning is
+ *  (owner decision 2026-09-18: silent learning is
  *  unauditable, so every autonomous lesson write shows up here). */
 export interface ReflectionLesson {
   id: string;

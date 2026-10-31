@@ -46,6 +46,22 @@ describe('ChatStatsStrip', () => {
     expect(screen.getByTestId('deep-diving')).toHaveTextContent('Deep diving for 4m16s');
   });
 
+  it('says the answer is ready while the turn finishes up', () => {
+    render(
+      <ChatStatsStrip
+        stats={stats}
+        live={{ tokensPerSecond: 0, latency: 0, totalTokens: 0, promptTokens: 0, completionTokens: 0 }}
+        isStreaming
+        responseReady
+        elapsedMs={256_000}
+      />,
+    );
+    // The reply is final: the strip names the state instead of letting the
+    // deep-dive timer keep counting over a finished answer.
+    expect(screen.getByTestId('answer-finishing')).toHaveTextContent('Answer ready · finishing up…');
+    expect(screen.queryByTestId('deep-diving')).toBeNull();
+  });
+
   it('hides the counts before the first turn reports', () => {
     render(<ChatStatsStrip stats={null} isStreaming={false} />);
     expect(screen.getByTestId('chat-stats-reading')).toBeEmptyDOMElement();

@@ -19,6 +19,10 @@ interface ChatStatsStripProps {
   /** The open turn's provider metrics while streaming. */
   live?: PerformanceMetrics | null;
   isStreaming: boolean;
+  /** Turn-close attribution: the backend's response_ready marker landed — the reply
+   *  is final, the turn is only closing out. The strip names that state
+   *  instead of letting the deep-dive timer blur over the finished answer. */
+  responseReady?: boolean;
   /** Wall time of the open turn (ms). */
   elapsedMs?: number;
   /** The chat's durable goal — drives the round meter while one is current. */
@@ -33,6 +37,7 @@ export function ChatStatsStrip({
   stats,
   live,
   isStreaming,
+  responseReady,
   elapsedMs = 0,
   goal,
 }: ChatStatsStripProps) {
@@ -71,7 +76,15 @@ export function ChatStatsStrip({
           </span>
         )}
         <div className="min-w-0 truncate">
-          {isStreaming ? (
+          {isStreaming && responseReady ? (
+            <span className="inline-flex items-center gap-1.5 text-brand-green-soft" data-testid="answer-finishing">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-green opacity-60" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand-green" />
+              </span>
+              Answer ready · finishing up…
+            </span>
+          ) : isStreaming ? (
             <span className="inline-flex items-center gap-1.5 text-brand-green-soft" data-testid="deep-diving">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-green opacity-60" />

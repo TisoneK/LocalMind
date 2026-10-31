@@ -212,6 +212,9 @@ interface TurnViewProps {
   > & { content?: string };
   todos?: TodoItem[];
   isStreaming?: boolean;
+  /** Turn-close attribution: the backend's response_ready marker landed —
+   *  the reply is final, the turn is only finishing up. */
+  responseReady?: boolean;
 }
 
 /** Indeterminate sweep along the top edge — the "something is happening" heartbeat. */
@@ -230,8 +233,8 @@ function Shimmer() {
   );
 }
 
-export const TurnView = memo(function TurnView({ message, todos, isStreaming }: TurnViewProps) {
-  const turn = buildTurn(message, { todos, isStreaming });
+export const TurnView = memo(function TurnView({ message, todos, isStreaming, responseReady }: TurnViewProps) {
+  const turn = buildTurn(message, { todos, isStreaming, responseReady });
   const running = turn.state === 'running';
   const elapsed = useElapsedSeconds(running);
   // The header's clock must not vanish the moment the turn ends: remember what it showed
