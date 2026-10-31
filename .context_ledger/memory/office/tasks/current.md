@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — no session in progress
-- **Status:** idle
+- **Session:** 2026-10-31 — Kofi / unknown (harness states no model ID)
+- **Task:** Fix the `storage.vector` embedding dimension mismatch — vec0 table frozen at 768 while `vector_meta.dim` and the active embedder are 1024; writes/recalls fail at runtime
+- **Status:** in-progress

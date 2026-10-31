@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261031T083322Z-Kofi-b27c9d9a",
+  "type": "claim",
+  "session": "S001",
+  "agent": "Kofi",
+  "created": "2026-10-31T08:33:23Z",
+  "issue": "vector-dim-reconcile",
+  "body": "Fix sqlite-vec dim mismatch: treat vec0 table schema as ground truth, rebuild empty stale index, guard runtime vector lengths, remove chat-model embed fallback, repair reset script",
+  "paths": ["backend/src/storage/vector.py", "scripts/reset_vector_db.py", "tests/core/test_vector_dim_reconcile.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
