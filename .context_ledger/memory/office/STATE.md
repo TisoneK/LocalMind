@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-31T10:20:14Z_
+_Regenerated: 2026-10-31T11:04:52Z_
 
 ## Standing params
 - **Core:** 2.3.2 (locked, verified 2026-10-31)
@@ -16,6 +16,7 @@ _Regenerated: 2026-10-31T10:20:14Z_
 
 ## Office — who's in, right now
 - **Nadia** (S002) — Done — Fix the Cerebras `messages.2.user.tool_calls is unsupported` payload rejection and the co…
+- **Tobias** (S004) — Working — Pull latest main and verify the app runs
 
 ## Current task
 - **—** — none — no session in progress — *idle*
