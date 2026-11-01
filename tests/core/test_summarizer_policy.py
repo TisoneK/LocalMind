@@ -17,10 +17,17 @@ from core.models import StreamChunk
 from core.summarizer import _preserved_decision_lines, maybe_compress_history
 
 
+_CANNED_SUMMARY = (
+    "[Continuing task] The user is setting up a database.\n"
+    "[Decisions and constraints] Wants PostgreSQL; rejected MongoDB.\n"
+    "[Open threads] (none)"
+)
+
+
 class _FakeAdapter:
     """Adapter that records the prompt and returns a canned summary."""
 
-    def __init__(self, summary: str = "Canned summary text."):
+    def __init__(self, summary: str = _CANNED_SUMMARY):
         self.summary = summary
         self.last_messages = None
 
