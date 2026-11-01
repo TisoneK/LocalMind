@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "id": "20261102T033000Z-Ayo-s018-checkin",
+  "type": "claim",
+  "session": "S018",
+  "agent": "Ayo",
+  "created": "2026-11-02T03:30:00Z",
+  "issue": "standing-eval-harness",
+  "body": "Ayo S018 claims B-2026-10-31-23 — the standing eval harness (audit §1.7, its strongest structural ask), the last open row of the goal-pursuit/prompt program line. Scope: the ten-scenario suite (ambiguous request, long conversation, preference recall, file analysis, dependent multi-step, failed tool, contradiction, user correction, unfamiliar problem, complex objective) run against the live app per system/live-testing.md, scored on task completion, factual accuracy, tool success, recovery rate, unnecessary questions, latency; absorbs the audit §1.1 (perspective/speaker-identity) and §1.2 (reflective turns / null meta-tool) replay cases; includes the C5 offer-is-DONE shape Nia S017 handed into this row (a scenario class exercising suggested-but-not-executed actions). Provider-honest: runs against the deterministic-provider 8765 harness for mechanics/contract verification, and against a real provider when a key is present (none in this sandbox — secrets/ holds github-pat only; the real-provider scoring run stays the standing follow-up). Process note recorded: my earlier S016 check-in was discarded before push — Amara shipped S016 (goal-pursuit investigation + C1-C3) and Nia S017 (G7 + C4) while this sandbox was between sessions; local tree reset to origin/main d8611590 and the board re-read before this claim.",
+  "paths": [
+    "scripts/",
+    "docs/",
+    "tests/",
+    ".context_ledger/memory/office/tasks/backlog.md"
+  ],
+  "refs": [
+    "office/tasks/backlog.md#B-2026-10-31-23",
+    "office/reviews/2026-10-31-external-audit-intake.md",
+    "office/reviews/2026-11-01-continuous-goal-pursuit-investigation.md",
+    "system/live-testing.md"
+  ],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
