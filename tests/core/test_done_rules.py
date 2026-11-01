@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import MagicMock, patch
 
+from core.agent.loop import AgentLoop
 from core.agent.turn_outcome import (
     SIDE_EFFECT_FREE_TOOLS,
     TurnOutcome,
@@ -25,7 +26,6 @@ from core.agent.turn_outcome import (
     pair_unanswered_tool_calls,
     provider_death_answer,
 )
-from core.agent.loop import AgentLoop
 from core.models import Intent, StreamChunk, ToolResult
 
 # ── 1. Provider death is a done-rule ────────────────────────────────────────
@@ -362,3 +362,71 @@ class TestLoopRecordsAnUnansweredCall:
                 if msg.get("role") == "tool":
                     pending.discard(msg.get("tool_call_id"))
             assert not pending, "a request carried an assistant tool call with no result"
+
+
+# ── 4. A turn that ends mid-flight settles its in-flight calls ──────────────
+
+
+class TestMidFlightSettlement:
+    def test_an_abandoned_turn_settles_its_in_flight_call(self):
+        """The user aborts (client disconnect) while a dispatched tool is
+        still running. The started tool_call event must not dangle forever:
+        the batch cancels the straggler and settles it as an unknown-outcome
+        result — attempted, abandoned mid-run, effect unknown."""
+        from contextlib import suppress
+
+        from adapters.ollama import ToolCallResult
+        from core.obs import ObsCollector
+
+        started = asyncio.Event()
+
+        async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
+            return ToolCallResult(tool_name="shell", tool_args={"command": "long-job"})
+
+        async def dispatch(intent, tool_input, *a, **k):
+            started.set()
+            await asyncio.sleep(300)  # still in flight when the turn ends
+
+        adapter = MagicMock()
+        adapter.chat_with_tools = chat_with_tools
+        adapter.chat = lambda *a, **k: iter(())
+        obs = ObsCollector()
+        loop = AgentLoop(adapter=MagicMock())
+
+        async def go():
+            async def consume():
+                async for _ in loop.run(
+                    messages=[{"role": "user", "content": "run the long job"}],
+                    intent=Intent.SHELL,
+                    initial_tool_result=None,
+                    available_tools=[],
+                    adapter=adapter,
+                    obs=obs,
+                    skip_planning=True,
+                    agent_config=_parent_config(),
+                ):
+                    pass
+
+            task = asyncio.ensure_future(consume())
+            with patch("core.agent.loop.dispatch_with_retry", dispatch):
+                await asyncio.wait_for(started.wait(), timeout=5)
+                await asyncio.sleep(0.1)  # let the generator suspend inside the batch await
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
+
+        asyncio.run(go())
+        events = obs.history()
+        settled = [
+            e for e in events
+            if e.type == "tool_call" and e.data.get("unknown_outcome") is True
+        ]
+        assert settled, "the in-flight call must be settled, never left dangling"
+        assert settled[0].data.get("tool") == "shell"
+        assert "OUTCOME UNKNOWN" in (settled[0].data.get("output") or "")
+        assert "inspect the\ncurrent state" in (settled[0].data.get("output") or "") or "inspect" in (
+            settled[0].data.get("output") or ""
+        ), "the settlement carries the check-before-rerun guidance for an effecting tool"
+        assert any(
+            e.type == "tool_call_unanswered" for e in events
+        ), "the repair itself goes on the audit trail"

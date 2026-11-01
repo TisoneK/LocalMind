@@ -2322,6 +2322,66 @@ def answer_hedges_after_evidence(text: str) -> bool:
     return any(phrase in lower for phrase in _HEDGE_PHRASES)
 
 
+def _settle_unreported_tool_calls(obs) -> int:
+    """Done-rule: every tool call that started ends with an outcome on the record.
+
+    A turn can die while a dispatch is in flight (user abort, client
+    disconnect, transport teardown) from ANY of the loop's dispatch sites —
+    the concurrent batch or any of the sequential ones. The record would
+    keep the call's started event forever without an outcome: the UI shows
+    a tool that never finished and a later turn cannot reason about a call
+    that left no trace. This reconcile walks the collector's history, finds
+    started calls that never reported, and settles each with the standard
+    unknown-outcome result (attempted, abandoned mid-run, effect unknown —
+    re-run only after checking the state it would have changed). Returns
+    the number of calls settled; 0 when nothing was owed.
+    """
+    if obs is None:
+        return 0
+    pending: list[dict] = []  # unsettled started calls, in emit order
+    for evt in obs.history():
+        if evt.type != "tool_call":
+            continue
+        data = evt.data if isinstance(evt.data, dict) else {}
+        if data.get("status") == "started":
+            pending.append(dict(data))
+        else:
+            # Any outcome event settles the most recent started call of
+            # the same tool (nested/completed dispatches emit in order).
+            for i in range(len(pending) - 1, -1, -1):
+                if pending[i].get("tool") == data.get("tool"):
+                    pending.pop(i)
+                    break
+    settled = 0
+    for started_evt in pending:
+        name = str(started_evt.get("tool") or "tool")
+        outcome = classify_unanswered_call(tool_name=name)
+        obs.emit(
+            "tool_call",
+            tool=name,
+            label="",
+            status="failed",
+            output=_truncate_observation(outcome.text),
+            latency_ms=0,
+            tool_args=started_evt.get("tool_args"),
+            iteration=started_evt.get("iteration"),
+            unknown_outcome=outcome.unknown,
+        )
+        obs.emit(
+            "tool_call_unanswered",
+            tool=name,
+            reason="the turn ended while the call was in flight",
+            unknown_outcome=outcome.unknown,
+            iteration=started_evt.get("iteration"),
+        )
+        logger.warning(
+            "[agent.loop] turn ended mid-flight — tool %s settled as unknown-outcome",
+            name,
+        )
+        settled += 1
+    return settled
+
+
 class AgentLoop:
     """
     Runs the think → act → observe cycle for a single user turn using
@@ -2346,7 +2406,27 @@ class AgentLoop:
     # Public entry point
     # ------------------------------------------------------------------
 
-    async def run(
+    async def run(self, *args, **kwargs):
+        """The turn's public entry — with the done-rule settle net.
+
+        Whatever ends the turn (normal completion, abort, provider death,
+        task cancellation, client disconnect), a tool call that STARTED but
+        never reported leaves the record settled as unknown-outcome —
+        never dangling. `obs` is extracted from the caller's arguments so
+        the reconcile can read this turn's event history (the loop instance
+        is shared across turns; no per-turn state lives on self).
+        """
+        obs = kwargs.get("obs")
+        if obs is None and len(args) >= 8:
+            obs = args[7]  # the 8th positional parameter of _run_impl
+        try:
+            async for chunk in self._run_impl(*args, **kwargs):
+                yield chunk
+        except BaseException:
+            _settle_unreported_tool_calls(obs)
+            raise
+
+    async def _run_impl(
         self,
         messages: list[dict],
         intent: Intent,
