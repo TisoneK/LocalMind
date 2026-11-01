@@ -1295,12 +1295,19 @@ def _intent_for_tool(tool_name: str) -> Intent:
     """Map a tool name to its Intent.
 
     Most tools share their intent value, but a few differ: the tool module is
-    ``edit_file`` while its Intent value is ``file_edit``. Seen live:
+    ``edit_file`` while its Intent value is ``file_edit``, and the schema name
+    is ``calculator`` while its Intent value is ``calculate``. Seen live:
     `Intent(tool_name)` with "edit_file" raises ValueError, the outer
     dispatch except marks the tool failed, and the failed-branch emit then
     crashed on the unbound `tool_result` — every native edit_file call died.
+    The calculator mismatch was found by the standing eval harness
+    (B-2026-10-31-23): every native calculator call fell back to SHELL and
+    died in the structured-input contract with the raw args JSON.
     """
-    _TOOL_NAME_TO_INTENT = {"edit_file": Intent.FILE_EDIT}
+    _TOOL_NAME_TO_INTENT = {
+        "edit_file": Intent.FILE_EDIT,
+        "calculator": Intent.CALCULATE,
+    }
     try:
         return _TOOL_NAME_TO_INTENT.get(tool_name) or Intent(tool_name)
     except ValueError:
