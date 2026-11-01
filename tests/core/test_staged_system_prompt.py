@@ -24,16 +24,13 @@ import pytest
 from adapters.ollama import ToolCallResult
 from core.agent.loop import AgentLoop
 from core.agent.prompt import (
-    Band,
-    staged_static_content,
-)
-from core.agent.prompt import (
     _CORE_HEAD,
     _SAFETY_HEAD,
     _STYLE_HEAD,
     _TOOLS_HEAD,
-    build_agent_system_prompt,
+    Band,
     build_parent_static_registry,
+    staged_static_content,
     staged_system_prompt,
 )
 from core.agent.tool_schemas import TOOL_DEFINITIONS
@@ -72,10 +69,13 @@ def prompt(registry) -> str:
 
 def test_the_builder_emits_every_section_head_in_layer_order(prompt):
     """The 4-layer doctrine order: safety/grounding is a CONSTRAINT and
-    renders before the execution-guidance blocks (style, tool index,
-    on-demand loading)."""
-    d, a, b, c = (prompt.find(h) for h in (_SAFETY_HEAD, _STYLE_HEAD, _TOOLS_HEAD, _CORE_HEAD))
-    assert 0 <= d < a < b < c
+    renders before the execution-guidance blocks — and the capability index
+    (tool list) LEADS the guidance layer (the conversation-or-action
+    constraint points at it, so it must survive the conversational
+    relevance horizon that drops the tool-choosing sections behind it:
+    style examples, selection hints, on-demand loading)."""
+    d, b, a, c = (prompt.find(h) for h in (_SAFETY_HEAD, _TOOLS_HEAD, _STYLE_HEAD, _CORE_HEAD))
+    assert 0 <= d < b < a < c
 
 
 def test_a_later_call_keeps_every_rule_and_drops_only_first_tool_guidance(registry, prompt):
@@ -122,7 +122,7 @@ def test_staged_excludes_of_absent_sections_are_a_no_op():
     """A registry without the parent sections (any other surface) renders
     unchanged through the staged helper — cutting sections a prompt never
     had is a no-op, never an error."""
-    from core.agent.prompt import Layer, SectionRegistry, make, SECTION_IDENTITY
+    from core.agent.prompt import SECTION_IDENTITY, Layer, SectionRegistry, make
 
     small = SectionRegistry()
     small.add(make(SECTION_IDENTITY, Band.STATIC, Layer.IDENTITY, 10, "You are a small surface."))

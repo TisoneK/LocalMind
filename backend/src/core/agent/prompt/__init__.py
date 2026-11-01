@@ -44,6 +44,14 @@ Consumers import from this package, never from the modules inside it:
 
 from __future__ import annotations
 
+from core.agent.prompt.budget import (
+    SOCIAL_DROP_SECTIONS,
+    RelevanceHorizon,
+    dropped_sections_for,
+    horizon_for_intent,
+    horizon_from_string,
+    render_static_budgeted,
+)
 from core.agent.prompt.names import (
     SECTION_ACT_NOT_ANNOUNCE,
     SECTION_AGENT_PLAYBOOK,
@@ -193,6 +201,13 @@ __all__ = [
     "STAGED_TOOL_RESULT_EXCLUDES",
     "staged_static_content",
     "staged_system_prompt",
+    # per-turn relevance budget
+    "SOCIAL_DROP_SECTIONS",
+    "RelevanceHorizon",
+    "dropped_sections_for",
+    "horizon_for_intent",
+    "horizon_from_string",
+    "render_static_budgeted",
     # shared rules
     "CAPABILITY_HONESTY_SPINE",
     "NO_MODES_RULE",

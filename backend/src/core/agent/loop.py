@@ -129,8 +129,11 @@ from core.agent.prompt import (
     build_agent_system_prompt,
     build_parent_static_registry,
     build_planning_prompt,
+    dropped_sections_for,
+    horizon_for_intent,
     make,
     memory_facts_section_text,
+    render_static_budgeted,
     staged_static_content,
     staged_system_prompt,
 )
@@ -3503,7 +3506,22 @@ class AgentLoop:
                 tool_defs=filtered_tools,
                 agent_context=agent_context,
             )
-            system_prompt = _static_registry.render(Band.STATIC)
+            # Per-turn relevance budget (B-2026-10-31-25): the STATIC prefix is
+            # scoped by the turn's classified intent — a conversational turn
+            # does not choose tools, so the tool-choosing guidance suffix is
+            # not sent (the capability index stays; the constraints reference
+            # it). The cut is a contiguous suffix of the render order, so the
+            # budgeted render stays a byte-prefix of the canonical render and
+            # provider prefix caching survives the cut in both directions.
+            _relevance_horizon = horizon_for_intent(intent)
+            system_prompt = render_static_budgeted(_static_registry, _relevance_horizon)
+            if _obs:
+                _obs.emit(
+                    "relevance_budget",
+                    horizon=_relevance_horizon.value,
+                    dropped_sections=dropped_sections_for(_static_registry, _relevance_horizon),
+                    static_chars=len(system_prompt),
+                )
         else:
             _static_registry = None
             system_prompt = build_agent_system_prompt(

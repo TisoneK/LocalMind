@@ -75,8 +75,14 @@ def build_parent_static_registry(
     - relevant context (210-290): the agent playbook, the boot-cached system
       facts, deduced user context, stated identity facts, retrieved memory —
       everything the constraints above reason about.
-    - execution guidance (400-430): reply-style examples, the tool index,
-      selection hints, on-demand loading.
+    - execution guidance (400-430): the tool index FIRST (the capability
+      spine the conversation-or-action constraint points at — "read the tool
+      list below"), then the tool-choosing guidance (reply-style examples,
+      selection hints, on-demand loading). The index leads so the per-turn
+      relevance budget (prompt/budget.py) can drop the tool-choosing suffix
+      on conversational turns while the capability spine stays — a cut that
+      keeps the referenced section is a byte-prefix of this render, not a
+      middle cut.
 
     The user objective is deliberately ABSENT here: it is per-turn content
     and leads the TURN band (the trailing turn-context message), never the
@@ -224,7 +230,7 @@ def build_parent_static_registry(
             SECTION_STYLE_EXAMPLES,
             Band.STATIC,
             Layer.GUIDANCE,
-            400,
+            410,
             f"{_STYLE_HEAD}\n"
             '- "how much RAM do I have?" → "16 GB." (from System facts; no tool)\n'
             '- "weather in Nairobi?" → run web_search, then: "24°C, partly cloudy."\n'
@@ -262,7 +268,7 @@ def build_parent_static_registry(
             SECTION_TOOL_INDEX,
             Band.STATIC,
             Layer.GUIDANCE,
-            410,
+            400,
             f"{_TOOLS_HEAD}\n{compact_tool_list}",
         )
     )

@@ -59,8 +59,8 @@ SECTION_SYSTEM_FACTS = "system_facts"  # 220
 SECTION_USER_CONTEXT_DEDUCED = "user_context_deduced"  # 230
 SECTION_USER_IDENTITY_STATED = "user_identity_stated"  # 240
 SECTION_MEMORY_WEAVE = "memory_weave"  # 290
-SECTION_STYLE_EXAMPLES = "style_examples"  # 400
-SECTION_TOOL_INDEX = "tool_index"  # 410
+SECTION_STYLE_EXAMPLES = "style_examples"  # 410
+SECTION_TOOL_INDEX = "tool_index"  # 400
 SECTION_SELECTION_HINTS = "selection_hints"  # 420
 SECTION_ON_DEMAND_LOADING = "on_demand_loading"  # 430
 
