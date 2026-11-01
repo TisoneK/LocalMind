@@ -331,3 +331,67 @@ def current_model_call() -> Optional[ModelCallWatch]:
     send, the SSE line loop) stamp response/first-byte milestones on it
     without the public method needing to pass it down."""
     return _current_call.get()
+
+
+def derive_call_timing(events) -> dict:
+    """Fold the turn's event stream into the provider-timing pair.
+
+    - ``first_token_ms``: the FIRST model call's submit → first-byte window
+      (submit, queue, cached-prefix processing — the time nothing had
+      arrived yet).
+    - ``decode_ms``: the FINAL model call's first-byte → last-byte window
+      (the generation window the completion tokens were actually produced
+      in — the honest denominator for tokens-per-second).
+
+    Both are None when the stream carries no matching stamps (a pre-trace
+    record, or a call that failed before its first byte). ``events`` may be
+    ObsEvent objects (the live collector history) or persisted trace rows
+    ({"type", "data"} dicts) — the same fold serves both.
+    """
+    started: dict[str, int] = {}
+    first_byte: dict[str, int] = {}
+    completed: dict[str, int] = {}
+    order: list[str] = []
+
+    def _pairs(obj) -> dict:
+        if isinstance(obj, dict):
+            data = obj.get("data")
+            return data if isinstance(data, dict) else {}
+        return getattr(obj, "data", None) or {}
+
+    def _etype(obj) -> str:
+        if isinstance(obj, dict):
+            return str(obj.get("type") or "")
+        return str(getattr(obj, "type", "") or "")
+
+    for evt in events:
+        etype = _etype(evt)
+        if not etype.startswith("model_call_"):
+            continue
+        data = _pairs(evt)
+        call_id = str(data.get("call_id") or "")
+        if not call_id:
+            continue
+        if etype == "model_call_started":
+            if call_id not in started:
+                order.append(call_id)
+            started[call_id] = int(data.get("submitted_at") or 0)
+        elif etype == "model_call_first_byte":
+            first_byte[call_id] = int(data.get("first_byte_at") or 0)
+        elif etype == "model_call_completed":
+            completed[call_id] = int(data.get("last_byte_at") or 0)
+
+    out: dict = {}
+    if order:
+        first_id = order[0]
+        fb = first_byte.get(first_id)
+        sub = started.get(first_id)
+        if fb and sub and fb >= sub:
+            out["first_token_ms"] = fb - sub
+    if completed:
+        last_id = order[-1] if order else next(reversed(completed))
+        fb = first_byte.get(last_id)
+        lb = completed.get(last_id)
+        if fb and lb and lb >= fb:
+            out["decode_ms"] = lb - fb
+    return out

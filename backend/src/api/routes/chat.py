@@ -1204,6 +1204,16 @@ async def _event_stream(
                             "post_answer_lanes": (
                                 evt.data.get("provider_usage") or {}
                             ).get("post_answer_lanes", {}),
+                            # Provider-timing pair: the first call's
+                            # submit→first-byte wait and the final call's
+                            # decode window — the honest tokens-per-second
+                            # denominator (0 when unrecorded).
+                            "first_token_ms": (
+                                evt.data.get("provider_usage") or {}
+                            ).get("first_token_ms", 0),
+                            "decode_ms": (
+                                evt.data.get("provider_usage") or {}
+                            ).get("decode_ms", 0),
                         },
                     }
                 )

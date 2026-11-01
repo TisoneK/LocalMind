@@ -13,12 +13,9 @@ Contract locked here:
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import pytest
-from fastapi.testclient import TestClient
-
 from core.obs import ObsCollector
+from fastapi.testclient import TestClient
 from storage.db import SessionStore
 
 
@@ -26,8 +23,8 @@ from storage.db import SessionStore
 def trace_api(tmp_path, monkeypatch):
     """A minimal app with the observability + sessions routers, both stores
     pointed at an isolated tmp DB."""
-    from fastapi import FastAPI
     from api.routes import observability, sessions
+    from fastapi import FastAPI
 
     store = SessionStore(str(tmp_path / "api-trace.db"))
 
@@ -92,6 +89,7 @@ def test_history_exposes_persisted_telemetry_and_trace_link(trace_api):
         "context_breakdown": {"system_prompt": 400, "history": 164},
         "post_answer_lanes": {"reflection": {"ms": 120}},
         "trace_id": "turn-hist-1",
+        # Pre-trace-record shape: no provider-timing pair.
     }
     from core.models import Message, Role
 
@@ -113,3 +111,35 @@ def test_history_exposes_persisted_telemetry_and_trace_link(trace_api):
     # Legacy fields unchanged.
     assert perf["latencyMs"] == 25_900
     assert perf["promptTokens"] == 564
+    # Pre-trace record: no timing pair, and the throughput basis names the
+    # wall-clock approximation honestly.
+    assert perf["firstTokenMs"] is None
+    assert perf["decodeMs"] is None
+    assert perf["timingBasis"] == "turn_wall_clock"
+
+    # A trace-stamped turn carries the timing pair, and the throughput
+    # denominator becomes the recorded decode window.
+    store.append(
+        sid,
+        Message(
+            role=Role.ASSISTANT,
+            content="second answer",
+            metrics={
+                "prompt_tokens": 600,
+                "completion_tokens": 200,
+                "latency_ms": 9_000,
+                "first_token_ms": 1_400,
+                "decode_ms": 2_000,
+                "trace_id": "turn-hist-2",
+            },
+        ),
+    )
+    with TestClient(app) as client:
+        history2 = client.get(f"/api/sessions/{sid}/history").json()
+    perf2 = history2["history"][1]["performance"]
+    assert perf2["firstTokenMs"] == 1_400
+    assert perf2["decodeMs"] == 2_000
+    assert perf2["timingBasis"] == "decode_window"
+    # 200 completion tokens over the 2,000 ms decode window — NOT the 9 s
+    # turn wall clock (the old circular arithmetic).
+    assert perf2["tokensPerSecond"] == 100.0

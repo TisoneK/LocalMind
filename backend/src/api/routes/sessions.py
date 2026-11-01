@@ -174,15 +174,32 @@ async def get_history(session_id: str):
             metrics = m.metrics
             latency_ms = metrics.get("latency_ms") or 0
             completion = metrics.get("completion_tokens") or 0
+            # Honest throughput (the observability investigation's finding
+            # 5c): completion ÷ whole-turn wall clock made latency ≈
+            # completion ÷ tok/s circular arithmetic. When the turn recorded
+            # its final call's decode window, that window is the denominator
+            # and the basis says so; pre-trace records keep the wall-clock
+            # value under its honest name.
+            _decode_ms = metrics.get("decode_ms")
+            _first_token_ms = metrics.get("first_token_ms")
+            _tps_basis = "decode_window" if _decode_ms else "turn_wall_clock"
+            _tps_denom_ms = _decode_ms or latency_ms
             message["performance"] = {
                 "latencyMs": latency_ms or None,
                 "promptTokens": metrics.get("prompt_tokens") or None,
                 "completionTokens": completion or None,
                 "tokensPerSecond": (
-                    round(completion / (latency_ms / 1000.0), 2)
-                    if latency_ms > 0 and completion > 0
+                    round(completion / (_tps_denom_ms / 1000.0), 2)
+                    if _tps_denom_ms > 0 and completion > 0
                     else None
                 ),
+                "timingBasis": _tps_basis,
+                # Provider-timing pair (B-2026-11-01-26 trace): the first
+                # call's submit→first-byte wait and the final call's
+                # first-byte→last-byte decode window. Absent on pre-trace
+                # records — unavailable is rendered as unavailable.
+                "firstTokenMs": _first_token_ms or None,
+                "decodeMs": _decode_ms or None,
                 # Turn identity (v3 export): which model + provider answered
                 # this turn, persisted with the reply's metrics.
                 "model": metrics.get("model") or None,

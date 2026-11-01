@@ -51,7 +51,7 @@ from core.parent_kernel import ParentKernel, active_parent_model
 from core.parent_session import ParentSession
 from core.safety_gate import check as safety_check
 from core.session_context import SessionContextManager
-from core.turn_trace import current_turn_id
+from core.turn_trace import current_turn_id, derive_call_timing
 from core.workspace_state import snapshot as workspace_snapshot
 from storage.db import SessionStore
 from tools import available_tools
@@ -1607,6 +1607,16 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 _response_text = "".join(_response_chunks)
                 _total_ms = round((time.monotonic() - started) * 1000)
                 _is_canned = bool(_fast_usage.get("synthetic"))
+                # Provider-timing pair on the fast path too (same fold as the
+                # loop path): the compact chat prompt makes this the turn
+                # shape whose 564-vs-6K spread started the investigation —
+                # its per-call windows belong on the record with the same
+                # semantics as every other path.
+                _fast_call_timing = (
+                    {} if _is_canned else derive_call_timing(collector.history())
+                )
+                if _fast_call_timing:
+                    _fast_usage.update(_fast_call_timing)
                 if _is_canned:
                     # Zero provider tokens: nothing was sent to a model.
                     _prompt_tokens = 0
@@ -1674,6 +1684,10 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                             # the turn_traces store under this id; the export
                             # references it instead of inlining the stream.
                             "trace_id": current_turn_id() or "",
+                            # Provider-timing pair: first-token wait +
+                            # final-call decode window.
+                            "first_token_ms": _fast_call_timing.get("first_token_ms"),
+                            "decode_ms": _fast_call_timing.get("decode_ms"),
                         }
                     ),
                 )
@@ -2408,6 +2422,16 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         _merged_stages = dict(usage.get("turn_stages") or {})
         _merged_stages.update(_turn_stages)
         usage["turn_stages"] = _merged_stages
+        # Provider-timing pair (the observability investigation's Deliverable
+        # 5c/5d): the FIRST call's submit→first-byte window and the FINAL
+        # call's first-byte→last-byte decode window, folded from this turn's
+        # model-call stamps. Rides the done payload (the live strip derives
+        # an honest tokens-per-second from the decode window) AND the
+        # persisted metrics (the history payload / export get the same
+        # numbers without replaying the trace). Absent on a pre-trace record.
+        _call_timing = derive_call_timing(collector.history())
+        if _call_timing:
+            usage.update(_call_timing)
         self._persist_assistant(
             session_id,
             final_text,
@@ -2441,6 +2465,10 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # under this id; the export references it instead of
                 # inlining the stream.
                 "trace_id": current_turn_id() or "",
+                # Provider-timing pair: first-token wait + final-call decode
+                # window (the honest tokens-per-second denominator).
+                "first_token_ms": _call_timing.get("first_token_ms"),
+                "decode_ms": _call_timing.get("decode_ms"),
             },
             agent_runs=agent_runs,
             agent_phases=agent_phases,
