@@ -23,7 +23,7 @@ import json
 
 import pytest
 from core.agent.loop import TOOL_DEFINITIONS
-from core.agent.prompts import build_agent_system_prompt
+from core.agent.prompt import build_agent_system_prompt
 from core.models import Intent
 
 

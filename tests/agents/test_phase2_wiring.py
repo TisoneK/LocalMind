@@ -28,7 +28,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from agents import CodingAgent
-from core.agent.prompts import build_agent_intent_tail, build_agent_system_prompt
+from core.agent.prompt import build_agent_intent_tail, build_agent_system_prompt
 from core.models import Intent
 
 # ── build_agent_system_prompt / intent tail: agent_context placement ───────

@@ -20,7 +20,7 @@ import json
 
 from core.agent.constants import AGENT_ALLOWED_TOOLS
 from core.agent.loop import TOOL_DEFINITIONS, _filtered_tool_defs
-from core.agent.prompts import build_agent_system_prompt
+from core.agent.prompt import build_agent_system_prompt
 from core.agent.tool_schemas import render_tool_list
 from core.models import Intent
 from tools import available_tools

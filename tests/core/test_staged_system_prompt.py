@@ -23,11 +23,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 from adapters.ollama import ToolCallResult
 from core.agent.loop import AgentLoop
-from core.agent.prompt_structure import (
+from core.agent.prompt import (
     Band,
     staged_static_content,
 )
-from core.agent.prompts import (
+from core.agent.prompt import (
     _CORE_HEAD,
     _SAFETY_HEAD,
     _STYLE_HEAD,
@@ -122,7 +122,7 @@ def test_staged_excludes_of_absent_sections_are_a_no_op():
     """A registry without the parent sections (any other surface) renders
     unchanged through the staged helper — cutting sections a prompt never
     had is a no-op, never an error."""
-    from core.agent.prompt_structure import Layer, SectionRegistry, make, SECTION_IDENTITY
+    from core.agent.prompt import Layer, SectionRegistry, make, SECTION_IDENTITY
 
     small = SectionRegistry()
     small.add(make(SECTION_IDENTITY, Band.STATIC, Layer.IDENTITY, 10, "You are a small surface."))

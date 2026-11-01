@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.agent.prompts import build_agent_system_prompt
+from core.agent.prompt import build_agent_system_prompt
 from core.context_builder import _build_environment_context
 from core.models import Intent
 from core.user_context import set_cached_fused

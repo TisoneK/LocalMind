@@ -108,19 +108,7 @@ from core.agent.initialization import (
     parse_initialization,
 )
 from core.agent.models import AgentStep, AgentTrace, strip_worker_reports, strip_worker_reports_from_history
-from core.agent.prompts import (
-    add_intent_tail_sections,
-    build_agent_system_prompt,
-    build_parent_static_registry,
-    build_planning_prompt,
-    memory_facts_section_text,
-    staged_system_prompt,
-)
-from core.agent.prompt_structure import (
-    Band,
-    Layer,
-    SectionRegistry,
-    staged_static_content,
+from core.agent.prompt import (
     SECTION_AGENT_PLAYBOOK,
     SECTION_CURRENT_INTENT,
     SECTION_ENVIRONMENT,
@@ -134,7 +122,17 @@ from core.agent.prompt_structure import (
     SECTION_TASK_STATE,
     SECTION_TODO_STATE,
     SECTION_WORKSPACE_STATE,
+    Band,
+    Layer,
+    SectionRegistry,
+    add_intent_tail_sections,
+    build_agent_system_prompt,
+    build_parent_static_registry,
+    build_planning_prompt,
     make,
+    memory_facts_section_text,
+    staged_static_content,
+    staged_system_prompt,
 )
 from core.agent.synthesizer import AnswerSynthesizer
 from core.agent.task_state import TaskState

@@ -55,13 +55,13 @@ import re
 from typing import AsyncIterator, Optional
 
 from core.agent.models import strip_worker_reports_from_history
-from core.engine._helpers import _approx_tokens
-from core.error_normalizer import normalize_error
-from core.agent.rules_library import (
+from core.agent.prompt import (
     CAPABILITY_HONESTY_SPINE,
     NO_MODES_RULE,
     QUESTION_VS_DIRECTIVE_RULE,
 )
+from core.engine._helpers import _approx_tokens
+from core.error_normalizer import normalize_error
 from core.models import StreamChunk
 
 logger = logging.getLogger(__name__)
@@ -74,7 +74,7 @@ logger = logging.getLogger(__name__)
 # turn), but the model must still know LocalMind is a real local agent, and
 # point at Agent mode for actions rather than inventing a limitation.
 #
-# The shared spine lives in core.agent.rules_library (one canonical statement,
+# The shared spine lives in core.agent.prompt (one canonical statement,
 # consumed by every conversational surface); only the surface-specific tails
 # differ: direct Chat has an Agent mode to point at; Auto has no modes at all.
 CAPABILITY_NOTE = (

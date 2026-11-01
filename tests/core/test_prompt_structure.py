@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.agent.prompt_structure import (
+from core.agent.prompt import (
     Band,
     Layer,
     PromptStructureError,

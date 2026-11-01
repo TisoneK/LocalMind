@@ -17,7 +17,7 @@ are not directives, nothing is invented.
 
 from __future__ import annotations
 
-from core.agent.rules_library import QUESTION_VS_DIRECTIVE_RULE
+from core.agent.prompt import QUESTION_VS_DIRECTIVE_RULE
 
 from .contract import Evidence
 

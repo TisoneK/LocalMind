@@ -44,7 +44,7 @@ from core.agent.constants import (
     ORCHESTRATOR_TIMEOUT_SECS,
     REASONING_PLAN_TIMEOUT_SECS,
 )
-from core.agent.prompts import build_orchestrator_prompt
+from core.agent.prompt import build_orchestrator_prompt
 from core.models import Intent
 
 logger = logging.getLogger(__name__)

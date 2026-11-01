@@ -262,7 +262,7 @@ class TestSafetyWorkflowInjection:
     def test_safety_workflow_injected_into_agent_prompt(self):
         """The agent system prompt must include the safety section for
         agent intents (SHELL, FILE_WRITE, etc.)."""
-        from core.agent.prompts import build_agent_system_prompt
+        from core.agent.prompt import build_agent_system_prompt
 
         prompt = build_agent_system_prompt(
             intent=Intent.SHELL,
@@ -278,7 +278,7 @@ class TestSafetyWorkflowInjection:
     def test_safety_workflow_injected_for_all_agent_intents(self):
         """The safety section must be injected for ALL agent intents, not
         just SHELL. This is a universal rule."""
-        from core.agent.prompts import build_agent_system_prompt
+        from core.agent.prompt import build_agent_system_prompt
 
         agent_intents = [
             Intent.SHELL,

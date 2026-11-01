@@ -71,7 +71,7 @@ class TestSystemInfoStore:
 
 
 def test_cached_summary_injected_into_bootstrap_prompt():
-    from core.agent.prompts import build_agent_system_prompt
+    from core.agent.prompt import build_agent_system_prompt
     from core.models import Intent
     from core.system_snapshot import set_cached_summary
     from tools import available_tools
@@ -89,7 +89,7 @@ def test_cached_summary_injected_into_bootstrap_prompt():
 
 
 def test_no_system_section_when_cache_unset():
-    from core.agent.prompts import _system_env_line
+    from core.agent.prompt import _system_env_line
     from core.system_snapshot import set_cached_summary
 
     set_cached_summary("")
@@ -104,7 +104,7 @@ def test_chat_prefix_is_byte_stable_env_rides_turn_context():
     loop's turn-context (``_build_environment_context``) instead."""
     import platform
 
-    from core.agent.prompts import build_agent_system_prompt
+    from core.agent.prompt import build_agent_system_prompt
     from core.context_builder import _build_environment_context
     from core.models import Intent
     from core.system_snapshot import set_cached_summary
