@@ -54,6 +54,8 @@ from core.session_context import SessionContextManager
 from core.turn_trace import current_turn_id, derive_call_timing
 from core.workspace_state import snapshot as workspace_snapshot
 from storage.db import SessionStore
+from storage.goals import GoalStore
+from storage.open_questions import OpenQuestionStore
 from tools import available_tools
 
 
@@ -262,6 +264,12 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
 
     def __init__(self):
         self._store = SessionStore(settings.localmind_db_path)
+        # Cross-turn continuity stores (the open-question record + the
+        # durable session goal). Both live in SQLite next to the session:
+        # an outstanding question and an active objective must survive a
+        # turn ending and a process restart.
+        self._open_questions = OpenQuestionStore(settings.localmind_db_path)
+        self._goal_store = GoalStore(settings.localmind_db_path)
         self._memory = MemoryComposer()
         self._metrics = MetricsStore()
         self._flywheel = FlywheelLogger()
@@ -1362,6 +1370,71 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # The hint that was designed to cooperate with this path was the
         # thing suppressing it.
         _conversational_hint = client_intent in (None, "", "chat")
+
+        # ── Cross-turn continuity state (read for BOTH paths) ──────────
+        # The open-question record: the clarifying question this session's
+        # last substantive exchange left hanging. A short reply that is not a
+        # pure social gesture is an ANSWER to it — it must reach the agent
+        # loop (where the question renders into context and an action can
+        # follow), never the small-talk lane. A substantive message
+        # supersedes the record; a social gesture leaves it outstanding.
+        # Local import: core.trivial_input itself imports core.engine._helpers,
+        # whose package __init__ imports THIS module — a module-top import
+        # here would be circular; at call time everything is loaded.
+        from core.trivial_input import (
+            answers_open_question,
+            is_pure_social_gesture,
+            is_short_reply,
+            is_trivial_input,
+        )
+
+        _open_question_text: Optional[str] = None
+        try:
+            _oq_record = await asyncio.to_thread(self._open_questions.get, session_id)
+        except Exception:
+            logger.debug("[agent-runtime] open-question read skipped", exc_info=True)
+            _oq_record = None
+        if _oq_record is not None:
+            if answers_open_question(message, _oq_record.question):
+                _open_question_text = _oq_record.question
+                try:
+                    await asyncio.to_thread(self._open_questions.clear, session_id)
+                    collector.emit(
+                        "open_question_consumed",
+                        session_id=session_id,
+                        question_chars=len(_oq_record.question),
+                    )
+                except Exception:
+                    logger.debug(
+                        "[agent-runtime] open-question consume skipped", exc_info=True
+                    )
+            elif is_short_reply(message) and is_pure_social_gesture(message):
+                # A pure social gesture — the record stays; the question it
+                # carries is still outstanding. The lane decision below runs
+                # exactly as it would have without the record.
+                pass
+            else:
+                try:
+                    await asyncio.to_thread(self._open_questions.clear, session_id)
+                    collector.emit("open_question_superseded", session_id=session_id)
+                except Exception:
+                    logger.debug(
+                        "[agent-runtime] open-question supersede skipped", exc_info=True
+                    )
+        # The session's carried objective: the durable goal's objective while
+        # it is active, paused, or blocked (a completed goal no longer binds
+        # any turn). Rendered into the loop's turn context and the fast
+        # path's one-line suffix so every turn on a mid-objective session
+        # advances the objective coherently.
+        _active_objective_text: Optional[str] = None
+        try:
+            _goal_row = await asyncio.to_thread(self._goal_store.get, session_id)
+        except Exception:
+            logger.debug("[agent-runtime] goal read skipped", exc_info=True)
+            _goal_row = None
+        if _goal_row is not None and _goal_row.phase in ("active", "paused", "blocked"):
+            _active_objective_text = _goal_row.objective
+
         if file is None and _conversational_hint and _pre_init_override.mode is None:
             from core.trivial_input import (
                 approves_pending_offer,
@@ -1369,7 +1442,6 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 conversational_response,
                 is_conversation_recall_question,
                 is_conversational_question,
-                is_trivial_input,
                 trivial_response,
             )
             # _approx_tokens is already imported at module top (line 35).
@@ -1416,7 +1488,25 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             # "yes" / "go ahead" answering an offer to DO something is an instruction, not small
             # talk: it must reach the agent loop, not the no-tools chat shortcut.
             _approves_offer = approves_pending_offer(message, _hist_dicts)
-            _is_trivial = is_trivial_input(message, _hist_dicts) and not _approves_offer
+            # An answer attempt against the open question rides with it too —
+            # the loop renders the question into context and can act on the
+            # answer; the no-tools chat shortcut would greet it.
+            _is_trivial = (
+                is_trivial_input(message, _hist_dicts)
+                and not _approves_offer
+                and not _open_question_text
+            )
+            if _open_question_text:
+                # The reroute is on the record: the short reply resolved
+                # against the outstanding question instead of taking a
+                # small-talk lane.
+                collector.emit(
+                    "path_selected",
+                    path="parent_loop",
+                    lane="open_question_reply",
+                    reason="short reply resolving the open question on record",
+                    classifier="open_question_record",
+                )
             # A question about the CONVERSATION ("what did you reply before
             # that?", "did I ask about that?") is answered from the transcript
             # and nothing else. It used to take the agent lane, run
@@ -1426,6 +1516,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             _is_conv = (
                 (not _is_trivial)
                 and not _approves_offer
+                and not _open_question_text
                 # A conversation-recall question wins over continues_prior_work:
                 # the previous turn having run a tool does not make "what did
                 # you just reply?" a task to act on.
@@ -1517,6 +1608,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                         _hist_dicts,
                         todo_state=current_todos,
                         memory_facts=_recent_memories,
+                        active_objective=_active_objective_text,
                     )
                 else:
                     # A recall question reads the transcript, so it gets the
@@ -1533,6 +1625,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                         memory_facts=[] if _is_recall else _recent_memories,
                         transcript_only=_is_recall,
                         first_user_message=_recall_first_user if _is_recall else "",
+                        active_objective=_active_objective_text,
                     )
                 async for _chunk in _stream:
                     if _chunk.thinking or _chunk.text:
@@ -1606,6 +1699,25 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # estimates.
                 _response_text = "".join(_response_chunks)
                 _total_ms = round((time.monotonic() - started) * 1000)
+                # A fast-path reply that ends on a question leaves that
+                # question outstanding — record it (latest wins) so the NEXT
+                # short reply resolves against it instead of being answered
+                # as small talk (cross-turn continuity, the "yes" bug).
+                if _response_text.rstrip().endswith("?"):
+                    try:
+                        await asyncio.to_thread(
+                            self._open_questions.record,
+                            session_id,
+                            _response_text.strip()[-600:],
+                            current_turn_id(),
+                        )
+                        collector.emit(
+                            "open_question_recorded", session_id=session_id, lane="fast_path"
+                        )
+                    except Exception:
+                        logger.debug(
+                            "[agent-runtime] open-question record skipped", exc_info=True
+                        )
                 _is_canned = bool(_fast_usage.get("synthetic"))
                 # Provider-timing pair on the fast path too (same fold as the
                 # loop path): the compact chat prompt makes this the turn
@@ -2168,6 +2280,13 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # model must know its own checklist to act on it.
                 todo_state=current_todos,
                 session_id=session_id,
+                # Cross-turn continuity: the session's carried objective
+                # (when a durable goal exists) and the outstanding open
+                # question (when the last exchange left one) render into the
+                # turn context, so a reply advances the objective and a short
+                # reply resolves against the agent's own question.
+                active_objective=_active_objective_text,
+                open_question=_open_question_text,
             ):
                 if chunk.usage:
                     usage.update(chunk.usage)
@@ -2406,6 +2525,24 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         final_text = response_text + _file_summary if _file_summary else response_text
         if _file_summary:
             yield StreamChunk(text=_file_summary, done=False)
+        # A turn that ends on a question leaves that question outstanding —
+        # record it (latest wins) so the NEXT short reply resolves against it
+        # instead of being re-classified from scratch (cross-turn continuity:
+        # the repeated-clarification loop). The clarify exits land here too —
+        # their question IS the loop's final text on this path.
+        if final_text.rstrip().endswith("?"):
+            try:
+                await asyncio.to_thread(
+                    self._open_questions.record,
+                    session_id,
+                    final_text.strip()[-600:],
+                    current_turn_id(),
+                )
+                collector.emit(
+                    "open_question_recorded", session_id=session_id, lane="parent_loop"
+                )
+            except Exception:
+                logger.debug("[agent-runtime] open-question record skipped", exc_info=True)
         # Persist the turn's artifacts (thinking, tool-call pills,
         # per-turn metrics) with the assistant message so a reload restores the
         # thinking block, step cards, and the cumulative context counter.

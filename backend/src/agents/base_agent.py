@@ -257,6 +257,15 @@ class BaseAgent(ABC):
         # Session id, forwarded to AgentLoop.run() so the env
         # context can inject the session's workspace folder.
         session_id: str | None = None,
+        # The session's active durable goal objective. Forwarded to
+        # AgentLoop.run() so the turn context carries the objective that
+        # outlives any single reply. None = no goal on this session.
+        active_objective: Optional[str] = None,
+        # The session's outstanding open question (the agent's own
+        # unanswered clarifying question). Forwarded to AgentLoop.run() so
+        # short replies resolve against it and the forced-clarify exits
+        # stand down. None = nothing outstanding.
+        open_question: Optional[str] = None,
     ) -> AsyncIterator[StreamChunk]:
         """
         Run this agent through the parent-owned AgentLoop:
@@ -398,6 +407,8 @@ class BaseAgent(ABC):
             todo_state=todo_state,
             goal_tree=goal_tree,
             session_id=session_id,
+            active_objective=active_objective,
+            open_question=open_question,
         ):
             yield chunk
 

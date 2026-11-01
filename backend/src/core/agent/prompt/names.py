@@ -27,6 +27,7 @@ from __future__ import annotations
 TURN_ONLY_SECTION_NAMES: frozenset[str] = frozenset(
     {
         "current_intent",
+        "carried_objective",
         "environment",
         "memory_facts",
         "memory_weave",
@@ -34,6 +35,7 @@ TURN_ONLY_SECTION_NAMES: frozenset[str] = frozenset(
         "workspace_state",
         "todo_state",
         "goal_route",
+        "open_question",
         "task_state",
         "transcript_focus",
         "skill_fragment",
@@ -84,12 +86,14 @@ SECTION_THINKING_DEPTH = "thinking_depth"  # 400
 
 # TURN band — the trailing per-turn context message
 SECTION_CURRENT_INTENT = "current_intent"  # 1010
+SECTION_CARRIED_OBJECTIVE = "carried_objective"  # 1020
 SECTION_ENVIRONMENT = "environment"  # 1050
 SECTION_MEMORY_FACTS = "memory_facts"  # 1060
 SECTION_INTENT_HISTORY = "intent_history"  # 1065
 SECTION_WORKSPACE_STATE = "workspace_state"  # 1070
 SECTION_TODO_STATE = "todo_state"  # 1080
 SECTION_GOAL_ROUTE = "goal_route"  # 1090
+SECTION_OPEN_QUESTION = "open_question"  # 1095
 SECTION_TASK_STATE = "task_state"  # 1100
 SECTION_TRANSCRIPT_FOCUS = "transcript_focus"  # 1110
 SECTION_SKILL_FRAGMENT = "skill_fragment"  # 1160

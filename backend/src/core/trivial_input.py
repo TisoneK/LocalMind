@@ -956,6 +956,61 @@ def continues_prior_work(message: str, history: Optional[list[dict]] = None) -> 
     return False
 
 
+# Pure social gestures — laughter, praise, filler. When the agent has an
+# outstanding question these do NOT answer it: "lol" after "Do you want me to
+# proceed?" is a reaction, not a decision, and it stays on the light chat lane.
+# Anything short that is NOT in this class (a bare "yes", "no", "what?", a
+# two-word answer like "CSV please") IS treated as an attempt to answer the
+# outstanding question and goes to the agent loop, which can act on it.
+_PURE_SOCIAL_RE = re.compile(
+    r"^(?:(?:lol|lmao|rofl|haha+|hehe+|haha|teehee|nice|cool|awesome|wow|omg|great|"
+    r"amazing|funny|true|real|same|mood|bruh|dang|damn|oops|yikes|sheesh|phew|"
+    r"hi|hello|hey|yo|sup|good (?:morning|evening|afternoon)|"
+    r"gtg|brb|cya|bye)[!.?.,:; ]*)+$",
+    re.IGNORECASE,
+)
+
+
+def answers_open_question(message: str, open_question: Optional[str] = None) -> bool:
+    """A short reply that is plausibly ANSWERING the agent's outstanding question.
+
+    The open question is the question this session's last substantive exchange
+    left hanging (the caller reads it from the durable open-question record).
+    A reply like "yes", "nope", "what?", or "CSV please" is not small talk in
+    that situation — it is an answer or a follow-up, and it must reach the
+    agent loop where the outstanding question is rendered into context and an
+    action can follow. Pure social gestures ("lol", "nice", "hi") stay on the
+    light lane; the question they interrupted remains outstanding.
+    """
+    if not message or not open_question:
+        return False
+    cleaned = message.strip().rstrip(_TRIVIAL_PUNCT).strip()
+    if not cleaned or len(cleaned) > 40 or len(cleaned.split()) > 5:
+        return False
+    if _PURE_SOCIAL_RE.match(cleaned):
+        return False
+    return True
+
+
+def is_short_reply(message: str) -> bool:
+    """The trivial lane's SHAPE test without its pattern list: short enough
+    that, with an open question outstanding, it can only be a reaction to it
+    (an answer, a follow-up, or a social gesture) — never a new request."""
+    if not message or not message.strip():
+        return False
+    cleaned = message.strip().rstrip(_TRIVIAL_PUNCT).strip()
+    return bool(cleaned) and len(cleaned) <= 40 and len(cleaned.split()) <= 5
+
+
+def is_pure_social_gesture(message: str) -> bool:
+    """Laughter / praise / filler that reacts to the exchange without
+    answering anything outstanding ("lol", "nice", "hi")."""
+    if not message:
+        return False
+    cleaned = message.strip().rstrip(_TRIVIAL_PUNCT).strip()
+    return bool(cleaned) and bool(_PURE_SOCIAL_RE.match(cleaned))
+
+
 # ── Direct chat response helper ──────────────────────────────────────────────
 
 
@@ -1070,6 +1125,7 @@ async def _direct_chat_response(
     adapter,
     history: Optional[list[dict]],
     system_prompt: str,
+    active_objective: Optional[str] = None,
 ) -> AsyncIterator[StreamChunk]:
     """Stream a single direct chat call with a minimal system prompt."""
     # The fast path answers from the machine too: the boot-fused user
@@ -1102,8 +1158,22 @@ async def _direct_chat_response(
         f"inference; anything marked never stated is unknown: ask, never guess "
         f"or infer it from tool results): {_about_line}"
     )
+    # The session's active objective rides the light path as ONE line — only
+    # when the session actually has one. An objective outlives any single
+    # reply: a greeting on a session mid-objective must not pretend the
+    # objective vanished, and a status question must be answered from the
+    # real objective, not invented.
+    _objective_suffix = (
+        f"\nActive objective for this session (still in force — it outlives any "
+        f"single reply): {active_objective}"
+        if active_objective
+        else ""
+    )
     messages = [
-        {"role": "system", "content": system_prompt + _user_suffix + _about_suffix},
+        {
+            "role": "system",
+            "content": system_prompt + _user_suffix + _about_suffix + _objective_suffix,
+        },
     ]
     if history:
         # Include the last few turns for context. Assistant turns are stripped
@@ -1297,6 +1367,7 @@ async def trivial_response(
     history: Optional[list[dict]] = None,
     todo_state: Optional[list[dict]] = None,
     memory_facts: Optional[list[str]] = None,
+    active_objective: Optional[str] = None,
 ) -> AsyncIterator[StreamChunk]:
     """
     Stream a reply for a trivial input (greeting/thanks/acknowledgment/...).
@@ -1351,6 +1422,7 @@ async def trivial_response(
             f"{todo_block}"
             f"{memory_block}"
         ),
+        active_objective=active_objective,
     ):
         yield chunk
 
@@ -1384,6 +1456,7 @@ async def conversational_response(
     memory_facts: Optional[list[str]] = None,
     transcript_only: bool = False,
     first_user_message: str = "",
+    active_objective: Optional[str] = None,
 ) -> AsyncIterator[StreamChunk]:
     """
     Stream a direct chat response for a conversational question.
@@ -1456,5 +1529,6 @@ async def conversational_response(
             f"{todo_block}"
             f"{memory_block}"
         ),
+        active_objective=active_objective,
     ):
         yield chunk

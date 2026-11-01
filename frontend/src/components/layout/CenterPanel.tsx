@@ -66,6 +66,8 @@ const INJECTED_KIND_LABELS: Record<string, string> = {
   workspace_state: 'Workspace state',
   todo_state: 'Todo list',
   goal_route: 'Goal route',
+  open_question: 'Open question',
+  carried_objective: 'Active objective',
   task_state: 'Task state',
 };
 

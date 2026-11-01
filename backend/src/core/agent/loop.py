@@ -110,6 +110,7 @@ from core.agent.initialization import (
 from core.agent.models import AgentStep, AgentTrace, strip_worker_reports, strip_worker_reports_from_history
 from core.agent.prompt import (
     SECTION_AGENT_PLAYBOOK,
+    SECTION_CARRIED_OBJECTIVE,
     SECTION_CURRENT_INTENT,
     SECTION_ENVIRONMENT,
     SECTION_EXECUTION_PLAN,
@@ -117,6 +118,7 @@ from core.agent.prompt import (
     SECTION_GOAL_ROUTE,
     SECTION_INTENT_HISTORY,
     SECTION_MEMORY_FACTS,
+    SECTION_OPEN_QUESTION,
     SECTION_ROUTING_HINT,
     SECTION_SKILL_FRAGMENT,
     SECTION_TASK_STATE,
@@ -2494,6 +2496,19 @@ class AgentLoop:
         # Session id → the env context injects the session's
         # workspace folder so the agent writes artifacts where they belong.
         session_id: str | None = None,
+        # The session's ACTIVE durable goal objective (from the session
+        # goals store), when one exists. An objective outlives any single
+        # reply: rendered into the turn context (objective layer) so every
+        # turn on a mid-objective session advances it coherently instead of
+        # re-deriving intent from the message alone.
+        active_objective: Optional[str] = None,
+        # The session's outstanding open question — the clarifying question
+        # the agent most recently asked that the user has not substantively
+        # answered. Rendered into the turn context so a short reply ("yes",
+        # "sure", "what about X?") is interpreted against the agent's OWN
+        # question instead of re-deriving intent, and the forced-clarify
+        # exits stand down (the referent IS known — it is on record).
+        open_question: Optional[str] = None,
     ) -> AsyncIterator[StreamChunk]:
         """
         Run the agent loop with the Plan→Execute→Verify workflow.
@@ -2642,7 +2657,17 @@ class AgentLoop:
             _obs.emit("agent_loop_start", intent=intent.value)
 
         # ── Clarification gate ─────────────────────────────────────────
-        if confidence < CLARIFICATION_THRESHOLD and intent in AGENT_INTENTS:
+        # An open question on record stands this gate down: the classifier
+        # sees a short reply with no referent, but the referent IS known —
+        # it is the agent's own outstanding question, rendered into the
+        # turn context below. Forcing the canned clarification here is the
+        # repeated-clarification loop (the same question asked twice) that
+        # cross-turn continuity exists to kill.
+        if (
+            confidence < CLARIFICATION_THRESHOLD
+            and intent in AGENT_INTENTS
+            and not open_question
+        ):
             clarification = (
                 f"I want to make sure I understand — it looks like you want me to "
                 f"use the **{intent.value.replace('_', ' ')}** tool, but I'm not very confident. "
@@ -2909,7 +2934,12 @@ class AgentLoop:
                 yield StreamChunk(text=initialization.response, done=False)
                 yield StreamChunk(text="", done=True)
                 return
-            elif initialization.is_clarification:
+            elif initialization.is_clarification and not open_question:
+                # The open-question stand-down mirrors the confidence gate
+                # above: with the agent's own question on record, a short
+                # reply is an ANSWER to it — fall through to the loop, which
+                # sees the record in its turn context, instead of ending the
+                # turn on a second forced clarification.
                 if _obs:
                     _obs.emit("agent_loop_done", intent=intent.value, clarified=True)
                 if initialization.acknowledgement:
@@ -3746,6 +3776,25 @@ class AgentLoop:
                     _env_text,
                 )
             )
+        # The session's carried objective — the durable goal that outlives
+        # any single reply (objective layer, slot 1020: first thing the tail
+        # says after the current-intent line). Registered only when the
+        # session actually has one; a mid-objective session's every turn
+        # advances the objective coherently instead of re-deriving intent.
+        if active_objective:
+            turn_registry.add(
+                make(
+                    SECTION_CARRIED_OBJECTIVE,
+                    Band.TURN,
+                    Layer.OBJECTIVE,
+                    1020,
+                    "Active objective for this session (carried from the session's "
+                    f"goal — it outlives any single reply): {active_objective}\n"
+                    "Take the next concrete step toward it when this message "
+                    "advances it; when it completes or genuinely blocks, say so "
+                    "through the goal tools.",
+                )
+            )
         # LocalMind Caching (2026-08-31): memory + intent history are DYNAMIC
         # (they change per retrieval/turn), so they live here in the trailing
         # turn-context — NOT in the cacheable system prefix above.
@@ -3808,6 +3857,24 @@ class AgentLoop:
                     _goal_route_prompt,
                 )
             )
+        # The open question — the agent's own outstanding clarifying
+        # question (context layer, slot 1095, between the goal route and the
+        # task state). A short reply is an ANSWER to this; interpreting it
+        # against anything else re-derives the intent the question already
+        # settled. Registered only when a fresh record exists.
+        if open_question:
+            turn_registry.add(
+                make(
+                    SECTION_OPEN_QUESTION,
+                    Band.TURN,
+                    Layer.CONTEXT,
+                    1095,
+                    "Open question you asked and the user is now answering — interpret "
+                    "this reply against it (it is the referent for short answers like "
+                    "'yes' or a naming of a missing detail):\n"
+                    f"{open_question}",
+                )
+            )
         _task_state_prompt = task_state.to_prompt()
         if _task_state_prompt:
             turn_registry.add(
@@ -3825,11 +3892,13 @@ class AgentLoop:
         # can show item by item, in the exact order the message renders.
         _TURN_SECTION_SOURCES = {
             SECTION_CURRENT_INTENT: "intent classifier",
+            SECTION_CARRIED_OBJECTIVE: "session goal store",
             SECTION_MEMORY_FACTS: "memory store",
             SECTION_INTENT_HISTORY: "intent classifier",
             SECTION_WORKSPACE_STATE: "workspace snapshot (git/diff/build)",
             SECTION_TODO_STATE: "session todo store",
             SECTION_GOAL_ROUTE: "goal tree",
+            SECTION_OPEN_QUESTION: "open-question record",
             SECTION_TASK_STATE: "task state engine",
             SECTION_SKILL_FRAGMENT: "intent skill library",
             SECTION_EXPERT_PERSONA: "intent persona map",
