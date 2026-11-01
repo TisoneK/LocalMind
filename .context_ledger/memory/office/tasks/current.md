@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — no session in progress
-- **Status:** idle
+- **Session:** 2026-11-01 — Nia / GLM (Z.ai sandbox) — S017
+- **Task:** The owner's "finish all" continuation: B-2026-11-01-27 (G7 request derivability from the durable record — the prompt/context program's last item), then B-2026-10-31-13's C4 remainder (idle/reconnect continuation of an active goal — the goal-pursuit program's decisive piece).
+- **Status:** in-progress
