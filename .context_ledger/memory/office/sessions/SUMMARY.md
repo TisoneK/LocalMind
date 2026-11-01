@@ -40,3 +40,8 @@ records.
 - **2026-11-01 — Session 12** — Imani / GLM (Z.ai sandbox) — prompt structure shipped (B-2026-10-31-25: G3 + G2 + 4-layer layout + rule dedupe, 6361656a).
   Named-section registry with enforced order slots and a TURN-only cache guard; all three prompt branches assembled in the 4-layer User Objective Primacy order; staged cuts by section name; injected ledger per named section; shared rules library. 18 registry tests, suites green (failure set identical to the pre-existing environment baseline), live prompt-audit harness PASS (staged call 9274→5887 chars, rules kept).
   Detail: .context_ledger/memory/office/agents/sessions.md (Session 12).
+
+---
+- **2026-11-01 — Session 13** — Jelani / GLM (Z.ai sandbox) — prompt system packaged as `core/agent/prompt/` (f4fb3245): engine / name catalog / staging / rules / per-surface section families / dispatcher / planner / pipeline, one import surface, flat modules retired.
+  Zero behavior change — live 8765 harness reproduces the exact pre-split renders (9,274 → 5,887 staged, constraints kept); 3886 backend tests, tsc/eslint clean. Sandbox note: no backend/.venv — exit-gate checks run directly; sqlite-vec wheel was missing (38 env failures → green after install).
+  Detail: .context_ledger/memory/office/agents/sessions.md (Session 13).

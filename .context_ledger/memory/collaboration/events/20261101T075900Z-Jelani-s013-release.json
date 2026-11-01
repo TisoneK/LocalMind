@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "id": "20261101T075900Z-Jelani-s013-release",
+  "type": "release",
+  "session": "S013",
+  "agent": "Jelani",
+  "created": "2026-11-01T07:59:00Z",
+  "issue": "prompt-package-split",
+  "body": "Jelani S013 releases the prompt package split: product commit f4fb3245 — the three flat modules (prompts.py 1,518 lines, prompt_structure.py, rules_library.py) become backend/src/core/agent/prompt/ (structure/names/staging/rules/sections.{parent,chat,agent,personas,turn}/system/planner/pipeline) with a single import surface; chat + scoped-agent registries promoted to first-class builders; loop/orchestrator/thinker/trivial-input + 16 test files rewired, flat modules retired, zero behavior change. Verified per the bar: 3886 backend tests green (prior 38-failure set was the sandbox's missing sqlite-vec wheel), ruff/tsc/eslint clean, memory gates OK, live 8765 prompt-audit harness reproduces the exact pre-split renders (full 9,274 / staged 5,887 / turn context untouched). B-2026-11-01-26 (full execution trace) remains the owner-ordered next build.",
+  "paths": [
+    "backend/src/core/agent/prompt/",
+    "backend/src/core/agent/loop.py",
+    "backend/src/core/agent/orchestrator.py",
+    "backend/src/core/agent/thinker/prompt.py",
+    "backend/src/core/trivial_input.py",
+    "tests/",
+    "CHANGELOG.md",
+    "scripts/ci-check.sh"
+  ],
+  "refs": ["office/tasks/backlog.md#B-2026-10-31-25", "office/agents/sessions.md#session-13"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": [],
+  "commit": "f4fb3245"
+}
