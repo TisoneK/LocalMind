@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-11-01 — Zola / GLM (Z.ai sandbox)
-- **Task:** B-2026-10-31-25 remainder (per-turn relevance budget with prefix-stability as a hard constraint, G6 outcome-typed recovery settlements, G5 fail-closed auxiliary-call templates) + queued measurement-honesty defects (throughput definition + tooltip, TTFT surface, thinking-channel leakage, agentRuns lifecycle, G4 gate/replan verification) — the owner's "finish all" directive.
-- **Status:** in-progress
+- **Session:** —
+- **Task:** none — no session in progress
+- **Status:** idle

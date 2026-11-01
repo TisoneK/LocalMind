@@ -45,3 +45,13 @@ records.
 - **2026-11-01 — Session 13** — Jelani / GLM (Z.ai sandbox) — prompt system packaged as `core/agent/prompt/` (f4fb3245): engine / name catalog / staging / rules / per-surface section families / dispatcher / planner / pipeline, one import surface, flat modules retired.
   Zero behavior change — live 8765 harness reproduces the exact pre-split renders (9,274 → 5,887 staged, constraints kept); 3886 backend tests, tsc/eslint clean. Sandbox note: no backend/.venv — exit-gate checks run directly; sqlite-vec wheel was missing (38 env failures → green after install).
   Detail: .context_ledger/memory/office/agents/sessions.md (Session 13).
+
+---
+- **2026-11-01 — Session 14** — Kesi / GLM (Z.ai sandbox) — the durable per-turn execution trace shipped (B-2026-11-01-26, bcef13de).
+  Every turn's event stream persists verbatim (turn_traces store, retention + cascade), adapter-level model-call stamps on every path (submit/first-byte/last-byte, usage, payload size+hash), path_selected incl. negative decisions, context-assembly + stage_skipped events, context_breakdown + post_answer_lanes persisted, trace list/replay API + Trace tab, export traceRef.
+  Detail: .context_ledger/memory/office/agents/sessions.md (Session 14).
+
+---
+- **2026-11-01 — Session 15** — Zola / GLM (Z.ai sandbox) — the B-2026-10-31-25 program completed: per-turn relevance budget (e5615d7a), honest tokens-per-second (88f2f3e0), the mid-flight settle net (55dafff8), the auxiliary-call contract (6ae28323), the triads doc (869155d4).
+  The budget scopes the STATIC prefix by classified intent under a hard byte-prefix constraint (contiguous-suffix cuts only; the capability index leads guidance after the re-slot; the decision rides the trace as `relevance_budget`). tokensPerSecond now divides by the recorded decode window (first-token wait + decode window on the record; the wall-clock fallback named `turn_wall_clock`). A turn that dies mid-flight settles its in-flight tool calls as unknown-outcome (one reconcile net at run()'s exit, covering all nine dispatch sites). The summary checkpoint runs on an exact-skeleton contract with fail-closed validation — a cut checkpoint never replaces history. G4 verified live (greeting gate: one provider call, zero replans, no false card); G8 delivered as docs/prompt-architecture.md. Backend 3,957 / frontend 678 / tsc clean; all three 8765 live harnesses PASS. Backlog: B-2026-10-31-25 closed (G7 → B-2026-11-01-27).
+  Detail: .context_ledger/memory/office/agents/sessions.md (Session 15).
