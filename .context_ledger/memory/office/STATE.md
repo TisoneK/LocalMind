@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-31T19:05:56Z_
+_Regenerated: 2026-11-01T06:28:05Z_
 
 ## Standing params
 - **Core:** 2.3.2 (locked, verified 2026-10-31)
@@ -19,10 +19,10 @@ _Regenerated: 2026-10-31T19:05:56Z_
 - **Rosa** (S008) — Done — Build the turn-close attribution + honest completion contract (owner-observed "Working" w…
 - **Tobias** (S004) — Working — Pull the latest main again and verify the greeting-gate + workspace-telemetry fixes run c…
 - **Sefu** (S010) — Done — Exhaustive study of the owner-provided external harness reference + retire the zero-provi…
-- **Zuri** (S011) — Done — INVESTIGATION (owner brief 2026-11-01): full execution observability — map the complete…
+- **Imani** (S012) — Working — Prompt structure build (B-2026-10-31-25 increments, owner directive 2026-11-01: before B-…
 
 ## Current task
-- **—** — none — no session in progress — *idle*
+- **2026-11-01 — Imani (S012) / GLM (Z.ai sandbox)** — Prompt structure build — B-2026-10-31-25 increments: order-slot registry + strict assembly (gap G3), cache discipline (G2), User Objectiv… — *in-progress*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-10-31-1 | In-app State Explorer + engine selector (ADR-71): port the explorer into the app as its own interface (game tree, move list, eval bar, inspector, meters, rewindable timeline) and add the Classic/State engine setting. Reference: `docs/prototypes/state-explorer/`, `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter `state_agent/adapters/localmind.py`); `EngineEvent` is the UI contract. Check whether the in-flight port landed before starting. |

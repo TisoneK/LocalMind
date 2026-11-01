@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — no session in progress
-- **Status:** idle
+- **Session:** 2026-11-01 — Imani (S012) / GLM (Z.ai sandbox)
+- **Task:** Prompt structure build — B-2026-10-31-25 increments: order-slot registry + strict assembly (gap G3), cache discipline (G2), User Objective Primacy 4-layer parent prompt, instruction dedupe across parent/dispatcher/thinker; owner directive "before building B-26". Study inputs (reference-only): S010 deep study, S011 observability investigation.
+- **Status:** in-progress
