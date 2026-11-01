@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "id": "20261102T041500Z-Ayo-s018-release",
+  "type": "release",
+  "session": "S018",
+  "agent": "Ayo",
+  "created": "2026-11-02T04:15:00Z",
+  "issue": "standing-eval-harness",
+  "body": "Ayo S018 releases B-2026-10-31-23 — the standing eval harness (audit §1.7, the owner's 'build all'): scripts/eval_suite.py + eval_scenarios.py run 13 scenarios turn by turn over the live chat SSE (the audit's ten + the absorbed §1.1 perspective-polarity and §1.2 reflective/no-meta-tools cases + the continuity integration case — offer, open-question record, bare-yes reroute, the offered tool EXECUTES, record consumed: the C5 offer-is-DONE shape scored end to end). Six metrics per the audit (task completion structural-authoritative, factual accuracy fixture-pinned and honestly labeled / advisory on a real provider, tool success incl. the honest-FAILED contract, recovery rate, unnecessary questions, latency wall + provider timing pair); defect-signature exclusions gate in both provider modes; --provider real uses the app's real settings with keys never read (refuses fast when absent — none in this sandbox). FIRST FULL RUN found and this session fixed two real product defects: the calculator name/intent mismatch (native calculator calls died at the SHELL fallback via _intent_for_tool AND at the allowed-tool fence comparing intent values to tool-name sets) — 324f7fb4, pinned by tests/core/test_tool_name_intent_fence.py (8 tests), the fence now names its allowed set on the log record; and READ_ONLY_TOOLS omitting offline arithmetic. Verified: backend 3,997 / 2 skipped / 0 failed (ulimit -n 4096 needed in this sandbox), all six 8765 harnesses PASS, eval suite 13/13 (completion 1.0, tool success 4/4, recovery 1/1, 0 unnecessary questions), ruff clean. Harness commit 29402658; CHANGELOG Added x1 + Fixed x2; live-testing.md gained the harness row; backlog B-2026-10-31-23 deleted (done — the suite is the standing sink; new scenarios land as scenario rows).",
+  "paths": [
+    "scripts/eval_suite.py",
+    "scripts/eval_scenarios.py",
+    "backend/src/core/agent/loop.py",
+    "backend/src/core/agent/tool_dispatch.py",
+    "backend/src/core/objective_runtime.py",
+    "tests/core/test_tool_name_intent_fence.py",
+    "CHANGELOG.md",
+    ".context_ledger/memory/system/live-testing.md"
+  ],
+  "refs": [
+    "office/tasks/backlog.md#B-2026-10-31-23",
+    "office/reviews/2026-10-31-external-audit-intake.md",
+    "office/agents/sessions.md#session-18"
+  ],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
