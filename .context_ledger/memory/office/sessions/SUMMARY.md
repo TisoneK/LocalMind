@@ -35,3 +35,8 @@ records.
 - **2026-10-31 — Session 1** — Kofi / unknown (harness states no model ID) — fixed the dimension mismatch that silently stopped memory writes; table DDL is now the startup ground truth and the reset script no longer reports false matches.
   Root cause: startup compared the embedder only against `vector_meta.dim`, while sqlite-vec enforces the frozen vec0 table dim; the reset tool repeated the meta-only check and its swallowed DROP left the stale table in place.
   Detail: .context_ledger/memory/office/reviews/2026-10-31-review.md
+
+---
+- **2026-11-01 — Session 12** — Imani / GLM (Z.ai sandbox) — prompt structure shipped (B-2026-10-31-25: G3 + G2 + 4-layer layout + rule dedupe, 6361656a).
+  Named-section registry with enforced order slots and a TURN-only cache guard; all three prompt branches assembled in the 4-layer User Objective Primacy order; staged cuts by section name; injected ledger per named section; shared rules library. 18 registry tests, suites green (failure set identical to the pre-existing environment baseline), live prompt-audit harness PASS (staged call 9274→5887 chars, rules kept).
+  Detail: .context_ledger/memory/office/agents/sessions.md (Session 12).
