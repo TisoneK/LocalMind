@@ -57,6 +57,11 @@ from typing import AsyncIterator, Optional
 from core.agent.models import strip_worker_reports_from_history
 from core.engine._helpers import _approx_tokens
 from core.error_normalizer import normalize_error
+from core.agent.rules_library import (
+    CAPABILITY_HONESTY_SPINE,
+    NO_MODES_RULE,
+    QUESTION_VS_DIRECTIVE_RULE,
+)
 from core.models import StreamChunk
 
 logger = logging.getLogger(__name__)
@@ -68,29 +73,23 @@ logger = logging.getLogger(__name__)
 # spirals once it starts). These paths answer conversationally (no tools THIS
 # turn), but the model must still know LocalMind is a real local agent, and
 # point at Agent mode for actions rather than inventing a limitation.
+#
+# The shared spine lives in core.agent.rules_library (one canonical statement,
+# consumed by every conversational surface); only the surface-specific tails
+# differ: direct Chat has an Agent mode to point at; Auto has no modes at all.
 CAPABILITY_NOTE = (
-    "You are LocalMind, a real AI agent running ON the user's machine with "
-    "actual tools (shell, file read/write/delete, code, web). NEVER claim you "
-    "lack access to the filesystem or that you 'can't' do something you could "
-    "do with a tool — that is false. You are giving a quick conversational "
-    "reply here; if the request needs an ACTION (run a command, edit or delete "
-    "files, search the computer), tell the user to switch to Agent mode instead "
-    "of inventing a limitation. "
+    CAPABILITY_HONESTY_SPINE
+    + "You are giving a quick conversational reply here; if the request needs "
+    "an ACTION (run a command, edit or delete files, search the computer), "
+    "tell the user to switch to Agent mode instead of inventing a limitation. "
 )
 
-# Auto mode has no "other mode" to switch to: one loop decides per message
-# whether to act. A lightweight reply that ends up needing a tool must not send
-# the user off to a mode that does not exist for them (owner live-report: "Found
-# it and???" got a promise plus "flip me to Agent mode" in an Auto session).
 AUTO_CAPABILITY_NOTE = (
-    "You are LocalMind, a real AI agent running ON the user's machine with "
-    "actual tools (shell, file read/write/delete, code, web). NEVER claim you "
-    "lack access to the filesystem or that you 'can't' do something you could "
-    "do with a tool — that is false. There are no modes for the user to switch "
-    "between; never mention modes. This reply has no "
-    "tools, so if answering needs an action or live data, say in one sentence "
-    "what you will check and end with: Say 'go' and I'll do it. Never narrate "
-    "an action as if you were doing it. "
+    CAPABILITY_HONESTY_SPINE
+    + NO_MODES_RULE
+    + "This reply has no tools, so if answering needs an action or live data, "
+    "say in one sentence what you will check and end with: Say 'go' and I'll "
+    "do it. Never narrate an action as if you were doing it. "
 )
 
 
@@ -1449,11 +1448,9 @@ async def conversational_response(
             "Small talk, greetings, and wellbeing checks get ONE short "
             "sentence or two; substantive questions get a real but tight "
             "answer.\n"
-            "CRITICAL: When the user asks a QUESTION (like 'can you switch workspace?' "
-            "or 'what are you doing?'), ANSWER the question directly — do NOT take "
-            "action. 'Can you switch workspace?' means 'do you have this capability?', "
-            "not 'switch workspace now.' Only take action when the user gives a "
-            "DIRECTIVE ('switch to the dev folder', 'create a file called X').\n"
+            "CRITICAL: "
+            + QUESTION_VS_DIRECTIVE_RULE
+            + "\n"
             "Use the recent conversation history as context. Resolve short follow-ups "
             "against what was just said. Be concise, warm, and direct.\n"
             f"{todo_block}"

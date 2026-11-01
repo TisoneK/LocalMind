@@ -87,18 +87,30 @@ class TestP3MemoryWeaving:
         assert "know" in content, "chat.md should frame memory as knowledge"
 
     def test_agent_prompt_frames_memory_as_knowledge(self):
-        from core.agent.prompts import build_agent_system_prompt
+        """P3 doctrine on the post-registry structure (2026-11-01): memory
+        facts are per-turn content (a TURN-only section) — they ride the
+        trailing turn-context, never the cacheable prefix, and they are
+        framed as knowledge, not 'retrieved from a store' prose."""
+        from core.agent.prompts import (
+            build_agent_system_prompt,
+            memory_facts_section_text,
+        )
+
         prompt = build_agent_system_prompt(
             intent=Intent.CHAT,
             available_tools=[],
             memory_facts=["User prefers Python", "User uses Linux"],
         )
         prompt_lower = prompt.lower()
-        # Should not use mechanical "retrieved from memory store" language
-        assert "memory store" not in prompt_lower, "Should not use mechanical memory language"
-        # Should contain the actual facts
-        assert "python" in prompt_lower, "Should contain memory facts"
-        assert "linux" in prompt_lower, "Should contain memory facts"
+        # The cacheable prefix must NOT embed per-turn memory (cache-buster class)
+        assert "python" not in prompt_lower, "per-turn memory leaked into the static prefix"
+        assert "linux" not in prompt_lower, "per-turn memory leaked into the static prefix"
+
+        # The TURN-band section carries the facts, knowledge-framed
+        section = memory_facts_section_text(["User prefers Python", "User uses Linux"]).lower()
+        assert "what you know about this user" in section
+        assert "memory store" not in section, "Should not use mechanical memory language"
+        assert "python" in section and "linux" in section, "Should contain memory facts"
 
 
 # ── P5: Parallel tool execution (MultiToolCallResult) ─────────────────────

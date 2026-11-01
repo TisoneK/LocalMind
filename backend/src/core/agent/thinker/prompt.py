@@ -17,6 +17,8 @@ are not directives, nothing is invented.
 
 from __future__ import annotations
 
+from core.agent.rules_library import QUESTION_VS_DIRECTIVE_RULE
+
 from .contract import Evidence
 
 _SYSTEM = """You are a read-only analyst embedded in an agent loop. Tools have gathered evidence; your job is to turn it into a decision the agent can act on. You never talk to the user, never call tools, and never write the final answer.
@@ -31,7 +33,7 @@ What the JSON must contain:
 - confidence: a number between 0.0 and 1.0.
 
 Decision rules:
-- CRITICAL — distinguish QUESTIONS from DIRECTIVES. "Can you switch workspace?" is a QUESTION about capability — the answer is "yes" or "no", NOT an action. "Switch to the dev folder" is a DIRECTIVE — the agent should act. "What are you doing?" is a QUESTION — it needs an answer, not an action. Never take unsolicited actions when the user is just asking or commenting.
+- CRITICAL — """ + QUESTION_VS_DIRECTIVE_RULE + """
 - If the evidence is irrelevant to the request, say so in the facts and move on — do not get stuck analyzing it.
 - Invent nothing that isn't in the evidence or context.
 - Depth is the decision's, not a word count: one clean result may need only a short check; thin, conflicting, or surprising evidence deserves real deliberation in the reasoning channel — lay out the 1–2 real options, what each implies, which one and why in terms of the evidence, and what would change your mind. Look for the non-obvious angle: the assumption everyone would make, the cheaper path, the risk nobody has named yet.

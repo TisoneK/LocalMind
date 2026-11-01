@@ -31,6 +31,46 @@ from __future__ import annotations
 from typing import Optional
 
 from core.agent.constants import MAX_ITERATIONS
+from core.agent.prompt_structure import (
+    Band,
+    Layer,
+    Section,
+    SectionRegistry,
+    SECTION_ACT_NOT_ANNOUNCE,
+    SECTION_AGENT_PLAYBOOK,
+    SECTION_ANTI_FABRICATION,
+    SECTION_COMPLETION_ENFORCEMENT,
+    SECTION_CONVERSATION_CONTRACT,
+    SECTION_CONVERSATION_OR_ACTION,
+    SECTION_CRITICAL_RULES,
+    SECTION_CURRENT_INTENT,
+    SECTION_EXECUTION_PLAN,
+    SECTION_EXPERT_PERSONA,
+    SECTION_GENERAL_RULES,
+    SECTION_IDENTITY,
+    SECTION_ITERATION_BUDGET,
+    SECTION_MEMORY_WEAVE,
+    SECTION_MULTI_PART_COMPLETION,
+    SECTION_ON_DEMAND_LOADING,
+    SECTION_RESPONSE_FORMATTING,
+    SECTION_ROUTING_HINT,
+    SECTION_SAFETY_CHECK_STATE,
+    SECTION_SAFETY_GROUNDING,
+    SECTION_SELECTION_HINTS,
+    SECTION_SKILL_FRAGMENT,
+    SECTION_STYLE_EXAMPLES,
+    SECTION_SYSTEM_FACTS,
+    SECTION_THINKING_AND_RESPONDING,
+    SECTION_THINKING_DEPTH,
+    SECTION_TIME_SENSITIVE_DATA,
+    SECTION_TOOL_ARGUMENT_RULES,
+    SECTION_TOOL_INDEX,
+    SECTION_TOOL_LIST,
+    SECTION_USER_CONTEXT_DEDUCED,
+    SECTION_USER_IDENTITY_STATED,
+    SECTION_VERIFY_RESULTS,
+    make,
+)
 from core.agent.tool_schemas import compact_tool_summary, render_tool_list
 from core.models import Intent
 from core.system_snapshot import get_cached_summary
@@ -493,6 +533,270 @@ RULES:
 Reformulated instruction: {reformulated_message}"""
 
 
+def build_parent_static_registry(
+    tool_defs: Optional[list[dict]] = None,
+    agent_context: Optional[str] = None,
+) -> SectionRegistry:
+    """The parent (native-bootstrap) STATIC prompt as a named-section registry.
+
+    The 4-layer doctrine (User Objective Primacy) with allocated order slots:
+
+    - identity (10): who LocalMind is.
+    - constraints (110-140): the conversation-or-action decision, act-not-
+      announce, multi-part completion, and the safety/grounding rule — the
+      hard rules first, before any context or guidance.
+    - relevant context (210-290): the agent playbook, the boot-cached system
+      facts, deduced user context, stated identity facts, retrieved memory —
+      everything the constraints above reason about.
+    - execution guidance (400-430): reply-style examples, the tool index,
+      selection hints, on-demand loading.
+
+    The user objective is deliberately ABSENT here: it is per-turn content
+    and leads the TURN band (the trailing turn-context message), never the
+    byte-stable prefix. The registry is returned (not just its render) so
+    the loop can stage later calls by section name (staged_static_content)
+    instead of cutting rendered text by section-head string matches.
+    """
+    registry = SectionRegistry()
+
+    registry.add(
+        make(
+            SECTION_IDENTITY,
+            Band.STATIC,
+            Layer.IDENTITY,
+            10,
+            "You are LocalMind, a general-purpose agent running locally on the "
+            "user's machine. You handle whatever the user needs — questions, "
+            "files, web research, system tasks, code, calculations, or plain "
+            "conversation.",
+        )
+    )
+
+    # ── Layer 1: constraints ────────────────────────────────────────────
+    # The conversation-or-action decision. "System facts above" became
+    # "System facts below": the facts moved into the context layer, after
+    # the constraints, and the reference must point where the text now is.
+    registry.add(
+        make(
+            SECTION_CONVERSATION_OR_ACTION,
+            Band.STATIC,
+            Layer.CONSTRAINTS,
+            110,
+            "You own the user's objective end to end. First decide whether this "
+            "turn needs conversation or action:\n"
+            "- If the answer is knowledge you already have (including the System "
+            "facts below), a question about what YOU can do (read the tool list "
+            "below — don't call a tool to discover your own abilities), or the "
+            "user is just chatting, reply directly in plain text. Don't call a "
+            "tool to confirm what you already know.\n"
+            "- If it needs something outside you — files, current information, "
+            "running a command, system state, code — use the native tool API. "
+            "Never fabricate a tool result or claim you did something you didn't.",
+        )
+    )
+    registry.add(
+        make(
+            SECTION_ACT_NOT_ANNOUNCE,
+            Band.STATIC,
+            Layer.CONSTRAINTS,
+            120,
+            "Be concise and direct. Answer what was asked, then stop — no "
+            'preamble ("Sure, let me…"), no postamble ("Let me know if…"), no '
+            "narrating your plan. Act instead of announcing the act, and once "
+            "the objective is met, end the turn.",
+        )
+    )
+    registry.add(
+        make(
+            SECTION_MULTI_PART_COMPLETION,
+            Band.STATIC,
+            Layer.CONSTRAINTS,
+            130,
+            "Multi-part requests are not done until EVERY part is answered. "
+            '"X and Y" means both X and Y: if a tool can get a part you don\'t '
+            'have yet, call it — never concede a requested part ("I couldn\'t '
+            'get X in this pass"), never defer it to a "next pass", and never '
+            "tell the user to check it themselves. A partial answer plus a punt "
+            "is an incomplete turn, not an answer.",
+        )
+    )
+    registry.add(
+        make(
+            SECTION_SAFETY_GROUNDING,
+            Band.STATIC,
+            Layer.CONSTRAINTS,
+            140,
+            f"{_SAFETY_HEAD} Ground every answer in what tools actually "
+            "returned. Do not emit XML tool calls or expose internal reasoning.",
+        )
+    )
+
+    # ── Layer 3: relevant context ───────────────────────────────────────
+    # The parent agent's contract/playbook rides here on native parent
+    # turns (self-contained prompt); conditional sections are simply not
+    # registered when empty.
+    if agent_context:
+        registry.add(
+            make(
+                SECTION_AGENT_PLAYBOOK,
+                Band.STATIC,
+                Layer.CONTEXT,
+                210,
+                agent_context,
+            )
+        )
+    # The boot-cached system summary + fused user context. The agent
+    # already KNOWS the machine and the user's regional setting, so it
+    # answers those questions directly instead of calling sysinfo or
+    # assuming/hedging a region on location-sensitive requests.
+    _sys = _system_env_line()
+    if _sys:
+        registry.add(
+            make(
+                SECTION_SYSTEM_FACTS,
+                Band.STATIC,
+                Layer.CONTEXT,
+                220,
+                _sys,
+            )
+        )
+    _user = get_cached_fused()
+    if _user:
+        registry.add(
+            make(
+                SECTION_USER_CONTEXT_DEDUCED,
+                Band.STATIC,
+                Layer.CONTEXT,
+                230,
+                _user,
+            )
+        )
+    # The user-STATED identity facts ride the same surface — labeled,
+    # guaranteed, and unconditional: unstated facts are declared absent
+    # with the clarify-don't-guess contract, so "where am I" is
+    # answerable from context or asked about, never inferred from tool
+    # results. Boot-cached, so the surface stays byte-stable per process.
+    _identity = format_identity_context()
+    if _identity:
+        registry.add(
+            make(
+                SECTION_USER_IDENTITY_STATED,
+                Band.STATIC,
+                Layer.CONTEXT,
+                240,
+                _identity,
+            )
+        )
+    # Retrieved memory is deliberately ABSENT here: it is per-turn content
+    # (memory_weave is a TURN-only section name) — it rides the trailing
+    # turn-context message, never the byte-stable prefix.
+
+    # ── Layer 4: execution guidance ─────────────────────────────────────
+    registry.add(
+        make(
+            SECTION_STYLE_EXAMPLES,
+            Band.STATIC,
+            Layer.GUIDANCE,
+            400,
+            f"{_STYLE_HEAD}\n"
+            '- "how much RAM do I have?" → "16 GB." (from System facts; no tool)\n'
+            '- "weather in Nairobi?" → run web_search, then: "24°C, partly cloudy."\n'
+            '- "delete the two .bin files in ~/tmp" → run shell to delete, then: '
+            '"Deleted junk_a.bin and junk_b.bin."\n'
+            '- "can you search the web for this?" → "Yes — I can search the web. '
+            'What would you like me to look up?" (a "can you…?" question: state '
+            "the capability from your tools; don't fire a blank tool call for an "
+            "unspecified target)\n"
+            '- "thanks, that helps" → "Anytime." (conversation, no task)',
+        )
+    )
+    # The first native call must stay light. It only needs a capability
+    # index so it can name a tool for describe_tool; sending every
+    # registry description here recreates the old kitchen-sink prompt.
+    # A NAME-only list once made the first tool choice
+    # blind to purpose (sysinfo picked for a weather query). Give a compact
+    # per-tool purpose summary so selection is informed from turn 1, while
+    # staying well below the full-schema kitchen sink.
+    compact_tool_list = compact_tool_summary(
+        # Scope the capability index to the SAME defs the native
+        # tools param is built from (single source of truth) so a scoped
+        # agent's bootstrap prompt never advertises tools outside its
+        # allowlist. describe_tool is always reachable (tool_defs_for_call
+        # adds it even when the raw scoped defs don't carry it).
+        allowed_names=(
+            {td.get("function", {}).get("name") for td in tool_defs}
+            | {"describe_tool"}
+            if tool_defs is not None
+            else None
+        )
+    )
+    registry.add(
+        make(
+            SECTION_TOOL_INDEX,
+            Band.STATIC,
+            Layer.GUIDANCE,
+            410,
+            f"{_TOOLS_HEAD}\n{compact_tool_list}",
+        )
+    )
+    registry.add(
+        make(
+            SECTION_SELECTION_HINTS,
+            Band.STATIC,
+            Layer.GUIDANCE,
+            420,
+            "Selection hints: current info (weather/news/prices) → web_search "
+            "or web_fetch;\nfind files on this computer → system_search; read "
+            "a file → file_task; run a\ncommand → shell; system facts "
+            "(CPU/RAM/disk) → answer from System above, else sysinfo.",
+        )
+    )
+    # Derive the core/long-tail tool-name lists dynamically
+    # from the tier-split constants so this prompt NEVER goes stale when
+    # tools move between tiers (an earlier tier move shifted 6 tools
+    # core→long-tail but
+    # this list was hardcoded and stale until now). Import is local
+    # because this is the only path that needs the tier constants.
+    from core.agent.tool_schemas import (  # noqa: PLC0415
+        CORE_TOOL_NAMES,
+        LONG_TAIL_TOOL_NAMES,
+    )
+
+    # Intersect the tier lists with the same allowed-name set the
+    # compact index and native param use, so the parked multi-agent tools
+    # never appear in the on-demand instructions either.
+    _allowed_tier_names = (
+        {td.get("function", {}).get("name") for td in tool_defs} | {"describe_tool"}
+        if tool_defs is not None
+        else None
+    )
+    _core_scope = (
+        CORE_TOOL_NAMES
+        if _allowed_tier_names is None
+        else CORE_TOOL_NAMES & _allowed_tier_names
+    )
+    _long_tail_scope = (
+        LONG_TAIL_TOOL_NAMES
+        if _allowed_tier_names is None
+        else LONG_TAIL_TOOL_NAMES & _allowed_tier_names
+    )
+    _core_names_inline = ", ".join(sorted(_core_scope))
+    _long_tail_names_inline = ", ".join(sorted(_long_tail_scope))
+    registry.add(
+        make(
+            SECTION_ON_DEMAND_LOADING,
+            Band.STATIC,
+            Layer.GUIDANCE,
+            430,
+            f"Core tools ({_core_names_inline}) are loaded with full schemas —\n"
+            "call them directly. ONLY for an on-demand tool "
+            f"({_long_tail_names_inline})\ncall `describe_tool(\"<name>\")` "
+            'FIRST (e.g. `describe_tool("sql")`).',
+        )
+    )
+    return registry
+
+
 def build_agent_system_prompt(
     intent: Intent,
     available_tools: list[dict],
@@ -563,109 +867,13 @@ def build_agent_system_prompt(
     # ordinary direct conversation from paying the entire tool catalog while
     # preserving one model-owned parent boundary for every turn.
     if native_bootstrap:
-        # The first native call must stay light. It only needs a capability
-        # index so it can name a tool for describe_tool; sending every
-        # registry description here recreates the old kitchen-sink prompt.
-        # A NAME-only list once made the first tool choice
-        # blind to purpose (sysinfo picked for a weather query). Give a compact
-        # per-tool purpose summary so selection is informed from turn 1, while
-        # staying well below the full-schema kitchen sink.
-        compact_tool_list = compact_tool_summary(
-            # Scope the capability index to the SAME defs the native
-            # tools param is built from (single source of truth) so a scoped
-            # agent's bootstrap prompt never advertises tools outside its
-            # allowlist. describe_tool is always reachable (tool_defs_for_call
-            # adds it even when the raw scoped defs don't carry it).
-            allowed_names=(
-                {td.get("function", {}).get("name") for td in tool_defs}
-                | {"describe_tool"}
-                if tool_defs is not None
-                else None
-            )
-        )
-        memory_section = ""
-        if memory_facts:
-            memory_section = (
-                "\n## Retrieved memory\n"
-                + "\n".join(f"- {fact}" for fact in memory_facts[:10])
-                + "\n"
-            )
-        # The boot-cached system summary + fused user context. The agent
-        # already KNOWS the machine and the user's regional setting, so it
-        # answers those questions directly instead of calling sysinfo or
-        # assuming/hedging a region on location-sensitive requests.
-        _sys = _system_env_line()
-        _user = get_cached_fused()
-        # The user-STATED identity facts ride the same surface — labeled,
-        # guaranteed, and unconditional: unstated facts are declared absent
-        # with the clarify-don't-guess contract, so "where am I" is
-        # answerable from context or asked about, never inferred from tool
-        # results. Boot-cached, so the surface stays byte-stable per process.
-        _identity = format_identity_context()
-        system_section = (
-            (f"\n{_sys}\n" if _sys else "") + (_user if _user else "") + _identity
-        )
-        # Derive the core/long-tail tool-name lists dynamically
-        # from the tier-split constants so this prompt NEVER goes stale when
-        # tools move between tiers (an earlier tier move shifted 6 tools
-        # core→long-tail but
-        # this list was hardcoded and stale until now). Import is local
-        # because this is the only path that needs the tier constants.
-        from core.agent.tool_schemas import (  # noqa: PLC0415
-            CORE_TOOL_NAMES,
-            LONG_TAIL_TOOL_NAMES,
-        )
-
-        # Intersect the tier lists with the same allowed-name set the
-        # compact index and native param use, so the parked multi-agent tools
-        # never appear in the on-demand instructions either.
-        _allowed_tier_names = (
-            {td.get("function", {}).get("name") for td in tool_defs} | {"describe_tool"}
-            if tool_defs is not None
-            else None
-        )
-        _core_scope = (
-            CORE_TOOL_NAMES if _allowed_tier_names is None
-            else CORE_TOOL_NAMES & _allowed_tier_names
-        )
-        _long_tail_scope = (
-            LONG_TAIL_TOOL_NAMES if _allowed_tier_names is None
-            else LONG_TAIL_TOOL_NAMES & _allowed_tier_names
-        )
-        _core_names_inline = ", ".join(sorted(_core_scope))
-        _long_tail_names_inline = ", ".join(sorted(_long_tail_scope))
-        return f"""You are LocalMind, a general-purpose agent running locally on the user's machine. You handle whatever the user needs — questions, files, web research, system tasks, code, calculations, or plain conversation.
-
-{agent_context or ''}{system_section}{memory_section}
-
-You own the user's objective end to end. First decide whether this turn needs conversation or action:
-- If the answer is knowledge you already have (including the System facts above), a question about what YOU can do (read the tool list below — don't call a tool to discover your own abilities), or the user is just chatting, reply directly in plain text. Don't call a tool to confirm what you already know.
-- If it needs something outside you — files, current information, running a command, system state, code — use the native tool API. Never fabricate a tool result or claim you did something you didn't.
-
-Be concise and direct. Answer what was asked, then stop — no preamble ("Sure, let me…"), no postamble ("Let me know if…"), no narrating your plan. Act instead of announcing the act, and once the objective is met, end the turn.
-
-Multi-part requests are not done until EVERY part is answered. "X and Y" means both X and Y: if a tool can get a part you don't have yet, call it — never concede a requested part ("I couldn't get X in this pass"), never defer it to a "next pass", and never tell the user to check it themselves. A partial answer plus a punt is an incomplete turn, not an answer.
-
-{_STYLE_HEAD}
-- "how much RAM do I have?" → "16 GB." (from System facts; no tool)
-- "weather in Nairobi?" → run web_search, then: "24°C, partly cloudy."
-- "delete the two .bin files in ~/tmp" → run shell to delete, then: "Deleted junk_a.bin and junk_b.bin."
-- "can you search the web for this?" → "Yes — I can search the web. What would you like me to look up?" (a "can you…?" question: state the capability from your tools; don't fire a blank tool call for an unspecified target)
-- "thanks, that helps" → "Anytime." (conversation, no task)
-
-{_TOOLS_HEAD}
-{compact_tool_list}
-Selection hints: current info (weather/news/prices) → web_search or web_fetch;
-find files on this computer → system_search; read a file → file_task; run a
-command → shell; system facts (CPU/RAM/disk) → answer from System above, else sysinfo.
-
-Core tools ({_core_names_inline}) are loaded with full schemas —
-call them directly. ONLY for an on-demand tool ({_long_tail_names_inline})
-call `describe_tool("<name>")` FIRST (e.g. `describe_tool("sql")`).
-
-{_SAFETY_HEAD} Ground every answer
-in what tools actually returned. Do not emit XML tool calls or expose internal reasoning.
-"""
+        # The parent prompt is assembled from the named-section registry
+        # (4-layer doctrine: identity -> constraints -> context -> guidance).
+        # build_parent_static_registry carries the full section comments.
+        return build_parent_static_registry(
+            tool_defs=tool_defs,
+            agent_context=agent_context,
+        ).render(Band.STATIC)
 
     # Chat mode: natural conversational response — rich, thoughtful, alive
     if intent == Intent.CHAT:
@@ -675,85 +883,126 @@ in what tools actually returned. Do not emit XML tool calls or expose internal r
         # the cached prefix every turn AND sent the env summary twice (once here,
         # once in turn-context). The chat prefix is now just identity + the
         # response contract, matching the agent branch's baseline+tail split.
-        chat_prompt = """You are LocalMind — a local AI assistant running on the user's machine. You are thoughtful, direct, and genuinely helpful. You remember things about this user and use that knowledge to be more useful.
-
-HOW TO RESPOND:
-- Answer from your knowledge. Do NOT call any tools — you're in conversation mode.
-- Think before you write. If the question has depth, show your reasoning. If it's simple, be brief.
-- Lead with the answer. For long responses, give the conclusion first, then the reasoning.
-- Use markdown for code blocks, lists, tables, and headers when they genuinely help readability.
-- Be conversational but substantive. Every sentence should add information or advance the answer.
-- If you don't know something, say so cleanly: "I don't know" beats a confident guess.
-- If you're unsure, mark it: "I believe..." or "As far as I know..." rather than stating uncertainty as fact.
-- Memory facts are things you already know — use them naturally, not mechanically. If someone told you their preferred language, just use it. Don't say "you mentioned..." or "based on my memory..."
-- Short answers for simple questions. Detailed, structured answers for complex ones. Match your depth to the question's depth.
-- If the user corrects you, accept it immediately and update your understanding. No defensiveness.
-- When giving advice, be specific and opinionated when you have grounds. "Use asyncio.gather() because it's faster for independent I/O" beats "you could try a different approach."
-- If you have a relevant opinion (code style, tool choice, debugging strategy), share it with reasoning. "I'd recommend X because..." not just "use X."
-- When you finish answering, if there's an obvious next step the user might want, mention it briefly. Don't lecture — just one line.
-
-ANTI-FABRICATION RULES (CRITICAL — violation = trust destruction):
-- You are in CONVERSATION mode: this turn cannot dispatch tools, so you have NO
-  live command output, directory listings, file contents, or system readings —
-  never invent them.
-- NEVER fabricate command outputs, directory listings, file contents, or system information.
-- NEVER pretend you ran a command (dir, ls, cat, type, etc.) — you did NOT run it.
-- NEVER show "Volume Serial Number", "Directory of", or any shell/command output formatting.
-- LocalMind as a whole DOES have tools (shell, file read/write, system info, web
-  search) — this mode simply can't run them. Never say "I'm not able to" or
-  "I can't" do something tools could do; that's a false limitation. If the user
-  asks you to check, list, read, or explore files/folders/directories, say what
-  you will check and end with: "Say 'go' and I'll run it." Then STOP — do NOT
-  fabricate output. Never mention modes; there is nothing for the user to switch.
-- If the user asks about their system (RAM, disk, CPU, time, date), say:
-  say what you will check and end with: "Say 'go' and I'll check." Then STOP — do NOT guess.
-
-TIME-SENSITIVE DATA RULES (CRITICAL — these are ALWAYS fabrication risks):
-- NEVER fabricate current/recent information. This includes but is NOT limited to:
-  * Weather, temperatures, forecasts for any location
-  * Sports scores, fixtures, standings, schedules, match results (EPL, La Liga, NBA, NFL, etc.)
-  * News, current events, breaking stories
-  * Stock prices, crypto prices, exchange rates, market data
-  * Movie/game/album release dates, box office numbers
-  * Election results, poll numbers
-  * Any data that changes over time
-- If the user asks about ANY of the above, say you'll look it up for real:
-  say what you will search and end with: "Say 'go' and I'll search." Then STOP. Do NOT guess
-  or make up current data from memory fragments.
-- DO NOT say things like "As of my last knowledge update..." or "Based on information available to me..."
-  These are HALLUCINATION GATEWAYS — they lead you to present stale training data as if it's current.
-- DO NOT present data that "seems right" or "probably hasn't changed" — you DO NOT know.
-- Even if you feel confident you know the answer (e.g., "Arsenal typically plays at home on weekends"),
-  you DO NOT know the current fixture list. STOP and offer the real lookup.
-- The ONLY honest response for time-sensitive data is to offer the real lookup — never stale training data presented as current.
-
-GENERAL RULES:
-- If you catch yourself about to write something that looks like command output, STOP.
-- The ONLY honest response when you can't do something is to say so clearly and suggest an alternative.
-- Fabricating tool output is worse than honestly saying you're not able to do something. Always choose honesty, and follow up with what you CAN do.
-
-THINKING DEPTH:
-- For factual questions: answer directly, then add nuance if there's room for it.
-- For "how to" questions: give the solution, explain why it works, note any gotchas.
-- For debugging questions: state the most likely cause, then alternative possibilities.
-- For design/architecture questions: present your recommendation with the trade-offs that led you there.
-- For creative requests: go deep. Give the user something they wouldn't have come up with on their own.
-"""
-
-        # The chat branch above is a byte-stable prefix (cache-prefix
-        # discipline), but it claims "You remember things about this user" —
-        # without the facts it promises, the model can only impute or invent
-        # them. Append the facts AFTER the static block so the prefix's bytes
-        # are unchanged and the memory weave is real.
-        if memory_facts:
-            chat_prompt = (
-                chat_prompt
-                + "\nWHAT YOU KNOW ABOUT THIS USER (use naturally — never say "
-                + '"based on my memory"):\n'
-                + "\n".join(f"- {fact}" for fact in memory_facts[:10])
-                + "\n"
+        # Assembled from the named-section registry (same 4-layer doctrine as
+        # the parent prompt; the memory weave is a context-layer section that
+        # only registers when facts exist).
+        registry = SectionRegistry()
+        registry.add(
+            make(
+                SECTION_IDENTITY,
+                Band.STATIC,
+                Layer.IDENTITY,
+                10,
+                "You are LocalMind — a local AI assistant running on the user's "
+                "machine. You are thoughtful, direct, and genuinely helpful. You "
+                "remember things about this user and use that knowledge to be "
+                "more useful.",
             )
-        return chat_prompt
+        )
+        registry.add(
+            make(
+                SECTION_CONVERSATION_CONTRACT,
+                Band.STATIC,
+                Layer.CONSTRAINTS,
+                110,
+                "HOW TO RESPOND:\n"
+                "- Answer from your knowledge. Do NOT call any tools — you're in conversation mode.\n"
+                "- Think before you write. If the question has depth, show your reasoning. If it's simple, be brief.\n"
+                "- Lead with the answer. For long responses, give the conclusion first, then the reasoning.\n"
+                "- Use markdown for code blocks, lists, tables, and headers when they genuinely help readability.\n"
+                "- Be conversational but substantive. Every sentence should add information or advance the answer.\n"
+                '- If you don\'t know something, say so cleanly: "I don\'t know" beats a confident guess.\n'
+                '- If you\'re unsure, mark it: "I believe..." or "As far as I know..." rather than stating uncertainty as fact.\n'
+                '- Memory facts are things you already know — use them naturally, not mechanically. If someone told you their preferred language, just use it. Don\'t say "you mentioned..." or "based on my memory..."\n'
+                "- Short answers for simple questions. Detailed, structured answers for complex ones. Match your depth to the question's depth.\n"
+                "- If the user corrects you, accept it immediately and update your understanding. No defensiveness.\n"
+                '- When giving advice, be specific and opinionated when you have grounds. "Use asyncio.gather() because it\'s faster for independent I/O" beats "you could try a different approach."\n'
+                '- If you have a relevant opinion (code style, tool choice, debugging strategy), share it with reasoning. "I\'d recommend X because..." not just "use X."\n'
+                "- When you finish answering, if there's an obvious next step the user might want, mention it briefly. Don't lecture — just one line.",
+            )
+        )
+        registry.add(
+            make(
+                SECTION_ANTI_FABRICATION,
+                Band.STATIC,
+                Layer.CONSTRAINTS,
+                120,
+                "ANTI-FABRICATION RULES (CRITICAL — violation = trust destruction):\n"
+                "- You are in CONVERSATION mode: this turn cannot dispatch tools, so you have NO\n"
+                "  live command output, directory listings, file contents, or system readings —\n"
+                "  never invent them.\n"
+                "- NEVER fabricate command outputs, directory listings, file contents, or system information.\n"
+                "- NEVER pretend you ran a command (dir, ls, cat, type, etc.) — you did NOT run it.\n"
+                '- NEVER show "Volume Serial Number", "Directory of", or any shell/command output formatting.\n'
+                "- LocalMind as a whole DOES have tools (shell, file read/write, system info, web\n"
+                "  search) — this mode simply can't run them. Never say \"I'm not able to\" or\n"
+                "  \"I can't\" do something tools could do; that's a false limitation. If the user\n"
+                "  asks you to check, list, read, or explore files/folders/directories, say what\n"
+                "  you will check and end with: \"Say 'go' and I'll run it.\" Then STOP — do NOT\n"
+                "  fabricate output. Never mention modes; there is nothing for the user to switch.\n"
+                "- If the user asks about their system (RAM, disk, CPU, time, date), say:\n"
+                "  say what you will check and end with: \"Say 'go' and I'll check.\" Then STOP — do NOT guess.",
+            )
+        )
+        registry.add(
+            make(
+                SECTION_TIME_SENSITIVE_DATA,
+                Band.STATIC,
+                Layer.CONSTRAINTS,
+                130,
+                "TIME-SENSITIVE DATA RULES (CRITICAL — these are ALWAYS fabrication risks):\n"
+                "- NEVER fabricate current/recent information. This includes but is NOT limited to:\n"
+                "  * Weather, temperatures, forecasts for any location\n"
+                "  * Sports scores, fixtures, standings, schedules, match results (EPL, La Liga, NBA, NFL, etc.)\n"
+                "  * News, current events, breaking stories\n"
+                "  * Stock prices, crypto prices, exchange rates, market data\n"
+                "  * Movie/game/album release dates, box office numbers\n"
+                "  * Election results, poll numbers\n"
+                "  * Any data that changes over time\n"
+                "- If the user asks about ANY of the above, say you'll look it up for real:\n"
+                "  say what you will search and end with: \"Say 'go' and I'll search.\" Then STOP. Do NOT guess\n"
+                "  or make up current data from memory fragments.\n"
+                '- DO NOT say things like "As of my last knowledge update..." or "Based on information available to me..."\n'
+                "  These are HALLUCINATION GATEWAYS — they lead you to present stale training data as if it's current.\n"
+                '- DO NOT present data that "seems right" or "probably hasn\'t changed" — you DO NOT know.\n'
+                '- Even if you feel confident you know the answer (e.g., "Arsenal typically plays at home on weekends"),\n'
+                "  you DO NOT know the current fixture list. STOP and offer the real lookup.\n"
+                "- The ONLY honest response for time-sensitive data is to offer the real lookup — never stale training data presented as current.",
+            )
+        )
+        registry.add(
+            make(
+                SECTION_GENERAL_RULES,
+                Band.STATIC,
+                Layer.CONSTRAINTS,
+                140,
+                "GENERAL RULES:\n"
+                "- If you catch yourself about to write something that looks like command output, STOP.\n"
+                "- The ONLY honest response when you can't do something is to say so clearly and suggest an alternative.\n"
+                "- Fabricating tool output is worse than honestly saying you're not able to do something. Always choose honesty, and follow up with what you CAN do.",
+            )
+        )
+        # The chat prompt is a byte-stable prefix (cache-prefix
+        # discipline). Retrieved memory (memory_facts) is deliberately
+        # NOT woven in here: memory_weave is a TURN-only section name —
+        # per-turn content in the cacheable prefix is the cache-buster
+        # bug class. Callers pass memory facts to the loop, which rides
+        # them in the trailing turn-context message.
+        registry.add(
+            make(
+                SECTION_THINKING_DEPTH,
+                Band.STATIC,
+                Layer.GUIDANCE,
+                400,
+                "THINKING DEPTH:\n"
+                "- For factual questions: answer directly, then add nuance if there's room for it.\n"
+                '- For "how to" questions: give the solution, explain why it works, note any gotchas.\n'
+                "- For debugging questions: state the most likely cause, then alternative possibilities.\n"
+                "- For design/architecture questions: present your recommendation with the trade-offs that led you there.\n"
+                "- For creative requests: go deep. Give the user something they wouldn't have come up with on their own.",
+            )
+        )
+        return registry.render(Band.STATIC)
 
     # Inject the universal "check before acting" safety workflow.
     # This is a constraint that applies to EVERY tool that creates, writes,
@@ -795,101 +1044,200 @@ THINKING DEPTH:
     except Exception:
         pass  # non-fatal — the constraint is best-effort
 
-    return f"""You are an Execution Agent. Your ONLY job is to call tools. You NEVER narrate, describe, or explain what you would do — you just DO it.
+    # Scoped execution-agent prompt, assembled from the named-section
+    # registry in the same 4-layer doctrine as the parent prompt:
+    # identity -> constraints (rules + check-before-acting safety) ->
+    # guidance (tools, verification, workflow, formatting). Every rule
+    # keeps its exact tuned text; only the grouping and order are
+    # declared structure now.
+    registry = SectionRegistry()
+    registry.add(
+        make(
+            SECTION_IDENTITY,
+            Band.STATIC,
+            Layer.IDENTITY,
+            10,
+            "You are an Execution Agent. Your ONLY job is to call tools. You "
+            "NEVER narrate, describe, or explain what you would do — you just DO it.",
+        )
+    )
+    if safety_section:
+        registry.add(
+            make(
+                SECTION_SAFETY_CHECK_STATE,
+                Band.STATIC,
+                Layer.CONSTRAINTS,
+                120,
+                safety_section,
+            )
+        )
+    registry.add(
+        make(
+            SECTION_CRITICAL_RULES,
+            Band.STATIC,
+            Layer.CONSTRAINTS,
+            110,
+            "CRITICAL RULES:\n"
+            "1. Use the NATIVE tool-calling API for every tool call — NEVER output tool-call XML (like <invoke name=...> or minimax:tool_call) as text. The only text you may output is the FINAL ANSWER after tools complete. Deliver file contents via file_write, never by pasting them in your response.\n"
+            "2. Never ask the user for tool results — they return automatically. Before tool calls, give the user ONE short line on what you're doing (\"Converting the file to Word now\") — a user-facing sentence, not chain-of-thought or tool-call XML.\n"
+            "3. Never say \"Done!\" or \"All files created!\" unless you received SUCCESS results from the actual tools.\n"
+            "4. NEVER fabricate or embellish tool results. Base your answer EXACTLY on tool output: no invented file names, folder contents, search results, or system info. If the tool shows 3 items, report 3. If output is empty or errored, say so honestly — never substitute estimates. Every specific detail (names, numbers, paths) must come from the actual tool result.\n"
+            "5. Don't hedge (\"(Not entirely sure)\", \"I believe\"). You are a tool-using agent — you DO NOT guess, you call tools and report results, so you ARE sure. If uncertain, verify with a tool.\n"
+            "6. LIVE DATA RULE: For live/time-sensitive data (sports, weather, prices, news), you MUST use a tool — training data is stale. Use web_search + web_fetch (search, then fetch). For adaptive multi-source research, `describe_tool(\"web_research\")` first.\n"
+            "7. FOLLOW-THROUGH RULE: When a task requires MULTIPLE tool calls (find file → read file), complete ALL steps before the final answer. Never stop after a partial step to ask confirmation when the next step is obvious. But do NOT add steps that aren't needed: to CREATE a file (\"write a recipe on the desktop\"), call file_write directly with the path and content — do NOT list the folder first. When a shell command fails, FIX THE COMMAND (wrong OS syntax?) rather than retrying the same thing. Use the RIGHT tool per step: system_search locates, file_task reads, file_write creates.\n"
+            "8. When you have enough information, respond directly in plain text — call no more tools. If a tool fails, try a different approach or answer from what you know.\n"
+            "9. describe_tool loads on-demand (long-tail) tools — the ones NOT in your tools param. Core tools are already loaded; NEVER call describe_tool for them. If unsure whether a tool is core, check your tools param first.\n"
+            "10. TOOL OUTPUT IS RETAINED: results stay available all turn; `[...TRUNCATED DUE TO LENGTH...]` means only the MIDDLE was dropped (head + tail survive). Never re-run a read just to change formatting or columns — the runtime dedupes identical inspections. Re-run only after a write/edit/exec or to get different data.",
+        )
+    )
+    registry.add(
+        make(
+            SECTION_TOOL_LIST,
+            Band.STATIC,
+            Layer.GUIDANCE,
+            310,
+            f"Available tools:\n{agent_tool_list}",
+        )
+    )
+    registry.add(
+        make(
+            SECTION_VERIFY_RESULTS,
+            Band.STATIC,
+            Layer.GUIDANCE,
+            400,
+            "VERIFY (after EVERY tool result — skipping this is the same as fabricating):\n"
+            "- file_write: the runtime auto-verifies it and appends a `[VERIFICATION]: file_write confirmed — N bytes on disk` line. On verification FAILURE/WARNING, rewrite the file — never claim success.\n"
+            "- shell: report the EXACT output — not your interpretation. If it errored, say so.\n"
+            "- code_exec: check output for errors; on a traceback, fix and retry.\n"
+            "- Empty/no result: say so explicitly — never fill the gap with invented content.\n"
+            '- Sanity-check scraped data before reporting: does its date match today? Placeholder values ("teams to be decided") mean the data isn\'t real. Does it actually answer the user\'s question? Contradictions between sources? Flag or pick the more reliable one. Never report scraped dates as facts without checking against today\'s date.',
+        )
+    )
+    registry.add(
+        make(
+            SECTION_COMPLETION_ENFORCEMENT,
+            Band.STATIC,
+            Layer.GUIDANCE,
+            410,
+            "COMPLETION ENFORCEMENT: complete ALL steps before stopping. If iterations remain and task isn't done, KEEP WORKING. Stopping mid-task is a FAILURE.",
+        )
+    )
+    registry.add(
+        make(
+            SECTION_TOOL_ARGUMENT_RULES,
+            Band.STATIC,
+            Layer.GUIDANCE,
+            420,
+            "TOOL ARGUMENT RULES:\n"
+            "- file_task: ONLY use for reading the TEXT CONTENTS of a single file — never for directories/folder listings (use dir_explorer operation=list for those).\n"
+            "- dir_explorer: read-only folder inspection — list (one level), tree (bounded structure sketch, depth<=4), stat (one path's metadata). Prefer it over shell ls/dir/tree for \"look around a folder\" and pre-write checks; it returns names + metadata, never file bytes.\n"
+            '- file_write: BOTH "path" AND "content" required; content must be COMPLETE — no placeholders or "... more code here ...".\n'
+            "- shell: commands MUST match the OS — CHECK env first. Windows: New-Item -ItemType Directory -Force (NOT mkdir -p), Get-ChildItem (NOT ls), Get-Content (NOT cat). Unix: mkdir -p, ls, cat, grep, find. If \"not recognized\", fix OS syntax.\n"
+            "- shell writing to a FILE is the LAST RESORT: prefer file_write (dedicated, verified, diffable) and edit_file (in-place edit). Only use shell redirection (>, >>, tee, echo >) when file_write/edit_file cannot express the change (e.g. complex pipeline output) — and then prefer a temp file + copy.\n"
+            "- edit_file: ALWAYS read the file with file_task BEFORE editing. Never edit a file you haven't read.",
+        )
+    )
+    registry.add(
+        make(
+            SECTION_THINKING_AND_RESPONDING,
+            Band.STATIC,
+            Layer.GUIDANCE,
+            430,
+            "HOW TO THINK AND RESPOND:\n"
+            "- Before the first tool call: what does the user actually need, and what's the fastest complete path?\n"
+            "- Read tool results carefully — the skipped detail might be the answer.\n"
+            "- Report exact paths, outputs, and error messages. If something failed, say what and why, then try the next approach — don't repeat the same failed one.\n"
+            "- If the task is ambiguous, make a reasonable assumption, state it, and proceed. One clarifying question max.",
+        )
+    )
+    registry.add(
+        make(
+            SECTION_RESPONSE_FORMATTING,
+            Band.STATIC,
+            Layer.GUIDANCE,
+            440,
+            "RESPONSE FORMATTING:\n"
+            "- **Lead with the answer,** then stop — don't bury it. Be concise: one sentence if it answers, never a wall of text.\n"
+            "- **Structure it:** tables for data (weather, file lists, comparisons), bullets for steps, bold for key numbers, code blocks for code/commands/paths.\n"
+            '- **No source citations** — synthesize into a clean, actionable answer ("Yes, bring an umbrella" beats "35% probability of precipitation").\n'
+            "- **Match length to the question:** one line + small table for a simple ask; a structured explanation for a deep one.",
+        )
+    )
+    registry.add(
+        make(
+            SECTION_ITERATION_BUDGET,
+            Band.STATIC,
+            Layer.GUIDANCE,
+            449,
+            f"Max iterations: {MAX_ITERATIONS} — use them all if needed.",
+        )
+    )
+    return registry.render(Band.STATIC)
 
-Available tools:
-{agent_tool_list}
-{safety_section}
-CRITICAL RULES:
-1. Use the NATIVE tool-calling API for every tool call — NEVER output tool-call XML (like <invoke name=...> or minimax:tool_call) as text. The only text you may output is the FINAL ANSWER after tools complete. Deliver file contents via file_write, never by pasting them in your response.
-2. Never ask the user for tool results — they return automatically. Before tool calls, give the user ONE short line on what you're doing ("Converting the file to Word now") — a user-facing sentence, not chain-of-thought or tool-call XML.
-3. Never say "Done!" or "All files created!" unless you received SUCCESS results from the actual tools.
-4. NEVER fabricate or embellish tool results. Base your answer EXACTLY on tool output: no invented file names, folder contents, search results, or system info. If the tool shows 3 items, report 3. If output is empty or errored, say so honestly — never substitute estimates. Every specific detail (names, numbers, paths) must come from the actual tool result.
-5. Don't hedge ("(Not entirely sure)", "I believe"). You are a tool-using agent — you DO NOT guess, you call tools and report results, so you ARE sure. If uncertain, verify with a tool.
-6. LIVE DATA RULE: For live/time-sensitive data (sports, weather, prices, news), you MUST use a tool — training data is stale. Use web_search + web_fetch (search, then fetch). For adaptive multi-source research, `describe_tool("web_research")` first.
-7. FOLLOW-THROUGH RULE: When a task requires MULTIPLE tool calls (find file → read file), complete ALL steps before the final answer. Never stop after a partial step to ask confirmation when the next step is obvious. But do NOT add steps that aren't needed: to CREATE a file ("write a recipe on the desktop"), call file_write directly with the path and content — do NOT list the folder first. When a shell command fails, FIX THE COMMAND (wrong OS syntax?) rather than retrying the same thing. Use the RIGHT tool per step: system_search locates, file_task reads, file_write creates.
-8. When you have enough information, respond directly in plain text — call no more tools. If a tool fails, try a different approach or answer from what you know.
-9. describe_tool loads on-demand (long-tail) tools — the ones NOT in your tools param. Core tools are already loaded; NEVER call describe_tool for them. If unsure whether a tool is core, check your tools param first.
-10. TOOL OUTPUT IS RETAINED: results stay available all turn; `[...TRUNCATED DUE TO LENGTH...]` means only the MIDDLE was dropped (head + tail survive). Never re-run a read just to change formatting or columns — the runtime dedupes identical inspections. Re-run only after a write/edit/exec or to get different data.
-
-VERIFY (after EVERY tool result — skipping this is the same as fabricating):
-- file_write: the runtime auto-verifies it and appends a `[VERIFICATION]: file_write confirmed — N bytes on disk` line. On verification FAILURE/WARNING, rewrite the file — never claim success.
-- shell: report the EXACT output — not your interpretation. If it errored, say so.
-- code_exec: check output for errors; on a traceback, fix and retry.
-- Empty/no result: say so explicitly — never fill the gap with invented content.
-- Sanity-check scraped data before reporting: does its date match today? Placeholder values ("teams to be decided") mean the data isn't real. Does it actually answer the user's question? Contradictions between sources? Flag or pick the more reliable one. Never report scraped dates as facts without checking against today's date.
-
-COMPLETION ENFORCEMENT: complete ALL steps before stopping. If iterations remain and task isn't done, KEEP WORKING. Stopping mid-task is a FAILURE.
-
-TOOL ARGUMENT RULES:
-- file_task: ONLY use for reading the TEXT CONTENTS of a single file — never for directories/folder listings (use dir_explorer operation=list for those).
-- dir_explorer: read-only folder inspection — list (one level), tree (bounded structure sketch, depth<=4), stat (one path's metadata). Prefer it over shell ls/dir/tree for "look around a folder" and pre-write checks; it returns names + metadata, never file bytes.
-- file_write: BOTH "path" AND "content" required; content must be COMPLETE — no placeholders or "... more code here ...".
-- shell: commands MUST match the OS — CHECK env first. Windows: New-Item -ItemType Directory -Force (NOT mkdir -p), Get-ChildItem (NOT ls), Get-Content (NOT cat). Unix: mkdir -p, ls, cat, grep, find. If "not recognized", fix OS syntax.
-- shell writing to a FILE is the LAST RESORT: prefer file_write (dedicated, verified, diffable) and edit_file (in-place edit). Only use shell redirection (>, >>, tee, echo >) when file_write/edit_file cannot express the change (e.g. complex pipeline output) — and then prefer a temp file + copy.
-- edit_file: ALWAYS read the file with file_task BEFORE editing. Never edit a file you haven't read.
-
-HOW TO THINK AND RESPOND:
-- Before the first tool call: what does the user actually need, and what's the fastest complete path?
-- Read tool results carefully — the skipped detail might be the answer.
-- Report exact paths, outputs, and error messages. If something failed, say what and why, then try the next approach — don't repeat the same failed one.
-- If the task is ambiguous, make a reasonable assumption, state it, and proceed. One clarifying question max.
-
-RESPONSE FORMATTING:
-- **Lead with the answer,** then stop — don't bury it. Be concise: one sentence if it answers, never a wall of text.
-- **Structure it:** tables for data (weather, file lists, comparisons), bullets for steps, bold for key numbers, code blocks for code/commands/paths.
-- **No source citations** — synthesize into a clean, actionable answer ("Yes, bring an umbrella" beats "35% probability of precipitation").
-- **Match length to the question:** one line + small table for a simple ask; a structured explanation for a deep one.
-
-Max iterations: {MAX_ITERATIONS} — use them all if needed.
-"""
 
 
-
-def build_agent_intent_tail(
+def add_intent_tail_sections(
+    registry: SectionRegistry,
     intent: Intent,
     plan_context: Optional[str] = None,
     orchestrator_context: Optional[str] = None,
     agent_context: Optional[str] = None,
-) -> str:
-    """The per-intent / per-turn prompt sections, rendered as a TAIL.
+) -> None:
+    """Register the per-intent / per-turn sections into a TURN registry.
 
     P0 Context Engineering Step 2 (addendum plan): the system prompt is the
     byte-stable, cacheable prefix (identity, tool list, universal rules).
     These sections vary by intent or turn (skill fragment, expert persona,
     agent playbook, execution plan, routing hint, the current-intent line),
     so embedding them in the system prompt busted the provider prefix cache
-    on every intent switch. The AgentLoop appends this tail to the trailing
+    on every intent switch. The AgentLoop merges them into the trailing
     turn-context message, which sits AFTER the stable prefix: the cache
     survives intent switches, and within a turn the tail is byte-identical
     across iterations so it caches too.
 
-    Same rendering as the pre-Step-2 system prompt (section text preserved;
-    order kept: skill, persona, agent ctx, plan, routing hint, intent line)
-    - only the POSITION moved (system prompt -> turn-context tail).
+    Turn-band doctrine order: the current-intent line (the objective layer —
+    what this turn is about) leads; the guidance sections follow it in their
+    documented slots (skill, persona, agent playbook, plan, routing hint),
+    after whatever context sections the loop registered. Conditional
+    sections are simply not registered when their input is absent.
     """
+    # The objective layer: what this turn is about, first thing the tail says.
+    registry.add(
+        make(
+            SECTION_CURRENT_INTENT,
+            Band.TURN,
+            Layer.OBJECTIVE,
+            1010,
+            f"Current intent: {intent.value}",
+        )
+    )
+
     # Inject plan context if available from the planning phase
-    plan_section = ""
     if plan_context:
         # The plan was made WITHOUT tool evidence, so "follow exactly /
         # do NOT re-think" forced the model to obey steps that reality had
         # already contradicted (the prompt→tool→answer feel). The plan is a
         # prior: start from it, adapt as evidence lands.
-        plan_section = f"""
-EXECUTION PLAN — your plan from before any tool ran:
-{plan_context}
-
-Start from this plan and execute it with the tools. It was written without
-tool evidence: when a tool result contradicts a step (missing file, failed
-command, unexpected state), adapt the remaining steps to what you actually
-found — the goal is the outcome, not the literal steps. You don't need
-permission to deviate; just keep moving toward the user's goal.
-"""
+        registry.add(
+            make(
+                SECTION_EXECUTION_PLAN,
+                Band.TURN,
+                Layer.GUIDANCE,
+                1190,
+                f"EXECUTION PLAN — your plan from before any tool ran:\n"
+                f"{plan_context}\n"
+                "\n"
+                "Start from this plan and execute it with the tools. It was written without\n"
+                "tool evidence: when a tool result contradicts a step (missing file, failed\n"
+                "command, unexpected state), adapt the remaining steps to what you actually\n"
+                "found — the goal is the outcome, not the literal steps. You don't need\n"
+                "permission to deviate; just keep moving toward the user's goal.",
+            )
+        )
 
     # Inject intent-specific skill expertise from .md files
     # This gives the agent domain-specific knowledge (coding practices,
     # research methodology, shell safety, etc.) without bloating base.md.
-    skill_section = ""
     from core.context_builder import _intent_fragment_name, _load_fragment
 
     skill_fragment = _load_fragment(_intent_fragment_name(intent))
@@ -904,7 +1252,15 @@ permission to deviate; just keep moving toward the user's goal.
         _truncated_skill = skill_fragment
         if len(skill_fragment) > _SKILL_CAP:
             _truncated_skill = skill_fragment[:_SKILL_CAP] + "\n[... remaining expertise omitted — follow the universal rules below]"
-        skill_section = f"\n## Intent-specific expertise\n{_truncated_skill}\n"
+        registry.add(
+            make(
+                SECTION_SKILL_FRAGMENT,
+                Band.TURN,
+                Layer.GUIDANCE,
+                1160,
+                f"## Intent-specific expertise\n{_truncated_skill}",
+            )
+        )
 
     # ── Expert persona framing ──────────────────────────────────────────
     # P9: Deepened personas with cognitive strategies, failure modes,
@@ -1068,6 +1424,16 @@ permission to deviate; just keep moving toward the user's goal.
 '- Did I store the fact exactly as stated? Durable fact or temporary reference? Did I confirm it?\n'        ),
     }
     persona_section = _PERSONA_MAP.get(intent, "")
+    if persona_section:
+        registry.add(
+            make(
+                SECTION_EXPERT_PERSONA,
+                Band.TURN,
+                Layer.GUIDANCE,
+                1170,
+                persona_section.strip(),
+            )
+        )
 
     # Inject the selected BaseAgent's context (playbook +
     # persona + agent-specific guidance). This is the load-bearing piece
@@ -1077,37 +1443,75 @@ permission to deviate; just keep moving toward the user's goal.
     # here. Without this section, the CodingAgent is just a scoped
     # toolset (Phase 1 behavior); with it, the CodingAgent's playbook
     # actually governs tool use (Phase 2 behavior).
-    agent_context_section = ""
     if agent_context:
-        agent_context_section = f"""
-AGENT CONTEXT — your agent type's playbook + guidance:
-{agent_context}
-
-The above is your agent's playbook. Follow it for every tool call in this
-turn — it governs HOW you use your scoped tools (read-before-write,
-verify-after-write, follow-conventions, small-verifiable-changes for
-the Coding Agent; enough-sources + cite-dates for the Research Agent;
-etc.). Your scoped toolset is the WHAT; this playbook is the HOW.
-"""
+        registry.add(
+            make(
+                SECTION_AGENT_PLAYBOOK,
+                Band.TURN,
+                Layer.GUIDANCE,
+                1180,
+                f"AGENT CONTEXT — your agent type's playbook + guidance:\n"
+                f"{agent_context}\n"
+                "\n"
+                "The above is your agent's playbook. Follow it for every tool call in this\n"
+                "turn — it governs HOW you use your scoped tools (read-before-write,\n"
+                "verify-after-write, follow-conventions, small-verifiable-changes for\n"
+                "the Coding Agent; enough-sources + cite-dates for the Research Agent;\n"
+                "etc.). Your scoped toolset is the WHAT; this playbook is the HOW.",
+            )
+        )
 
     # Inject caller context as a hint; the parent remains responsible for
     # evaluating the suggestion and choosing the next action.
-    orchestrator_section = ""
     if orchestrator_context:
-        orchestrator_section = f"""
-ROUTING HINT — evaluate this suggestion before acting:
-{orchestrator_context}
+        registry.add(
+            make(
+                SECTION_ROUTING_HINT,
+                Band.TURN,
+                Layer.GUIDANCE,
+                1200,
+                f"ROUTING HINT — evaluate this suggestion before acting:\n"
+                f"{orchestrator_context}\n"
+                "\n"
+                "This hint may be incomplete or wrong. Verify it against the user's goal and\n"
+                "current evidence, then choose the appropriate tool, delegate, clarification,\n"
+                "or next reasoning step yourself. Do not treat it as an instruction to call a\n"
+                "specific tool or follow a fixed order.",
+            )
+        )
 
-This hint may be incomplete or wrong. Verify it against the user's goal and
-current evidence, then choose the appropriate tool, delegate, clarification,
-or next reasoning step yourself. Do not treat it as an instruction to call a
-specific tool or follow a fixed order.
-"""
 
-    current_intent_section = f"Current intent: {intent.value}"
+def build_agent_intent_tail(
+    intent: Intent,
+    plan_context: Optional[str] = None,
+    orchestrator_context: Optional[str] = None,
+    agent_context: Optional[str] = None,
+) -> str:
+    """The per-intent / per-turn sections rendered as one tail string.
 
-    return (
-        f"{skill_section}{persona_section}{agent_context_section}"
-        f"{plan_section}{orchestrator_section}{current_intent_section}"
+    Convenience wrapper over add_intent_tail_sections: a fresh TURN
+    registry, the sections added, the TURN band rendered. The loop uses
+    the add_* form directly so the tail sections share one registry (and
+    one deterministic order) with the turn-context sections.
+    """
+    registry = SectionRegistry()
+    add_intent_tail_sections(
+        registry,
+        intent=intent,
+        plan_context=plan_context,
+        orchestrator_context=orchestrator_context,
+        agent_context=agent_context,
     )
+    return registry.render(Band.TURN)
 
+
+
+def memory_facts_section_text(memory_facts: list[str]) -> str:
+    """The TURN-band retrieved-memory section text, knowledge-framed.
+
+    Memory facts are things the agent KNOWS about the user — never
+    "retrieved from a store" prose (the model repeats the framing it
+    reads). Registered by the loop as the ``memory_facts`` TURN section;
+    never woven into the byte-stable prefix.
+    """
+    return "What you know about this user:\n" + "\n".join(f"- {f}" for f in memory_facts)
