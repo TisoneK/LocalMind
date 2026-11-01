@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — no session in progress
-- **Status:** idle
+- **Session:** 2026-11-01 — Kesi / GLM (Z.ai sandbox)
+- **Task:** B-2026-11-01-26 — the durable per-turn execution trace (owner-gated build, "Go ahead" received): persist the per-turn event stream (turn_id + seq), adapter-level model_call stamps (submit/first-byte/last-byte, per-call usage, payload size/hash, every path), path_selected decision events (incl. negative decisions), context-assembly start/end, stage_skipped for never-attempted stages; persist context_breakdown + post_answer_lanes; one clock discipline (epoch-ms everywhere, monotonic only as labelled deltas); export traceRef + history endpoint exposes persisted stage maps; State Explorer renders the trace. Build order per the investigation's Deliverable 7.
+- **Status:** in-progress
