@@ -557,6 +557,13 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
         # browse dispatcher expects JSON-encoded args so action-specific
         # options (selector, filters, clear/json flags) survive dispatch.
         return json.dumps(tool_args, ensure_ascii=False)
+    elif tool_name in ("update_goal", "get_goal"):
+        # The goal tools parse a JSON object (action/objective/revision…).
+        # Without this branch the fallback flattens the dict to
+        # "create Map the machine 3" — unparseable, so the model's own
+        # goal tool calls could never create or mutate a goal (found LIVE:
+        # the goal-idle harness's create was rejected as validation_error).
+        return json.dumps(tool_args, ensure_ascii=False)
     else:
         # Fallback: join all values
         return " ".join(str(v) for v in tool_args.values() if v)

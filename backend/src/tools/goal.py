@@ -154,6 +154,10 @@ async def update_goal(message: str) -> ToolResult:
         if action == "clear":
             store.clear(session_id)
             goal_rounds.disarm(session_id)
+            # A cleared goal owes nobody a continuation round.
+            from core.goal_idle import cancel_idle_continuation
+
+            cancel_idle_continuation(session_id)
             return ToolResult(
                 content=json.dumps({"goal": None, "activation": "disarmed"}),
                 risk=RiskLevel.LOW,
@@ -213,6 +217,11 @@ async def update_goal(message: str) -> ToolResult:
 
         if action == "complete" or action == "pause" or action == "blocked":
             goal_rounds.disarm(session_id)
+            # The model ended the deep dive: a scheduled idle round must
+            # never fire behind it.
+            from core.goal_idle import cancel_idle_continuation
+
+            cancel_idle_continuation(session_id)
         elif action == "resume":
             goal_rounds.arm(session_id)
 

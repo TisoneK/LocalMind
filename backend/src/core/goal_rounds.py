@@ -41,6 +41,11 @@ BLOCKED_AFTER_ROUNDS = 3
 _armed: set[str] = set()
 _active_rounds: dict[str, int] = {}
 _steered: set[str] = set()
+# Why the in-request round driver last stopped for a session. The idle
+# continuation driver reads this to decide whether the deep dive still wants
+# rounds after the transport ended (a steer or a pending confirmation means
+# a human is mid-decision — automatic work must stay stopped).
+_stop_reasons: dict[str, str] = {}
 
 
 def arm(session_id: str) -> None:
@@ -73,11 +78,25 @@ def note_human_steer(session_id: str) -> None:
     _steered.add(session_id)
 
 
+def has_human_steer(session_id: str) -> bool:
+    """Read-only peek: is an unconsumed human steer on record?"""
+    return session_id in _steered
+
+
 def take_human_steer(session_id: str) -> bool:
     if session_id in _steered:
         _steered.discard(session_id)
         return True
     return False
+
+
+def note_driver_stop(session_id: str, reason: str) -> None:
+    """Record why the in-request round driver stopped (idle-driver input)."""
+    _stop_reasons[session_id] = reason
+
+
+def last_driver_stop(session_id: str) -> str | None:
+    return _stop_reasons.get(session_id)
 
 
 def goal_view(goal: Goal | None, session_id: str) -> dict | None:
@@ -190,12 +209,14 @@ async def process_with_goal_rounds(
     round_number = 0
     round_message = message
     last_done: StreamChunk | None = None
+    stop_reason = "completed"
     try:
         while True:
             round_number += 1
             if round_number > 1:
                 goal = reserve_round(goal_store, session_id)
                 if goal is None:
+                    stop_reason = "stopped"
                     break
                 mark_goal_round(session_id, goal.rounds_started)
                 yield StreamChunk(
@@ -232,32 +253,39 @@ async def process_with_goal_rounds(
 
             # User intent wins at every idle point.
             if take_human_steer(session_id):
+                stop_reason = "steer"
                 break
             try:
                 if engine._abort_for(session_id).is_set():
+                    stop_reason = "abort"
                     break
             except Exception:
                 pass
 
             metadata = dict(round_done.metadata) if round_done is not None else {}
             if metadata.get("pending_write") or metadata.get("switch_to_agent"):
+                stop_reason = "pending_write"
                 break
 
             goal = goal_store.get(session_id)
             if not should_continue(goal, session_id):
                 if goal is not None and goal.phase == "active" and is_armed(session_id):
                     block_at_cap(goal_store, goal)
+                stop_reason = "stopped"
                 break
 
             if goal.rounds_started >= goal.max_rounds:
                 block_at_cap(goal_store, goal)
+                stop_reason = "stopped"
                 break
     except Exception:
         logger.exception("[goal-rounds] driver failed for session %s", session_id)
+        stop_reason = "error"
         raise
     finally:
         mark_goal_round(session_id, None)
         _steered.discard(session_id)
+        note_driver_stop(session_id, stop_reason)
 
     final_goal = goal_store.get(session_id)
     # Continuation authority is only meaningful while the goal is active. A
@@ -284,8 +312,11 @@ __all__ = [
     "build_round_prompt",
     "disarm",
     "goal_view",
+    "has_human_steer",
     "is_armed",
+    "last_driver_stop",
     "mark_goal_round",
+    "note_driver_stop",
     "note_human_steer",
     "process_with_goal_rounds",
     "reserve_round",

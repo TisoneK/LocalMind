@@ -40,6 +40,14 @@ from core.agent.loop import answer_is_internal_scaffold
 from core.config import settings
 from core.engine import Engine
 from core.error_normalizer import SOURCE_INTERNAL, normalize_error
+from core.goal_idle import (
+    cancel_idle_continuation,
+    clear_human_stop,
+    note_human_stop,
+    note_session_busy,
+    release_session_busy,
+    schedule_idle_continuation,
+)
 from core.goal_rounds import note_human_steer, process_with_goal_rounds
 from core.obs import ObsCollector
 from core.title_generator import generate_title_smart, refine_title_async
@@ -665,6 +673,14 @@ async def _event_stream(
     )
     _turn_token = bind_turn(_turn_ctx)
 
+    # The session is busy with a transport turn for this whole request, and
+    # a fresh human message clears both any scheduled idle continuation and
+    # any human-stop suppression (the human is back — their turn re-drives
+    # the deep dive through the in-request driver).
+    note_session_busy(session_id)
+    cancel_idle_continuation(session_id)
+    clear_human_stop(session_id)
+
     # ── SSE keepalive state ──────────────────────────────────────────────
     # Track the last time we sent ANY SSE data. If more than KEEPALIVE_INTERVAL_S
     # passes without data, send a comment line to prevent the client/proxy
@@ -1255,6 +1271,21 @@ async def _event_stream(
         yield _sse({"type": "done"})
 
     finally:
+        # The transport turn is over — normal end, abort, disconnect or
+        # exception. Release the busy fence first, then let the idle
+        # continuation driver pick the deep dive back up when the goal is
+        # armed and still wants rounds (a dropped connection no longer ends
+        # it; a steer, a Stop, or a pending confirmation never schedules).
+        release_session_busy(session_id)
+        try:
+            scheduled = schedule_idle_continuation(_engine, session_id, goal_store)
+            if scheduled:
+                logger.info(
+                    "[chat] goal deep dive continues on the idle driver: %s",
+                    session_id,
+                )
+        except Exception:
+            logger.debug("[chat] idle continuation schedule skipped", exc_info=True)
         # unbind the transport-level session
         # contextvar (paired with the set at the top of this generator).
         # Must run in this stable task's context — the token was created here.
@@ -1374,6 +1405,9 @@ async def abort_session(session_id: str):
     Safe to call when idle: each turn starts with a fresh (unset) event.
     """
     _engine.abort(session_id)
+    # A human pressed Stop: automatic continuation must not pick the deep
+    # dive back up (this is a cease, not a dropped connection).
+    note_human_stop(session_id)
     return {"aborted": True}
 
 
@@ -1400,8 +1434,11 @@ async def steer_session(session_id: str, message: str = Body(..., embed=True)):
             detail="Steering queue full — wait for the agent to finish a step and retry",
         )
     # A human message arrived during a goal-driven turn: the round driver
-    # yields at the next idle point instead of auto-continuing over it.
+    # yields at the next idle point instead of auto-continuing over it —
+    # and the idle driver must not pick the work back up while the human
+    # is mid-decision.
     note_human_steer(session_id)
+    note_human_stop(session_id)
     return {"accepted": True}
 
 
