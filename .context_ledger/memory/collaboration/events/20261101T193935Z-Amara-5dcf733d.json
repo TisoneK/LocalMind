@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261101T193935Z-Amara-5dcf733d",
+  "type": "claim",
+  "session": "S016",
+  "agent": "Amara",
+  "created": "2026-11-01T19:39:35Z",
+  "issue": "continuous-goal-pursuit",
+  "body": "Continuous Goal Pursuit (owner brief 2026-11-01): investigate cross-turn task continuity (1-turn-1-step evidence) + external-reference long-work handling, then build the gap",
+  "paths": ["backend/src/core/agent", "backend/src/core", "docs"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

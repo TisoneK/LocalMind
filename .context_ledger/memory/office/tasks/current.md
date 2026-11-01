@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — no session in progress
-- **Status:** idle
+- **Session:** 2026-11-01 — Amara / GLM (Z.ai sandbox)
+- **Task:** Continuous Goal Pursuit (owner brief 2026-11-01): investigate whether an objective survives individual model calls in LocalMind (the location-conversation evidence: "1 turn == 1 step"), study how the external reference handles long/heavy work, then build the continuity gap in LocalMind's own vocabulary.
+- **Status:** in-progress
