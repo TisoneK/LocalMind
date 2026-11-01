@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261101T201924Z-Amara-1545c159",
+  "type": "release",
+  "session": "S016",
+  "agent": "Amara",
+  "created": "2026-11-01T20:19:24Z",
+  "issue": "continuous-goal-pursuit",
+  "body": "Cross-turn continuity shipped (e7d72c97): the durable open-question record (record/consume/supersede/preserve, trace events, reroute lane open_question_reply, open_question TURN section, forced-clarify stand-down) + the carried objective on ordinary turns (carried_objective section + fast-path line). Investigation delivered as a review file. Live-verified 19/19 on the 8765 harness; 3840 backend + 678 frontend green.",
+  "paths": ["backend/src/core", "backend/src/storage", "backend/src/agents", "frontend/src/components", "tests", "scripts", "docs"],
+  "refs": ["e7d72c97"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
