@@ -149,9 +149,15 @@ class TestDecisionLedgerHelpers:
 
 
 class TestSummarizerDecisionSink:
+    _SKELETON_SUMMARY = (
+        "[Continuing task] The design work is underway.\n"
+        "[Decisions and constraints] (none)\n"
+        "[Open threads] (none)"
+    )
+
     """maybe_compress_history forwards preserved lines to the sink."""
 
-    def _fake_adapter(self, summary_text="concise summary"):
+    def _fake_adapter(self, summary_text=_SKELETON_SUMMARY):
         from unittest.mock import MagicMock
 
         adapter = MagicMock()

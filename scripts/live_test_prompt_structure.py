@@ -300,10 +300,15 @@ def main() -> int:
                 failures.append("no staged (second) loop call captured")
 
             # ── call 1: full render in doctrine order ──────────────────
+            # Guidance-layer allocation (the per-turn relevance budget):
+            # the capability index (TOOLS_HEAD) LEADS guidance — the
+            # conversation-or-action constraint points at it, so it must
+            # survive the conversational cut that drops style/selection/
+            # on-demand behind it.
             positions = {h: full.find(h) for h in (SAFETY_HEAD, STYLE_HEAD, TOOLS_HEAD, CORE_HEAD)}
             if not all(p >= 0 for p in positions.values()):
                 failures.append(f"a section head is missing from the full prompt: {positions}")
-            elif not positions[SAFETY_HEAD] < positions[STYLE_HEAD] < positions[TOOLS_HEAD] < positions[CORE_HEAD]:
+            elif not positions[SAFETY_HEAD] < positions[TOOLS_HEAD] < positions[STYLE_HEAD] < positions[CORE_HEAD]:
                 failures.append(f"doctrine order violated: {positions}")
             for rule in (
                 "Multi-part requests are not done until EVERY part is answered",
