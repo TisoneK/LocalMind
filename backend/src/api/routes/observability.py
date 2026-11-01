@@ -180,3 +180,37 @@ async def get_observability(session_id: str):
     # impossible. With every turn (incl. trivial "Hi") now storing an
     # observation, this branch only fires for pruned sessions (>200).
     return ObservabilityData(session_id=session_id)
+
+
+@router.get("/observability/{session_id}/traces")
+async def list_turn_traces(session_id: str):
+    """List the session's retained per-turn execution traces (newest first).
+
+    The durable per-turn event stream (B-2026-11-01-26): each entry is one
+    request's recorded execution — turn id, wall-clock bounds, event count.
+    Retention keeps the newest turns per session; older traces prune on
+    write."""
+    engine = _get_engine()
+    try:
+        traces = engine._store.list_turn_traces(session_id)
+    except Exception:
+        traces = []
+    return {"sessionId": session_id, "traces": traces}
+
+
+@router.get("/observability/{session_id}/trace/{turn_id}")
+async def get_turn_trace(session_id: str, turn_id: str):
+    """Replay one turn's persisted event stream, oldest first.
+
+    This is the brief's central ask made real: open any conversation,
+    inspect its complete execution trajectory, and explain exactly what
+    happened at every stage — routing decision, context assembly, per-call
+    model boundaries (submit → response → first byte → completed), tool
+    work, gates, replans — from the record, not from inference."""
+    engine = _get_engine()
+    trace = engine._store.get_turn_trace(session_id, turn_id)
+    if trace is None:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="trace not found")
+    return trace

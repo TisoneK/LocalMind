@@ -153,6 +153,36 @@ describe('sessionsToJson', () => {
     const doc = JSON.parse(sessionsToJson([{ session: session(), history }]));
     expect(doc.version).toBe(3);
   });
+
+  it('references the durable execution trace without inlining it (B-2026-11-01-26)', () => {
+    const traced = sessionsToJson([
+      {
+        session: session(),
+        history: [
+          {
+            ...history[1],
+            performance: {
+              ...history[1].performance,
+              traceId: 'turn-abc-123',
+            },
+          },
+        ],
+      },
+    ]);
+    const doc = JSON.parse(traced);
+    // The export carries a REFERENCE to the per-turn event stream — the
+    // heavy trace itself lives behind the API, keyed by sessionId + turnId.
+    expect(doc.chats[0].messages[0].traceRef).toEqual({
+      turnId: 'turn-abc-123',
+      sessionId: 's1',
+    });
+
+    // No trace id → no reference (turns recorded before the capability).
+    const untraced = JSON.parse(
+      sessionsToJson([{ session: session(), history }])
+    );
+    expect(untraced.chats[0].messages[0].traceRef).toBeUndefined();
+  });
 });
 
 describe('sessionsToJson v3 — full-fidelity export', () => {

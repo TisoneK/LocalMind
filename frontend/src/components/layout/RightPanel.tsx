@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Terminal, Brain, PanelRightClose, PanelRight, Settings } from 'lucide-react';
+import { Terminal, Brain, PanelRightClose, PanelRight, Settings, Route } from 'lucide-react';
 import { TerminalLine, MemoryFact, PerformanceMetrics as PerformanceMetricsType, CompletionSuggestion, SessionStats, AgentRun, TodoItem, ActionItem, DiffData } from '@/types';
 import { TerminalPanel } from '@/components/panels/TerminalPanel';
 import { ActivityRail } from '@/components/panels/ActivityRail';
 import { MemoryTab } from '@/components/panels/MemoryTab';
 import { PerformanceMetrics } from '@/components/panels/PerformanceMetrics';
+import { TraceView } from '@/components/panels/TraceView';
 import { SettingsModal } from '@/components/shared/SettingsModal';
 
 interface RightPanelProps {
@@ -78,7 +79,9 @@ interface RightPanelProps {
 
 // The Observe tab and its Intent Classification / Agent Pipeline
 // visualization are retired. The Agents tab is the canonical live surface.
-type RightTab = 'terminal' | 'memory' | 'agents';
+// The Trace tab renders the durable per-turn execution record
+// (B-2026-11-01-26): the raw event stream of a finished request.
+type RightTab = 'terminal' | 'agents' | 'memory' | 'trace';
 
 export function RightPanel({
   terminalLines,
@@ -240,6 +243,7 @@ export function RightPanel({
     { id: 'terminal', label: 'Terminal', icon: <Terminal className={iconSize} /> },
     { id: 'agents', label: 'Agents', icon: <PanelRight className={iconSize} /> },
     { id: 'memory', label: 'Memory', icon: <Brain className={iconSize} /> },
+    { id: 'trace', label: 'Trace', icon: <Route className={iconSize} /> },
   ];
 
   if (collapsed) {
@@ -351,6 +355,7 @@ export function RightPanel({
             onRefresh={onMemoryRefresh}
           />
         )}
+        {activeTab === 'trace' && <TraceView sessionId={chatSessionId} />}
       </div>
 
       {/* Performance metrics — session cumulative (stats split) */}

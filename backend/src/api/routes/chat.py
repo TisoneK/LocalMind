@@ -650,8 +650,20 @@ async def _event_stream(
         reset_current_session,
         set_current_session,
     )
+    from core.turn_trace import TurnContext, bind_turn, new_turn_id, reset_turn
 
     _ws_token = set_current_session(session_id)
+
+    # Bind the request's execution-trace identity (B-2026-11-01-26) in the
+    # same stable task that bound the session: turn_id is minted at the
+    # transport boundary and carried by ContextVar so the runtime, the loop
+    # and the adapters stamp their events (routing decision, model-call
+    # boundaries) with the turn they serve. Persisted in the finally below —
+    # including on abort/exception, where the trace is most valuable.
+    _turn_ctx = TurnContext(
+        turn_id=new_turn_id(), session_id=session_id, collector=obs
+    )
+    _turn_token = bind_turn(_turn_ctx)
 
     # ── SSE keepalive state ──────────────────────────────────────────────
     # Track the last time we sent ANY SSE data. If more than KEEPALIVE_INTERVAL_S
@@ -1240,6 +1252,28 @@ async def _event_stream(
             reset_current_session(_ws_token)
         except Exception:
             pass  # Never let cleanup crash the SSE stream
+        # Persist the durable per-turn execution trace (B-2026-11-01-26):
+        # the request collector's full non-destructive history lands in the
+        # turn_traces store keyed by this turn's id — the stream itself, not
+        # a projection — so a finished turn can be replayed. Runs on every
+        # ending (normal, abort, exception); a crashed turn's trace is the
+        # most valuable one. Never let the write break the SSE cleanup.
+        try:
+            _written = _engine._store.append_turn_trace(
+                session_id, _turn_ctx.turn_id, obs.history()
+            )
+            logger.info(
+                "[chat] turn trace persisted: %s (%d events)",
+                _turn_ctx.turn_id,
+                _written,
+            )
+        except Exception:
+            logger.debug("[chat] turn trace persist skipped", exc_info=True)
+        finally:
+            try:
+                reset_turn(_turn_token)
+            except Exception:
+                pass  # Never let cleanup crash the SSE stream
         # GUARANTEE: If the generator was interrupted (client disconnect,
         # exception, etc.) before engine.process() could persist the
         # assistant message, save whatever response text we accumulated.

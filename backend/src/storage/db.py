@@ -40,6 +40,13 @@ _FAILURE_STOPWORDS = {
 # stays bounded and stale secrets age out of recall.
 _FAILURE_RETENTION_DAYS = 90
 
+# Durable per-turn trace bounds (B-2026-11-01-26). A single event's data
+# is capped with an explicit _truncated marker (tool events already bound
+# their raw output; this is the defensive backstop). Retention keeps the
+# newest N turns per session — old traces prune on write, never mid-read.
+_TRACE_EVENT_DATA_CAP_CHARS = 32_000
+TRACE_TURNS_RETAINED = 30
+
 
 
 _SCHEMA = """
@@ -342,6 +349,37 @@ class SessionStore:
                         snapshot    TEXT,
                         updated_at  REAL
                     )
+                    """
+                )
+        except sqlite3.OperationalError:
+            pass
+        # Durable per-turn execution trace (B-2026-11-01-26): the raw
+        # ObsEvent stream of each request, keyed by turn_id + seq. The
+        # projections (agent_runs, agent_phases, injected_items) stay folds
+        # of the in-memory stream; this table is the stream itself, so a
+        # finished turn can be replayed and every prompt token accounted
+        # for. Bounded: only the newest TRACE_TURNS_RETAINED turns per
+        # session are kept (pruned on write); deleting a session deletes
+        # its traces (cascade).
+        try:
+            with self._conn() as conn:
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS turn_traces (
+                        turn_id    TEXT    NOT NULL,
+                        session_id TEXT    NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                        seq        INTEGER NOT NULL,
+                        ts         INTEGER NOT NULL,
+                        type       TEXT    NOT NULL,
+                        data       TEXT    NOT NULL,
+                        PRIMARY KEY (turn_id, seq)
+                    )
+                    """
+                )
+                conn.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_turn_traces_session
+                    ON turn_traces(session_id, turn_id, seq)
                     """
                 )
         except sqlite3.OperationalError:
@@ -1088,6 +1126,127 @@ class SessionStore:
                     time.time(),
                 ),
             )
+
+    # ── Durable per-turn execution trace (B-2026-11-01-26) ────
+
+    def append_turn_trace(
+        self, session_id: str, turn_id: str, events: list
+    ) -> int:
+        """Persist one request's full event stream verbatim (turn_id + seq).
+
+        ``events`` are ObsEvent objects (the request collector's
+        non-destructive history). Each event lands as its own row — the
+        stream itself, not a projection — with its emit-time ``ts``.
+        Oversized event payloads are bounded with an explicit
+        ``_truncated`` marker rather than dropped silently. Only the
+        newest TRACE_TURNS_RETAINED turns per session survive (older
+        turns' rows are pruned after the write).
+
+        Returns the number of events written.
+        """
+        if not events:
+            return 0
+        self.ensure_session(session_id)
+        rows = []
+        for seq, evt in enumerate(events):
+            data = evt.data if isinstance(evt.data, dict) else {"value": evt.data}
+            try:
+                payload = json.dumps(data, default=str, ensure_ascii=False)
+            except (TypeError, ValueError):
+                payload = json.dumps({"repr": str(data)[:2000]})
+            if len(payload) > _TRACE_EVENT_DATA_CAP_CHARS:
+                payload = json.dumps(
+                    {
+                        "_truncated": True,
+                        "original_chars": len(payload),
+                        "preview": payload[:_TRACE_EVENT_DATA_CAP_CHARS],
+                    },
+                    ensure_ascii=False,
+                )
+            rows.append((turn_id, session_id, seq, int(evt.ts), evt.type, payload))
+        with self._conn() as conn:
+            conn.executemany(
+                """
+                INSERT OR REPLACE INTO turn_traces(turn_id, session_id, seq, ts, type, data)
+                VALUES(?, ?, ?, ?, ?, ?)
+                """,
+                rows,
+            )
+            # Bound the store: keep only the newest N turns per session.
+            conn.execute(
+                """
+                DELETE FROM turn_traces
+                WHERE session_id = ?
+                  AND turn_id NOT IN (
+                      SELECT turn_id FROM turn_traces
+                      WHERE session_id = ?
+                      GROUP BY turn_id
+                      ORDER BY MIN(ts) DESC
+                      LIMIT ?
+                  )
+                """,
+                (session_id, session_id, TRACE_TURNS_RETAINED),
+            )
+        return len(rows)
+
+    def get_turn_trace(self, session_id: str, turn_id: str) -> Optional[dict]:
+        """Replay one turn's persisted event stream, oldest first.
+
+        Returns None when no trace exists for this turn (older than the
+        retention window or recorded before the trace capability)."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT seq, ts, type, data FROM turn_traces
+                WHERE session_id = ? AND turn_id = ?
+                ORDER BY seq ASC
+                """,
+                (session_id, turn_id),
+            ).fetchall()
+        if not rows:
+            return None
+        events = []
+        for row in rows:
+            events.append(
+                {
+                    "seq": row["seq"],
+                    "ts": row["ts"],
+                    "type": row["type"],
+                    "data": self._decode_json(row["data"]) or {},
+                }
+            )
+        return {
+            "turnId": turn_id,
+            "sessionId": session_id,
+            "eventCount": len(events),
+            "startedTs": events[0]["ts"],
+            "lastTs": events[-1]["ts"],
+            "events": events,
+        }
+
+    def list_turn_traces(self, session_id: str) -> list[dict]:
+        """List the session's retained turn traces, newest first."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT turn_id, MIN(ts) AS started_ts, MAX(ts) AS last_ts,
+                       COUNT(*) AS event_count
+                FROM turn_traces
+                WHERE session_id = ?
+                GROUP BY turn_id
+                ORDER BY started_ts DESC
+                """,
+                (session_id,),
+            ).fetchall()
+        return [
+            {
+                "turnId": row["turn_id"],
+                "startedTs": row["started_ts"],
+                "lastTs": row["last_ts"],
+                "eventCount": row["event_count"],
+            }
+            for row in rows
+        ]
 
     def get_observation(self, session_id: str) -> Optional[dict]:
         """Return the latest persisted observation, or None.

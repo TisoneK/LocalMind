@@ -1758,6 +1758,47 @@ async confirmWrite(
       // The useModels/useHealth hooks will retry and sync once it's up.
     }
   }
+
+  // ── Durable per-turn execution trace (B-2026-11-01-26) ────────────────
+
+  /** List the session's retained turn traces (newest first). */
+  async listTurnTraces(
+    sessionId: string
+  ): Promise<{ sessionId: string; traces: TraceSummary[] }> {
+    return this.request(`/api/observability/${encodeURIComponent(sessionId)}/traces`);
+  }
+
+  /** Replay one turn's persisted event stream, oldest first. */
+  async getTurnTrace(sessionId: string, turnId: string): Promise<TurnTrace> {
+    return this.request(
+      `/api/observability/${encodeURIComponent(sessionId)}/trace/${encodeURIComponent(turnId)}`
+    );
+  }
+}
+
+/** One retained turn trace — a request's recorded execution bounds. */
+export interface TraceSummary {
+  turnId: string;
+  startedTs: number;
+  lastTs: number;
+  eventCount: number;
+}
+
+export interface TraceEventRecord {
+  seq: number;
+  ts: number;
+  type: string;
+  data: Record<string, unknown>;
+}
+
+/** The full per-turn event stream (the record, not a projection). */
+export interface TurnTrace {
+  turnId: string;
+  sessionId: string;
+  eventCount: number;
+  startedTs: number;
+  lastTs: number;
+  events: TraceEventRecord[];
 }
 
 // ─── Exports ───────────────────────────────────────────────────────────

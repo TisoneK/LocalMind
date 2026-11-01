@@ -168,6 +168,18 @@ export interface ChatMessage {
      *  a chat may switch models mid-way, so identity is per turn). */
     model?: string;
     provider?: string;
+    /** Per-stage wall-clock stamps of the turn-close window (persisted with
+     *  the reply; restored on reload). */
+    turnStages?: Record<string, number>;
+    /** Per-category composition of the last model call's context (system /
+     *  history / tool results / schemas...), scaled to the reported total. */
+    contextBreakdown?: Record<string, number>;
+    /** Post-answer lane records (acceptance gate, completion judge,
+     *  reflection) that ran between the last token and the terminal done. */
+    postAnswerLanes?: Record<string, unknown>;
+    /** Durable execution-trace link (B-2026-11-01-26): the full per-turn
+     *  event stream lives in the backend trace store under this id. */
+    traceId?: string;
   };
   /** Best-of-N editor candidates, rendered
    * as an expandable section in the message. Populated from the tool result

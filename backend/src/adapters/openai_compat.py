@@ -34,6 +34,47 @@ import httpx
 from adapters.base import BaseAdapter
 from core.cache import TTLCache
 from core.models import StreamChunk
+from core.turn_trace import current_model_call, start_model_call
+
+
+def _watched_stream(
+    inner: AsyncIterator[StreamChunk], watch
+) -> AsyncIterator[StreamChunk]:
+    """Stamp first-byte / completed / failed on a returned inner stream.
+
+    chat_with_tools returns its text-response generator unconsumed — the
+    caller (agent loop) drains it later. Wrapping it here stamps the
+    boundary milestones when the bytes actually flow, and forwards every
+    chunk untouched."""
+
+    async def _gen() -> AsyncIterator[StreamChunk]:
+        _last_usage: dict | None = None
+        try:
+            async for chunk in inner:
+                if chunk.usage:
+                    _last_usage = dict(chunk.usage)
+                if chunk.thinking or chunk.text:
+                    watch.first_byte()
+                yield chunk
+                if chunk.error:
+                    watch.failed(chunk.error)
+                    return
+                if chunk.done:
+                    watch.completed(chunk.usage)
+                    return
+            watch.completed(_last_usage)
+        except Exception as _stream_exc:
+            watch.failed(str(_stream_exc))
+            raise
+        finally:
+            # A consumer that stops reading mid-stream (loop buffering
+            # rules, gates, aborts) abandons this generator via GeneratorExit
+            # — close the watch so the call never sits 'started but never
+            # closed' in the durable record. completed() is idempotent.
+            if not watch.closed:
+                watch.completed(_last_usage)
+
+    return _gen()
 
 if TYPE_CHECKING:
     # ToolCallResult is defined in adapters.ollama. Imported only under
@@ -1310,6 +1351,16 @@ class OpenAICompatAdapter(BaseAdapter):
                 timeout=req_timeout,
             )
             response = await self._client.send(request, stream=True)
+            # Trace hooks (B-2026-11-01-26): the provider's response moment
+            # and every 429 retry become durable events on the active call's
+            # watch. current_model_call() is None outside a request context
+            # (CLI, background) — the stamp is then a no-op.
+            _trace_watch = current_model_call()
+            if _trace_watch is not None:
+                if response.status_code == 429:
+                    _trace_watch.retry(response.status_code, attempt)
+                else:
+                    _trace_watch.response_received(response.status_code)
 
             if response.status_code != 429:
                 # Some OpenAI-compatible providers reject optional fields
@@ -1577,12 +1628,36 @@ class OpenAICompatAdapter(BaseAdapter):
             return
 
         # Build payload based on provider
-        if self._provider_key == "anthropic":
-            async for chunk in self._chat_anthropic(messages, temperature, timeout):
+        # Adapter-boundary trace stamps (B-2026-11-01-26): every model call
+        # records submitted → response → first byte → completed/failed with
+        # a payload fingerprint (sizes + hash, never contents). No-op when
+        # no request context is bound (CLI, background jobs).
+        _watch = start_model_call(
+            provider=self._provider_name,
+            model=self._model,
+            intent=str(intent),
+            mode="chat",
+            messages=messages,
+        )
+        try:
+            if self._provider_key == "anthropic":
+                _inner = self._chat_anthropic(messages, temperature, timeout)
+            else:
+                _inner = self._chat_openai_style(messages, temperature, timeout)
+            async for chunk in _inner:
+                if chunk.thinking or chunk.text:
+                    _watch.first_byte()
                 yield chunk
-        else:
-            async for chunk in self._chat_openai_style(messages, temperature, timeout):
-                yield chunk
+                if chunk.error:
+                    _watch.failed(chunk.error)
+                    return
+                if chunk.done:
+                    _watch.completed(chunk.usage)
+                    return
+            _watch.completed()
+        except Exception as _chat_exc:
+            _watch.failed(str(_chat_exc))
+            raise
 
     def _is_anthropic_family(self) -> bool:
         """True when the active model is a Claude/Anthropic model (possibly via
@@ -1617,6 +1692,44 @@ class OpenAICompatAdapter(BaseAdapter):
         return out
 
     async def chat_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        temperature: float = 0.7,
+        intent: str = "chat",
+        tool_choice: str | dict | None = None,
+    ) -> "AsyncIterator[StreamChunk] | ToolCallResult":
+        """Send messages with tool definitions — trace-wrapped.
+
+        The wrapper only owns the per-call boundary stamps (B-2026-11-01-26):
+        submitted → response → first byte → completed/failed, plus a payload
+        fingerprint (sizes + hash, never contents). All model logic lives in
+        ``chat_with_tools_impl`` unchanged.
+        """
+        _watch = start_model_call(
+            provider=self._provider_name,
+            model=self._model,
+            intent=str(intent),
+            mode="tools",
+            messages=messages,
+            tools=tools,
+        )
+        try:
+            result = await self.chat_with_tools_impl(
+                messages, tools, temperature, intent, tool_choice
+            )
+        except Exception as _tools_exc:
+            _watch.failed(str(_tools_exc))
+            raise
+        # Text responses come back as an async generator the caller consumes
+        # AFTER this coroutine returns — wrap it so first-byte and completion
+        # are stamped when the stream actually flows, not when it was created.
+        if hasattr(result, "__aiter__"):
+            return _watched_stream(result, _watch)
+        _watch.completed(getattr(result, "usage", None))
+        return result
+
+    async def chat_with_tools_impl(
         self,
         messages: list[dict],
         tools: list[dict],
@@ -1844,6 +1957,12 @@ class OpenAICompatAdapter(BaseAdapter):
 
                 try:
                     obj = json.loads(data)
+                    # First provider data line parsed — the first-byte moment
+                    # for tool-call responses (the text path stamps from the
+                    # returned stream instead).
+                    _p1_watch = current_model_call()
+                    if _p1_watch is not None:
+                        _p1_watch.first_byte()
                     usage_metadata.update(_normalize_usage(obj.get("usage")))
                     choice = obj.get("choices", [{}])[0]
                     delta = choice.get("delta", {})

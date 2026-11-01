@@ -51,6 +51,7 @@ from core.parent_kernel import ParentKernel, active_parent_model
 from core.parent_session import ParentSession
 from core.safety_gate import check as safety_check
 from core.session_context import SessionContextManager
+from core.turn_trace import current_turn_id
 from core.workspace_state import snapshot as workspace_snapshot
 from storage.db import SessionStore
 from tools import available_tools
@@ -917,6 +918,12 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         safe, user_msg, debug_label = safety_check(message)
         if not safe:
             collector.emit("safety_blocked", reason=debug_label[:120])
+            # Routing decision — including the negative ones (B-2026-11-01-26):
+            # which path a turn took and why is a first-class record, never a
+            # log line.
+            collector.emit(
+                "path_selected", path="blocked", reason=debug_label[:120], classifier="safety_check"
+            )
             yield StreamChunk(text=user_msg, done=False)
             yield StreamChunk(text="", done=True)
             return
@@ -978,6 +985,12 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 _memory_intent.content[:80],
             )
             collector.emit("agent_loop_start", intent="memory_op")
+            collector.emit(
+                "path_selected",
+                path="memory_write",
+                reason="explicit memory request is an action, not a suggestion",
+                classifier="memory_intent",
+            )
             collector.emit(
                 "stage_timing", stage="intent_classify", latency_ms=0, status="memory_write"
             )
@@ -1207,6 +1220,12 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         if _memory_intent.is_read and not _pre_init_override.mode:
             logger.info("[agent-runtime] deterministic memory-read")
             collector.emit("agent_loop_start", intent="memory_op")
+            collector.emit(
+                "path_selected",
+                path="memory_read",
+                reason="memory question answers from the store, not the conversation",
+                classifier="memory_intent",
+            )
             for _stage, _status in (
                 ("intent_classify", "memory_read"),
                 ("tool_select", "skipped"),
@@ -1257,6 +1276,12 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 _memory_intent.content[:80],
             )
             collector.emit("agent_loop_start", intent="memory_op")
+            collector.emit(
+                "path_selected",
+                path="memory_delete",
+                reason="forget request must not wait on the model's tool choice",
+                classifier="memory_intent",
+            )
             for _stage, _status in (
                 ("intent_classify", "memory_delete"),
                 ("tool_select", "skipped"),
@@ -1417,6 +1442,17 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 logger.info(
                     "[agent-runtime] fast-path(%s) for %r", _path, message[:60]
                 )
+                # Routing decision on the record (B-2026-11-01-26): the
+                # investigation's Deliverable 5(b) — the 564-vs-6K prompt
+                # spread was THIS decision being invisible. Which lane ran
+                # and why now lands in the durable trace.
+                collector.emit(
+                    "path_selected",
+                    path="fast_path",
+                    lane=_path,
+                    reason="deterministic conversational detector",
+                    classifier="trivial_input",
+                )
                 # Emit stage_timings matching the test contract
                 # (intent_classify skipped — no classifier runs; tool_select/
                 # execute skipped — no tools; generate done with real latency
@@ -1468,13 +1504,12 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # model is thinking/generating slowly." The owner-reported
                 # bankofai glm-5.3-flash stall (107s before the first byte)
                 # read as silent pondering because both looked identical.
-                collector.emit(
-                    "provider_call_start",
-                    provider=settings.localmind_adapter,
-                    model=active_parent_model() or "",
-                    started_at=time.monotonic(),
-                )
-                _fast_first_byte_seen = False
+                # These stamps now come from the adapter-level ModelCallWatch
+                # (core/turn_trace.py) — provider_call_start/first_byte fire
+                # at the adapter boundary on EVERY path (loop turns included,
+                # which previously had neither and could not stall-detect),
+                # with the epoch-ms anchor beside the heartbeat's monotonic
+                # clock. No manual emission here anymore.
                 if _is_trivial:
                     _stream = trivial_response(
                         message,
@@ -1500,11 +1535,12 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                         first_user_message=_recall_first_user if _is_recall else "",
                     )
                 async for _chunk in _stream:
-                    if not _fast_first_byte_seen and (_chunk.thinking or _chunk.text):
+                    if _chunk.thinking or _chunk.text:
                         # The provider answered — past this point a heartbeat
                         # silence means slow GENERATION, not a stalled queue.
-                        _fast_first_byte_seen = True
-                        collector.emit("provider_first_byte")
+                        # (Stamped at the adapter boundary by the watch; this
+                        # consumer loop no longer emits.)
+                        pass
                     if _chunk.error:
                         # A provider death on the fast path must surface like
                         # every other path — the SSE boundary normalizes it
@@ -1633,6 +1669,11 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                             # provider answered this real (non-canned) turn.
                             "model": active_parent_model() or "(default)",
                             "provider": settings.localmind_adapter,
+                            # Execution-trace link (B-2026-11-01-26): the
+                            # durable event stream for this request lives in
+                            # the turn_traces store under this id; the export
+                            # references it instead of inlining the stream.
+                            "trace_id": current_turn_id() or "",
                         }
                     ),
                 )
@@ -1708,6 +1749,21 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # runs max(history, memory, parent_session, adapter_prime) in parallel.
         # The user sees the first thinking token as soon as the LLM's first
         # chunk arrives, with no serial DB round-trips in between.
+        # The turn took the parent-agent loop — record the routing decision
+        # (B-2026-11-01-26): every path decision, including this default one,
+        # lands in the durable trace with the classifier that failed to claim
+        # the turn.
+        collector.emit(
+            "path_selected",
+            path="parent_loop",
+            reason=(
+                f"pre-init override mode={_pre_init_override.mode}"
+                if _pre_init_override.mode
+                else "no deterministic lane claimed the turn"
+            ),
+            classifier="trivial_input",
+        )
+
         asyncio.create_task(
             self._persist_user_safe(
                 session_id, message,
@@ -1828,6 +1884,11 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
 
         # Start the concurrent task FIRST — before cwd sync + adapter setup.
         nonessential_task = asyncio.create_task(_gather_nonessential())
+        # Context-assembly boundary (B-2026-11-01-26): the gather is one of
+        # the invisible pre-first-token stages — stamp its start and, below,
+        # its completion with the source sizes so a turn's context cost is
+        # attributable after the fact.
+        collector.emit("context_assembly_started", phase="turn_init")
 
         # Terminal/cwd sync — fast, runs while the concurrent task is already
         # doing DB reads + memory retrieval in the background.
@@ -1884,6 +1945,13 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             parent_session = ParentSession(session_id=session_id)
 
         collector.emit("agent_context_ready", memory_facts=len(memory_facts), attachment=bool(attachment))
+        collector.emit(
+            "context_assembly_completed",
+            phase="turn_init",
+            history_messages=len(history),
+            memory_facts=len(memory_facts),
+            attachment=bool(attachment),
+        )
         self._metrics.start_request()
         clock = _StageClock(collector)
         clock.mark("intent_classify", 0, "skipped")
@@ -2363,6 +2431,16 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # Turn-close attribution: per-stage wall-clock stamps so a
                 # reloaded conversation can attribute the turn-close window.
                 "turn_stages": dict(_merged_stages),
+                # Wire-only no more (B-2026-11-01-26): the per-call context
+                # composition and the post-answer lane records persist with
+                # the turn so a finished turn is fully accountable.
+                "context_breakdown": dict(usage.get("context_breakdown") or {}),
+                "post_answer_lanes": dict(usage.get("post_answer_lanes") or {}),
+                # Execution-trace link (B-2026-11-01-26): the durable event
+                # stream for this request lives in the turn_traces store
+                # under this id; the export references it instead of
+                # inlining the stream.
+                "trace_id": current_turn_id() or "",
             },
             agent_runs=agent_runs,
             agent_phases=agent_phases,

@@ -3176,6 +3176,19 @@ class AgentLoop:
                         )
         else:
             _plan_steps = []
+            # Never-attempted on the record (B-2026-11-01-26): planning
+            # deliberately did not run for this turn — say which gate kept
+            # it out, so a skipped stage is never mistaken for a crash.
+            if _obs:
+                _obs.emit(
+                    "stage_skipped",
+                    stage="planning",
+                    reason=(
+                        "planning gate did not admit this turn "
+                        "(no agent intent / direct tool result / planning "
+                        "disabled / planning already skipped)"
+                    ),
+                )
 
         # First-class task state — created once per turn when
         # there is a contract (criteria) or a plan. The full block (objective
@@ -3852,6 +3865,15 @@ class AgentLoop:
                     _consult_inflight.start()
             except Exception as _thx:  # never let the Thinker break a turn
                 logger.warning("[agent.loop] first-tool Thinker consult skipped: %s", _thx)
+                # Attempted-vs-never-attempted on the record (B-2026-11-01-26):
+                # the consult fired (agent_thinker_start is out) but produced
+                # no analysis — distinguishable from a consult that never ran.
+                if _obs:
+                    _obs.emit(
+                        "stage_skipped",
+                        stage="thinker_consult",
+                        reason=f"consult crashed before analysis: {_thx}"[:300],
+                    )
 
         if initial_tool_result:
             safe_initial = _filter_tool_injection(initial_tool_result.content)
@@ -4037,6 +4059,16 @@ class AgentLoop:
         _divergent_stop = False  # divergent tool budget broke the loop
         for iteration in range(_iter_hard_cap):
             trace.iterations_used = iteration + 1
+            # Per-iteration assembly boundary (B-2026-11-01-26): the
+            # iteration's prompt grows through plan/context/injections and
+            # the staging cuts — stamp the window so the per-call payload is
+            # attributable (completed below, beside the payload breakdown).
+            if _obs:
+                _obs.emit(
+                    "context_assembly_started",
+                    phase="iteration",
+                    iteration=iteration + 1,
+                )
 
             # Done-rule: nothing is owed on a call that never answered. If an
             # earlier iteration left an assistant tool call without a result
@@ -4573,6 +4605,27 @@ class AgentLoop:
             except Exception:
                 logger.debug("[agent.loop] context breakdown failed", exc_info=True)
                 _breakdown_est = None
+            if _obs:
+                _completed_fields = dict(
+                    phase="iteration",
+                    iteration=iteration + 1,
+                    messages=len(iteration_messages),
+                    tools=len(_iter_tools),
+                    system_chars=(
+                        len(iteration_messages[0].get("content") or "")
+                        if iteration_messages
+                        and iteration_messages[0].get("role") == "system"
+                        else 0
+                    ),
+                )
+                if _breakdown_est is not None:
+                    try:
+                        _completed_fields["estimated_prompt_tokens"] = int(
+                            sum(_breakdown_est.values())
+                        )
+                    except (TypeError, ValueError):
+                        pass
+                _obs.emit("context_assembly_completed", **_completed_fields)
             try:
                 _call = asyncio.ensure_future(
                     asyncio.wait_for(

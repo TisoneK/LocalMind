@@ -187,6 +187,18 @@ async def get_history(session_id: str):
                 # this turn, persisted with the reply's metrics.
                 "model": metrics.get("model") or None,
                 "provider": metrics.get("provider") or None,
+                # Persisted-but-unreturned no more (B-2026-11-01-26): the
+                # cache/call counters, the per-stage stage map, the per-call
+                # context composition, the post-answer lane records and the
+                # execution-trace link now ride the history payload so a
+                # reloaded conversation (and the JSON export) can account
+                # for the whole turn.
+                "cachedTokens": metrics.get("cached_tokens") or None,
+                "llmCalls": metrics.get("llm_calls") or None,
+                "turnStages": metrics.get("turn_stages") or None,
+                "contextBreakdown": metrics.get("context_breakdown") or None,
+                "postAnswerLanes": metrics.get("post_answer_lanes") or None,
+                "traceId": metrics.get("trace_id") or None,
             }
             # "Thought for Xs" — the active reasoning time the live UI
             # accumulated; restored so the thinking header reads the same
