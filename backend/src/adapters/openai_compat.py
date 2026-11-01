@@ -347,6 +347,16 @@ def _audit_record(
             "adapter": adapter_name, "model": model, "intent": intent,
             "call": call_kind, **b,
         }
+        # Request-derivation linkage (G7): the same content-free fingerprint
+        # the durable trace's model_call_started carries, so an audit line
+        # can be MATCHED to its trace call by hash — the audit dump then
+        # byte-verifies what the trace only fingerprints.
+        try:
+            from core.turn_trace import payload_fingerprint
+
+            rec.update(payload_fingerprint(messages, tools))
+        except Exception:  # linkage is best-effort; audit must never break a call
+            pass
         print(
             "[prompt-audit] {adapter}/{model} {call} intent={intent} "
             "system={system} tools={tools} history={history} current={current} "

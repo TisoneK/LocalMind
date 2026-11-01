@@ -100,3 +100,63 @@ SECTION_SKILL_FRAGMENT = "skill_fragment"  # 1160
 SECTION_EXPERT_PERSONA = "expert_persona"  # 1170
 SECTION_EXECUTION_PLAN = "execution_plan"  # 1190
 SECTION_ROUTING_HINT = "routing_hint"  # 1200
+
+# ── The machine-readable allocation table ───────────────────────────────────
+# name → order slot, for every name above. This is the table the payload
+# deriver (core/agent/trace_derive.py) verifies the durable record against:
+# a record whose sections render in a different order than this table is an
+# assembly drift the deriver flags. Registration sites take their slot from
+# the comment beside each constant; a registration that drifts from this
+# table shows up as a derivation order mismatch on the record — the drift
+# cannot hide. (The registry enforces layer RANGES at construction; this
+# table pins the exact slots the surfaces share.)
+
+SECTION_SLOTS: dict[str, int] = {
+    # STATIC — parent (native bootstrap) execution prompt
+    "identity": 10,
+    "conversation_or_action": 110,
+    "act_not_announce": 120,
+    "multi_part_completion": 130,
+    "safety_grounding": 140,
+    "agent_playbook": 210,
+    "system_facts": 220,
+    "user_context_deduced": 230,
+    "user_identity_stated": 240,
+    "memory_weave": 290,
+    "tool_index": 400,
+    "style_examples": 410,
+    "selection_hints": 420,
+    "on_demand_loading": 430,
+    # STATIC — scoped execution-agent prompt
+    "critical_rules": 110,
+    "safety_check_state": 120,
+    "tool_list": 310,
+    "verify_results": 400,
+    "completion_enforcement": 410,
+    "tool_argument_rules": 420,
+    "thinking_and_responding": 430,
+    "response_formatting": 440,
+    "iteration_budget": 449,
+    # STATIC — chat-surface prompt
+    "conversation_contract": 110,
+    "anti_fabrication": 120,
+    "time_sensitive_data": 130,
+    "general_rules": 140,
+    "thinking_depth": 400,
+    # TURN band
+    "current_intent": 1010,
+    "carried_objective": 1020,
+    "environment": 1050,
+    "memory_facts": 1060,
+    "intent_history": 1065,
+    "workspace_state": 1070,
+    "todo_state": 1080,
+    "goal_route": 1090,
+    "open_question": 1095,
+    "task_state": 1100,
+    "transcript_focus": 1110,
+    "skill_fragment": 1160,
+    "expert_persona": 1170,
+    "execution_plan": 1190,
+    "routing_hint": 1200,
+}

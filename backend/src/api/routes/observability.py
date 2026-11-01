@@ -7,6 +7,7 @@ was removed because it leaked another session's data.
 
 from __future__ import annotations
 
+import json
 from typing import Any, List, Optional
 
 from fastapi import APIRouter
@@ -199,18 +200,57 @@ async def list_turn_traces(session_id: str):
 
 
 @router.get("/observability/{session_id}/trace/{turn_id}")
-async def get_turn_trace(session_id: str, turn_id: str):
+async def get_turn_trace(session_id: str, turn_id: str, derive: bool = False):
     """Replay one turn's persisted event stream, oldest first.
 
     This is the brief's central ask made real: open any conversation,
     inspect its complete execution trajectory, and explain exactly what
     happened at every stage — routing decision, context assembly, per-call
     model boundaries (submit → response → first byte → completed), tool
-    work, gates, replans — from the record, not from inference."""
+    work, gates, replans — from the record, not from inference.
+
+    ``?derive=1`` adds the request-derivation report (G7): what each model
+    call's payload was composed of, re-derived from the record plus the
+    prompt package's contracts, with per-check verdicts (fingerprints,
+    composition arithmetic, render order, staged cuts, sha reuse)."""
     engine = _get_engine()
     trace = engine._store.get_turn_trace(session_id, turn_id)
     if trace is None:
         from fastapi import HTTPException
 
         raise HTTPException(status_code=404, detail="trace not found")
+    if derive:
+        from core.agent.trace_derive import derive_from_trace_payload
+
+        trace["derivation"] = derive_from_trace_payload(
+            trace, audit_lines=_load_audit_lines()
+        )
     return trace
+
+
+def _load_audit_lines() -> list[dict] | None:
+    """The prompt-assembly audit's recent lines, when the env-gate is on.
+
+    The audit dump carries the same payload fingerprint the trace stamps,
+    so its lines upgrade the derivation to the byte-verification level.
+    Bounded: the newest 500 lines (the audit appends one line per call).
+    Missing/unreadable file → None (record-level derivation, honestly)."""
+    import os
+
+    path = os.environ.get("LOCALMIND_PROMPT_AUDIT") or ""
+    if not path:
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    except OSError:
+        return None
+    out = []
+    for line in lines[-500:]:
+        try:
+            rec = json.loads(line)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(rec, dict):
+            out.append(rec)
+    return out or None

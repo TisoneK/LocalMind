@@ -44,6 +44,7 @@ v0.6 changes vs v0.5 (JSON-parsing loop):
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import re
@@ -3626,11 +3627,26 @@ class AgentLoop:
             _relevance_horizon = horizon_for_intent(intent)
             system_prompt = render_static_budgeted(_static_registry, _relevance_horizon)
             if _obs:
+                # Request-derivation stamps (G7): the STATIC band's FULL
+                # registry composition (per-section chars, render order —
+                # including sections this turn's horizon dropped) and the
+                # budgeted render's fingerprint — content-free, so the
+                # durable record can prove WHAT the prefix was and what any
+                # staged re-render (which re-renders from the full registry,
+                # full membership) would produce.
+                _budget_dropped = dropped_sections_for(_static_registry, _relevance_horizon)
                 _obs.emit(
                     "relevance_budget",
                     horizon=_relevance_horizon.value,
-                    dropped_sections=dropped_sections_for(_static_registry, _relevance_horizon),
+                    dropped_sections=_budget_dropped,
                     static_chars=len(system_prompt),
+                    static_sha16=hashlib.sha256(
+                        system_prompt.encode("utf-8", "replace")
+                    ).hexdigest()[:16],
+                    sections=[
+                        {"name": s.name, "chars": len(s.text)}
+                        for s in _static_registry.render_sections(Band.STATIC)
+                    ],
                 )
         else:
             _static_registry = None
@@ -3922,7 +3938,23 @@ class AgentLoop:
                 }
             )
         if _injected_items and _obs:
-            _obs.emit("context_injected", surface="loop_turn", items=_injected_items)
+            # Request-derivation stamps (G7): the TURN message's composition
+            # (per-section chars in render order) and the exact rendered
+            # bytes' fingerprint — the deriver rebuilds the message from the
+            # injected items and verifies both against these stamps.
+            _obs.emit(
+                "context_injected",
+                surface="loop_turn",
+                items=_injected_items,
+                rendered_chars=len(turn_context),
+                rendered_sha16=hashlib.sha256(
+                    turn_context.encode("utf-8", "replace")
+                ).hexdigest()[:16],
+                sections=[
+                    {"name": s.name, "chars": len(s.text)}
+                    for s in turn_registry.render_sections(Band.TURN)
+                ],
+            )
 
         # Replace or prepend the (stable) system message. When a system
         # message is already present (the conversation-summary section),
@@ -4785,6 +4817,28 @@ class AgentLoop:
                         else 0
                     ),
                 )
+                # Request-derivation stamps (G7): WHICH input-selection stage
+                # this call's system message used, and the exact bytes'
+                # fingerprint. The deriver re-derives the expected stage from
+                # the payload shape (tool result present? tools offered?) and
+                # the expected composition from the prompt package, then
+                # verifies both against this stamp.
+                _has_tool_results = any(
+                    m.get("role") == "tool" for m in iteration_messages
+                )
+                if not _has_tool_results:
+                    _system_stage = "full"
+                elif _iter_tools:
+                    _system_stage = "tool_result"
+                else:
+                    _system_stage = "answer_only"
+                _completed_fields["system_stage"] = _system_stage
+                if iteration_messages and iteration_messages[0].get("role") == "system":
+                    _completed_fields["system_sha16"] = hashlib.sha256(
+                        str(iteration_messages[0].get("content") or "").encode(
+                            "utf-8", "replace"
+                        )
+                    ).hexdigest()[:16]
                 if _breakdown_est is not None:
                     try:
                         _completed_fields["estimated_prompt_tokens"] = int(
