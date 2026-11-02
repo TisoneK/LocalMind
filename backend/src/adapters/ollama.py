@@ -24,6 +24,43 @@ from adapters.base import BaseAdapter
 from core.cache import TTLCache
 from core.config import settings
 from core.models import StreamChunk
+from core.turn_trace import current_model_call, start_model_call
+
+
+def _watched_ollama_stream(
+    inner: AsyncIterator[StreamChunk], watch
+) -> AsyncIterator[StreamChunk]:
+    """Stamp first-byte / completed / failed on a returned inner stream
+    (the tool-call adapter replays buffered text through a generator the
+    caller drains later — stamp when the bytes actually flow)."""
+
+    async def _gen() -> AsyncIterator[StreamChunk]:
+        _last_usage: dict | None = None
+        try:
+            async for chunk in inner:
+                if chunk.usage:
+                    _last_usage = dict(chunk.usage)
+                if chunk.thinking or chunk.text:
+                    watch.first_byte()
+                yield chunk
+                if chunk.error:
+                    watch.failed(chunk.error)
+                    return
+                if chunk.done:
+                    watch.completed(chunk.usage)
+                    return
+            watch.completed(_last_usage)
+        except Exception as _stream_exc:
+            watch.failed(str(_stream_exc))
+            raise
+        finally:
+            # A consumer that stops reading mid-stream abandons this
+            # generator via GeneratorExit — close the watch so the call
+            # never sits 'started but never closed' in the record.
+            if not watch.closed:
+                watch.completed(_last_usage)
+
+    return _gen()
 
 
 # Per-intent timeout overrides (seconds).
@@ -391,6 +428,40 @@ class OllamaAdapter(BaseAdapter):
         intent: str = "chat",
         **kwargs,
     ) -> AsyncIterator[StreamChunk]:
+        """Stream a plain-text response — trace-wrapped.
+
+        The wrapper owns the per-call boundary stamps (B-2026-11-01-26);
+        the streaming logic lives in ``chat_impl`` unchanged."""
+        _watch = start_model_call(
+            provider="ollama",
+            model=self._model,
+            intent=str(intent),
+            mode="chat",
+            messages=messages,
+        )
+        try:
+            async for chunk in self.chat_impl(messages, temperature, intent, **kwargs):
+                if chunk.thinking or chunk.text:
+                    _watch.first_byte()
+                yield chunk
+                if chunk.error:
+                    _watch.failed(chunk.error)
+                    return
+                if chunk.done:
+                    _watch.completed(chunk.usage)
+                    return
+            _watch.completed()
+        except Exception as _chat_exc:
+            _watch.failed(str(_chat_exc))
+            raise
+
+    async def chat_impl(
+        self,
+        messages: list[dict],
+        temperature: float = 0.7,
+        intent: str = "chat",
+        **kwargs,
+    ) -> AsyncIterator[StreamChunk]:
         """Stream a plain-text response from the model."""
         url = f"{self._base_url}/v1/chat/completions"
         timeout = _INTENT_TIMEOUTS.get(intent, _DEFAULT_TIMEOUT)
@@ -528,6 +599,39 @@ class OllamaAdapter(BaseAdapter):
         intent: str = "chat",
         tool_choice: str | dict | None = None,
     ) -> "AsyncIterator[StreamChunk] | ToolCallResult":
+        """Send messages with tool definitions — trace-wrapped.
+
+        The wrapper owns the per-call boundary stamps (B-2026-11-01-26);
+        the streaming/queue logic lives in ``chat_with_tools_impl``
+        unchanged."""
+        _watch = start_model_call(
+            provider="ollama",
+            model=self._model,
+            intent=str(intent),
+            mode="tools",
+            messages=messages,
+            tools=tools,
+        )
+        try:
+            result = await self.chat_with_tools_impl(
+                messages, tools, temperature, intent, tool_choice
+            )
+        except Exception as _tools_exc:
+            _watch.failed(str(_tools_exc))
+            raise
+        if hasattr(result, "__aiter__"):
+            return _watched_ollama_stream(result, _watch)
+        _watch.completed(getattr(result, "usage", None))
+        return result
+
+    async def chat_with_tools_impl(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        temperature: float = 0.7,
+        intent: str = "chat",
+        tool_choice: str | dict | None = None,
+    ) -> "AsyncIterator[StreamChunk] | ToolCallResult":
         """Send messages with tool definitions and stream tokens live.
 
         Uses Ollama's OpenAI-compatible endpoint (v0.3+).  Returns either:
@@ -577,6 +681,12 @@ class OllamaAdapter(BaseAdapter):
         async def _reader() -> None:
             try:
                 async with self._client.stream("POST", url, json=payload, timeout=timeout) as response:
+                    # Trace hook: the provider accepted the request — stamp
+                    # the response moment on the active call's watch (the
+                    # reader task inherited this call's context).
+                    _rd_watch = current_model_call()
+                    if _rd_watch is not None:
+                        _rd_watch.response_received(response.status_code)
                     if response.status_code != 200:
                         body = await response.aread()
                         raw_error = body.decode(errors="replace")[:200]
@@ -622,6 +732,10 @@ class OllamaAdapter(BaseAdapter):
                         data = line[6:]
                         if data == "[DONE]":
                             break
+                        # First data line parsed — the first-byte moment.
+                        _lb_watch = current_model_call()
+                        if _lb_watch is not None:
+                            _lb_watch.first_byte()
 
                         try:
                             obj = json.loads(data)

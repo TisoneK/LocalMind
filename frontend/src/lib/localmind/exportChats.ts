@@ -117,8 +117,21 @@ function messageToMarkdown(m: ChatMessage): string[] {
     if (m.performance.latencyMs !== undefined) bits.push(`${m.performance.latencyMs}ms`);
     if (m.performance.promptTokens !== undefined) bits.push(`${m.performance.promptTokens} in`);
     if (m.performance.completionTokens !== undefined) bits.push(`${m.performance.completionTokens} out`);
-    if (m.performance.tokensPerSecond !== undefined) bits.push(`${m.performance.tokensPerSecond} tok/s`);
+    if (m.performance.firstTokenMs !== undefined) bits.push(`${m.performance.firstTokenMs}ms to first token`);
+    if (m.performance.decodeMs !== undefined) bits.push(`${m.performance.decodeMs}ms decode`);
+    // The throughput label names its denominator — the wall-clock
+    // approximation must not masquerade as decode speed (the
+    // observability investigation's finding 5c).
+    if (m.performance.tokensPerSecond !== undefined) {
+      const basis = m.performance.timingBasis === 'turn_wall_clock' ? ' (turn window)' : '';
+      bits.push(`${m.performance.tokensPerSecond} tok/s${basis}`);
+    }
     if (bits.length) lines.push('', `_performance: ${bits.join(' · ')}_`);
+    // Execution-trace link (B-2026-11-01-26): points at the durable event
+    // stream; the export itself stays the conversation surface.
+    if (m.performance.traceId) {
+      lines.push(`_execution trace: ${m.performance.traceId}_`);
+    }
   }
 
   if (m.agentPhases?.length) {
@@ -235,6 +248,15 @@ export function sessionsToJson(entries: SessionExport[]): string {
         performance: m.performance ?? undefined,
         agentRuns: m.agentRuns ?? undefined,
         agentPhases: m.agentPhases ?? undefined,
+        // Durable execution trace reference (B-2026-11-01-26): the JSON
+        // export stays the conversation surface; the full per-turn event
+        // stream lives in the backend trace store under this id (read it
+        // via GET /api/observability/{sessionId}/trace/{traceId}). The
+        // export references the trace without becoming enormous.
+        traceRef:
+          m.performance?.traceId
+            ? { turnId: m.performance.traceId, sessionId: session.id }
+            : undefined,
         fileResults: m.fileResults?.map((f) => ({
           id: f.id,
           path: f.path,

@@ -86,9 +86,11 @@ function _seedSessionStats(history: ChatMessage[]): SessionStats {
     acc.completionTokens += completion;
     acc.latencyMs += latency;
     if (latency > 0) acc.turnLatencies!.push(latency);
-    acc.genTimeMs += p.tokensPerSecond && p.tokensPerSecond > 0 && completion > 0
-      ? (completion / p.tokensPerSecond) * 1000
-      : latency;
+    acc.genTimeMs += p.decodeMs && p.decodeMs > 0
+      ? p.decodeMs // the recorded decode window — no inversion needed
+      : p.tokensPerSecond && p.tokensPerSecond > 0 && completion > 0
+        ? (completion / p.tokensPerSecond) * 1000
+        : latency;
     acc.turnCount += 1;
     acc.cachedTokens += p.cachedTokens ?? 0;
     acc.llmCalls += p.llmCalls ?? 0;
@@ -455,9 +457,11 @@ export function useChat(
     const hasTokens = completion > 0 || prompt > 0;
     const hasLatency = latency > 0 || (m.totalTokens || 0) > 0;
     if (!hasTokens || !hasLatency) return;
-    const genMs = m.tokensPerSecond && m.tokensPerSecond > 0 && completion > 0
-      ? (completion / m.tokensPerSecond) * 1000
-      : latency;
+    const genMs = m.decodeMs && m.decodeMs > 0
+      ? m.decodeMs // the recorded decode window — no inversion needed
+      : m.tokensPerSecond && m.tokensPerSecond > 0 && completion > 0
+        ? (completion / m.tokensPerSecond) * 1000
+        : latency;
     const turn = turnCounterRef.current;
     const prevContribution = lastTurnContributionRef.current?.turn === turn
       ? lastTurnContributionRef.current
@@ -1441,6 +1445,12 @@ export function useChat(
                       && typeof _providerUsage.post_answer_lanes === 'object')
                       ? _providerUsage.post_answer_lanes as Record<string, Record<string, unknown>>
                       : undefined;
+                    // Provider-timing pair (trace-stamped): the final call's
+                    // decode window is the honest tokens-per-second
+                    // denominator — the old wall-clock value made latency ≈
+                    // completion ÷ tok/s circular arithmetic.
+                    const _decodeMs = Number(_providerUsage.decode_ms || 0);
+                    const _firstTokenMs = Number(_providerUsage.first_token_ms || 0);
                     if (_tokens > 0 || _latency > 0) {
                       const _elapsed_s = _latency / 1000;
                       // tokens_approx is the RESPONSE (completion) token count.
@@ -1463,9 +1473,19 @@ export function useChat(
                           ? _estimatedPrompt
                           : prev?.promptTokens || 0;
                         return {
-                          tokensPerSecond: _elapsed_s > 0
-                            ? Math.round(completionTokens / _elapsed_s * 100) / 100
-                            : prev?.tokensPerSecond || 0,
+                          // Decode window when the turn recorded it; the
+                          // whole-turn wall clock stays the labelled fallback
+                          // basis for turns without call stamps.
+                          tokensPerSecond: _decodeMs > 0
+                            ? Math.round(completionTokens / (_decodeMs / 1000) * 100) / 100
+                            : _elapsed_s > 0
+                              ? Math.round(completionTokens / _elapsed_s * 100) / 100
+                              : prev?.tokensPerSecond || 0,
+                          timingBasis: _decodeMs > 0 ? 'decode_window' : 'turn_wall_clock',
+                          firstTokenMs: _firstTokenMs > 0
+                            ? _firstTokenMs
+                            : prev?.firstTokenMs,
+                          decodeMs: _decodeMs > 0 ? _decodeMs : prev?.decodeMs,
                           latency: _latency,
                           totalTokens: completionTokens + promptTokens,
                           promptTokens,
@@ -1732,6 +1752,10 @@ export function useChat(
                   && typeof m.post_answer_lanes === 'object')
                   ? m.post_answer_lanes as Record<string, Record<string, unknown>>
                   : undefined;
+                // Provider-timing pair: the decode window is the honest
+                // tokens-per-second denominator when the turn recorded it.
+                const _mDecodeMs = Number(m.decode_ms || 0);
+                const _mFirstTokenMs = Number(m.first_token_ms || 0);
                 if (_tokens > 0 || _latency > 0) {
                   const _elapsed_s = _latency / 1000;
                   setLastMetrics((prev) => {
@@ -1744,9 +1768,16 @@ export function useChat(
                       ? _promptTokens
                       : prev?.promptTokens || 0;
                     return {
-                      tokensPerSecond: _elapsed_s > 0
-                        ? Math.round(completionTokens / _elapsed_s * 100) / 100
-                        : prev?.tokensPerSecond || 0,
+                      tokensPerSecond: _mDecodeMs > 0
+                        ? Math.round(completionTokens / (_mDecodeMs / 1000) * 100) / 100
+                        : _elapsed_s > 0
+                          ? Math.round(completionTokens / _elapsed_s * 100) / 100
+                          : prev?.tokensPerSecond || 0,
+                      timingBasis: _mDecodeMs > 0 ? 'decode_window' : 'turn_wall_clock',
+                      firstTokenMs: _mFirstTokenMs > 0
+                        ? _mFirstTokenMs
+                        : prev?.firstTokenMs,
+                      decodeMs: _mDecodeMs > 0 ? _mDecodeMs : prev?.decodeMs,
                       latency: _latency,
                       totalTokens: completionTokens + promptTokens,
                       promptTokens,

@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261031T185724Z-Zuri-b307bfca",
+  "type": "claim",
+  "session": "S011",
+  "agent": "Zuri",
+  "created": "2026-10-31T18:57:24Z",
+  "issue": "full-execution-observability",
+  "body": "Zuri S011 claims the owner-brief investigation (read-only): full execution lifecycle map, telemetry inventory, invisible stages, measurement inconsistencies, trace proposal. No product code changes; capture harness scripts/obs_trace_capture.py added. Distinct from Tobias S004's verification scope.",
+  "paths": ["backend/src/core/agent_runtime.py", "backend/src/core/obs.py", "backend/src/core/agent_workspace.py", "backend/src/core/agent/context_breakdown.py", "backend/src/api/routes/chat.py", "frontend/src/lib/localmind/exportChats.ts", "frontend/src/hooks/useLocalMind.ts", ".context_ledger/memory/office/tasks/backlog.md"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

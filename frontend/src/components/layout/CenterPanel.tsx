@@ -57,9 +57,17 @@ const INJECTED_KIND_LABELS: Record<string, string> = {
   memory_facts: 'Memory facts',
   intent_history: 'Intent history',
   intent_tail: 'Intent tail',
+  current_intent: 'Current intent',
+  skill_fragment: 'Intent expertise',
+  expert_persona: 'Expert persona',
+  agent_playbook: 'Agent playbook',
+  execution_plan: 'Execution plan',
+  routing_hint: 'Routing hint',
   workspace_state: 'Workspace state',
   todo_state: 'Todo list',
   goal_route: 'Goal route',
+  open_question: 'Open question',
+  carried_objective: 'Active objective',
   task_state: 'Task state',
 };
 

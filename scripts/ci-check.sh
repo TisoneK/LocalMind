@@ -11,9 +11,10 @@
 #
 # Conventions honored:
 #   - Backend ruff enforces E501 (line-length) — the genuinely-long prompt
-#     strings are exempted per-file via `# ruff: noqa: E501` (prompts.py,
-#     loop.py) and inline `# noqa: E501` on the remaining scattered strings
-#     (backlog L1, closed Session 92). New overlong lines now FAIL the gate.
+#     strings are exempted per-file via `# ruff: noqa: E501` (the prompt
+#     package's template modules, loop.py) and inline `# noqa: E501` on the
+#     remaining scattered strings (backlog L1, closed Session 92). New
+#     overlong lines now FAIL the gate.
 #   - Frontend eslint allows the 53 pre-existing warnings but fails if the
 #     count grows beyond --max-warnings (catches big regressions).
 #

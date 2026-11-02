@@ -29,6 +29,11 @@ class ObjectiveRuntime:
             "file_task",
             "sysinfo",
             "diagnostics",
+            # Offline, bounded, read-only arithmetic — a read-only objective
+            # can still need precise numbers ("compute the total"). Found by
+            # the standing eval harness: the fence blocked the calculator
+            # with permission while the objective itself asked for the math.
+            "calculator",
         }
     )
 

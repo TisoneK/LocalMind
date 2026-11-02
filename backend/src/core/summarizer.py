@@ -27,6 +27,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Callable, Optional
 
+from core.agent.prompt.auxiliary import (
+    AuxiliaryCallOutputError,
+    build_summary_call_prompt,
+    validate_summary_output,
+)
 from core.context_policy import ContextPolicy
 from core.value_scoring import lowest_value_indices
 
@@ -54,11 +59,13 @@ _MAX_PRESERVED_CHARS = 1200
 _MAX_PRESERVED_LINE_CHARS = 200
 
 _SUMMARY_PROMPT = (
-    "You are a conversation summarizer. "
-    "Summarize the following conversation excerpt into a compact paragraph "
-    "that preserves key facts, user preferences, decisions, and context that "
-    "would be important for continuing the conversation. "
-    "Be concise — aim for 3-6 sentences. Do not add commentary or preamble."
+    # Retired as the call's instruction — the summary checkpoint now runs on
+    # the fail-closed skeleton (core.agent.prompt.auxiliary), which names the
+    # exact output structure and the verbatim-preservation classes. Kept as
+    # the legacy task_focus fallback so a policy without its own focus line
+    # still carries the task-aware weight.
+    "preserve key facts, user preferences, decisions, and context that "
+    "would be important for continuing the conversation"
 )
 
 
@@ -181,7 +188,12 @@ async def maybe_compress_history(
     # excerpt — per review: a decision line past the 500-char cut
     # must still survive, that is the entire point of the feature).
     active_policy = None if policy is None or policy.task_type == "default" else policy
-    summary_prompt = active_policy.summary_prompt if active_policy else _SUMMARY_PROMPT
+    # The checkpoint call runs on the fail-closed skeleton (exact structure,
+    # verbatim preservation, no commentary) — the task-aware policy's own
+    # prompt rides as the task focus when present.
+    summary_prompt = build_summary_call_prompt(
+        task_focus=(active_policy.summary_prompt if active_policy else _SUMMARY_PROMPT),
+    )
     raw_excerpt = "\n".join(f"{m['role'].upper()}: {m.get('content', '')}" for m in to_compress)
     preserved = _preserved_decision_lines(raw_excerpt, active_policy) if active_policy else []
 
@@ -204,6 +216,16 @@ async def maybe_compress_history(
         return messages
 
     if not summary_text:
+        return messages
+
+    # Fail-closed checkpoint (G5): the summary replaces real history, so an
+    # unusable one must never land. Empty output and a missing required
+    # section (the signature of an output-limit cut) both skip compression —
+    # the original history stays intact rather than being half-replaced.
+    try:
+        summary_text = validate_summary_output(summary_text)
+    except AuxiliaryCallOutputError as _summary_exc:
+        logger.warning("[summarizer] %s", _summary_exc)
         return messages
 
     parts = [f"[Conversation summary — earlier context]\n{summary_text}"]

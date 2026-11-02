@@ -174,19 +174,48 @@ async def get_history(session_id: str):
             metrics = m.metrics
             latency_ms = metrics.get("latency_ms") or 0
             completion = metrics.get("completion_tokens") or 0
+            # Honest throughput (the observability investigation's finding
+            # 5c): completion ÷ whole-turn wall clock made latency ≈
+            # completion ÷ tok/s circular arithmetic. When the turn recorded
+            # its final call's decode window, that window is the denominator
+            # and the basis says so; pre-trace records keep the wall-clock
+            # value under its honest name.
+            _decode_ms = metrics.get("decode_ms")
+            _first_token_ms = metrics.get("first_token_ms")
+            _tps_basis = "decode_window" if _decode_ms else "turn_wall_clock"
+            _tps_denom_ms = _decode_ms or latency_ms
             message["performance"] = {
                 "latencyMs": latency_ms or None,
                 "promptTokens": metrics.get("prompt_tokens") or None,
                 "completionTokens": completion or None,
                 "tokensPerSecond": (
-                    round(completion / (latency_ms / 1000.0), 2)
-                    if latency_ms > 0 and completion > 0
+                    round(completion / (_tps_denom_ms / 1000.0), 2)
+                    if _tps_denom_ms > 0 and completion > 0
                     else None
                 ),
+                "timingBasis": _tps_basis,
+                # Provider-timing pair (B-2026-11-01-26 trace): the first
+                # call's submit→first-byte wait and the final call's
+                # first-byte→last-byte decode window. Absent on pre-trace
+                # records — unavailable is rendered as unavailable.
+                "firstTokenMs": _first_token_ms or None,
+                "decodeMs": _decode_ms or None,
                 # Turn identity (v3 export): which model + provider answered
                 # this turn, persisted with the reply's metrics.
                 "model": metrics.get("model") or None,
                 "provider": metrics.get("provider") or None,
+                # Persisted-but-unreturned no more (B-2026-11-01-26): the
+                # cache/call counters, the per-stage stage map, the per-call
+                # context composition, the post-answer lane records and the
+                # execution-trace link now ride the history payload so a
+                # reloaded conversation (and the JSON export) can account
+                # for the whole turn.
+                "cachedTokens": metrics.get("cached_tokens") or None,
+                "llmCalls": metrics.get("llm_calls") or None,
+                "turnStages": metrics.get("turn_stages") or None,
+                "contextBreakdown": metrics.get("context_breakdown") or None,
+                "postAnswerLanes": metrics.get("post_answer_lanes") or None,
+                "traceId": metrics.get("trace_id") or None,
             }
             # "Thought for Xs" — the active reasoning time the live UI
             # accumulated; restored so the thinking header reads the same
@@ -354,6 +383,78 @@ async def get_session_goal(session_id: str):
     return {"goal": goal_view(goal, session_id)}
 
 
+@router.post("/sessions/{session_id}/goal/resume")
+async def resume_session_goal(session_id: str, extend_rounds: int = 0):
+    """The human resume affordance for a goal whose automatic work stopped.
+
+    An explicit human decision — the ONLY thing that revives a disarmed
+    goal (including after a backend restart, whose empty registry never
+    revives autonomous work on its own). Re-arms the goal and hands the
+    deep dive to the idle continuation driver. A round-limit-blocked goal
+    needs its cap extended first (`extend_rounds` > 0 bumps max_rounds);
+    a completed goal cannot be resumed.
+    """
+    from api.routes.chat import _engine
+    from core.goal_idle import resume_for_human
+    from storage.goals import GoalConflictError, get_goal_store
+
+    store = get_goal_store(settings.localmind_db_path)
+    goal = store.get(session_id)
+    if goal is None:
+        raise HTTPException(status_code=404, detail="No goal for this session")
+    if goal.phase == "complete":
+        raise HTTPException(status_code=409, detail="A completed goal cannot be resumed")
+    if goal.phase == "blocked" and extend_rounds > 0:
+        updated = store.edit(
+            session_id,
+            goal.id,
+            goal.revision,
+            max_rounds=goal.max_rounds + extend_rounds,
+        )
+        if updated is None:
+            raise HTTPException(status_code=409, detail="Goal moved — retry")
+        goal = updated
+    if goal.phase != "active":
+        # paused / blocked → active (resume), still cap-validated below
+        try:
+            goal = store.set_phase(session_id, goal.id, goal.revision, "active")
+        except GoalConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+        if goal is None:
+            raise HTTPException(status_code=409, detail="Goal moved — retry")
+    try:
+        view = resume_for_human(_engine, session_id, store)
+    except GoalConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    return {"goal": view, "resumed": view is not None}
+
+
+@router.post("/sessions/{session_id}/goal/pause")
+async def pause_session_goal(session_id: str):
+    """The human pause affordance: stop the automatic work, keep the goal.
+
+    Pauses the durable goal, drops its activation, and cancels any pending
+    idle continuation. Resuming is the resume endpoint's explicit decision.
+    """
+    from core.goal_idle import cancel_idle_continuation
+    from core.goal_rounds import disarm, goal_view
+    from storage.goals import GoalConflictError, get_goal_store
+
+    store = get_goal_store(settings.localmind_db_path)
+    goal = store.get(session_id)
+    if goal is None:
+        raise HTTPException(status_code=404, detail="No goal for this session")
+    cancel_idle_continuation(session_id)
+    disarm(session_id)
+    if goal.phase == "active":
+        try:
+            updated = store.set_phase(session_id, goal.id, goal.revision, "paused")
+        except GoalConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+        goal = updated or goal
+    return {"goal": goal_view(goal, session_id), "paused": True}
+
+
 @router.delete("/sessions/{session_id}")
 async def delete_session(session_id: str):
     """Delete a session and all its messages.
@@ -396,9 +497,11 @@ async def delete_session(session_id: str):
 
     # The durable goal belongs to the session too.
     try:
+        from core.goal_idle import cancel_idle_continuation
         from core.goal_rounds import disarm
         from storage.goals import get_goal_store
 
+        cancel_idle_continuation(session_id)
         disarm(session_id)
         get_goal_store(settings.localmind_db_path).clear(session_id)
     except Exception as e:

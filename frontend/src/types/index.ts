@@ -159,6 +159,18 @@ export interface ChatMessage {
     promptTokens?: number;
     completionTokens?: number;
     tokensPerSecond?: number;
+    /** What the tokensPerSecond denominator measures: "decode_window" =
+     *  the final model call's first→last byte (the honest generation
+     *  window); "turn_wall_clock" = the whole turn (pre-trace records —
+     *  the approximation the old tooltip mislabeled as decode time). */
+    timingBasis?: 'decode_window' | 'turn_wall_clock';
+    /** First model call's submit→first-byte wait (ms) — queue + cached-
+     *  prefix processing, the time nothing had arrived. Unavailable on
+     *  pre-trace records. */
+    firstTokenMs?: number;
+    /** Final model call's first→last byte window (ms) — the generation
+     *  window the completion tokens were produced in. */
+    decodeMs?: number;
     /** Provider-reported cache-hit input tokens for this turn (0/absent when
      *  the provider doesn't report caching). */
     cachedTokens?: number;
@@ -168,6 +180,18 @@ export interface ChatMessage {
      *  a chat may switch models mid-way, so identity is per turn). */
     model?: string;
     provider?: string;
+    /** Per-stage wall-clock stamps of the turn-close window (persisted with
+     *  the reply; restored on reload). */
+    turnStages?: Record<string, number>;
+    /** Per-category composition of the last model call's context (system /
+     *  history / tool results / schemas...), scaled to the reported total. */
+    contextBreakdown?: Record<string, number>;
+    /** Post-answer lane records (acceptance gate, completion judge,
+     *  reflection) that ran between the last token and the terminal done. */
+    postAnswerLanes?: Record<string, unknown>;
+    /** Durable execution-trace link (B-2026-11-01-26): the full per-turn
+     *  event stream lives in the backend trace store under this id. */
+    traceId?: string;
   };
   /** Best-of-N editor candidates, rendered
    * as an expandable section in the message. Populated from the tool result
@@ -645,6 +669,13 @@ export interface PerformanceMetrics {
   totalTokens: number;
   promptTokens: number;
   completionTokens: number;
+  /** What the tokensPerSecond denominator measured this turn
+   *  ("decode_window" when the final call's window was recorded). */
+  timingBasis?: 'decode_window' | 'turn_wall_clock';
+  /** First call's submit→first-byte wait (ms), when recorded. */
+  firstTokenMs?: number;
+  /** Final call's first→last byte decode window (ms), when recorded. */
+  decodeMs?: number;
   /** Provider-reported cache-hit input tokens for the last request (P0
    *  Context Engineering Step 1). 0/undefined when the provider doesn't
    *  report caching — the display hides the cached/fresh split then. */

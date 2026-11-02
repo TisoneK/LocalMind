@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261101T113815Z-Zola-a5f8a0c9",
+  "type": "claim",
+  "session": "S015",
+  "agent": "Zola",
+  "created": "2026-11-01T11:38:15Z",
+  "issue": "b25-remainder-and-measurement-honesty",
+  "body": "Zola S015 claims the B-2026-10-31-25 remainder (per-turn relevance budget with prefix-stability as a hard constraint; G6 outcome-typed recovery settlements; G5 fail-closed auxiliary-call templates) plus the queued measurement-honesty defects (throughput definition + tooltip, TTFT surface, thinking-channel leakage, agentRuns lifecycle, G4 gate/replan verification) — completing the owner's 'finish all' directive after Kesi S014 shipped the B-26 trace",
+  "paths": ["backend/src/core/agent/prompt/", "backend/src/core/agent/loop.py", "backend/src/core/agent_runtime.py", "backend/src/api/routes/sessions.py", "backend/src/adapters/", "frontend/src/components/", "frontend/src/lib/localmind/", "tests/", "scripts/", "CHANGELOG.md", "docs/"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

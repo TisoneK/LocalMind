@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "id": "20261101T084500Z-Kesi-s014-checkin",
+  "type": "claim",
+  "session": "S014",
+  "agent": "Kesi",
+  "created": "2026-11-01T08:45:00Z",
+  "issue": "full-execution-trace",
+  "body": "Kesi S014 claims B-2026-11-01-26 — the durable per-turn execution trace (owner brief 2026-11-01, 'Go ahead' received this session). Build order per the investigation's Deliverable 7: (a) persist the per-turn event stream verbatim (turn_id + seq, existing ObsEvent shape); (b) adapter-level model_call stamps (submit / first byte / last byte, per-call usage + payload size/hash, every path incl. the fast path); (c) path_selected decision events (incl. negative decisions) + context-assembly start/end; (d) persist context_breakdown + post_answer_lanes with the turn; (e) export gains traceRef + history endpoint exposes persisted stage maps; (f) State Explorer renders the trace. One clock discipline (epoch-ms everywhere; monotonic only as labelled deltas). SSE contract NOT widened before the stream persists; projections stay folds of the stream. No overlap with any live peer (only the stale Tobias S004 re-check-in row on the board).",
+  "paths": [
+    "backend/src/core/obs.py",
+    "backend/src/core/agent_runtime.py",
+    "backend/src/core/agent/loop.py",
+    "backend/src/core/adapters/",
+    "backend/src/api/routes/chat.py",
+    "backend/src/api/routes/observability.py",
+    "backend/src/api/routes/sessions.py",
+    "backend/src/core/db.py",
+    "backend/src/core/observation.py",
+    "frontend/src/lib/localmind/exportChats.ts",
+    "tests/",
+    "scripts/obs_trace_capture.py"
+  ],
+  "refs": [
+    "office/reviews/2026-11-01-full-execution-observability-investigation.md",
+    "office/tasks/backlog.md#B-2026-11-01-26",
+    "office/agents/sessions.md#session-11"
+  ],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

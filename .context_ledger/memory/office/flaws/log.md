@@ -39,3 +39,11 @@ names them), and roll-up candidates.
 - **Root cause:** The kickoff's check-in flow writes to the shared main checkout before mode is decided ("decide the mode from evidence, not from an empty board"), and `ledger-guard` attributes by count of live sessions but cannot tell whose staged files are whose. Nothing forces the second arriving session into a worktree, and a broad `git add .context_ledger/` is the documented way to stage memory.
 - **Suggested fix:** (a) Once the roster shows a second live row, have `ledger-guard` refuse a ledger commit whose diff includes files another live session has touched in its own check-in window, or (b) make the kickoff require an isolated worktree/branch for the later arrival before its first ledger write, and (c) have `ledger-mem`/`ledger-guard` print which session each staged path belongs to at commit time.
 - **Status:** open
+
+---
+## 2026-11-01 — Zuri / GLM (Z.ai sandbox) (Session 11)
+- **Flaw:** The check-in sequence's own tooling generates local ledger modifications BEFORE the sync step can complete: `ledger-sync verify` rewrites `memory/core.lock` (drops/reshuffles the `source_*` block) and `ledger-state generate` rewrites `memory/office/STATE.md`, so a fresh-session `git pull --ff-only` then aborts with "Please commit your changes or stash them before you merge."
+- **Symptom:** First pull of the session refused on two files this session itself had just caused to be modified; upstream had moved (S009/S010 had landed since the last office), so proceeding required recognising that the local mods were self-generated and safe to restore.
+- **Root cause:** The kickoff orders Phase 1 (sync + verify + guard install) before Phase 2 (check-in), but `verify` and the guard are not read-only — they mutate tracked ledger files even when nothing is stale. A recycled sandbox (no repo, fresh clone) always hits this: verify rewrites the lock because the source block differs from the vendored state.
+- **Suggested fix:** Make `ledger-sync verify` idempotent-silent when the lock already matches the installed core (only write when content actually changes), and/or have the kickoff's Phase 1 note: "if `git pull --ff-only` aborts right after verify on `core.lock`/`STATE.md` and `git diff` shows only verify/regen artefacts, restore those two files and re-pull."
+- **Status:** open

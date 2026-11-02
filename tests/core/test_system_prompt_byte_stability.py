@@ -18,7 +18,7 @@ stable prefix. Consequences pinned here:
 
 import pytest
 
-from core.agent.prompts import build_agent_intent_tail, build_agent_system_prompt
+from core.agent.prompt import build_agent_intent_tail, build_agent_system_prompt
 from core.models import Intent
 
 

@@ -10,12 +10,10 @@ Covers:
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from core.agent.loop import AgentLoop, answer_hedges_after_evidence
-
 
 # ── Detector unit tests ─────────────────────────────────────────────────────
 
@@ -141,7 +139,6 @@ async def test_gate_does_not_trigger_hedge_when_no_tools_ran():
         gate_summary="",
     )
     loop_messages = [{"role": "user", "content": "hi"}]
-    original_len = len(loop_messages)
 
     suffix, is_final = await loop._acceptance_gate_at_final_answer(
         trace=trace, iteration=0, effective_max_iter=10,
@@ -203,7 +200,9 @@ def test_recovery_nudge_includes_original_question():
     # Read the source to verify the nudge includes the question.
     import inspect
 
-    source = inspect.getsource(AgentLoop.run)
+    # The nudge lives in the loop's implementation (run() is the public
+    # wrapper that adds the done-rule settle net).
+    source = inspect.getsource(AgentLoop._run_impl)
     # The nudge must reference the user's original question.
     assert "_original_question" in source or "user's request was" in source, (
         "the recovery nudge must include the user's original question"

@@ -23,7 +23,9 @@ export interface SessionReading {
   totalTokens: number;
   /** Cache-hit share of prompt-side input, or null when nothing was billed. */
   cacheHitPct: number | null;
-  /** Provider output tokens per second of decode time, or null without timing. */
+  /** Output tokens per second — the final call's decode window where
+   *  recorded, else the whole-turn wall clock (labelled pre-trace
+   *  approximation); null without timing. */
   tokensPerSecond: number | null;
 }
 

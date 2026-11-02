@@ -55,6 +55,11 @@ import re
 from typing import AsyncIterator, Optional
 
 from core.agent.models import strip_worker_reports_from_history
+from core.agent.prompt import (
+    CAPABILITY_HONESTY_SPINE,
+    NO_MODES_RULE,
+    QUESTION_VS_DIRECTIVE_RULE,
+)
 from core.engine._helpers import _approx_tokens
 from core.error_normalizer import normalize_error
 from core.models import StreamChunk
@@ -68,29 +73,23 @@ logger = logging.getLogger(__name__)
 # spirals once it starts). These paths answer conversationally (no tools THIS
 # turn), but the model must still know LocalMind is a real local agent, and
 # point at Agent mode for actions rather than inventing a limitation.
+#
+# The shared spine lives in core.agent.prompt (one canonical statement,
+# consumed by every conversational surface); only the surface-specific tails
+# differ: direct Chat has an Agent mode to point at; Auto has no modes at all.
 CAPABILITY_NOTE = (
-    "You are LocalMind, a real AI agent running ON the user's machine with "
-    "actual tools (shell, file read/write/delete, code, web). NEVER claim you "
-    "lack access to the filesystem or that you 'can't' do something you could "
-    "do with a tool — that is false. You are giving a quick conversational "
-    "reply here; if the request needs an ACTION (run a command, edit or delete "
-    "files, search the computer), tell the user to switch to Agent mode instead "
-    "of inventing a limitation. "
+    CAPABILITY_HONESTY_SPINE
+    + "You are giving a quick conversational reply here; if the request needs "
+    "an ACTION (run a command, edit or delete files, search the computer), "
+    "tell the user to switch to Agent mode instead of inventing a limitation. "
 )
 
-# Auto mode has no "other mode" to switch to: one loop decides per message
-# whether to act. A lightweight reply that ends up needing a tool must not send
-# the user off to a mode that does not exist for them (owner live-report: "Found
-# it and???" got a promise plus "flip me to Agent mode" in an Auto session).
 AUTO_CAPABILITY_NOTE = (
-    "You are LocalMind, a real AI agent running ON the user's machine with "
-    "actual tools (shell, file read/write/delete, code, web). NEVER claim you "
-    "lack access to the filesystem or that you 'can't' do something you could "
-    "do with a tool — that is false. There are no modes for the user to switch "
-    "between; never mention modes. This reply has no "
-    "tools, so if answering needs an action or live data, say in one sentence "
-    "what you will check and end with: Say 'go' and I'll do it. Never narrate "
-    "an action as if you were doing it. "
+    CAPABILITY_HONESTY_SPINE
+    + NO_MODES_RULE
+    + "This reply has no tools, so if answering needs an action or live data, "
+    "say in one sentence what you will check and end with: Say 'go' and I'll "
+    "do it. Never narrate an action as if you were doing it. "
 )
 
 
@@ -957,6 +956,61 @@ def continues_prior_work(message: str, history: Optional[list[dict]] = None) -> 
     return False
 
 
+# Pure social gestures — laughter, praise, filler. When the agent has an
+# outstanding question these do NOT answer it: "lol" after "Do you want me to
+# proceed?" is a reaction, not a decision, and it stays on the light chat lane.
+# Anything short that is NOT in this class (a bare "yes", "no", "what?", a
+# two-word answer like "CSV please") IS treated as an attempt to answer the
+# outstanding question and goes to the agent loop, which can act on it.
+_PURE_SOCIAL_RE = re.compile(
+    r"^(?:(?:lol|lmao|rofl|haha+|hehe+|haha|teehee|nice|cool|awesome|wow|omg|great|"
+    r"amazing|funny|true|real|same|mood|bruh|dang|damn|oops|yikes|sheesh|phew|"
+    r"hi|hello|hey|yo|sup|good (?:morning|evening|afternoon)|"
+    r"gtg|brb|cya|bye)[!.?.,:; ]*)+$",
+    re.IGNORECASE,
+)
+
+
+def answers_open_question(message: str, open_question: Optional[str] = None) -> bool:
+    """A short reply that is plausibly ANSWERING the agent's outstanding question.
+
+    The open question is the question this session's last substantive exchange
+    left hanging (the caller reads it from the durable open-question record).
+    A reply like "yes", "nope", "what?", or "CSV please" is not small talk in
+    that situation — it is an answer or a follow-up, and it must reach the
+    agent loop where the outstanding question is rendered into context and an
+    action can follow. Pure social gestures ("lol", "nice", "hi") stay on the
+    light lane; the question they interrupted remains outstanding.
+    """
+    if not message or not open_question:
+        return False
+    cleaned = message.strip().rstrip(_TRIVIAL_PUNCT).strip()
+    if not cleaned or len(cleaned) > 40 or len(cleaned.split()) > 5:
+        return False
+    if _PURE_SOCIAL_RE.match(cleaned):
+        return False
+    return True
+
+
+def is_short_reply(message: str) -> bool:
+    """The trivial lane's SHAPE test without its pattern list: short enough
+    that, with an open question outstanding, it can only be a reaction to it
+    (an answer, a follow-up, or a social gesture) — never a new request."""
+    if not message or not message.strip():
+        return False
+    cleaned = message.strip().rstrip(_TRIVIAL_PUNCT).strip()
+    return bool(cleaned) and len(cleaned) <= 40 and len(cleaned.split()) <= 5
+
+
+def is_pure_social_gesture(message: str) -> bool:
+    """Laughter / praise / filler that reacts to the exchange without
+    answering anything outstanding ("lol", "nice", "hi")."""
+    if not message:
+        return False
+    cleaned = message.strip().rstrip(_TRIVIAL_PUNCT).strip()
+    return bool(cleaned) and bool(_PURE_SOCIAL_RE.match(cleaned))
+
+
 # ── Direct chat response helper ──────────────────────────────────────────────
 
 
@@ -1071,6 +1125,7 @@ async def _direct_chat_response(
     adapter,
     history: Optional[list[dict]],
     system_prompt: str,
+    active_objective: Optional[str] = None,
 ) -> AsyncIterator[StreamChunk]:
     """Stream a single direct chat call with a minimal system prompt."""
     # The fast path answers from the machine too: the boot-fused user
@@ -1103,8 +1158,22 @@ async def _direct_chat_response(
         f"inference; anything marked never stated is unknown: ask, never guess "
         f"or infer it from tool results): {_about_line}"
     )
+    # The session's active objective rides the light path as ONE line — only
+    # when the session actually has one. An objective outlives any single
+    # reply: a greeting on a session mid-objective must not pretend the
+    # objective vanished, and a status question must be answered from the
+    # real objective, not invented.
+    _objective_suffix = (
+        f"\nActive objective for this session (still in force — it outlives any "
+        f"single reply): {active_objective}"
+        if active_objective
+        else ""
+    )
     messages = [
-        {"role": "system", "content": system_prompt + _user_suffix + _about_suffix},
+        {
+            "role": "system",
+            "content": system_prompt + _user_suffix + _about_suffix + _objective_suffix,
+        },
     ]
     if history:
         # Include the last few turns for context. Assistant turns are stripped
@@ -1298,6 +1367,7 @@ async def trivial_response(
     history: Optional[list[dict]] = None,
     todo_state: Optional[list[dict]] = None,
     memory_facts: Optional[list[str]] = None,
+    active_objective: Optional[str] = None,
 ) -> AsyncIterator[StreamChunk]:
     """
     Stream a reply for a trivial input (greeting/thanks/acknowledgment/...).
@@ -1352,6 +1422,7 @@ async def trivial_response(
             f"{todo_block}"
             f"{memory_block}"
         ),
+        active_objective=active_objective,
     ):
         yield chunk
 
@@ -1385,6 +1456,7 @@ async def conversational_response(
     memory_facts: Optional[list[str]] = None,
     transcript_only: bool = False,
     first_user_message: str = "",
+    active_objective: Optional[str] = None,
 ) -> AsyncIterator[StreamChunk]:
     """
     Stream a direct chat response for a conversational question.
@@ -1449,15 +1521,14 @@ async def conversational_response(
             "Small talk, greetings, and wellbeing checks get ONE short "
             "sentence or two; substantive questions get a real but tight "
             "answer.\n"
-            "CRITICAL: When the user asks a QUESTION (like 'can you switch workspace?' "
-            "or 'what are you doing?'), ANSWER the question directly — do NOT take "
-            "action. 'Can you switch workspace?' means 'do you have this capability?', "
-            "not 'switch workspace now.' Only take action when the user gives a "
-            "DIRECTIVE ('switch to the dev folder', 'create a file called X').\n"
+            "CRITICAL: "
+            + QUESTION_VS_DIRECTIVE_RULE
+            + "\n"
             "Use the recent conversation history as context. Resolve short follow-ups "
             "against what was just said. Be concise, warm, and direct.\n"
             f"{todo_block}"
             f"{memory_block}"
         ),
+        active_objective=active_objective,
     ):
         yield chunk

@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "id": "20261101T105500Z-Kesi-s014-release",
+  "type": "release",
+  "session": "S014",
+  "agent": "Kesi",
+  "created": "2026-11-01T10:55:00Z",
+  "issue": "full-execution-trace",
+  "body": "Kesi S014 releases B-2026-11-01-26 — the durable per-turn execution trace — product commit bcef13de (22 files, +2,483/−17): (a) the per-turn event stream persists verbatim (turn_id + seq, turn_traces store, 32KB per-event cap with _truncated marker, newest-30-turns retention, session cascade, persisted on abort/crash too); (b) adapter-level model_call stamps on every path via ModelCallWatch (submitted / response / first byte / completed-failed, per-call usage + payload size+sha never contents, 429 retries visible; the heartbeat's provider_call_start/first_byte now fire from the same watch on loop turns too, epoch-ms anchored beside the labelled monotonic clock); (c) path_selected at every routing decision incl. negative ones + context_assembly start/end (turn-init and per-iteration, with sizes) + stage_skipped for never-attempted stages; (d) context_breakdown + post_answer_lanes persist with the turn, trace_id links every turn to its stream; (e) history payload exposes the full persisted telemetry, trace list/replay endpoints land, the export references the trace via traceRef; (f) the side panel's new Trace tab lists retained turns and replays the raw stream. Verified: backend 3,921 passed / 2 skipped (29 new tests), frontend 677 + tsc clean, ruff clean, and the live 8765 harness PASS twice — the three-message experiment reproduces the investigation's routing split with per-call payload sizes on the record (loop ~23.8K chars vs fast path ~2.0K): the 564-vs-6K prompt spread is now measured, not inferred.",
+  "paths": [
+    "backend/src/core/turn_trace.py",
+    "backend/src/storage/db.py",
+    "backend/src/adapters/openai_compat.py",
+    "backend/src/adapters/ollama.py",
+    "backend/src/api/routes/chat.py",
+    "backend/src/api/routes/observability.py",
+    "backend/src/api/routes/sessions.py",
+    "backend/src/core/agent_runtime.py",
+    "backend/src/core/agent/loop.py",
+    "frontend/src/components/panels/TraceView.tsx",
+    "frontend/src/components/layout/RightPanel.tsx",
+    "frontend/src/lib/localmind/client.ts",
+    "frontend/src/lib/localmind/exportChats.ts",
+    "frontend/src/types/index.ts",
+    "tests/",
+    "scripts/live_test_turn_trace.py",
+    "CHANGELOG.md"
+  ],
+  "refs": [
+    "office/reviews/2026-11-01-full-execution-observability-investigation.md",
+    "office/agents/sessions.md#session-14"
+  ],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": [],
+  "commit": "bcef13de"
+}

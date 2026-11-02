@@ -239,7 +239,30 @@ async def dispatch_with_retry(
         ``result.retry_attempts`` directly.
     """
     effective_allowed = allowed_tool_names if allowed_tool_names is not None else _allowed_tool_names.get()
-    if effective_allowed is not None and tool_intent.value not in effective_allowed:
+    # The fence sets are TOOL-NAME sets (AGENT_ALLOWED_TOOLS and every
+    # caller of this fence carry the schema names), but the dispatch knows
+    # the Intent. The two differ for exactly the tools whose schema name
+    # and intent value diverge — the same mismatch class
+    # loop._intent_for_tool maps for. Found by the standing eval harness
+    # (B-2026-10-31-23): the fence held "calculator" while the check looked
+    # for "calculate", so every calculator call inside any scoped turn died
+    # as permission — with the diag above now naming the set on the record.
+    _tool_name_alias = {
+        Intent.FILE_EDIT.value: "edit_file",
+        Intent.CALCULATE.value: "calculator",
+    }.get(tool_intent.value, tool_intent.value)
+    if (
+        effective_allowed is not None
+        and _tool_name_alias not in effective_allowed
+        and tool_intent.value not in effective_allowed
+    ):
+        # Name the fence on the record: which set blocked the tool — the
+        # diag that was missing when the eval harness hit this block and
+        # neither the turn log nor the result said WHO scoped the tool out.
+        logger.info(
+            f"[agent.dispatch] tool={tool_intent.value} blocked by the allowed-tool fence; "
+            f"allowed={sorted(effective_allowed)}"
+        )
         return (
             ToolResult(
                 content=(f"Tool '{tool_intent.value}' is not available in this read-only objective."),

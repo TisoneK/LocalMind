@@ -26,7 +26,7 @@ justified, not silently absorbed.
 """
 
 import pytest
-from core.agent.prompts import build_agent_system_prompt
+from core.agent.prompt import build_agent_system_prompt
 from core.models import Intent
 
 # intent -> max chars for the system prompt with EMPTY tool metadata list

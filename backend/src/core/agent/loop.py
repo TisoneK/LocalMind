@@ -44,6 +44,7 @@ v0.6 changes vs v0.5 (JSON-parsing loop):
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import re
@@ -108,10 +109,35 @@ from core.agent.initialization import (
     parse_initialization,
 )
 from core.agent.models import AgentStep, AgentTrace, strip_worker_reports, strip_worker_reports_from_history
-from core.agent.prompts import (
-    build_agent_intent_tail,
+from core.agent.prompt import (
+    SECTION_AGENT_PLAYBOOK,
+    SECTION_CARRIED_OBJECTIVE,
+    SECTION_CURRENT_INTENT,
+    SECTION_ENVIRONMENT,
+    SECTION_EXECUTION_PLAN,
+    SECTION_EXPERT_PERSONA,
+    SECTION_GOAL_ROUTE,
+    SECTION_INTENT_HISTORY,
+    SECTION_MEMORY_FACTS,
+    SECTION_OPEN_QUESTION,
+    SECTION_ROUTING_HINT,
+    SECTION_SKILL_FRAGMENT,
+    SECTION_TASK_STATE,
+    SECTION_TODO_STATE,
+    SECTION_WORKSPACE_STATE,
+    Band,
+    Layer,
+    SectionRegistry,
+    add_intent_tail_sections,
     build_agent_system_prompt,
+    build_parent_static_registry,
     build_planning_prompt,
+    dropped_sections_for,
+    horizon_for_intent,
+    make,
+    memory_facts_section_text,
+    render_static_budgeted,
+    staged_static_content,
     staged_system_prompt,
 )
 from core.agent.synthesizer import AnswerSynthesizer
@@ -1269,12 +1295,19 @@ def _intent_for_tool(tool_name: str) -> Intent:
     """Map a tool name to its Intent.
 
     Most tools share their intent value, but a few differ: the tool module is
-    ``edit_file`` while its Intent value is ``file_edit``. Seen live:
+    ``edit_file`` while its Intent value is ``file_edit``, and the schema name
+    is ``calculator`` while its Intent value is ``calculate``. Seen live:
     `Intent(tool_name)` with "edit_file" raises ValueError, the outer
     dispatch except marks the tool failed, and the failed-branch emit then
     crashed on the unbound `tool_result` — every native edit_file call died.
+    The calculator mismatch was found by the standing eval harness
+    (B-2026-10-31-23): every native calculator call fell back to SHELL and
+    died in the structured-input contract with the raw args JSON.
     """
-    _TOOL_NAME_TO_INTENT = {"edit_file": Intent.FILE_EDIT}
+    _TOOL_NAME_TO_INTENT = {
+        "edit_file": Intent.FILE_EDIT,
+        "calculator": Intent.CALCULATE,
+    }
     try:
         return _TOOL_NAME_TO_INTENT.get(tool_name) or Intent(tool_name)
     except ValueError:
@@ -2299,6 +2332,66 @@ def answer_hedges_after_evidence(text: str) -> bool:
     return any(phrase in lower for phrase in _HEDGE_PHRASES)
 
 
+def _settle_unreported_tool_calls(obs) -> int:
+    """Done-rule: every tool call that started ends with an outcome on the record.
+
+    A turn can die while a dispatch is in flight (user abort, client
+    disconnect, transport teardown) from ANY of the loop's dispatch sites —
+    the concurrent batch or any of the sequential ones. The record would
+    keep the call's started event forever without an outcome: the UI shows
+    a tool that never finished and a later turn cannot reason about a call
+    that left no trace. This reconcile walks the collector's history, finds
+    started calls that never reported, and settles each with the standard
+    unknown-outcome result (attempted, abandoned mid-run, effect unknown —
+    re-run only after checking the state it would have changed). Returns
+    the number of calls settled; 0 when nothing was owed.
+    """
+    if obs is None:
+        return 0
+    pending: list[dict] = []  # unsettled started calls, in emit order
+    for evt in obs.history():
+        if evt.type != "tool_call":
+            continue
+        data = evt.data if isinstance(evt.data, dict) else {}
+        if data.get("status") == "started":
+            pending.append(dict(data))
+        else:
+            # Any outcome event settles the most recent started call of
+            # the same tool (nested/completed dispatches emit in order).
+            for i in range(len(pending) - 1, -1, -1):
+                if pending[i].get("tool") == data.get("tool"):
+                    pending.pop(i)
+                    break
+    settled = 0
+    for started_evt in pending:
+        name = str(started_evt.get("tool") or "tool")
+        outcome = classify_unanswered_call(tool_name=name)
+        obs.emit(
+            "tool_call",
+            tool=name,
+            label="",
+            status="failed",
+            output=_truncate_observation(outcome.text),
+            latency_ms=0,
+            tool_args=started_evt.get("tool_args"),
+            iteration=started_evt.get("iteration"),
+            unknown_outcome=outcome.unknown,
+        )
+        obs.emit(
+            "tool_call_unanswered",
+            tool=name,
+            reason="the turn ended while the call was in flight",
+            unknown_outcome=outcome.unknown,
+            iteration=started_evt.get("iteration"),
+        )
+        logger.warning(
+            "[agent.loop] turn ended mid-flight — tool %s settled as unknown-outcome",
+            name,
+        )
+        settled += 1
+    return settled
+
+
 class AgentLoop:
     """
     Runs the think → act → observe cycle for a single user turn using
@@ -2323,7 +2416,27 @@ class AgentLoop:
     # Public entry point
     # ------------------------------------------------------------------
 
-    async def run(
+    async def run(self, *args, **kwargs):
+        """The turn's public entry — with the done-rule settle net.
+
+        Whatever ends the turn (normal completion, abort, provider death,
+        task cancellation, client disconnect), a tool call that STARTED but
+        never reported leaves the record settled as unknown-outcome —
+        never dangling. `obs` is extracted from the caller's arguments so
+        the reconcile can read this turn's event history (the loop instance
+        is shared across turns; no per-turn state lives on self).
+        """
+        obs = kwargs.get("obs")
+        if obs is None and len(args) >= 8:
+            obs = args[7]  # the 8th positional parameter of _run_impl
+        try:
+            async for chunk in self._run_impl(*args, **kwargs):
+                yield chunk
+        except BaseException:
+            _settle_unreported_tool_calls(obs)
+            raise
+
+    async def _run_impl(
         self,
         messages: list[dict],
         intent: Intent,
@@ -2391,6 +2504,19 @@ class AgentLoop:
         # Session id → the env context injects the session's
         # workspace folder so the agent writes artifacts where they belong.
         session_id: str | None = None,
+        # The session's ACTIVE durable goal objective (from the session
+        # goals store), when one exists. An objective outlives any single
+        # reply: rendered into the turn context (objective layer) so every
+        # turn on a mid-objective session advances it coherently instead of
+        # re-deriving intent from the message alone.
+        active_objective: Optional[str] = None,
+        # The session's outstanding open question — the clarifying question
+        # the agent most recently asked that the user has not substantively
+        # answered. Rendered into the turn context so a short reply ("yes",
+        # "sure", "what about X?") is interpreted against the agent's OWN
+        # question instead of re-deriving intent, and the forced-clarify
+        # exits stand down (the referent IS known — it is on record).
+        open_question: Optional[str] = None,
     ) -> AsyncIterator[StreamChunk]:
         """
         Run the agent loop with the Plan→Execute→Verify workflow.
@@ -2539,7 +2665,17 @@ class AgentLoop:
             _obs.emit("agent_loop_start", intent=intent.value)
 
         # ── Clarification gate ─────────────────────────────────────────
-        if confidence < CLARIFICATION_THRESHOLD and intent in AGENT_INTENTS:
+        # An open question on record stands this gate down: the classifier
+        # sees a short reply with no referent, but the referent IS known —
+        # it is the agent's own outstanding question, rendered into the
+        # turn context below. Forcing the canned clarification here is the
+        # repeated-clarification loop (the same question asked twice) that
+        # cross-turn continuity exists to kill.
+        if (
+            confidence < CLARIFICATION_THRESHOLD
+            and intent in AGENT_INTENTS
+            and not open_question
+        ):
             clarification = (
                 f"I want to make sure I understand — it looks like you want me to "
                 f"use the **{intent.value.replace('_', ' ')}** tool, but I'm not very confident. "
@@ -2806,7 +2942,12 @@ class AgentLoop:
                 yield StreamChunk(text=initialization.response, done=False)
                 yield StreamChunk(text="", done=True)
                 return
-            elif initialization.is_clarification:
+            elif initialization.is_clarification and not open_question:
+                # The open-question stand-down mirrors the confidence gate
+                # above: with the agent's own question on record, a short
+                # reply is an ANSWER to it — fall through to the loop, which
+                # sees the record in its turn context, instead of ending the
+                # turn on a second forced clarification.
                 if _obs:
                     _obs.emit("agent_loop_done", intent=intent.value, clarified=True)
                 if initialization.acknowledgement:
@@ -3156,6 +3297,19 @@ class AgentLoop:
                         )
         else:
             _plan_steps = []
+            # Never-attempted on the record (B-2026-11-01-26): planning
+            # deliberately did not run for this turn — say which gate kept
+            # it out, so a skipped stage is never mistaken for a crash.
+            if _obs:
+                _obs.emit(
+                    "stage_skipped",
+                    stage="planning",
+                    reason=(
+                        "planning gate did not admit this turn "
+                        "(no agent intent / direct tool result / planning "
+                        "disabled / planning already skipped)"
+                    ),
+                )
 
         # First-class task state — created once per turn when
         # there is a contract (criteria) or a plan. The full block (objective
@@ -3458,25 +3612,70 @@ class AgentLoop:
         # used to leak in — memory_facts and intent_history — are moved to the
         # trailing turn_context message below. So this prompt = identity +
         # instructions + tool descriptions only.
-        system_prompt = build_agent_system_prompt(
-            intent=intent,
-            available_tools=scoped_available,
-            intent_history=None,
-            # Context engineering: plan/routing-hint/agent-playbook
-            # are PER-TURN or PER-INTENT content — they now ride the trailing
-            # turn-context (via build_agent_intent_tail below) instead of the
-            # byte-stable system prefix. agent_context is passed through ONLY
-            # for the native-bootstrap branch (parent turns), which keeps its
-            # own self-contained prompt.
-            plan_context=None,
-            memory_facts=None,
-            orchestrator_context=None,
-            agent_context=agent_context if _parent_native_turn else None,
-            # Render the in-prompt "Available tools" list from the SAME
-            # scoped defs as the native tools param (single source of truth).
-            tool_defs=filtered_tools,
-            native_bootstrap=_parent_native_turn,
-        )
+        #
+        # Prompt-structure registry (2026-11-01): on native parent turns the
+        # STATIC prompt is assembled from the named-section registry (4-layer
+        # doctrine). The registry object is kept so LATER calls stage their
+        # input by section name (staged_static_content) instead of cutting the
+        # rendered text by head-string finds, and so per-section telemetry can
+        # name what was sent.
+        if _parent_native_turn:
+            _static_registry = build_parent_static_registry(
+                tool_defs=filtered_tools,
+                agent_context=agent_context,
+            )
+            # Per-turn relevance budget (B-2026-10-31-25): the STATIC prefix is
+            # scoped by the turn's classified intent — a conversational turn
+            # does not choose tools, so the tool-choosing guidance suffix is
+            # not sent (the capability index stays; the constraints reference
+            # it). The cut is a contiguous suffix of the render order, so the
+            # budgeted render stays a byte-prefix of the canonical render and
+            # provider prefix caching survives the cut in both directions.
+            _relevance_horizon = horizon_for_intent(intent)
+            system_prompt = render_static_budgeted(_static_registry, _relevance_horizon)
+            if _obs:
+                # Request-derivation stamps (G7): the STATIC band's FULL
+                # registry composition (per-section chars, render order —
+                # including sections this turn's horizon dropped) and the
+                # budgeted render's fingerprint — content-free, so the
+                # durable record can prove WHAT the prefix was and what any
+                # staged re-render (which re-renders from the full registry,
+                # full membership) would produce.
+                _budget_dropped = dropped_sections_for(_static_registry, _relevance_horizon)
+                _obs.emit(
+                    "relevance_budget",
+                    horizon=_relevance_horizon.value,
+                    dropped_sections=_budget_dropped,
+                    static_chars=len(system_prompt),
+                    static_sha16=hashlib.sha256(
+                        system_prompt.encode("utf-8", "replace")
+                    ).hexdigest()[:16],
+                    sections=[
+                        {"name": s.name, "chars": len(s.text)}
+                        for s in _static_registry.render_sections(Band.STATIC)
+                    ],
+                )
+        else:
+            _static_registry = None
+            system_prompt = build_agent_system_prompt(
+                intent=intent,
+                available_tools=scoped_available,
+                intent_history=None,
+                # Context engineering: plan/routing-hint/agent-playbook
+                # are PER-TURN or PER-INTENT content — they now ride the trailing
+                # turn-context (via build_agent_intent_tail below) instead of the
+                # byte-stable system prefix. agent_context is passed through ONLY
+                # for the native-bootstrap branch (parent turns), which keeps its
+                # own self-contained prompt.
+                plan_context=None,
+                memory_facts=None,
+                orchestrator_context=None,
+                agent_context=None,
+                # Render the in-prompt "Available tools" list from the SAME
+                # scoped defs as the native tools param (single source of truth).
+                tool_defs=filtered_tools,
+                native_bootstrap=False,
+            )
         # Context engineering: the intent-varying sections (skill
         # fragment, expert persona, agent playbook, execution plan, routing
         # hint, current-intent line) used to live INSIDE the system prompt —
@@ -3485,16 +3684,23 @@ class AgentLoop:
         # after the stable prefix. Native bootstrap turns keep their compact
         # self-contained prompt (no tail — that surface never had these
         # sections and its leanness is deliberate).
-        intent_tail = (
-            ""
-            if _parent_native_turn
-            else build_agent_intent_tail(
+        #
+        # Prompt-structure registry (2026-11-01): the tail sections are
+        # registered into the SAME TURN registry as the context sections
+        # below, so the whole trailing message renders in one deterministic
+        # doctrine order (objective -> context -> guidance) instead of a
+        # concatenation sequence. The tail sections land per-name in the
+        # injected-items ledger too — the audit shows each named section
+        # rather than one opaque blob.
+        turn_registry = SectionRegistry()
+        if not _parent_native_turn:
+            add_intent_tail_sections(
+                turn_registry,
                 intent=intent,
                 plan_context=plan_context or None,
                 orchestrator_context=orchestrator_context,
                 agent_context=agent_context,
             )
-        )
 
         # Agent-loop token efficiency: the environment
         # (OS/cwd and the CURRENT TIME), the workspace state (git status,
@@ -3569,53 +3775,81 @@ class AgentLoop:
         # in-prompt list) to save ~279 tokens/iteration. session_id is passed
         # so the Session workspace line lands in the per-iteration context too —
         # free-tier models need the destination
-        # The injected-items ledger for this turn's trailing context: the env
-        # block records its exact rendered fragments; every further part
-        # appended below (intent tail, memory, workspace state, todos, goal
-        # route, task state) is recorded in the same ledger. One
-        # context_injected event carries them all — the audit half of "what
-        # the UI shows is what the model received".
-        _injected_items: list = []
-        turn_context_parts = [
-            # Context engineering: the intent tail leads the per-iteration context — it
-            # varies by intent/turn, so it lives entirely after the stable
-            # prefix (byte-identical within a turn, so it caches too).
-            *([intent_tail] if intent_tail else []),
-            _build_environment_context(
-                include_tool_list=False, session_id=session_id, items_out=_injected_items
+        #
+        # Prompt-structure registry (2026-11-01): every trailing part below
+        # is a named TURN section in `turn_registry` (the tail sections were
+        # registered above), so the message renders in one doctrine order —
+        # objective (current intent) -> context (environment, memory, intent
+        # history, workspace, todos, goal route, task state) -> guidance
+        # (skill, persona, playbook, plan, routing hint). The injected-items
+        # ledger walks the SAME render order, one item per named section —
+        # the audit half of "what the UI shows is what the model received",
+        # now itemized the way the prompt is structured.
+        _env_fragments: list = []
+        _env_text = _build_environment_context(
+            include_tool_list=False, session_id=session_id, items_out=_env_fragments
+        )
+        if _env_text:
+            turn_registry.add(
+                make(
+                    SECTION_ENVIRONMENT,
+                    Band.TURN,
+                    Layer.CONTEXT,
+                    1050,
+                    _env_text,
+                )
             )
-        ]
+        # The session's carried objective — the durable goal that outlives
+        # any single reply (objective layer, slot 1020: first thing the tail
+        # says after the current-intent line). Registered only when the
+        # session actually has one; a mid-objective session's every turn
+        # advances the objective coherently instead of re-deriving intent.
+        if active_objective:
+            turn_registry.add(
+                make(
+                    SECTION_CARRIED_OBJECTIVE,
+                    Band.TURN,
+                    Layer.OBJECTIVE,
+                    1020,
+                    "Active objective for this session (carried from the session's "
+                    f"goal — it outlives any single reply): {active_objective}\n"
+                    "Take the next concrete step toward it when this message "
+                    "advances it; when it completes or genuinely blocks, say so "
+                    "through the goal tools.",
+                )
+            )
         # LocalMind Caching (2026-08-31): memory + intent history are DYNAMIC
         # (they change per retrieval/turn), so they live here in the trailing
         # turn-context — NOT in the cacheable system prefix above.
         if memory_facts:
-            _memory_block = (
-                "What you know about this user:\n"
-                + "\n".join(f"- {f}" for f in memory_facts)
-            )
-            turn_context_parts.append(_memory_block)
-            _injected_items.append(
-                {"kind": "memory_facts", "source": "memory store", "text": _memory_block, "chars": len(_memory_block)}
+            turn_registry.add(
+                make(
+                    SECTION_MEMORY_FACTS,
+                    Band.TURN,
+                    Layer.CONTEXT,
+                    1060,
+                    memory_facts_section_text(memory_facts),
+                )
             )
         if intent_history:
-            _ih_text = "Recent intent history: " + ", ".join(intent_history)
-            turn_context_parts.append(_ih_text)
-            _injected_items.append(
-                {"kind": "intent_history", "source": "intent classifier", "text": _ih_text, "chars": len(_ih_text)}
+            turn_registry.add(
+                make(
+                    SECTION_INTENT_HISTORY,
+                    Band.TURN,
+                    Layer.CONTEXT,
+                    1065,
+                    "Recent intent history: " + ", ".join(intent_history),
+                )
             )
         if workspace_context:
-            turn_context_parts.append(workspace_context)
-            _injected_items.append(
-                {
-                    "kind": "workspace_state",
-                    "source": "workspace snapshot (git/diff/build)",
-                    "text": workspace_context,
-                    "chars": len(workspace_context),
-                }
-            )
-        if intent_tail:
-            _injected_items.append(
-                {"kind": "intent_tail", "source": "intent classifier", "text": intent_tail, "chars": len(intent_tail)}
+            turn_registry.add(
+                make(
+                    SECTION_WORKSPACE_STATE,
+                    Band.TURN,
+                    Layer.CONTEXT,
+                    1070,
+                    workspace_context,
+                )
             )
         # Inject the session's CURRENT todo list (persisted from
         # previous turns). This is the "agent is aware of its own environment"
@@ -3623,52 +3857,123 @@ class AgentLoop:
         # todos exist and their status instead of looking for them in chat.
         _todo_state_prompt = _render_todo_state(todo_state)
         if _todo_state_prompt:
-            turn_context_parts.append(_todo_state_prompt)
-            _injected_items.append(
-                {
-                    "kind": "todo_state",
-                    "source": "session todo store",
-                    "text": _todo_state_prompt,
-                    "chars": len(_todo_state_prompt),
-                }
+            turn_registry.add(
+                make(
+                    SECTION_TODO_STATE,
+                    Band.TURN,
+                    Layer.CONTEXT,
+                    1080,
+                    _todo_state_prompt,
+                )
             )
         # The derived goal route — the ordered sub-goal path
         # (check → prep → write → verify) per top-level goal, so the model
         # follows the fastest+safest sequence rather than guessing.
         _goal_route_prompt = _render_goal_route(goal_tree)
         if _goal_route_prompt:
-            turn_context_parts.append(_goal_route_prompt)
-            _injected_items.append(
-                {
-                    "kind": "goal_route",
-                    "source": "goal tree",
-                    "text": _goal_route_prompt,
-                    "chars": len(_goal_route_prompt),
-                }
+            turn_registry.add(
+                make(
+                    SECTION_GOAL_ROUTE,
+                    Band.TURN,
+                    Layer.CONTEXT,
+                    1090,
+                    _goal_route_prompt,
+                )
+            )
+        # The open question — the agent's own outstanding clarifying
+        # question (context layer, slot 1095, between the goal route and the
+        # task state). A short reply is an ANSWER to this; interpreting it
+        # against anything else re-derives the intent the question already
+        # settled. Registered only when a fresh record exists.
+        if open_question:
+            turn_registry.add(
+                make(
+                    SECTION_OPEN_QUESTION,
+                    Band.TURN,
+                    Layer.CONTEXT,
+                    1095,
+                    "Open question you asked and the user is now answering — interpret "
+                    "this reply against it (it is the referent for short answers like "
+                    "'yes' or a naming of a missing detail):\n"
+                    f"{open_question}",
+                )
             )
         _task_state_prompt = task_state.to_prompt()
         if _task_state_prompt:
-            turn_context_parts.append(_task_state_prompt)
-            _injected_items.append(
-                {
-                    "kind": "task_state",
-                    "source": "task state engine",
-                    "text": _task_state_prompt,
-                    "chars": len(_task_state_prompt),
-                }
+            turn_registry.add(
+                make(
+                    SECTION_TASK_STATE,
+                    Band.TURN,
+                    Layer.CONTEXT,
+                    1100,
+                    _task_state_prompt,
+                )
             )
-        turn_context = "\n\n".join(p for p in turn_context_parts if p)
+        turn_context = turn_registry.render(Band.TURN)
         # The audit emit: one event, every injected item of the trailing
         # context with its exact text — the record the UI (and the export)
-        # can show item by item.
+        # can show item by item, in the exact order the message renders.
+        _TURN_SECTION_SOURCES = {
+            SECTION_CURRENT_INTENT: "intent classifier",
+            SECTION_CARRIED_OBJECTIVE: "session goal store",
+            SECTION_MEMORY_FACTS: "memory store",
+            SECTION_INTENT_HISTORY: "intent classifier",
+            SECTION_WORKSPACE_STATE: "workspace snapshot (git/diff/build)",
+            SECTION_TODO_STATE: "session todo store",
+            SECTION_GOAL_ROUTE: "goal tree",
+            SECTION_OPEN_QUESTION: "open-question record",
+            SECTION_TASK_STATE: "task state engine",
+            SECTION_SKILL_FRAGMENT: "intent skill library",
+            SECTION_EXPERT_PERSONA: "intent persona map",
+            SECTION_AGENT_PLAYBOOK: "selected agent",
+            SECTION_EXECUTION_PLAN: "planning phase",
+            SECTION_ROUTING_HINT: "orchestrator",
+        }
+        _injected_items: list = []
+        for _sec in turn_registry.render_sections(Band.TURN):
+            if _sec.name == SECTION_ENVIRONMENT:
+                # The environment section records its own fine-grained
+                # fragments (os/clock/paths/hardware/guidance/know).
+                _injected_items.extend(_env_fragments)
+                continue
+            _injected_items.append(
+                {
+                    "kind": _sec.name,
+                    "source": _TURN_SECTION_SOURCES.get(_sec.name, "prompt structure"),
+                    "text": _sec.text,
+                    "chars": len(_sec.text),
+                }
+            )
         if _injected_items and _obs:
-            _obs.emit("context_injected", surface="loop_turn", items=_injected_items)
+            # Request-derivation stamps (G7): the TURN message's composition
+            # (per-section chars in render order) and the exact rendered
+            # bytes' fingerprint — the deriver rebuilds the message from the
+            # injected items and verifies both against these stamps.
+            _obs.emit(
+                "context_injected",
+                surface="loop_turn",
+                items=_injected_items,
+                rendered_chars=len(turn_context),
+                rendered_sha16=hashlib.sha256(
+                    turn_context.encode("utf-8", "replace")
+                ).hexdigest()[:16],
+                sections=[
+                    {"name": s.name, "chars": len(s.text)}
+                    for s in turn_registry.render_sections(Band.TURN)
+                ],
+            )
 
-        # Replace or prepend the (stable) system message
+        # Replace or prepend the (stable) system message. When a system
+        # message is already present (the conversation-summary section),
+        # the registry render is APPENDED to it; `_system_prefix` keeps
+        # that pre-existing content so the staged re-render below can
+        # reproduce the merged message with only the registry part staged.
+        _system_prefix = ""
         if loop_messages and loop_messages[0]["role"] == "system":
+            _system_prefix = loop_messages[0]["content"]
             loop_messages[0] = {
                 "role": "system",
-                "content": loop_messages[0]["content"] + "\n\n" + system_prompt,
+                "content": _system_prefix + "\n\n" + system_prompt,
             }
         else:
             loop_messages.insert(0, {"role": "system", "content": system_prompt})
@@ -3766,6 +4071,15 @@ class AgentLoop:
                     _consult_inflight.start()
             except Exception as _thx:  # never let the Thinker break a turn
                 logger.warning("[agent.loop] first-tool Thinker consult skipped: %s", _thx)
+                # Attempted-vs-never-attempted on the record (B-2026-11-01-26):
+                # the consult fired (agent_thinker_start is out) but produced
+                # no analysis — distinguishable from a consult that never ran.
+                if _obs:
+                    _obs.emit(
+                        "stage_skipped",
+                        stage="thinker_consult",
+                        reason=f"consult crashed before analysis: {_thx}"[:300],
+                    )
 
         if initial_tool_result:
             safe_initial = _filter_tool_injection(initial_tool_result.content)
@@ -3951,6 +4265,16 @@ class AgentLoop:
         _divergent_stop = False  # divergent tool budget broke the loop
         for iteration in range(_iter_hard_cap):
             trace.iterations_used = iteration + 1
+            # Per-iteration assembly boundary (B-2026-11-01-26): the
+            # iteration's prompt grows through plan/context/injections and
+            # the staging cuts — stamp the window so the per-call payload is
+            # attributable (completed below, beside the payload breakdown).
+            if _obs:
+                _obs.emit(
+                    "context_assembly_started",
+                    phase="iteration",
+                    iteration=iteration + 1,
+                )
 
             # Done-rule: nothing is owed on a call that never answered. If an
             # earlier iteration left an assistant tool call without a result
@@ -4438,7 +4762,32 @@ class AgentLoop:
             # answer-only call (no tools offered) also drops the on-demand-loading
             # paragraph. Placed after the answer-only decision so `_iter_tools`
             # is final, and before the breakdown so the meter shows what is sent.
-            if (
+            # Native parent turns stage by SECTION NAME from the registry they
+            # were built with (the cut cannot drift from the structure);
+            # other surfaces keep the legacy head-string cut, which returns
+            # its input untouched for prompts without the parent heads.
+            if _static_registry is not None:
+                if (
+                    iteration_messages
+                    and iteration_messages[0].get("role") == "system"
+                    and any(m.get("role") == "tool" for m in iteration_messages)
+                ):
+                    _staged_content = staged_static_content(
+                        _static_registry,
+                        with_tools=bool(_iter_tools),
+                        prefix=_system_prefix,
+                    )
+                    logger.info(
+                        "[agent.loop] staged-by-name iter=%d: system %d -> %d chars",
+                        iteration + 1,
+                        len(iteration_messages[0].get("content") or ""),
+                        len(_staged_content),
+                    )
+                    iteration_messages[0] = {
+                        **iteration_messages[0],
+                        "content": _staged_content,
+                    }
+            elif (
                 iteration_messages
                 and iteration_messages[0].get("role") == "system"
                 and isinstance(iteration_messages[0].get("content"), str)
@@ -4462,6 +4811,49 @@ class AgentLoop:
             except Exception:
                 logger.debug("[agent.loop] context breakdown failed", exc_info=True)
                 _breakdown_est = None
+            if _obs:
+                _completed_fields = dict(
+                    phase="iteration",
+                    iteration=iteration + 1,
+                    messages=len(iteration_messages),
+                    tools=len(_iter_tools),
+                    system_chars=(
+                        len(iteration_messages[0].get("content") or "")
+                        if iteration_messages
+                        and iteration_messages[0].get("role") == "system"
+                        else 0
+                    ),
+                )
+                # Request-derivation stamps (G7): WHICH input-selection stage
+                # this call's system message used, and the exact bytes'
+                # fingerprint. The deriver re-derives the expected stage from
+                # the payload shape (tool result present? tools offered?) and
+                # the expected composition from the prompt package, then
+                # verifies both against this stamp.
+                _has_tool_results = any(
+                    m.get("role") == "tool" for m in iteration_messages
+                )
+                if not _has_tool_results:
+                    _system_stage = "full"
+                elif _iter_tools:
+                    _system_stage = "tool_result"
+                else:
+                    _system_stage = "answer_only"
+                _completed_fields["system_stage"] = _system_stage
+                if iteration_messages and iteration_messages[0].get("role") == "system":
+                    _completed_fields["system_sha16"] = hashlib.sha256(
+                        str(iteration_messages[0].get("content") or "").encode(
+                            "utf-8", "replace"
+                        )
+                    ).hexdigest()[:16]
+                if _breakdown_est is not None:
+                    try:
+                        _completed_fields["estimated_prompt_tokens"] = int(
+                            sum(_breakdown_est.values())
+                        )
+                    except (TypeError, ValueError):
+                        pass
+                _obs.emit("context_assembly_completed", **_completed_fields)
             try:
                 _call = asyncio.ensure_future(
                     asyncio.wait_for(

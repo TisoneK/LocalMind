@@ -40,6 +40,14 @@ from core.agent.loop import answer_is_internal_scaffold
 from core.config import settings
 from core.engine import Engine
 from core.error_normalizer import SOURCE_INTERNAL, normalize_error
+from core.goal_idle import (
+    cancel_idle_continuation,
+    clear_human_stop,
+    note_human_stop,
+    note_session_busy,
+    release_session_busy,
+    schedule_idle_continuation,
+)
 from core.goal_rounds import note_human_steer, process_with_goal_rounds
 from core.obs import ObsCollector
 from core.title_generator import generate_title_smart, refine_title_async
@@ -650,8 +658,28 @@ async def _event_stream(
         reset_current_session,
         set_current_session,
     )
+    from core.turn_trace import TurnContext, bind_turn, new_turn_id, reset_turn
 
     _ws_token = set_current_session(session_id)
+
+    # Bind the request's execution-trace identity (B-2026-11-01-26) in the
+    # same stable task that bound the session: turn_id is minted at the
+    # transport boundary and carried by ContextVar so the runtime, the loop
+    # and the adapters stamp their events (routing decision, model-call
+    # boundaries) with the turn they serve. Persisted in the finally below —
+    # including on abort/exception, where the trace is most valuable.
+    _turn_ctx = TurnContext(
+        turn_id=new_turn_id(), session_id=session_id, collector=obs
+    )
+    _turn_token = bind_turn(_turn_ctx)
+
+    # The session is busy with a transport turn for this whole request, and
+    # a fresh human message clears both any scheduled idle continuation and
+    # any human-stop suppression (the human is back — their turn re-drives
+    # the deep dive through the in-request driver).
+    note_session_busy(session_id)
+    cancel_idle_continuation(session_id)
+    clear_human_stop(session_id)
 
     # ── SSE keepalive state ──────────────────────────────────────────────
     # Track the last time we sent ANY SSE data. If more than KEEPALIVE_INTERVAL_S
@@ -1192,6 +1220,16 @@ async def _event_stream(
                             "post_answer_lanes": (
                                 evt.data.get("provider_usage") or {}
                             ).get("post_answer_lanes", {}),
+                            # Provider-timing pair: the first call's
+                            # submit→first-byte wait and the final call's
+                            # decode window — the honest tokens-per-second
+                            # denominator (0 when unrecorded).
+                            "first_token_ms": (
+                                evt.data.get("provider_usage") or {}
+                            ).get("first_token_ms", 0),
+                            "decode_ms": (
+                                evt.data.get("provider_usage") or {}
+                            ).get("decode_ms", 0),
                         },
                     }
                 )
@@ -1233,6 +1271,21 @@ async def _event_stream(
         yield _sse({"type": "done"})
 
     finally:
+        # The transport turn is over — normal end, abort, disconnect or
+        # exception. Release the busy fence first, then let the idle
+        # continuation driver pick the deep dive back up when the goal is
+        # armed and still wants rounds (a dropped connection no longer ends
+        # it; a steer, a Stop, or a pending confirmation never schedules).
+        release_session_busy(session_id)
+        try:
+            scheduled = schedule_idle_continuation(_engine, session_id, goal_store)
+            if scheduled:
+                logger.info(
+                    "[chat] goal deep dive continues on the idle driver: %s",
+                    session_id,
+                )
+        except Exception:
+            logger.debug("[chat] idle continuation schedule skipped", exc_info=True)
         # unbind the transport-level session
         # contextvar (paired with the set at the top of this generator).
         # Must run in this stable task's context — the token was created here.
@@ -1240,6 +1293,28 @@ async def _event_stream(
             reset_current_session(_ws_token)
         except Exception:
             pass  # Never let cleanup crash the SSE stream
+        # Persist the durable per-turn execution trace (B-2026-11-01-26):
+        # the request collector's full non-destructive history lands in the
+        # turn_traces store keyed by this turn's id — the stream itself, not
+        # a projection — so a finished turn can be replayed. Runs on every
+        # ending (normal, abort, exception); a crashed turn's trace is the
+        # most valuable one. Never let the write break the SSE cleanup.
+        try:
+            _written = _engine._store.append_turn_trace(
+                session_id, _turn_ctx.turn_id, obs.history()
+            )
+            logger.info(
+                "[chat] turn trace persisted: %s (%d events)",
+                _turn_ctx.turn_id,
+                _written,
+            )
+        except Exception:
+            logger.debug("[chat] turn trace persist skipped", exc_info=True)
+        finally:
+            try:
+                reset_turn(_turn_token)
+            except Exception:
+                pass  # Never let cleanup crash the SSE stream
         # GUARANTEE: If the generator was interrupted (client disconnect,
         # exception, etc.) before engine.process() could persist the
         # assistant message, save whatever response text we accumulated.
@@ -1330,6 +1405,9 @@ async def abort_session(session_id: str):
     Safe to call when idle: each turn starts with a fresh (unset) event.
     """
     _engine.abort(session_id)
+    # A human pressed Stop: automatic continuation must not pick the deep
+    # dive back up (this is a cease, not a dropped connection).
+    note_human_stop(session_id)
     return {"aborted": True}
 
 
@@ -1356,8 +1434,11 @@ async def steer_session(session_id: str, message: str = Body(..., embed=True)):
             detail="Steering queue full — wait for the agent to finish a step and retry",
         )
     # A human message arrived during a goal-driven turn: the round driver
-    # yields at the next idle point instead of auto-continuing over it.
+    # yields at the next idle point instead of auto-continuing over it —
+    # and the idle driver must not pick the work back up while the human
+    # is mid-decision.
     note_human_steer(session_id)
+    note_human_stop(session_id)
     return {"accepted": True}
 
 

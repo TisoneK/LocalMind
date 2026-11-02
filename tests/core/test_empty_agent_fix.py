@@ -87,18 +87,30 @@ class TestP3MemoryWeaving:
         assert "know" in content, "chat.md should frame memory as knowledge"
 
     def test_agent_prompt_frames_memory_as_knowledge(self):
-        from core.agent.prompts import build_agent_system_prompt
+        """P3 doctrine on the post-registry structure (2026-11-01): memory
+        facts are per-turn content (a TURN-only section) — they ride the
+        trailing turn-context, never the cacheable prefix, and they are
+        framed as knowledge, not 'retrieved from a store' prose."""
+        from core.agent.prompt import (
+            build_agent_system_prompt,
+            memory_facts_section_text,
+        )
+
         prompt = build_agent_system_prompt(
             intent=Intent.CHAT,
             available_tools=[],
             memory_facts=["User prefers Python", "User uses Linux"],
         )
         prompt_lower = prompt.lower()
-        # Should not use mechanical "retrieved from memory store" language
-        assert "memory store" not in prompt_lower, "Should not use mechanical memory language"
-        # Should contain the actual facts
-        assert "python" in prompt_lower, "Should contain memory facts"
-        assert "linux" in prompt_lower, "Should contain memory facts"
+        # The cacheable prefix must NOT embed per-turn memory (cache-buster class)
+        assert "python" not in prompt_lower, "per-turn memory leaked into the static prefix"
+        assert "linux" not in prompt_lower, "per-turn memory leaked into the static prefix"
+
+        # The TURN-band section carries the facts, knowledge-framed
+        section = memory_facts_section_text(["User prefers Python", "User uses Linux"]).lower()
+        assert "what you know about this user" in section
+        assert "memory store" not in section, "Should not use mechanical memory language"
+        assert "python" in section and "linux" in section, "Should contain memory facts"
 
 
 # ── P5: Parallel tool execution (MultiToolCallResult) ─────────────────────
@@ -146,7 +158,7 @@ class TestP6SkillInjection:
     def test_skill_injected_into_agent_prompt(self):
         # P0 Step 2: the skill fragment rides the intent TAIL, not the
         # byte-stable system prompt.
-        from core.agent.prompts import build_agent_intent_tail
+        from core.agent.prompt import build_agent_intent_tail
         tail = build_agent_intent_tail(intent=Intent.CODE_EXEC).lower()
         # CODE_EXEC intent should inject coding.md content
         # The coding skill should mention something about code practices
@@ -275,7 +287,7 @@ class TestP10ExpertPersonas:
     """
 
     def test_coder_persona_for_code_exec(self):
-        from core.agent.prompts import build_agent_intent_tail
+        from core.agent.prompt import build_agent_intent_tail
         tail = build_agent_intent_tail(
             intent=Intent.CODE_EXEC,
         )
@@ -284,7 +296,7 @@ class TestP10ExpertPersonas:
         assert "code" in tail_lower or "coder" in tail_lower or "engineer" in tail_lower
 
     def test_writer_persona_for_file_write(self):
-        from core.agent.prompts import build_agent_intent_tail
+        from core.agent.prompt import build_agent_intent_tail
         tail = build_agent_intent_tail(
             intent=Intent.FILE_WRITE,
         )
@@ -293,7 +305,7 @@ class TestP10ExpertPersonas:
         assert "write" in tail_lower or "writer" in tail_lower or "content" in tail_lower
 
     def test_debugger_persona_for_file_edit(self):
-        from core.agent.prompts import build_agent_intent_tail
+        from core.agent.prompt import build_agent_intent_tail
         tail = build_agent_intent_tail(
             intent=Intent.FILE_EDIT,
         )
@@ -302,7 +314,7 @@ class TestP10ExpertPersonas:
         assert "debug" in tail_lower or "fix" in tail_lower or "diagnos" in tail_lower
 
     def test_researcher_persona_for_web_search(self):
-        from core.agent.prompts import build_agent_intent_tail
+        from core.agent.prompt import build_agent_intent_tail
         tail = build_agent_intent_tail(
             intent=Intent.WEB_SEARCH,
         )
@@ -311,7 +323,7 @@ class TestP10ExpertPersonas:
         assert "research" in tail_lower or "search" in tail_lower or "fact" in tail_lower
 
     def test_operator_persona_for_shell(self):
-        from core.agent.prompts import build_agent_intent_tail
+        from core.agent.prompt import build_agent_intent_tail
         tail = build_agent_intent_tail(
             intent=Intent.SHELL,
         )
@@ -320,7 +332,7 @@ class TestP10ExpertPersonas:
         assert "shell" in tail_lower or "command" in tail_lower or "system" in tail_lower
 
     def test_archivist_persona_for_memory_op(self):
-        from core.agent.prompts import build_agent_intent_tail
+        from core.agent.prompt import build_agent_intent_tail
         tail = build_agent_intent_tail(
             intent=Intent.MEMORY_OP,
         )

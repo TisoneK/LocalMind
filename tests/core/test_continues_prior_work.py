@@ -52,8 +52,8 @@ def test_auto_note_never_mentions_agent_mode(monkeypatch):
 
 
 def test_shell_note_survives_missing_summary(monkeypatch):
-    from core.agent import prompts
+    from core.agent.prompt.sections import parent
 
-    monkeypatch.setattr(prompts, "get_cached_summary", lambda: "")
+    monkeypatch.setattr(parent, "get_cached_summary", lambda: "")
     monkeypatch.setattr("core.shell_config.note", lambda: "Shell: Git Bash — write commands in this shell's syntax.")
-    assert "Git Bash" in prompts._system_env_line()
+    assert "Git Bash" in parent._system_env_line()

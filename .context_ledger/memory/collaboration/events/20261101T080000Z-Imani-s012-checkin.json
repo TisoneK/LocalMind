@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261101T080000Z-Imani-s012-checkin",
+  "type": "claim",
+  "session": "S012",
+  "agent": "Imani",
+  "created": "2026-11-01T08:00:00Z",
+  "issue": "prompt-structure-b25",
+  "body": "Imani S012 claims the prompt-structure build (owner directive 2026-11-01: before B-26): order-slot registry + strict assembly (gap G3), cache discipline (gap G2), User Objective Primacy 4-layer parent prompt, instruction dedupe across parent/dispatcher/thinker — B-2026-10-31-25 increments. Design inputs read reference-only: S010 external-harness deep study (gaps G1-G8, adoption queue), S011 observability investigation. Zero reference vocabulary enters product artifacts. No overlap with Tobias S004's verification scope.",
+  "paths": ["backend/src/core/agent/prompts.py", "backend/src/core/agent/loop.py", "backend/src/core/trivial_input.py", "backend/src/core/agent/context_breakdown.py"],
+  "refs": ["office/reviews/2026-11-01-external-harness-deep-study.md", "office/reviews/2026-11-01-full-execution-observability-investigation.md", "office/tasks/backlog.md#B-2026-10-31-25"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

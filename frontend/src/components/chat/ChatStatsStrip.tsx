@@ -114,7 +114,7 @@ export function ChatStatsStrip({
           </span>
         )}
         {reading.tokensPerSecond !== null && (
-          <span title="Provider output tokens per second of decode time">
+          <span title="Output tokens per second — the final model call's decode window where recorded, else the whole-turn wall clock (pre-trace turns)">
             {reading.tokensPerSecond} tok/s
           </span>
         )}

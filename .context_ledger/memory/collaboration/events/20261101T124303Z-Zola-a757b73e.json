@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261101T124303Z-Zola-a757b73e",
+  "type": "release",
+  "session": "S015",
+  "agent": "Zola",
+  "created": "2026-11-01T12:43:03Z",
+  "issue": "b25-remainder-and-measurement-honesty",
+  "body": "Zola S015 releases the completion of the B-2026-10-31-25 prompt/context program + the measurement-honesty fixes (owner: 'finish all'): (1) the per-turn relevance budget e5615d7a — a chat-classified loop turn's first call drops the tool-choosing guidance suffix under a hard byte-prefix constraint (contiguous-suffix cuts only; capability index survives; the decision rides the trace as relevance_budget); (2) honest tokens-per-second 88f2f3e0 — decode-window denominator + first-token wait on the record, timingBasis names the denominator everywhere it renders; (3) the mid-flight settle net 55dafff8 — a turn that dies with a dispatch in flight settles it unknown-outcome (one net at run()'s exit, all nine dispatch sites); (4) the auxiliary-call contract 6ae28323 — exact-skeleton summary checkpoints, fail-closed validation, a cut checkpoint never replaces history; (5) the triads doc 869155d4 (docs/prompt-architecture.md) + changelog. Verified: backend 3,957 / frontend 678 / tsc clean; all three 8765 live harnesses PASS (prompt structure incl. the re-slot, greeting gate = 1 call 0 replans no false card — G4 verified live, turn trace). Backlog: B-2026-10-31-25 closed, G7 re-seeded as B-2026-11-01-27.",
+  "paths": [],
+  "refs": ["office/agents/sessions.md#session-15"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

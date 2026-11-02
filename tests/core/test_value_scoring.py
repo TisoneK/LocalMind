@@ -134,7 +134,7 @@ class TestSummarizerValueSlice:
         # includes the NEWEST message (7) and excludes the oldest (0).
         # This genuinely discriminates value-based from positional.
         scores = [0.9, 0.1, 0.8, 0.2, 0.7, 0.3, 0.6, 0.4]
-        adapter = _fake_adapter("value summary")
+        adapter = _fake_adapter('[Continuing task] The user is setting up a database.\n[Decisions and constraints] Wants PostgreSQL; rejected MongoDB.\n[Open threads] (none)')
         # Fixture ≈ 80 tokens; budget 80 → threshold 60 < 80 forces compression.
         result = await maybe_compress_history(
             msgs, adapter, 80, value_scores=scores
@@ -142,7 +142,7 @@ class TestSummarizerValueSlice:
         # Compression happened (summary replaced ~50% of conv).
         assert len(result) < len(msgs)
         joined = "\n".join(m.get("content", "") for m in result)
-        assert "value summary" in joined
+        assert '[Continuing task] The user is setting up a database.\n[Decisions and constraints] Wants PostgreSQL; rejected MongoDB.\n[Open threads] (none)' in joined
         # The NEWEST message (index 7, score 0.4) was compressed despite
         # being most recent — proves VALUE selection, not positional.
         assert "msg 7 detail here" not in joined
@@ -155,10 +155,10 @@ class TestSummarizerValueSlice:
         from core.summarizer import maybe_compress_history
 
         msgs = self._big_history()
-        adapter = _fake_adapter("legacy summary")
+        adapter = _fake_adapter('[Continuing task] The user is setting up a database.\n[Decisions and constraints] Wants PostgreSQL; rejected MongoDB.\n[Open threads] (none)')
         result = await maybe_compress_history(msgs, adapter, 80, value_scores=None)
         joined = "\n".join(m.get("content", "") for m in result)
-        assert "legacy summary" in joined
+        assert '[Continuing task] The user is setting up a database.\n[Decisions and constraints] Wants PostgreSQL; rejected MongoDB.\n[Open threads] (none)' in joined
         # Legacy: oldest slice compressed, newest survive.
         assert "msg 7 detail here" in joined
 
@@ -167,11 +167,11 @@ class TestSummarizerValueSlice:
         from core.summarizer import maybe_compress_history
 
         msgs = self._big_history()
-        adapter = _fake_adapter("fallback summary")
+        adapter = _fake_adapter('[Continuing task] The user is setting up a database.\n[Decisions and constraints] Wants PostgreSQL; rejected MongoDB.\n[Open threads] (none)')
         # Wrong length (3 vs 8 conv messages) → legacy positional slice.
         result = await maybe_compress_history(msgs, adapter, 80, value_scores=[0.1, 0.2, 0.3])
         joined = "\n".join(m.get("content", "") for m in result)
-        assert "fallback summary" in joined
+        assert '[Continuing task] The user is setting up a database.\n[Decisions and constraints] Wants PostgreSQL; rejected MongoDB.\n[Open threads] (none)' in joined
 
 
 class TestParentContextBoundary:
