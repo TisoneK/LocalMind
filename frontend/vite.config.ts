@@ -4,6 +4,15 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
+// Ports are env-configured — scripts/dev-full.js resolves free ports BEFORE the
+// dev server starts and passes them down, so the proxy target can never drift
+// from the backend that actually bound. strictPort keeps that contract honest:
+// if the agreed port is taken, fail loudly instead of silently serving 3001
+// while Electron loads 3000.
+const frontendPort = Number(process.env.LOCALMIND_FRONTEND_PORT) || 3000
+const backendHost = process.env.LOCALMIND_HOST || '127.0.0.1'
+const backendPort = Number(process.env.LOCALMIND_PORT) || 8000
+
 export default defineConfig({
   // Relative asset URLs: the packaged Electron app loads dist/index.html from disk (file://),
   // where an absolute "/assets/..." points at the filesystem root, finds nothing, and leaves the
@@ -21,10 +30,15 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: frontendPort,
+    strictPort: true,
+    // Bind IPv4 explicitly — the dev tooling (wait-frontend, Electron, the
+    // orchestrator's probes) all target 127.0.0.1, and an IPv6-only localhost
+    // bind is exactly the drift class this port contract exists to prevent.
+    host: backendHost === '0.0.0.0' ? 'localhost' : backendHost,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: `http://${backendHost}:${backendPort}`,
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on('error', (err, req, res) => {

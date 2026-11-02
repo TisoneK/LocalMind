@@ -11,7 +11,6 @@ NOTE: Backend source lives in src/ — add it to sys.path so that
 import logging
 import os
 import signal
-import socket
 import sys
 
 import uvicorn
@@ -21,6 +20,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from api.app import create_app
 from core.config import settings
+from core.ports import is_port_in_use, occupant_is_localmind
 
 logging.basicConfig(
     level=getattr(logging, settings.localmind_log_level.upper(), logging.INFO),
@@ -43,48 +43,36 @@ httpx_logger.propagate = False
 app = create_app()
 
 
-def is_port_in_use(port: int, host: str = "127.0.0.1") -> bool:
-    """Check if a TCP port is already bound by another process.
-
-    POSIX: bind-probe with SO_REUSEADDR — matches uvicorn's own binding, so
-    lingering TIME_WAIT sockets from the previous instance don't produce a
-    FALSE "port in use" (a live finding), while a genuinely LISTENING process
-    still fails the bind.
-
-    Windows flips SO_REUSEADDR's meaning: a probe socket WITH the flag can
-    bind over another process's ACTIVE listener, so a bind-probe reports
-    genuinely-busy ports as free. Probe by connecting instead: a listening
-    owner completes (or rejects) the connection → in use; TIME_WAIT
-    leftovers refuse it → free, preserving that restart behavior.
-    """
-    if sys.platform == "win32":
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(0.5)
-            return s.connect_ex((host, port)) == 0
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        try:
-            s.bind((host, port))
-            return False  # Port is free
-        except OSError:
-            return True  # Port is already in use
-
-
 if __name__ == "__main__":
-    # Pre-check: fail fast if port is already in use by another LocalMind instance.
-    # This prevents the infinite restart loop in Electron when the user
-    # manually runs `python server.py` before launching the Electron app.
+    # Pre-check: fail fast when the preferred port is held by another process.
+    # The server layer stays strict on purpose — flexibility lives one layer up,
+    # in scripts/dev-full.js, which resolves free ports BEFORE spawning and
+    # propagates them through env to every consumer (vite, Electron, CORS).
+    # This guard names the occupant instead of telling the user to run netstat
+    # and guess: a healthy LocalMind instance is a different situation from a
+    # foreign application holding the port.
     if is_port_in_use(settings.localmind_port, settings.localmind_host):
         logger = logging.getLogger("localmind")
-        logger.error(
-            "[startup] Port %s:%s is already in use — another instance may be running. "
-            "Use `netstat -ano | findstr :%s` (Windows) or `lsof -i :%s` (macOS/Linux) "
-            "to find and kill the process, then try again.",
-            settings.localmind_host,
-            settings.localmind_port,
-            settings.localmind_port,
-            settings.localmind_port,
-        )
+        if occupant_is_localmind(settings.localmind_host, settings.localmind_port):
+            logger.error(
+                "[startup] Port %s:%s is already serving a healthy LocalMind instance — "
+                "stop that one first, or just open it; `npm start` reuses an existing "
+                "healthy backend automatically.",
+                settings.localmind_host,
+                settings.localmind_port,
+            )
+        else:
+            logger.error(
+                "[startup] Port %s:%s is held by a different application. Free it "
+                "(find the holder: `netstat -ano | findstr :%s` on Windows or "
+                "`lsof -i :%s` on macOS/Linux) or run LocalMind elsewhere: set "
+                "LOCALMIND_PORT (backend) and LOCALMIND_FRONTEND_PORT (UI) before "
+                "starting, or just use `npm start`, which picks free ports for you.",
+                settings.localmind_host,
+                settings.localmind_port,
+                settings.localmind_port,
+                settings.localmind_port,
+            )
         sys.exit(42)  # Exit code 42 = port in use (convention shared with Electron)
 
     # ── Graceful shutdown via uvicorn.Server ──────────────────────────────

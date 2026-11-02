@@ -74,19 +74,48 @@ npm install
 npm run dev:full
 ```
 
-This starts three processes concurrently:
+This starts the dev stack through `scripts/dev-full.js`:
 - **Backend** — FastAPI on `http://localhost:8000`
 - **Frontend** — Vite dev server on `http://localhost:3000`
 - **Electron** — desktop wrapper that loads the frontend
 
 The first run may take a few seconds while Ollama loads the model into memory.
 
+#### Ports — never a crash because another app holds one
+
+Ports are read from the environment, and conflicts are resolved **before**
+anything spawns:
+
+| Variable | Default | What it configures |
+|---|---|---|
+| `LOCALMIND_PORT` | `8000` | Backend (FastAPI) port |
+| `LOCALMIND_HOST` | `127.0.0.1` | Backend bind host |
+| `LOCALMIND_FRONTEND_PORT` | `3000` | Vite dev server port |
+| `LOCALMIND_PORT_STRICT` | unset | `1` = never move or reuse — report the conflict and exit instead |
+
+When you run `npm start`:
+
+- Preferred port **free** → used.
+- Port **held by a healthy LocalMind instance** → reused (no second backend; a
+  watcher tears the stack down if it dies).
+- Port **held by a different application** → the stack **moves to the next free
+  port and says so loudly** (`Port 8000 is held by another app — moving to 8001;
+  pin it with LOCALMIND_PORT`). The choice propagates to the Vite proxy,
+  Electron, the backend bind and CORS, so nothing drifts.
+- `LOCALMIND_PORT_STRICT=1` restores the old fail-fast behavior with a message
+  that names the occupant.
+
+Running `python server.py` directly stays strict (exit code 42) on purpose —
+flexibility lives in the orchestrator, where the chosen port can actually reach
+every consumer. `node scripts/dev-full.js --no-electron` starts just the
+backend + frontend for browser-only work.
+
 ### Run individual pieces
 
 | Command | What it does |
 |---|---|
-| `npm run dev:backend` | Backend only (FastAPI on :8000). **Note:** the default script uses a Windows venv path — see [Known Issues](#known-issues) for macOS/Linux. |
-| `npm run dev:frontend` | Frontend only (Vite on :3000). |
+| `npm run dev:backend` | Backend only (FastAPI on :8000 by default — set `LOCALMIND_PORT` to change). **Note:** the default script uses a Windows venv path — see [Known Issues](#known-issues) for macOS/Linux. |
+| `npm run dev:frontend` | Frontend only (Vite on :3000 by default — set `LOCALMIND_FRONTEND_PORT` to change; the port is strict, it will not silently drift). |
 | `npm run dev:electron` | Electron only (expects backend + frontend already running). |
 | `npm run build` | Production build of frontend + Electron. |
 

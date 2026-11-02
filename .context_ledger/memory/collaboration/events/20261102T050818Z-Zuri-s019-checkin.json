@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "id": "20261102T050818Z-Zuri-s019-checkin",
+  "type": "claim",
+  "session": "S019",
+  "agent": "Zuri",
+  "created": "2026-11-02T05:08:18Z",
+  "issue": "dev-port-flexibility",
+  "body": "Zuri S019 claims the owner's live report 2026-11-02: the dev stack uses common ports and crashes when another app holds one ('No flexibility' — pasted npm start log, backend exit 42 tears the whole tree down via --kill-others-on-fail). Build port flexibility end to end: ports as env contract (LOCALMIND_PORT / LOCALMIND_HOST already exist in settings; LOCALMIND_FRONTEND_PORT new), a dev orchestrator (scripts/dev-full.js) that resolves ports BEFORE spawning — reuse a healthy LocalMind backend on the preferred port, auto-fallback to the next free port with a loud notice, LOCALMIND_PORT_STRICT=1 keeps the old fail-fast — and full propagation: vite (the config's 5173 contradicts the CLI's 3000 — unified), electron main.js env-driven URLs + packaged-mode resolve, CORS from env, and the one hardcoded absolute-8000 fetch (ChatMessage PermissionGate) aligned to the shared relative base. server.py keeps its exit-42 guard (strict at the server layer, flexible at the orchestrator layer). Recon verified live: every hardcoded touchpoint mapped (dev:full wait-on URLs x3, electron main.js BACKEND_PORT/devServerUrl/prodUiUrl, electron package.json wait-on x2, vite.config port+proxy, app.py CORS list, ChatMessage.tsx:353).",
+  "paths": [
+    "scripts/dev-full.js",
+    "scripts/wait-frontend.js",
+    "package.json",
+    "electron/package.json",
+    "electron/main.js",
+    "frontend/vite.config.ts",
+    "backend/src/api/app.py",
+    "backend/server.py",
+    "frontend/src/components/chat/ChatMessage.tsx",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "refs": [
+    "office/agents/roster.md#zuri-s019",
+    "office/agents/sessions.md#session-19"
+  ],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

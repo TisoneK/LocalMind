@@ -5,10 +5,10 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-11-02T04:47:58Z_
+_Regenerated: 2026-11-02T05:40:18Z_
 
 ## Standing params
-- **Core:** 2.3.2 (locked, verified 2026-10-31)
+- **Core:** 2.3.2 (locked, verified 2026-11-02)
 - **Target:** Resilience + ZCode-import program (set by owner 2026-09-12, S471; full map: `office/reviews/2026-09-12-review-s471.md`). DONE at setting: the provider-stall watchdog on chat turns (`e32e08a1` — no-first-byte stall names the provider at 5s, switch-model offer at 30s, no abort). NEXT, in priority order: (1) **MCP client support** (stdio + streamable-HTTP transports, `mcp__server__tool` naming — the tool surface stops being the boundary); (2) **read-only Explorer subagent** — a Parent TOOL, not a peer: read-only sandbox, returns bounded conclusions with `file:line` refs, not dumps; (3) **fresh-eyes acceptance judge** — read-only, re-reads a finished deliverable against the original request, structured per-item verdicts (deepens ADR-18; the loop never grades its own work); (4) **plugin-style skill packaging** — versioned, namespaced `plugin:skill`, seed manifest, bundleable scripts/.mcp.json/commands. Tier-2 backlog candidates: web_fetch prompt-distillation, background-exec completion re-invocation, structured clarifying questions, plan mode. LocalMind has exactly one active agent: the Parent; live multi-agent delegation stays parked compatibility residue (the explorer/judge are read-only Parent tools, not peers). **Do NOT regress:** the ADR-34 event order, Session 31-33 fixes (thinking-aware timeouts build on them), the ADR-40 guardrail (live-verify tool SELECTION on a weak model + cerebras before any further schema cut), the ADR-41 default (z.ai thinking ON — never re-add a thinking-disable for GLM; GLM-4.5-flash has no effort/budget param, timeout scaling is the lever), the S471 watchdog fall-through (once a first byte lands, the heartbeat must return to the truthful prior branches — never stall-shame a healthy stream), or the Parent-only scope. **Owner ruling 2026-11-01 (supersedes the S206 `Hi`→zero-provider-call boundary, which is RETIRED):** no input class is answered from a hardcoded string while the provider is healthy — bare social gestures ("hi", "hello", "what's up", "sup") reach the model like any other turn ("the answer was hardcoded and not ethical or my design at all"). The canned warm lines exist as the provider-down fallback only (S448 ruling stands). A chat-message target overrides this standing Target.
 - **Scope:** discovery + review + fix all safe issues
 - **Push policy:** push to main directly after each commit
@@ -33,10 +33,10 @@ _Regenerated: 2026-11-02T04:47:58Z_
 _10 medium, 1 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
-- flaws/log.md (protocol/.context_ledger friction): 2 entries, last added 2026-11-01
-- inefficiencies/log.md (project code/env friction): 3 entries, last added 2026-11-01
+- flaws/log.md (protocol/.context_ledger friction): 3 entries, last added 2026-11-02
+- inefficiencies/log.md (project code/env friction): 4 entries, last added 2026-11-02
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-21
 
 ## Collaboration
-- 184 event(s) on file; most recent: `20261102T041500Z-Ayo-s018-release.json`
+- 186 event(s) on file; most recent: `20261102T053000Z-Zuri-s019-release.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`

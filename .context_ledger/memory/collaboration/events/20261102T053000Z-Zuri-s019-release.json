@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "id": "20261102T053000Z-Zuri-s019-release",
+  "type": "release",
+  "session": "S019",
+  "agent": "Zuri",
+  "created": "2026-11-02T05:30:00Z",
+  "issue": "dev-port-flexibility",
+  "body": "Zuri S019 releases the owner's port-flexibility report ('uses common ports, crashes when another app is using that port: No flexibility'): ports are now an environment contract and conflicts resolve BEFORE anything spawns. scripts/dev-full.js (the new dev:full) — free -> use; healthy LocalMind -> reuse through a watcher slot (never a second instance; 3 failed probes tear the stack down); foreign app -> next free port with a loud notice; LOCALMIND_PORT_STRICT=1 -> the old fail-fast naming the occupant; --print-plan and --no-electron flags. Propagation by env (LOCALMIND_PORT / LOCALMIND_HOST / LOCALMIND_FRONTEND_PORT) to Vite (strictPort + explicit IPv4 bind; the config's leftover 5173 unified to the stack's 3000), the proxy target, Electron (env URLs + packaged-mode resolve before the window loads), the backend bind and CORS (_cors_allow_origins follows the frontend port; LOCALMIND_CORS_ORIGINS override). core/ports.py is the single testable home for the occupancy rules; server.py's exit-42 guard names WHO holds the port. Fixed en route: ChatMessage's PermissionGate bypassed the shared relative API base with an absolute localhost:8000; and the live-verified probe hole — a socket.setTimeout probe reads a hung connect (non-accepting listener) as FREE, now a hard timer race in both JS copies. Verified: backend 4,020 passed / 2 skipped / 0 failed (15 new tests), frontend 678 + tsc clean, ruff clean; LIVE: five resolution scenarios, the fallback end-to-end (backend 8001, Vite proxy + CORS preflight green), reuse + watchdog teardown, both server.py guard messages verbatim, the default npm path. Commit 03ebcf3e (16 files, +852/-93); CHANGELOG Added x1; README 'Ports' section; no backlog row (built and closed in-session).",
+  "paths": [
+    "scripts/dev-full.js",
+    "scripts/dev-reuse-backend.js",
+    "scripts/wait-frontend.js",
+    "package.json",
+    "electron/package.json",
+    "electron/main.js",
+    "frontend/vite.config.ts",
+    "frontend/src/components/chat/ChatMessage.tsx",
+    "backend/server.py",
+    "backend/src/core/ports.py",
+    "backend/src/api/app.py",
+    "scripts/smoke_gate.py",
+    "tests/core/test_ports.py",
+    "tests/api/test_cors_origins.py",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "refs": [
+    "office/agents/sessions.md#session-19",
+    "office/agents/roster.md#zuri-s019"
+  ],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
