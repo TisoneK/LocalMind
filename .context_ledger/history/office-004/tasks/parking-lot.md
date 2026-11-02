@@ -1,0 +1,81 @@
+# Parking Lot (deferred knowledge — not a queue)
+
+The backlog is a work queue you act on; this file is the knowledge base
+you **don't** act on yet. Research findings, open design questions,
+advisory "should we…?" items, deferred work, and someday ideas live here
+so the backlog stays a queue an agent can actually work from. Nothing
+here is urgent, nothing here is capped, and nothing here blocks a gate.
+The record of a finding is its own row plus the commit / session entry
+that produced it; git history keeps every row, so promoting or dropping
+one loses nothing.
+
+**One rule keeps the two files honest: a parking-lot row is not a task.**
+If an item becomes actionable — it now has a clear next step and someone
+to take it — **promote** it: cut the row here, add an actionable row to
+`backlog.md` (a fresh `B-` ID, one line, pointing back at this row's `P-`
+ID if the context matters), and leave it here only as a one-line
+"→ promoted to B-… " stub if you want the breadcrumb. An item that turns
+out to be wrong or moot is just deleted — history remembers it.
+
+Every row gets a stable **ID** — `P-<added YYYY-MM-DD>-<n>`, n = that
+date's next sequence in the file — and a **Summary** cell with enough
+context that a future session can pick it up cold. Keep status
+qualifiers in the text ("advisory", "needs a decision", "blocked on X",
+"deferred by owner"). There is **no cap** here and **no priority** —
+items are grouped by *kind*, because the whole point is that these are
+not competing for the top of a queue.
+
+This file belongs to the **current office**. When the office closes, the
+parking lot is **not** re-seeded wholesale: the closing session promotes
+what is now actionable into the new backlog and records the rest in the
+permanent record (`history/office-<NNN>.md`, "Open threads"). A cold
+idea earns its way into the next office by becoming work, not by being
+copied.
+
+Full spec: `.context_ledger/core/schemas/ledger-schema.md` →
+"The parking lot".
+
+## Findings
+
+What we learned that isn't work yet — observations, measurements, root
+causes, "the current design does X because Y".
+
+| ID | Summary |
+|----|---------|
+
+## Open questions
+
+Advisory questions, decisions still up for grabs, "should we…?" — a
+question is not a task until it has an owner and a next step (then it
+becomes a backlog row or an ADR in `plans/decisions.md`).
+
+| ID | Summary |
+|----|---------|
+
+## Deferred work
+
+Real tasks, consciously parked — not now, but keepable. This is where a
+backlog row goes when the cap forces a prune and the item still matters:
+out of the queue, not into the void.
+
+| ID | Summary |
+|----|---------|
+| P-2026-10-31-1 | Teach `scripts/reset_vector_db.py` the cloud embedder path. It probes Ollama only, so a cloud-only setup (Ollama unreachable, OpenAI-compatible embedder configured) cannot use the repair tool to rebuild a stale index — VectorStore's own startup reconciliation handles that state, but the script exits with "Could not determine actual dim". Mirror `VectorStore._probe_cloud_dim` and record the cloud backend id when re-embedding. Context: 2026-10-31 vector dimension review (`office/reviews/2026-10-31-review.md`). |
+| P-2026-10-31-2 | Windows verification of the state engine: the State Explorer page and the live SSE run route (`GET /state-explorer`, `POST /api/state-engine/run`) were verified on macOS only. Run them on the owner's Windows box (build-free by design) and fix what the platform surfaces. Deferred from backlog B-2026-10-31-8 (2026-10-31 audit intake, cap prune): blocked on owner-box availability — no code work is possible from the sandbox side until the owner runs it. |
+| P-2026-10-31-3 | Memory edit path tolerance: `PATCH /api/memory/{id}` (behind `VectorStore.update_content`) needs the embedding index, so an edit against a store built by the plain-text fallback rolls back and answers 404. Mirror the delete half's best-effort behaviour, or refuse with the reason instead of "not found". Deferred from backlog B-2026-10-31-11 (2026-10-31 audit intake, cap prune): small, low-traffic, no recent demand. |
+| P-2026-10-31-4 | "Conversation too long" false positive: the raw provider error behind a ~3K-token chat on a 1M-token model was never captured. Reproduce on the owner's setup with the failure card's Technical details open, log the raw error server-side, find why the card said `Provider: unknown`, and add the missing provider label. Deferred from backlog B-2026-10-31-12 (2026-10-31 audit intake, cap prune): needs a repro on the owner's live setup. |
+| P-2026-10-31-5 | Async test-isolation flake + no active pytest config at the CI run location: `test_file_content_preview.py::test_xlsx_returns_structured_sheets` failed once in 4 full runs. Root smell: `ci-check.sh` runs `pytest tests` from the repo root, where no config is read — so `asyncio_default_fixture_loop_scope` is unset. Add a repo-root pytest config pinning it to `function`, then verify rootdir/testpaths/asyncio_mode are unchanged suite-wide. Deferred from backlog B-2026-10-31-17 (2026-10-31 audit intake, cap prune): small infra nicety, no active failure traced to it today. |
+| P-2026-11-01-6 | Windows test portability + exit-gate reliability: raw Windows `tmp_path` backslashes injected into JSON tool args (`Invalid \escape` — the `find_path` cluster plus ~11 others, ~24 full-suite failures at exit); temp-dir/disallowed-path gates fail there; 5 source-grepping tests need `PYTHONUTF8=1` in the CI pytest step. THEN stabilise the nondeterministic families (failure set swings 7↔22) and refresh `scripts/pytest-baseline.txt` as a ratchet, not a mask. Deferred from backlog B-2026-10-31-7 (2026-11-01 observability-intake cap prune, Zuri S011): environment friction with no owner-observed failure in view; the freed slot took B-2026-11-01-26 (full execution trace), the owner's explicit gating ask. Promote back when Windows CI is next exercised. |
+
+## Someday
+
+Loose ideas with no owner and no hook yet. The lowest-pressure shelf.
+
+| ID | Summary |
+|----|---------|
+
+<!-- TEMPLATE — add one row to the matching section:
+| P-<YYYY-MM-DD>-<n> | <enough context that a future session can pick
+      this up cold — status qualifiers in the text; promote to the
+      backlog when it becomes actionable> |
+-->

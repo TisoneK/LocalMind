@@ -27,7 +27,16 @@ time. The name is how the team and the supervisor refer to you; the codename
 is your stable session tag.
 
 - **Name** — a human name you choose.
-- **Codename** — your session tag `S<NNN>` (N = your session number).
+- **Codename** — your session tag. Use the structured form
+  **`OF<oo>SS<ss>`**: office number + session number
+  (e.g. `OF01SS07` = office 1, session 7). The office number is how many
+  offices have been frozen into `.context_ledger/history/` plus one (the
+  current office); the session number is the next free one (the board's
+  highest plus one, cross-checked against the last `Session N` in
+  `agents/sessions.md`). This makes a codename unique across offices and the
+  whole fleet, not just within this board. Legacy office-local `S<NNN>`
+  codenames are still valid and still read everywhere — don't rewrite old
+  rows — but new sessions take the structured form.
 - **Model** — the model you're running. A fingerprint, not an identity:
   several agents can share one model, and a harness marker from a system
   prompt appears in every session on that harness. Never adopt an
@@ -47,18 +56,11 @@ is your stable session tag.
   - `Blocked` → what you're waiting on, and from whom.
 
 <!-- TEMPLATE — one row per person in this office:
-| <Name> | S<NNN> | <model id> | <what you're doing> | Working | <stage reached / shipped outcome / blocker> |
+| <Name> | OF<oo>SS<ss> | <model id> | <what you're doing> | Working | <stage reached / shipped outcome / blocker> |
 -->
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Nadia | S002 | unknown (harness states no model ID) | Fix the Cerebras `messages.2.user.tool_calls is unsupported` payload rejection and the conversation-recall behaviour behind it | Done | Shipped af347f95 + 253ae0b4: per-role wire normalization, invalid_request→failover, transcript-only recall lane, name-identity dedupe; DB name facts merged (1 remains, keyed `subject:name`); 2285 core+adapter tests pass, 7 previously-red tests fixed |
-| Rosa | S008 | GLM (Z.ai sandbox) | Build the turn-close attribution + honest completion contract (owner-observed "Working" window; audit §1.3) | Done | Shipped c45a3182: response_ready SSE event + per-stage turn_stages/post_answer_lanes attribution (loop→runtime→done payload/metrics/persisted); strip "Answer ready · finishing up", turn view honest label, Stop disabled once the reply is final; 3812 backend + 677 frontend tests, live trace on the 8765 harness (deterministic provider — no key in sandbox) |
-| Sefu | S010 | GLM (Z.ai sandbox) | Exhaustive study of the owner-provided external harness reference + retire the zero-provider canned greeting path + first prompt-architecture fixes toward B-2026-10-31-25 | Done | Shipped: deep study (reviews/2026-11-01-external-harness-deep-study.md), canned-greeting retirement a9f64c82 + owner ruling 6002b38a, harness-note registry ff8834e4 (G1); 92+9+179+60 tests green, live done-rules harness PASS |
-| Nia | S017 | GLM (Z.ai sandbox) | The owner's "finish all" continuation: B-2026-11-01-27 (G7 request derivability from the durable record) then B-2026-10-31-13's C4 remainder (idle/reconnect continuation of an active goal) | Done | Shipped d47519de: G7 request derivation (trace stamps + core/agent/trace_derive.py + ?derive=1 + audit linkage, 11 tests, live 19/19) and C4 idle continuation (core/goal_idle.py + human resume/pause endpoints, 12 tests, live 17/17 — the deep dive survives a dropped connection; the resume affordance re-arms it; the cap holds). Also fixed live: native update_goal calls were flattened unparseable. 3,997 backend tests, all six harnesses clean |
-| Jabari | S020 | GLM (Z.ai sandbox) | Build B-2026-11-02-1 — Todo Planning & Hierarchical Execution (owner 2026-11-02): the real agent-generated Todo list (meaningful work items, not tool calls) + per-Todo execution steps, lifecycle, verification, persistence | Done | Shipped f76cabff: `{todo, outcome}` classify contract (fail-closed parser, budget 3492<3500), panel hierarchy (steps/outcome/result), honest lifecycle (in_progress → evidence-carrying done / failed+reason / blocked "Not reached" — the false 100% is dead), migration 016 + context re-render, outcomes seed the acceptance gate; 3,847 backend tests (baseline parity proven), frontend clean, live eval PASS |
-| Amara | S021 | GLM (Z.ai sandbox) | Build B-2026-11-02-2 — Adaptive plan revision & objective fidelity (owner 2026-11-02 advisor exchange, follow-on to S020): `retired` todo status + revision diff on the todo list, objective-fidelity judge at the close | Working | Recon done (todo pipeline mapped end to end: tool → loop emit → bridge persist/SSE → panel; judge nudge site located); building |
-| Kenji | S022 | GLM (Z.ai sandbox) | "Fix all" (owner 2026-11-02) — the Arsenal-export findings NOT covered by S020/S021: capability awareness, evidence-grounded self-evaluation, objective→execution translation, response-vs-execution finality, deterministic provider management | Done | Shipped 605a3bf3 + be92cd4c + e893aced: system_search args structured end to end (the "recent 1 10" misdirected search dead), results/yesterday-class questions force the tool loop (backend + mirror), the execution-record turn section (slot 1110) grounds self-evaluation in the persisted tool timeline, the judge runs thinking-off@5s and the 90s post-turn services are detached from the SSE, and provider management is deterministic (explicit fallback_to only, switches recorded, stamps report the actual server). 3,915 backend tests, e2e 132, frontend 21 + tsc; new live harness ALL PASS + four standing harnesses clean |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,

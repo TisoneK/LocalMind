@@ -1,0 +1,86 @@
+# Team Roster (current office — update in place)
+
+The people working this office, and as whom. Think of it as a workplace: you
+are a coworker on a team, the human is your supervisor, and this is the board
+by the door that says who's in and what they're on.
+
+**Every session checks in here, solo or not** — it is how the next agent
+through the door sees you are in the office. Sign **before the deep read**
+— at the entrance, not after analysis: two workers who read first both
+see an empty board and collide on codenames. Push the check-in (its own
+`chore(ledger):` commit) before any product work; if the push forces a
+rebase, a peer checked in concurrently — re-read the board. Your codename
+is claimed by your push: the earlier commit keeps a colliding number —
+fix your own row to the next free codename, never drop a peer's row.
+
+**Pick a real name you like when you start** — any human name (John, Ada,
+Kwame, Mei, …) — and add your row. **Not your own model or product name,
+literally** ("Claude", "Gemini", "Buffy") — that is not choosing a persona,
+it is skipping the choice, and it collides the moment two sessions on the
+same agent/model both do it. Present yourself by that name from then
+on: in collaboration events, in your session log, when you report to the
+supervisor. "John (S427)", never "peer" or a bare ID.
+
+Your **name and your codename are each unique within this office**. If a name
+is already taken, pick another — there is only one John on the team at a
+time. The name is how the team and the supervisor refer to you; the codename
+is your stable session tag.
+
+- **Name** — a human name you choose.
+- **Codename** — your session tag `S<NNN>` (N = your session number).
+- **Model** — the model you're running. A fingerprint, not an identity:
+  several agents can share one model, and a harness marker from a system
+  prompt appears in every session on that harness. Never adopt an
+  existing row because its model string matches yours — write your own
+  row (a fresh name and codename) unless you are checking back in after
+  clocking out in *this same session* (or the user says the row is
+  yours).
+- **Doing** — one line: your role / persona / what you're on right now.
+- **Status** — one short word for how your work stands: `Working`
+  (what you sign in with), `Done`, or `Blocked`. Edit it in place as
+  your work moves — this is the at-a-glance coordination signal.
+- **Status detail** — the one line the next worker needs:
+  - `Working` → how far you've got — the stage or step of the protocol
+    you've reached ("Phase 2 review, Step 9").
+  - `Done` → the outcome and its extent — "Shipped: core 1.1.0
+    released and self-hosted".
+  - `Blocked` → what you're waiting on, and from whom.
+
+<!-- TEMPLATE — one row per person in this office:
+| <Name> | S<NNN> | <model id> | <what you're doing> | Working | <stage reached / shipped outcome / blocker> |
+-->
+
+| Name | Codename | Model | Doing | Status | Status detail |
+|------|----------|-------|-------|--------|---------------|
+| Nadia | S002 | unknown (harness states no model ID) | Fix the Cerebras `messages.2.user.tool_calls is unsupported` payload rejection and the conversation-recall behaviour behind it | Done | Shipped af347f95 + 253ae0b4: per-role wire normalization, invalid_request→failover, transcript-only recall lane, name-identity dedupe; DB name facts merged (1 remains, keyed `subject:name`); 2285 core+adapter tests pass, 7 previously-red tests fixed |
+| Rosa | S008 | GLM (Z.ai sandbox) | Build the turn-close attribution + honest completion contract (owner-observed "Working" window; audit §1.3) | Done | Shipped c45a3182: response_ready SSE event + per-stage turn_stages/post_answer_lanes attribution (loop→runtime→done payload/metrics/persisted); strip "Answer ready · finishing up", turn view honest label, Stop disabled once the reply is final; 3812 backend + 677 frontend tests, live trace on the 8765 harness (deterministic provider — no key in sandbox) |
+| Sefu | S010 | GLM (Z.ai sandbox) | Exhaustive study of the owner-provided external harness reference + retire the zero-provider canned greeting path + first prompt-architecture fixes toward B-2026-10-31-25 | Done | Shipped: deep study (reviews/2026-11-01-external-harness-deep-study.md), canned-greeting retirement a9f64c82 + owner ruling 6002b38a, harness-note registry ff8834e4 (G1); 92+9+179+60 tests green, live done-rules harness PASS |
+| Nia | S017 | GLM (Z.ai sandbox) | The owner's "finish all" continuation: B-2026-11-01-27 (G7 request derivability from the durable record) then B-2026-10-31-13's C4 remainder (idle/reconnect continuation of an active goal) | Done | Shipped d47519de: G7 request derivation (trace stamps + core/agent/trace_derive.py + ?derive=1 + audit linkage, 11 tests, live 19/19) and C4 idle continuation (core/goal_idle.py + human resume/pause endpoints, 12 tests, live 17/17 — the deep dive survives a dropped connection; the resume affordance re-arms it; the cap holds). Also fixed live: native update_goal calls were flattened unparseable. 3,997 backend tests, all six harnesses clean |
+| Jabari | S020 | GLM (Z.ai sandbox) | Build B-2026-11-02-1 — Todo Planning & Hierarchical Execution (owner 2026-11-02): the real agent-generated Todo list (meaningful work items, not tool calls) + per-Todo execution steps, lifecycle, verification, persistence | Done | Shipped f76cabff: `{todo, outcome}` classify contract (fail-closed parser, budget 3492<3500), panel hierarchy (steps/outcome/result), honest lifecycle (in_progress → evidence-carrying done / failed+reason / blocked "Not reached" — the false 100% is dead), migration 016 + context re-render, outcomes seed the acceptance gate; 3,847 backend tests (baseline parity proven), frontend clean, live eval PASS |
+| Amara | S021 | GLM (Z.ai sandbox) | Build B-2026-11-02-2 — Adaptive plan revision & objective fidelity (owner 2026-11-02 advisor exchange, follow-on to S020): `retired` todo status + revision diff on the todo list, objective-fidelity judge at the close | Working | Recon done (todo pipeline mapped end to end: tool → loop emit → bridge persist/SSE → panel; judge nudge site located); building |
+| Kenji | S022 | GLM (Z.ai sandbox) | "Fix all" (owner 2026-11-02) — the Arsenal-export findings NOT covered by S020/S021: capability awareness, evidence-grounded self-evaluation, objective→execution translation, response-vs-execution finality, deterministic provider management | Done | Shipped 605a3bf3 + be92cd4c + e893aced: system_search args structured end to end (the "recent 1 10" misdirected search dead), results/yesterday-class questions force the tool loop (backend + mirror), the execution-record turn section (slot 1110) grounds self-evaluation in the persisted tool timeline, the judge runs thinking-off@5s and the 90s post-turn services are detached from the SSE, and provider management is deterministic (explicit fallback_to only, switches recorded, stamps report the actual server). 3,915 backend tests, e2e 132, frontend 21 + tsc; new live harness ALL PASS + four standing harnesses clean |
+
+**Keep your Status cells current — that is what the board is for.** The
+next live worker reads it to know at a glance what a peer has finished,
+what is in flight and at which stage, and what is blocked — and so how
+to coordinate with you without interrupting. Edit your own row (don't
+append a second); when your work moves, update the Doing cell and the
+Status cells in the same edit. `ledger-mem check` warns when a real row
+leaves its Status cell empty.
+
+**Clock out when your session ends**: remove your row in the closing
+`chore(ledger):` commit. The board shows who is in the office *now*;
+who was on duty *when* lives in the system log, not here — your
+append-only entry in `agents/sessions.md`, plus this file's own git
+history (the check-in commit opens your shift, the clock-out commit
+closes it). Until you actually leave, a finished session stays on the
+board as `Done` + what shipped — exactly what the next worker needs to
+see. A row left behind after you leave sends the next agent hunting for
+a peer who has gone. `ledger-mem check` flags a duplicate name or
+codename, and warns when a session entry was logged while your row
+still claimed the office. This roster is the **current office's** only —
+it is never reset or trimmed: when the office fills up, `ledger-history
+close` freezes this whole directory verbatim into `.context_ledger/history/`
+(every shift preserved), and the next office starts with an empty board.
+The permanent record `history/office-<NNN>.md` keeps each office's duty
+summary forever.

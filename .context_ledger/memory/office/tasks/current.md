@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-11-02 — Amara / GLM (Z.ai sandbox)
-- **Task:** B-2026-11-02-2 — Adaptive plan revision & objective fidelity (owner 2026-11-02 advisor exchange): `retired` todo status carrying the mooting discovery in its result, the revision diff (`todo_revised`) surfaced in the Todos panel, and a bounded objective-fidelity judge at the close — does the reply address the ORIGINAL request; one drift nudge, on the record, never blocks.
-- **Status:** in-progress
+- **Session:** —
+- **Task:** none — no session in progress
+- **Status:** idle
