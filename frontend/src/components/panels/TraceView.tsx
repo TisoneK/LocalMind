@@ -95,9 +95,9 @@ export function TraceView({ sessionId }: TraceViewProps) {
 
   const loadList = useCallback(async () => {
     if (!sessionId) return;
-    setError(null);
     try {
       const res = await localmindClient.listTurnTraces(sessionId);
+      setError(null);
       setTraces(res.traces || []);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -126,12 +126,25 @@ export function TraceView({ sessionId }: TraceViewProps) {
     }
   }, [sessionId]);
 
+  // The parent keys this component by session, so a session change remounts
+  // it with fresh state; state is only written after the fetch resolves.
   useEffect(() => {
-    setTrace(null);
-    setSelected(null);
-    setTraces([]);
-    loadList();
-  }, [sessionId, loadList]);
+    if (!sessionId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await localmindClient.listTurnTraces(sessionId);
+        if (cancelled) return;
+        setError(null);
+        setTraces(res.traces || []);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
 
   if (!sessionId) {
     return (

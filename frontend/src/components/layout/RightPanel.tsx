@@ -355,7 +355,7 @@ export function RightPanel({
             onRefresh={onMemoryRefresh}
           />
         )}
-        {activeTab === 'trace' && <TraceView sessionId={chatSessionId} />}
+        {activeTab === 'trace' && <TraceView key={chatSessionId ?? 'none'} sessionId={chatSessionId} />}
       </div>
 
       {/* Performance metrics — session cumulative (stats split) */}
