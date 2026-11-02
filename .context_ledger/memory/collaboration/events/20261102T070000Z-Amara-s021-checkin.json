@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "id": "20261102T070000Z-Amara-s021-checkin",
+  "type": "claim",
+  "session": "S021",
+  "agent": "Amara",
+  "created": "2026-11-02T07:00:00Z",
+  "issue": "b-2026-11-02-2-plan-revision-objective-fidelity",
+  "body": "Amara S021 claims B-2026-11-02-2, the owner's 2026-11-02 advisor exchange (follow-on to S020's Todo Planning & Hierarchical Execution): the todo list must EVOLVE when execution evidence changes the work. Three deliverables — (1) an explicit `retired` status so a discovery that moots a todo retires it with the discovery in its result instead of silently vanishing in a full-replace; (2) the revision diff surfaced — the loop diffs each todo_write against the live list and emits `todo_revised` (added/retired/kept) to the Todos panel, so a plan that changes shape mid-turn is visible to the user (the adaptive-planning behaviour the exchange benchmarked); (3) an objective-fidelity judge at the close — a bounded read-only lane in the completion-judge shape asking whether the reply addresses the ORIGINAL request (not merely the executed todos), one drift nudge, on the record, never blocks. Recon verified live: the todo pipeline (tool → loop emit → bridge persist/SSE → panel), the four `_emit_todo_write_events` call sites all inside `_run_impl` (a local mirror threads cleanly), the store accepts arbitrary status strings (no migration needed), the sweep's closed-status check, and the shared judge nudge site with its one-shot guard.",
+  "paths": [
+    "backend/src/tools/todo_write.py",
+    "backend/src/core/agent/loop.py",
+    "backend/src/core/agent/fidelity_judge.py",
+    "backend/src/api/routes/chat.py",
+    "frontend/src/hooks/useLocalMind.ts",
+    "frontend/src/components/panels/TodoList.tsx"
+  ]
+}
