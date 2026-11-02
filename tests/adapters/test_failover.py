@@ -14,6 +14,9 @@ class Fake:
         self.name, self.error, self.raises, self.text = name, error, raises, text
         self.calls = 0
         self.context_window = 1234
+        # What the real adapters expose (OpenAICompatAdapter._model): the
+        # turn's served-model stamp reads it after a failover.
+        self.model = f"{name}-model"
 
     async def chat(self, messages, temperature=0.7, **kw):
         self.calls += 1
@@ -125,13 +128,78 @@ async def test_tool_call_results_pass_through_untouched():
     assert await build(Tooly("zen"), []).chat_with_tools([], []) == {"tool": "x"}
 
 
-def test_local_model_never_falls_back_to_cloud_uninvited(monkeypatch):
+def test_no_provider_falls_back_uninvited_deterministic_policy(monkeypatch):
+    """Deterministic provider management (owner ruling 2026-11-02).
+
+    The ONLY fallback candidate is the connection's own explicit `fallback_to`
+    choice. The retired implicit tail ("every other enabled provider that has
+    an API key") let a zai-configured turn silently hop to an unconfigured
+    promotional endpoint (the 2026-11-02 Arsenal export). Now: no key, no
+    fallback_to, no rotation — cloud→cloud included.
+    """
     from adapters.failover import fallback_candidates
     from core.config import settings
 
     monkeypatch.setattr(type(settings), "get_api_key", lambda self, p: "k")
+    # A local model never falls back to the cloud uninvited (unchanged).
     assert fallback_candidates("ollama") == []
-    assert len(fallback_candidates("zen")) > 0
+    # A cloud provider with a key but NO explicit fallback_to: no candidates —
+    # the configured provider fails honestly instead of silently rotating.
+    assert fallback_candidates("zen") == []
+    assert fallback_candidates("groq") == []
+
+
+def test_explicit_fallback_to_is_the_only_candidate_and_keeps_its_model(monkeypatch):
+    from adapters import failover
+    from core import connections as connections_mod
+
+    class StubConn:
+        def __init__(self, cid):
+            self.id = cid
+            self.fallback_to = ""
+            self.model = ""
+
+    class StubRegistry:
+        def __init__(self):
+            self._c = {"zen": StubConn("zen"), "groq": StubConn("groq")}
+
+        def get(self, cid):
+            return self._c.get(cid)
+
+    stub = StubRegistry()
+    monkeypatch.setattr(connections_mod, "get_connection_registry", lambda: stub)
+    # The explicit choice is the only candidate, and it runs the
+    # destination's own configured model — not a blank override.
+    stub._c["zen"].fallback_to = "groq"
+    stub._c["groq"].model = "groq-4-fast"
+    assert failover.fallback_candidates("zen") == [("groq", "groq-4-fast")]
+    # A destination with no configured model falls back to the provider
+    # default (empty override).
+    stub._c["groq"].model = ""
+    assert failover.fallback_candidates("zen") == [("groq", "")]
+    # No explicit choice → no candidates at all (the deterministic policy).
+    stub._c["zen"].fallback_to = ""
+    assert failover.fallback_candidates("zen") == []
+
+
+def test_failover_switch_is_on_the_record_not_silent():
+    """A switch must leave {from, code, to} on the adapter for the turn's
+    identity stamps — the observability half of deterministic provider
+    management."""
+    fo = build(Fake("zen", error=RATE), [Fake("groq")])
+
+    async def drive():
+        async for _ in fo.chat([]):
+            pass
+
+    import asyncio
+
+    asyncio.run(drive())
+    assert fo.last_served_by == "groq"
+    # The recorded code is the NORMALIZED failure code (the same contract the
+    # cooldown table and the status lines use), not the raw error text.
+    assert fo.last_failover == {"from": "zen", "code": "rate_limit", "to": "groq"}
+    assert fo.served_model == "groq-model"
 
 
 def drain_status(fo):

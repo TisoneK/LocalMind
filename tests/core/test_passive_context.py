@@ -194,6 +194,13 @@ class TestFastPathPassiveExtraction:
             ):
                 pass
 
+        # Response-vs-execution finality: the passive-extraction service is
+        # DETACHED from the turn (the answer's delivery is not its hostage).
+        # Drain the retained tasks before asserting the service's effect.
+        from core.agent_runtime import drain_post_turn_services
+
+        await drain_post_turn_services()
+
         # The write reached the real shared path, subject-keyed by name.
         store_calls = runtime._memory.store.await_args_list
         passive_writes = [

@@ -323,7 +323,10 @@ class _Verdict:
     def __init__(self, word="", boom=False):
         self.word, self.boom, self.calls = word, boom, 0
 
-    async def chat(self, messages, temperature=0.0, intent="chat"):
+    async def chat(self, messages, temperature=0.0, intent="chat", **kwargs):
+        # **kwargs: the judge's call carries thinking_override="off" (the
+        # one-word lane must not pay the model's reasoning pass) — the
+        # adapter contract tolerates unknown kwargs.
         self.calls += 1
         if self.boom:
             raise RuntimeError("provider down")
@@ -429,7 +432,7 @@ async def test_verdict_about_a_replaced_plan_is_stale_and_never_applied():
     bus = TurnBus()
 
     class _ReplansMidJudge(_Verdict):
-        async def chat(self, messages, temperature=0.0, intent="chat"):
+        async def chat(self, messages, temperature=0.0, intent="chat", **kwargs):
             bus.replan()  # the plan is replaced while the judge is thinking
             async for c in super().chat(messages, temperature, intent):
                 yield c
@@ -449,7 +452,7 @@ async def test_judge_sees_the_evidence_gathered_this_turn():
     assert evidence_digest([]) == ""
 
     class _Capture(_Verdict):
-        async def chat(self, messages, temperature=0.0, intent="chat"):
+        async def chat(self, messages, temperature=0.0, intent="chat", **kwargs):
             self.prompt = messages[0]["content"]
             async for c in super().chat(messages, temperature, intent):
                 yield c

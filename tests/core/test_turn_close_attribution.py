@@ -34,7 +34,9 @@ def _stub_adapter(reply: str) -> MagicMock:
 
         return _stream()
 
-    async def chat(messages, temperature=0.4):
+    async def chat(messages, temperature=0.4, intent="chat", **kwargs):
+        # **kwargs: the judge's call carries thinking_override="off" — the
+        # adapter contract tolerates unknown kwargs.
         return
         yield
 
@@ -101,7 +103,8 @@ class TestResponseReadyMarker:
 class TestJudgeAttribution:
     @pytest.mark.asyncio
     async def test_verdict_fact_carries_elapsed_ms(self):
-        async def judge_chat(messages, temperature=0.0, intent=None):
+        async def judge_chat(messages, temperature=0.0, intent=None, **kwargs):
+            # **kwargs: the judge's call carries thinking_override="off".
             yield StreamChunk(text="DONE", done=True)
 
         adapter = MagicMock()

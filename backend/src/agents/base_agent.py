@@ -266,6 +266,10 @@ class BaseAgent(ABC):
         # short replies resolve against it and the forced-clarify exits
         # stand down. None = nothing outstanding.
         open_question: Optional[str] = None,
+        # Evidence-grounded self-evaluation: the compact facts of what this
+        # session's tools actually ran in recent turns (runtime-prebuilt).
+        # Forwarded to AgentLoop.run() for the turn context (slot 1110).
+        execution_record: Optional[str] = None,
     ) -> AsyncIterator[StreamChunk]:
         """
         Run this agent through the parent-owned AgentLoop:
@@ -409,6 +413,7 @@ class BaseAgent(ABC):
             session_id=session_id,
             active_objective=active_objective,
             open_question=open_question,
+            execution_record=execution_record,
         ):
             yield chunk
 

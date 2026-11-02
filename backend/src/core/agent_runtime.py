@@ -216,6 +216,50 @@ async def _run_bounded_services(services, budget_s: float, collector) -> None:
             logger.debug("[agent-runtime] post-turn %s skipped", name, exc_info=True)
 
 
+# Retention set for the detached post-turn services (the chat.py
+# _spawn_background pattern): a strong reference so GC cannot swallow the
+# task, self-removing on completion.
+_POST_TURN_TASKS: set = set()
+
+
+def _spawn_post_turn_services(services, budget_s: float, collector) -> None:
+    """Run ``_run_bounded_services`` DETACHED from the turn's transport.
+
+    Response-vs-execution finality (owner directive, 2026-11-02): the answer
+    is complete and persisted when the `done` chunk is emitted — the user
+    must never keep an open connection (or a locked session) waiting on up
+    to POST_TURN_LLM_BUDGET_S of quality-gate LLM calls. Spawned while the
+    session/turn ContextVars are still bound, so the task's context copy is
+    valid. Recorded trade-off: events the services emit after the
+    transport's trace snapshot land in neither the SSE nor the persisted
+    turn trace — their OUTPUT persists through the memory stores they write,
+    which is their purpose.
+    """
+
+    async def _runner() -> None:
+        try:
+            await _run_bounded_services(services, budget_s, collector)
+        except Exception:  # noqa: BLE001 — bookkeeping lanes never fail the turn
+            logger.debug("[agent-runtime] detached post-turn services failed", exc_info=True)
+
+    task = asyncio.create_task(_runner(), name="post-turn-services")
+    _POST_TURN_TASKS.add(task)
+    task.add_done_callback(_POST_TURN_TASKS.discard)
+
+
+async def drain_post_turn_services() -> None:
+    """Await every retained detached post-turn service task.
+
+    The test seam for the detachment (a turn test asserts a service's
+    EFFECT — it must be able to wait for the detached work) and the
+    graceful-shutdown primitive: drain before the loop closes instead of
+    dropping the bookkeeping mid-flight.
+    """
+    tasks = [t for t in list(_POST_TURN_TASKS) if not t.done()]
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
 def _history_without_current_turn(history: list, message: str) -> list:
     """Drop this turn's own user message from the stored history.
 
@@ -229,6 +273,64 @@ def _history_without_current_turn(history: list, message: str) -> list:
     if history and history[-1].role == Role.USER and history[-1].content.strip() == (message or "").strip():
         return list(history[:-1])
     return list(history)
+
+
+# Execution-record bounds: the model needs FACTS about its own recent tool
+# activity, not the whole timeline. Six calls cover a turn's decisive work;
+# the char caps keep the section inside the turn-context budget.
+_EXECUTION_RECORD_MAX_CALLS = 6
+_EXECUTION_RECORD_INPUT_CHARS = 80
+_EXECUTION_RECORD_OUTPUT_CHARS = 160
+_EXECUTION_RECORD_MAX_CHARS = 1400
+
+
+def _build_execution_record(history: list, message: str) -> str:
+    """Compact facts of the tools that ACTUALLY ran in this session's recent turns.
+
+    Grounds self-evaluation: asked to explain or judge its own prior actions,
+    the model must read what its tools actually did — name, outcome, input,
+    output head — instead of reconstructing a narrative from the prose
+    history (the 2026-11-02 Arsenal export: the agent claimed it "had not
+    actually used the search tool to verify" a result its own trace shows
+    web_search had delivered). Built from the persisted per-message tool-call
+    timeline; empty when no tools ran (the section is not registered then).
+    """
+    calls: list[dict] = []
+    for item in _history_without_current_turn(history, message):
+        if getattr(item, "role", None) != Role.ASSISTANT:
+            continue
+        for tc in getattr(item, "tool_calls", None) or []:
+            if not isinstance(tc, dict):
+                continue
+            calls.append(tc)
+    if not calls:
+        return ""
+    lines: list[str] = []
+    total = 0
+    for tc in calls[-_EXECUTION_RECORD_MAX_CALLS:]:
+        name = str(tc.get("name") or "tool")
+        status = str(tc.get("status") or "unknown")
+        status_label = {"done": "done", "failed": "FAILED"}.get(status, status)
+        args_head = " ".join(str(tc.get("tool_args") or tc.get("input") or "").split())
+        out_head = " ".join(str(tc.get("output") or "").split())
+        line = (
+            f"- {name} [{status_label}]"
+            + (f" input: {args_head[:_EXECUTION_RECORD_INPUT_CHARS]!r}" if args_head else "")
+            + (f" → {out_head[:_EXECUTION_RECORD_OUTPUT_CHARS]!r}" if out_head else "")
+        )
+        total += len(line) + 1
+        if total > _EXECUTION_RECORD_MAX_CHARS:
+            break
+        lines.append(line)
+    if not lines:
+        return ""
+    return (
+        "Execution record — what your tools ACTUALLY did in this session's recent "
+        "turns (facts from the run timeline, not recollection):\n"
+        + "\n".join(lines)
+        + "\nGround any claim about your own prior actions in this record; do not "
+        "reconstruct it from memory."
+    )
 
 
 from adapters.base import BaseAdapter  # noqa: E402
@@ -1761,6 +1863,14 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     time.monotonic() - _fast_think_seg if _fast_think_seg is not None else 0.0
                 )
                 _fast_think_elapsed_ms = round((_fast_think_accum + _fast_think_open) * 1000)
+                # Deterministic provider management: report what actually
+                # served the fast-path call (see the loop-path site).
+                _fast_served_by_raw = getattr(_adapter, "last_served_by", "")
+                _fast_served_by = _fast_served_by_raw if isinstance(_fast_served_by_raw, str) else ""
+                _fast_served_model_raw = getattr(_adapter, "served_model", "")
+                _fast_served_model = _fast_served_model_raw if isinstance(_fast_served_model_raw, str) else ""
+                _fast_failover_note = getattr(_adapter, "last_failover", None)
+                _fast_failover_note = _fast_failover_note if isinstance(_fast_failover_note, dict) else None
                 self._persist_assistant(
                     session_id,
                     _response_text,
@@ -1789,8 +1899,15 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                             "think_ms": _fast_think_elapsed_ms if _fast_thinking_parts else 0,
                             # Turn identity (v3 export): which model +
                             # provider answered this real (non-canned) turn.
-                            "model": active_parent_model() or "(default)",
-                            "provider": settings.localmind_adapter,
+                            # Reports the ACTUAL server (deterministic
+                            # provider management, owner ruling 2026-11-02).
+                            "model": _fast_served_model or active_parent_model() or "(default)",
+                            "provider": _fast_served_by or settings.localmind_adapter,
+                            **(
+                                {"failover": dict(_fast_failover_note)}
+                                if _fast_failover_note
+                                else {}
+                            ),
                             # Execution-trace link (B-2026-11-01-26): the
                             # durable event stream for this request lives in
                             # the turn_traces store under this id; the export
@@ -2101,6 +2218,12 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         prompt_messages: list[dict] = []
         if summary_section:
             prompt_messages.append({"role": "system", "content": summary_section})
+        # Evidence-grounded self-evaluation (owner finding, 2026-11-02
+        # Arsenal export): the facts of what this session's tools actually
+        # ran, rendered into the turn context — the model evaluates and
+        # explains its own actions from the record, not from a narrative
+        # reconstructed out of the prose history.
+        _execution_record_text = _build_execution_record(history, message)
         for item in _history_without_current_turn(history, message)[-8:]:
             if item.role not in (Role.USER, Role.ASSISTANT) or not item.content.strip():
                 continue
@@ -2287,6 +2410,9 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # reply resolves against the agent's own question.
                 active_objective=_active_objective_text,
                 open_question=_open_question_text,
+                # Evidence-grounded self-evaluation: what the session's
+                # tools actually ran (see _build_execution_record).
+                execution_record=_execution_record_text or None,
             ):
                 if chunk.usage:
                     usage.update(chunk.usage)
@@ -2550,6 +2676,19 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # so the Agents tab and phase visibility survive a reload.
         agent_runs, agent_phases = build_workspace_artifacts(collector, task=message)
         _thinking_text = "".join(thinking_parts) or None
+        # Deterministic provider management (owner ruling 2026-11-02): the
+        # turn's identity stamps report the adapter that ACTUALLY served the
+        # final call — a failover must never leave the message claiming the
+        # configured provider (the 2026-11-02 export showed provider=zai on
+        # a turn BankOfAI answered, and its terminal error named BankOfAI).
+        # isinstance guards keep non-string stand-ins (test mocks) honest:
+        # they fall through to the configured identity.
+        _served_by_raw = getattr(adapter, "last_served_by", "")
+        _served_by = _served_by_raw if isinstance(_served_by_raw, str) else ""
+        _served_model_raw = getattr(adapter, "served_model", "")
+        _served_model = _served_model_raw if isinstance(_served_model_raw, str) else ""
+        _failover_note = getattr(adapter, "last_failover", None)
+        _failover_note = _failover_note if isinstance(_failover_note, dict) else None
         # Turn-close attribution: the turn's record is written — close-out is
         # done. Merge the runtime stamps over the loop's (the loop already put
         # its stages into usage via the terminal chunk) so every consumer —
@@ -2587,8 +2726,14 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 "think_ms": _think_elapsed_ms() if _thinking_text else 0,
                 # Turn identity (v3 export): which model + provider answered
                 # this turn (same source the kernel ready log records).
-                "model": active_parent_model() or "(default)",
-                "provider": settings.localmind_adapter,
+                # Reports the ACTUAL server (see _served_by above), falling
+                # back to the configured identity when the adapter does not
+                # track it (test adapters, the local ollama surface).
+                "model": _served_model or active_parent_model() or "(default)",
+                "provider": _served_by or settings.localmind_adapter,
+                # The failover record of the call that served the answer:
+                # {from, code, to} when a switch happened, absent otherwise.
+                **({"failover": dict(_failover_note)} if _failover_note else {}),
                 # Turn-close attribution: per-stage wall-clock stamps so a
                 # reloaded conversation can attribute the turn-close window.
                 "turn_stages": dict(_merged_stages),
@@ -2706,11 +2851,14 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         )
         # Reflection and response-fact extraction remain post-turn services;
         # they never make routing decisions or expose child tool output. They
-        # run AFTER the final `done` chunk: the answer is complete and
-        # persisted, so the user must not wait on up to POST_TURN_LLM_BUDGET_S
-        # of quality-gate LLM calls. Their visible events (reflection_lesson,
-        # passive_context_stored) still ride the open stream's final flush.
-        await _run_bounded_services(
+        # run AFTER the final `done` chunk — now DETACHED from the transport
+        # (response-vs-execution finality, owner directive 2026-11-02): the
+        # answer is complete and persisted, so the connection must close and
+        # the session lock release while these finish in the background. The
+        # old inline await held the SSE open for up to POST_TURN_LLM_BUDGET_S
+        # after the answer was already final (the owner's "the answer is
+        # already present and it won't change" lug).
+        _spawn_post_turn_services(
             [
                 (
                     "fact_extraction",

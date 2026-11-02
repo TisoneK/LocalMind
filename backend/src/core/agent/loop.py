@@ -124,6 +124,7 @@ from core.agent.prompt import (
     SECTION_SKILL_FRAGMENT,
     SECTION_TASK_STATE,
     SECTION_TODO_STATE,
+    SECTION_TRANSCRIPT_FOCUS,
     SECTION_WORKSPACE_STATE,
     Band,
     Layer,
@@ -2528,6 +2529,14 @@ class AgentLoop:
         # question instead of re-deriving intent, and the forced-clarify
         # exits stand down (the referent IS known — it is on record).
         open_question: Optional[str] = None,
+        # Evidence-grounded self-evaluation (owner finding, 2026-11-02): the
+        # compact facts of what this session's tools ACTUALLY ran in recent
+        # turns, prebuilt by the runtime from the persisted tool-call
+        # timeline. Rendered into the turn context (slot 1110) so the model
+        # explains and judges its own actions from the record instead of
+        # reconstructing a narrative from the prose history. None/empty = no
+        # tool ran recently (the section is not registered).
+        execution_record: Optional[str] = None,
     ) -> AsyncIterator[StreamChunk]:
         """
         Run the agent loop with the Plan→Execute→Verify workflow.
@@ -3977,6 +3986,20 @@ class AgentLoop:
                     _task_state_prompt,
                 )
             )
+        # Evidence-grounded self-evaluation — what the session's tools
+        # ACTUALLY ran (context layer, slot 1110, after the task state).
+        # Registered only when recent tool activity exists; an "explain
+        # yourself" turn reads facts, not a reconstructed narrative.
+        if execution_record:
+            turn_registry.add(
+                make(
+                    SECTION_TRANSCRIPT_FOCUS,
+                    Band.TURN,
+                    Layer.CONTEXT,
+                    1110,
+                    execution_record,
+                )
+            )
         turn_context = turn_registry.render(Band.TURN)
         # The audit emit: one event, every injected item of the trailing
         # context with its exact text — the record the UI (and the export)
@@ -3991,6 +4014,7 @@ class AgentLoop:
             SECTION_GOAL_ROUTE: "goal tree",
             SECTION_OPEN_QUESTION: "open-question record",
             SECTION_TASK_STATE: "task state engine",
+            SECTION_TRANSCRIPT_FOCUS: "persisted tool-call timeline",
             SECTION_SKILL_FRAGMENT: "intent skill library",
             SECTION_EXPERT_PERSONA: "intent persona map",
             SECTION_AGENT_PLAYBOOK: "selected agent",

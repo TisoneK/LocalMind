@@ -33,7 +33,13 @@ logger = logging.getLogger(__name__)
 SOURCE = "completion_judge"
 # Above this a reply carries real content; the promise, if any, is not the answer.
 JUDGE_MAX_REPLY_CHARS = 600
-JUDGE_TIMEOUT_S = 8.0
+# The judge is a ONE-WORD verdict between the visible answer and the turn's
+# done — every second here is the owner's post-answer dead weight (the
+# 2026-11-02 export: verdict unjudged at 8.0s, twice per turn). Thinking is
+# disabled on the call (a one-word lane, not the answer path — ADR-41
+# governs the answer path) and the budget is 5s: an unjudgeable reply must
+# cost seconds, never the turn.
+JUDGE_TIMEOUT_S = 5.0
 _EVIDENCE_STEPS = 3
 _EVIDENCE_CHARS = 200
 
@@ -68,7 +74,11 @@ def _judgeable(adapter, reply: str) -> bool:
 async def _ask(adapter, request: str, reply: str, evidence: str) -> str:
     msgs = [{"role": "user", "content": _PROMPT.format(request=(request or "")[:600], evidence=evidence, reply=reply)}]
     text = ""
-    async for chunk in adapter.chat(msgs, temperature=0.0, intent="chat"):
+    # thinking_override="off": the judge answers one word — a reasoning
+    # pass makes it the turn's slowest call for zero verdict gain (the
+    # 2026-11-02 export's 8s unjudged timeouts). Adapters that do not know
+    # the override ignore it (kwargs tolerance is the chat() contract).
+    async for chunk in adapter.chat(msgs, temperature=0.0, intent="chat", thinking_override="off"):
         if getattr(chunk, "error", None):
             return ""
         text += getattr(chunk, "text", "") or ""

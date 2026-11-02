@@ -3,9 +3,14 @@
 A rate limit, an exhausted quota, an overloaded or unreachable provider used to end the turn
 with an error card. Every one of those is recoverable when another configured provider can
 answer, so `FailoverAdapter` wraps the turn's adapter and, when a call fails BEFORE producing
-anything, moves on to the next candidate (the connection's `fallback_to`, then every other
-provider that has a key) and carries on. The user only sees an error when every candidate has
-failed.
+anything, moves on to the next candidate and carries on. The user only sees an error when
+every candidate has failed.
+
+Deterministic provider management (owner ruling 2026-11-02): the only fallback candidate is
+the connection's own explicit `fallback_to` choice. A provider failure is REPORTED (status
+line + the switch record below), never silently rotated away — the old implicit tail ("every
+other provider that has a key") could hop a zai-configured turn to an unconfigured
+promotional endpoint and leave the message stamped with the wrong provider.
 
 `ProviderHealth` remembers what is down and for how long, so the next turn (and the next call
 in the same turn) skips a provider that just rate-limited us instead of paying for it again.
@@ -139,31 +144,29 @@ def _failure_code(error: Any) -> str:
 def fallback_candidates(primary: str) -> list[tuple[str, str]]:
     """Ordered `(provider, model)` pairs to try after `primary`, best first.
 
-    The connection's own `fallback_to` comes first (the user's explicit choice); then any other
-    provider that has an API key. Models are the providers' defaults (empty override).
+    Deterministic provider management (owner ruling 2026-11-02): the ONLY
+    candidate is the connection's own explicit `fallback_to` choice — the
+    user-configured fallback policy. The old implicit tail ("every other
+    enabled openai-compat provider that has an API key") is RETIRED: it made
+    provider identity unpredictable (a zai-configured turn silently landing
+    on BankOfAI, the 2026-11-02 export), broke failure attribution, and put
+    time-limited promotional endpoints on the critical path. A candidate
+    runs the destination's own configured model (its connection record's
+    `model`, else the provider default) — the turn's identity stamps report
+    what actually served.
     """
-    from core.config import settings
     from core.connections import get_connection_registry
 
     registry = get_connection_registry()
-    out: list[str] = []
     connection = registry.get(primary)
     chosen = getattr(connection, "fallback_to", "") if connection else ""
-    if chosen and chosen != primary and registry.get(chosen) is not None:
-        out.append(chosen)
-    # A local model's failure must never ship the conversation to a cloud provider the user did
-    # not choose: only an explicit fallback applies.
-    if primary == "ollama" or (connection is not None and connection.kind == "ollama"):
-        return [(cid, "") for cid in out]
-    for cid in registry.ids():
-        if cid == primary or cid in out or cid == "ollama":
-            continue
-        conn = registry.get(cid)
-        if conn is None or not conn.enabled or conn.kind != "openai-compat":
-            continue
-        if settings.get_api_key(cid):
-            out.append(cid)
-    return [(cid, "") for cid in out]
+    if not chosen or chosen == primary:
+        return []
+    conn = registry.get(chosen)
+    if conn is None:
+        return []
+    model = str(getattr(conn, "model", "") or "").strip()
+    return [(chosen, model)]
 
 
 class FailoverAdapter:
@@ -187,6 +190,13 @@ class FailoverAdapter:
         self._retry_delays = retry_delays
         # Set to the provider name that ended up serving the last call, for diagnostics.
         self.last_served_by = primary_name
+        # The model string of the adapter that actually served the last call
+        # (differs from the configured model when a failover candidate served).
+        self.served_model: str = ""
+        # The most recent switch of the LAST call: {"from", "code", "to"}, or
+        # None when the call was served by the primary. The turn's identity
+        # stamps read this so a failover is on the record, not silent.
+        self.last_failover: dict[str, str] | None = None
         # Plain-language progress for the user ("X is busy — switching to Y"). The agent loop
         # drains this while the model call is in flight, so it is seen DURING the wait.
         self.status_queue: asyncio.Queue[str] = asyncio.Queue()
@@ -260,6 +270,7 @@ class FailoverAdapter:
         chain = self._chain()
         last_error = ""
         switched = False  # a candidate failed during THIS call, so the user was told about a switch
+        self.last_failover = None  # this call's record — a stale switch must not mislabel this turn
         single = len(chain) == 1
         for idx, (name, adapter) in enumerate(chain):
             attempt = 0
@@ -283,6 +294,9 @@ class FailoverAdapter:
                         if switched:
                             self._say(f"Continuing with {self._label(name)}")
                     self.last_served_by = name
+                    self.served_model = str(
+                        getattr(adapter, "_model", "") or getattr(adapter, "model", "") or ""
+                    )
                     return payload
                 code = _failure_code(payload)
                 if raised and code not in _COOLDOWN_SECONDS and code not in _NOT_A_PROVIDER_PROBLEM:
@@ -314,6 +328,11 @@ class FailoverAdapter:
                 logger.warning("[failover] %s failed (%s)%s", name, code, "; trying next" if more else "")
                 if more:
                     switched = True
+                    self.last_failover = {
+                        "from": name,
+                        "code": code,
+                        "to": chain[idx + 1][0],
+                    }
                     self._say(
                         f"{self._label(name)} {_PROBLEM_PHRASE.get(code, 'is unavailable')} "
                         f"— switching to {self._label(chain[idx + 1][0])}"

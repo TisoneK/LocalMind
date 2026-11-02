@@ -1606,11 +1606,12 @@ class OpenAICompatAdapter(BaseAdapter):
         intent: str = "chat",
         **kwargs,
     ) -> AsyncIterator[StreamChunk]:
-        # Validate kwargs — previously unsupported kwargs
-        # (like stream=True) were silently swallowed into **kwargs,
-        # causing bugs that were impossible to trace. Now: log a warning
-        # so callers know their kwarg is being ignored.
-        _SUPPORTED_KWARGS = set()  # chat() doesn't use any kwargs yet
+        # Supported kwargs: `thinking_override` — "off" forces the z.ai
+        # thinking param OFF for THIS call only (the one-word verdict lanes
+        # like the completion judge; ADR-41's thinking-ON default governs the
+        # answer path, not a lane that must answer inside seconds).
+        _SUPPORTED_KWARGS = {"thinking_override"}
+        _thinking_override = kwargs.pop("thinking_override", None)
         _unsupported = set(kwargs.keys()) - _SUPPORTED_KWARGS
         if _unsupported:
             logger.warning(
@@ -1620,6 +1621,12 @@ class OpenAICompatAdapter(BaseAdapter):
                 _unsupported,
                 _SUPPORTED_KWARGS or "(none)",
             )
+        if _thinking_override == "off":
+            # One-shot, per-call: consumed below where the thinking payload
+            # is built (before any other call can read it on this adapter
+            # instance — the judge awaits its call, so no concurrent chat
+            # runs on the same instance while the override is armed).
+            self._one_shot_thinking_off = True
 
         timeout = self._timeouts.get(intent, 120)
 
