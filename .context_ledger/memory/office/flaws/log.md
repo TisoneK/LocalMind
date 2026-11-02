@@ -47,3 +47,5 @@ names them), and roll-up candidates.
 - **Root cause:** The kickoff orders Phase 1 (sync + verify + guard install) before Phase 2 (check-in), but `verify` and the guard are not read-only — they mutate tracked ledger files even when nothing is stale. A recycled sandbox (no repo, fresh clone) always hits this: verify rewrites the lock because the source block differs from the vendored state.
 - **Suggested fix:** Make `ledger-sync verify` idempotent-silent when the lock already matches the installed core (only write when content actually changes), and/or have the kickoff's Phase 1 note: "if `git pull --ff-only` aborts right after verify on `core.lock`/`STATE.md` and `git diff` shows only verify/regen artefacts, restore those two files and re-pull."
 - **Status:** open
+
+## 2026-11-02 — none this session

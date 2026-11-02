@@ -60,3 +60,5 @@ names them), and roll-up candidates.
 ## 2026-11-01 — Zuri / GLM (Z.ai sandbox) (Session 11)
 - **Friction:** Backend venv bring-up on a recycled sandbox has no documented install path: `scripts/venv-run.sh`'s error says "Create the backend venv first: python -m venv backend/.venv" but not how to populate it; there is no `backend/requirements.txt`, and the real path is `pip install -e "backend[dev]"` (discoverable only from `backend/pyproject.toml`). Cost this session: one failed `pip install -r backend/requirements.txt` guess before finding the editable install. Prior sessions' worklog notes ("npm workspaces install, ledger-guard hooks") cover the frontend side only.
 - **Fix:** One line in `scripts/venv-run.sh`'s error (or `scripts/README.md`): `python3 -m venv backend/.venv && backend/.venv/bin/python -m pip install -e "backend[dev]"`. All sessions bootstrap fresh sandboxes; the knowledge lives in session notes today.
+
+## 2026-11-02 — none this session
