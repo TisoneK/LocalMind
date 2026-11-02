@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261102T151147Z-Zuri-d3ba5d23",
+  "type": "release",
+  "session": "S023",
+  "agent": "Zuri",
+  "created": "2026-11-02T15:11:47Z",
+  "issue": "B-2026-11-02-3",
+  "body": "S023 releasing 106e28eb: the Planner lane (the real {todo,outcome} plan on the production path — S020's branch was dead under skip_planning), plan_outcomes as the gate's criteria + plan_objective context, B-2026-11-02-2's adaptive revision (retired + todo_revised diff) and the objective-fidelity lane, the consult's fenced JSON rehearsal stripped from visible thinking. 4,060 backend / 132 e2e / 678 frontend; live_test_planner_lane ALL PASS + 11 standing harnesses + eval 13/13. Review: office/reviews/2026-11-02-review-s023-planner-lane.md",
+  "paths": ["backend/src/core/agent_runtime.py", "backend/src/core/agent/loop.py", "backend/src/core/agent/thinker/thinker.py", "backend/src/agents/base_agent.py", "backend/src/api/routes/chat.py", "frontend/src/components/panels/TodoList.tsx", "frontend/src/types/index.ts", "scripts/live_test_planner_lane.py"],
+  "refs": ["106e28eb"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

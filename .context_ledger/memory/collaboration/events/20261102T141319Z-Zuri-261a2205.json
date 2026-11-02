@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261102T141319Z-Zuri-261a2205",
+  "type": "note",
+  "session": "S023",
+  "agent": "Zuri",
+  "created": "2026-11-02T14:13:19Z",
+  "issue": "B-2026-11-02-3",
+  "body": "S023 checking in: the owner's live export (session-1793620218681) shows the production path still rendering syn-0 tool-echo todos — S020's classify-drawn plan is wired only into the parent-init branch the runtime skips (skip_planning=True). Building: (1) a runtime Planner lane so every non-social task turn gets the real {todo,outcome} plan; (2) plan_outcomes/objective wired through the loop's plan branch; (3) consult-thinking JSON-rehearsal strip (the messy thinking in the same export); (4) B-2026-11-02-2's adaptive revision (retired status + todo_revised diff) + the objective-fidelity lane. Light path, will release on main.",
+  "paths": ["backend/src/core/agent_runtime.py", "backend/src/core/agent/loop.py", "backend/src/core/agent/thinker/", "frontend/src/components/panels/TodoList.tsx"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

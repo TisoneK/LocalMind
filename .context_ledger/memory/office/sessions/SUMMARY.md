@@ -19,19 +19,9 @@ records.
   Detail: .context_ledger/memory/office/sessions/YYYY-MM-DD-N/notes.md (or \"summary only\").
 -->
 
-<!-- GC GUIDANCE (not part of the template — remove this comment before committing):
-- Keep all entries from the last ~10 sessions.
-- Older entries: distill key facts into the durable logs (decisions,
-  inefficiencies, backlog) if they haven't been promoted already, then
-  remove the summary line. The compact entry in agents/sessions.md is
-  the permanent record that the session happened.
-- Never let SUMMARY.md become another giant history file — if it exceeds
-  ~40 lines, it's time to compress.
-- A removed summary line MUST have a corresponding permanent entry in
-  agents/sessions.md — never delete the only record of a session.
--->
+
 
 ---
-- **2026-11-02 — Session 1** — Tobias / unknown (harness states no model ID) — closed office-004 at 21 sessions (permanent record + re-seeded queue), then pulled and verified the Arsenal fix pack.
-  73 targeted backend tests, 21 frontend client tests, tsc clean, and the new live harness ALL PASS on this box; exit gate green (4,022 passed, 22 documented Windows-baseline failures).
-  Detail: .context_ledger/memory/office/reviews/2026-11-02-review.md
+- **2026-11-02 — Session 23** (numbered in the office-004 lineage; the fresh office restarted its counter — this is the first product session of office-005) — Zuri / GLM (Z.ai sandbox) — the Planner lane: the real todo list reaches the production path (B-2026-11-02-1's wiring gap closed; B-2026-11-02-2's revision + drift judge landed).
+  The owner's export showed `syn-0` tool-echo todos + consult JSON rehearsing in the visible thinking. Root cause: S020's plan branch is gated on `not skip_planning` — dead on the production path since August. Shipped: the runtime draws the `{todo, outcome}` plan by model before the loop (fail-open lane; social/open-question/goal/sequence step aside), outcomes seed the gate's criteria, the gate's replan retires/adds rows with a `todo_revised` diff + the objective-fidelity lane at the close, and the consult's fenced rehearsal is stripped from thinking. 4,060 backend / 132 e2e / 678 frontend; the new live harness ALL PASS + 11 standing harnesses + eval 13/13 clean; five count-routed harness fakes migrated to content-routing.
+  Detail: .context_ledger/memory/office/agents/sessions.md (Session 23); review: `office/reviews/2026-11-02-review-s023-planner-lane.md`.
