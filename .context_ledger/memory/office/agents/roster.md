@@ -61,6 +61,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
+| Tobias | S001 | unknown (harness states no model ID) | Pull the latest main, close the full office, and verify the newly pulled Arsenal fix pack | Working | Office-004 closed and re-seeded; verifying the pulled fixes, then the exit gate |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,

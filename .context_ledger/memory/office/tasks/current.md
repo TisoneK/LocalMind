@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — no session in progress
-- **Status:** idle
+- **Session:** 2026-11-02 — Tobias / unknown (harness states no model ID)
+- **Task:** Close the full office, then pull and verify the Arsenal fix pack (structured system_search args, live-data routing, execution record, bounded judge, deterministic provider management)
+- **Status:** in-progress
