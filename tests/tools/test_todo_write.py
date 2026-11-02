@@ -78,7 +78,14 @@ def test_emit_clears_then_creates_each_todo():
     types = [e[0] for e in obs.events]
     assert types == ["todo_cleared", "todo_created", "todo_created"]  # full replace
     first = obs.events[1][1]
-    assert first == {"id": "t1", "text": "a", "completed": False, "status": "in_progress"}
+    assert first == {
+        "id": "t1",
+        "text": "a",
+        "expected_outcome": "",
+        "result": "",
+        "completed": False,
+        "status": "in_progress",
+    }
     assert obs.events[2][1]["completed"] is True
 
 
@@ -88,3 +95,37 @@ def test_emit_ignores_other_tools_and_failures():
     _emit_todo_write_events("todo_write", _Result([{"text": "a"}], success=False), obs)
     _emit_todo_write_events("todo_write", None, obs)
     assert obs.events == []
+
+
+@pytest.mark.asyncio
+async def test_todo_write_accepts_failed_status_and_contract_fields():
+    """failed is a first-class status; expected_outcome/result ride through
+    the metadata the loop emits, so the panel + DB keep the verification
+    contract and the closing evidence."""
+    import json
+
+    from tools.todo_write import todo_write
+
+    payload = json.dumps(
+        {
+            "todos": [
+                {
+                    "text": "Fetch the page",
+                    "status": "failed",
+                    "result": "web_fetch: connection refused",
+                },
+                {
+                    "text": "Establish conditions",
+                    "expected_outcome": "temperature from a named source",
+                    "status": "in_progress",
+                },
+            ]
+        }
+    )
+    result = await todo_write(payload)
+    assert result.success
+    todos = result.metadata["todos"]
+    assert todos[0]["status"] == "failed"
+    assert todos[0]["result"] == "web_fetch: connection refused"
+    assert todos[1]["expected_outcome"] == "temperature from a named source"
+    assert "Failed:" in result.content or "[x!]" in result.content

@@ -939,6 +939,8 @@ def _emit_todo_write_events(tool_name: str, tool_result, obs) -> None:
             "todo_created",
             id=t.get("id", ""),
             text=t.get("text", ""),
+            expected_outcome=t.get("expected_outcome", ""),
+            result=t.get("result", ""),
             completed=bool(t.get("completed", False)),
             status=t.get("status", "pending"),
         )
@@ -1223,7 +1225,9 @@ def _render_todo_state(todo_state: Optional[list[dict]]) -> str:
     like "mark the task as complete" needs to know WHICH todos exist and their
     status. The todos table rows carry id/content/completed/status; render
     them with the same markers the UI uses so the model can act on them.
-    Returns "" when there is nothing to show.
+    The per-todo verification contract (`expected_outcome`) and the recorded
+    `result` render too — resuming work mid-objective means knowing the DONE
+    contract, not just the labels. Returns "" when there is nothing to show.
     """
     if not todo_state:
         return ""
@@ -1233,16 +1237,23 @@ def _render_todo_state(todo_state: Optional[list[dict]]) -> str:
         if not text:
             continue
         status = str(t.get("status") or "").lower()
-        if status not in ("pending", "in_progress", "completed", "blocked", "done"):
+        if status not in ("pending", "in_progress", "completed", "blocked", "failed", "done"):
             status = "completed" if t.get("completed") else "pending"
         marker = {
             "completed": "[x]",
             "done": "[x]",
             "in_progress": "[~]",
             "blocked": "[!]",
+            "failed": "[x!]",
             "pending": "[ ]",
         }.get(status, "[ ]")
         lines.append(f"- {marker} {text}")
+        outcome = str(t.get("expected_outcome") or "").strip()
+        if outcome:
+            lines.append(f"  done when: {outcome}")
+        result = str(t.get("result") or "").strip()
+        if result:
+            lines.append(f"  result: {result}")
     if len(lines) == 1:
         return ""
     done = sum(
@@ -3125,6 +3136,13 @@ class AgentLoop:
             # `_advance_plan_on_narration` (below) checks each step off as the
             # agent works, and the agent may reorder/skip as evidence changes.
             _plan_steps = ensure_upfront_plan(list(initialization.plan_steps or []), intent)
+            # The per-todo verification contract (same order as _plan_steps;
+            # "" when a todo carries none). The Planner states what evidence
+            # establishes each todo done — the todo is judged against THAT,
+            # never against "a tool happened to succeed".
+            _plan_outcomes = list(initialization.plan_outcomes or [])[: len(_plan_steps)]
+            while len(_plan_outcomes) < len(_plan_steps):
+                _plan_outcomes.append("")
             if _plan_steps and _obs:
                 _obs.emit("todo_cleared")
                 for i, step in enumerate(_plan_steps):
@@ -3132,6 +3150,7 @@ class AgentLoop:
                         "todo_created",
                         id=f"plan-{i}",
                         text=step,
+                        expected_outcome=_plan_outcomes[i],
                         completed=False,
                         status="pending",
                     )
@@ -3231,6 +3250,7 @@ class AgentLoop:
             # Parse plan steps and emit as todo items via obs
             # so the frontend's Todos panel shows the execution plan
             _plan_steps = _parse_plan_steps(plan_context)
+            _plan_outcomes: list[str] = []  # free-text plans carry no per-step contract
             if _plan_steps and _obs:
                 for i, step in enumerate(_plan_steps):
                     _obs.emit("todo_created", id=f"plan-{i}", text=step, completed=False)
@@ -3252,6 +3272,7 @@ class AgentLoop:
             # the goal's short title (when the goal tree supplied one);
             # `content` keeps the full checkable goal string.
             _plan_steps = list(plan_steps)
+            _plan_outcomes = []  # reused plans carry no per-step contract
             if _obs:
                 for i, step in enumerate(_plan_steps):
                     _ttl = ""
@@ -3297,6 +3318,7 @@ class AgentLoop:
                         )
         else:
             _plan_steps = []
+            _plan_outcomes = []
             # Never-attempted on the record (B-2026-11-01-26): planning
             # deliberately did not run for this turn — say which gate kept
             # it out, so a skipped stage is never mistaken for a crash.
@@ -3325,6 +3347,19 @@ class AgentLoop:
             or "",
             success_criteria=list(trace.success_criteria),
         )
+        # Per-todo verification contracts become task-state criteria: a todo
+        # whose Planner outcome is stated is judged against THAT evidence by
+        # the acceptance gate, not against "a tool happened to succeed". Dedup
+        # against the trace criteria and cap — the gate judges each criterion
+        # with evidence, so the block must stay small.
+        _outcome_criteria = [
+            f"{step} — done when: {outcome}"
+            for step, outcome in zip(_plan_steps, _plan_outcomes)
+            if outcome
+        ][-6:]
+        for _c in _outcome_criteria:
+            if _c not in task_state.success_criteria:
+                task_state.success_criteria.append(_c)
         # Structured Planner DAG. Parse the free-text
         # plan into typed PlanNode objects so the loop can advance them
         # through pending → in_progress → completed | failed. Falls back
@@ -3438,13 +3473,22 @@ class AgentLoop:
         _plan_failed_key: dict[str, tuple[str, str]] = {}
 
         def _plan_tool_finished(
-            plan_id: Optional[str], failed: bool, tool_name: str = "", tool_input: str = ""
+            plan_id: Optional[str],
+            failed: bool,
+            tool_name: str = "",
+            tool_input: str = "",
+            observation: str = "",
         ) -> None:
-            """A tool attributed to a plan step ended: tick the step if it worked, mark it failed if not.
+            """A tool attributed to a plan todo ended: keep the todo's lifecycle honest.
 
-            A failure sticks: trying a DIFFERENT source or way does not turn the step for the failed
-            one into done. Only a success of the same tool on the same target (the retry) clears it.
-            After a failure the plan moves on, so what the agent tries next lands on the next step.
+            First tool under a todo → the todo is in_progress (work started).
+            A success ticks the todo AND records the evidence that closed it
+            (the tool + what it returned) — the todo's `result`. A failure
+            marks the todo failed with the reason. A failure sticks: trying a
+            DIFFERENT source or way does not turn the step for the failed one
+            into done. Only a success of the same tool on the same target (the
+            retry) clears it. After a failure the plan moves on, so what the
+            agent tries next lands on the next todo.
             """
             nonlocal _plan_step_cursor
             if not plan_id or not plan_id.startswith("plan-") or not _obs:
@@ -3454,17 +3498,28 @@ class AgentLoop:
             except (IndexError, ValueError):
                 return
             key = (tool_name, (tool_input or "").strip().splitlines()[0][:120] if (tool_input or "").strip() else "")
+            first_tool = _plan_step_tools.get(idx, 0) == 0
             _plan_step_tools[idx] = _plan_step_tools.get(idx, 0) + 1
+            if first_tool:
+                # Work started under this todo — show it as in_progress,
+                # not just a silent jump from pending to done.
+                _obs.emit("todo_updated", id=plan_id, status="in_progress")
             if failed:
                 _plan_failed_key[plan_id] = key
-                _mark_plan_step_failed(plan_id)
+                _mark_plan_step_failed(plan_id, reason=observation or "")
                 if _plan_step_cursor == idx and _plan_step_cursor < len(_plan_steps) - 1:
                     _plan_step_cursor += 1
                 return
             if plan_id in _plan_failed and _plan_failed_key.get(plan_id) != key:
                 return  # a different way of doing something else: the failed step stays failed
             _plan_failed.discard(plan_id)
-            _obs.emit("todo_completed", id=plan_id, completed=True)
+            # The result line: what closed this todo (the tool that landed +
+            # what it returned). Execution success is recorded as evidence,
+            # never silently equated with the objective being met.
+            _obs_head = " ".join(str(observation or "").split())[:160]
+            _result = f"{tool_name}: {_obs_head}" if _obs_head else str(tool_name)
+            _plan_done.add(plan_id)
+            _obs.emit("todo_completed", id=plan_id, completed=True, result=_result)
             _complete_sub_goals(idx)
 
         # The 'why' for any tool call under the active plan
@@ -3489,8 +3544,12 @@ class AgentLoop:
         # Plan steps whose tool did not work. They are shown failed and never ticked as done, even
         # when the agent later narrates past them or the turn ends.
         _plan_failed: set[str] = set()
+        # Plan todos already closed WITH evidence by their tool success — the
+        # turn-end sweep must not overwrite that concrete result with a
+        # generic close line.
+        _plan_done: set[str] = set()
 
-        def _mark_plan_step_failed(plan_id: str) -> None:
+        def _mark_plan_step_failed(plan_id: str, reason: str = "") -> None:
             try:
                 idx = int(plan_id.split("-")[1])
             except (IndexError, ValueError):
@@ -3498,13 +3557,15 @@ class AgentLoop:
             if plan_id in _plan_failed or not _obs or not (0 <= idx < len(_plan_steps)):
                 return
             _plan_failed.add(plan_id)
+            # The title stays clean — the failure lives in the STATUS and the
+            # recorded reason, not glued onto the label (the panel renders the
+            # failed state itself).
+            _reason = " ".join(str(reason or "").split())[:160]
             _obs.emit(
-                "todo_created",
+                "todo_updated",
                 id=plan_id,
-                text=f"{str(_plan_steps[idx])[:100]} — didn't work",
-                content=str(_plan_steps[idx]),
-                completed=False,
                 status="failed",
+                result=_reason or "The tool run under this todo did not succeed.",
             )
 
         def _complete_current_plan_step() -> None:
@@ -3512,11 +3573,18 @@ class AgentLoop:
                 return
             if f"plan-{_plan_step_cursor}" in _plan_failed:
                 return
+            if f"plan-{_plan_step_cursor}" in _plan_done:
+                return  # already closed with its tool evidence — keep that result
             if 0 <= _plan_step_cursor < len(_plan_steps):
+                # A todo with no tools under it can still close honestly: a
+                # reasoning-only todo (e.g. "prepare the answer") completes
+                # when the reply is delivered. The result says so — the close
+                # carries its own evidence, never a bare tick.
                 _obs.emit(
                     "todo_completed",
                     id=f"plan-{_plan_step_cursor}",
                     completed=True,
+                    result="Completed by reasoning — no tool needed.",
                 )
                 _complete_sub_goals(_plan_step_cursor)
 
@@ -6311,7 +6379,13 @@ class AgentLoop:
                 _todo_id = _syn_todo_id or (f"plan-{_plan_step_cursor}" if _plan_steps else None)
                 _benign_absent = tool_failed and _is_benign_not_found(tool_name, tool_result)
                 if not _benign_absent:
-                    _plan_tool_finished(_todo_id, tool_failed, tool_name, tool_input)
+                    _plan_tool_finished(
+                        _todo_id,
+                        tool_failed,
+                        tool_name,
+                        tool_input,
+                        observation=observation,
+                    )
                 if tool_failed:
                     last_tool_failed = True
                     consecutive_failures += 1

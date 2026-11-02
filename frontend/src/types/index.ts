@@ -449,6 +449,12 @@ export interface TodoItem {
   /** The full agent-facing content (paths/commands),
    *  kept for tooltips + re-persistence even when a title is shown. */
   content?: string;
+  /** What evidence establishes this todo done — the Planner's
+   *  verification contract stated when the todo was drawn up. */
+  expected_outcome?: string;
+  /** What actually closed the todo (its evidence), or why it closed
+   *  blocked/failed. */
+  result?: string;
 }
 
 export type ObjectiveStatus = 'queued' | 'running' | 'paused' | 'blocked' | 'completed' | 'failed' | 'canceled';

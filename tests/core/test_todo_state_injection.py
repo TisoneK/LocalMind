@@ -230,3 +230,53 @@ class TestLoopInjectsTodoState:
             str(m.get("content", "")) for m in sent_messages.get("messages", [])
         )
         assert "# Current todos" not in all_content
+
+
+def test_render_todo_state_carries_contract_and_result():
+    """Resuming mid-objective means knowing the DONE contract: the outcome
+    (what proves it) and the result (what closed it) render with the label."""
+    from core.agent.loop import _render_todo_state
+
+    block = _render_todo_state(
+        [
+            {
+                "id": "plan-0",
+                "content": "Establish current conditions for Kitengela",
+                "completed": True,
+                "status": "done",
+                "expected_outcome": "temperature and condition from a named source",
+                "result": "web_search: 22C, sunny, Kitengela (meteoblue)",
+            },
+            {
+                "id": "plan-1",
+                "content": "Determine the forecast",
+                "completed": False,
+                "status": "blocked",
+                "expected_outcome": "hour-by-day figures for today",
+                "result": "Not reached — the turn closed before this todo ran.",
+            },
+        ]
+    )
+    assert "[x] Establish current conditions for Kitengela" in block
+    assert "done when: temperature and condition from a named source" in block
+    assert "result: web_search: 22C, sunny, Kitengela (meteoblue)" in block
+    assert "[!] Determine the forecast" in block
+    assert "done when: hour-by-day figures for today" in block
+
+
+def test_render_todo_state_failed_marker():
+    from core.agent.loop import _render_todo_state
+
+    block = _render_todo_state(
+        [
+            {
+                "id": "plan-0",
+                "content": "Read the file",
+                "completed": False,
+                "status": "failed",
+                "result": "file_task: permission denied",
+            }
+        ]
+    )
+    assert "[x!] Read the file" in block
+    assert "result: file_task: permission denied" in block

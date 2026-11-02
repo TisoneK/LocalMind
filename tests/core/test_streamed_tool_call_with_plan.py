@@ -191,8 +191,12 @@ def test_a_plan_step_whose_tool_failed_is_marked_failed_and_never_ticked():
             ]
 
     asyncio.run(go())
-    created = [(e.data.get("id"), e.data.get("status")) for e in obs.drain_matching({"todo_created"})]
-    assert ("plan-0", "failed") in created
+    # A failed tool marks the todo failed via todo_updated — the title stays
+    # clean, the reason lives in the status + the recorded result.
+    drained = obs.drain_matching({"todo_updated"})
+    updated = [(e.data.get("id"), e.data.get("status")) for e in drained]
+    assert ("plan-0", "failed") in updated
+    assert any(e.data.get("result") for e in drained)
     assert "plan-0" not in [e.data.get("id") for e in obs.drain_matching({"todo_completed"})]
 
 

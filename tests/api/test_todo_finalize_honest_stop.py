@@ -37,8 +37,10 @@ def test_finalize_skips_on_honest_stop():
 
 
 def test_finalize_flips_remaining_by_default():
-    """Legacy behavior unchanged: on a normal (non-honest-stop) turn the
-    remaining plan todos are finalized as complete."""
+    """On a normal (non-honest-stop) turn the remaining plan todos close as
+    BLOCKED with a result — never completed. A todo that never ran is not
+    done: marking it complete was the execution-success-equals-objective-
+    success lie, and the panel must show the true fraction."""
     engine, store = _fake_engine(
         [
             {"id": "plan-0", "completed": True},
@@ -47,5 +49,13 @@ def test_finalize_flips_remaining_by_default():
     )
     chat_routes._engine = engine
     flipped = chat_routes._finalize_plan_todos("s1", skip=False)
-    assert flipped == [{"id": "plan-1", "completed": True}]
+    assert flipped == [
+        {
+            "id": "plan-1",
+            "status": "blocked",
+            "result": "Not reached — the turn closed before this todo ran.",
+        }
+    ]
     store.upsert_todo.assert_called_once()
+    _args, _kwargs = store.upsert_todo.call_args
+    assert _kwargs.get("status") == "blocked"

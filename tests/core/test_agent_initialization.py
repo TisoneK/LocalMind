@@ -486,10 +486,14 @@ async def test_execute_mode_does_boot_the_workspace_or_loop():
 # ── the plan is whole before the first action runs ─────────────────────────
 
 
-def test_prompt_asks_for_every_action_up_front_without_naming_tools():
+def test_prompt_asks_for_meaningful_work_items_with_outcomes():
+    """The plan is the REAL todo list: meaningful work items with a stated
+    outcome each — never a 1:1 mirror of tool calls (the panel is not a
+    rendered tool log)."""
     prompt = " ".join(build_initialization_prompt("What is the weather?", env_context="").split())
-    assert "EVERY action" in prompt
-    assert "Check the sources" in prompt
+    assert "MEANINGFUL PIECE OF WORK" in prompt
+    assert "outcome" in prompt
+    assert '"todo"' in prompt
     assert "web_search" not in prompt and "shell" not in prompt
 
 
@@ -519,3 +523,40 @@ class TestEnsureUpfrontPlan:
 
         many = [f"step {i}" for i in range(9)]
         assert ensure_upfront_plan(["", "  ", *many], "chat") == many[:6]
+
+
+def test_parse_initialization_plan_objects_carry_outcomes():
+    """The real todo list: {todo, outcome} objects keep their verification
+    contract; plain strings degrade to outcome-less todos; junk items are
+    dropped — nothing crashes, nothing is invented."""
+    from core.agent.initialization import parse_initialization
+
+    raw = (
+        '{"mode": "execute", "acknowledgement": "On it.", "objective": "weather", '
+        '"title": "Fetch Weather", "plan": ['
+        '{"todo": "Establish current conditions for Kitengela", '
+        '"outcome": "temperature and condition from a named source, dated today"}, '
+        '{"text": "Determine today\u2019s forecast", "expected": "hour-by-day figures"}, '
+        '"Prepare the answer", '
+        '{"junk": true}, '
+        '{"todo": "   "}'
+        '], "confidence": 0.9}'
+    )
+    decision = parse_initialization(raw)
+    assert decision.plan_steps == [
+        "Establish current conditions for Kitengela",
+        "Determine today\u2019s forecast",
+        "Prepare the answer",
+    ]
+    assert decision.plan_outcomes == [
+        "temperature and condition from a named source, dated today",
+        "hour-by-day figures",
+        "",
+    ]
+
+
+def test_parse_initialization_plan_absent_yields_empty():
+    from core.agent.initialization import parse_initialization
+
+    decision = parse_initialization('{"mode": "execute", "acknowledgement": "ok"}')
+    assert decision.plan_steps == [] and decision.plan_outcomes == []

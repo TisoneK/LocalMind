@@ -11,6 +11,10 @@ export interface RawTodoEvent {
   session_id?: string;
   /** Short user-facing label, preferred over content. */
   title?: string;
+  /** The todo's verification contract (what evidence establishes done). */
+  expected_outcome?: string;
+  /** What actually closed the todo (or why it is blocked/failed). */
+  result?: string;
 }
 
 /** Statuses that mean a tool is still executing and should remain active in UI. */
@@ -35,6 +39,8 @@ export function normalizeTodoEvent(raw: RawTodoEvent): TodoItem | null {
     ...(raw.content && raw.content !== text ? { content: raw.content } : {}),
     ...(raw.status ? { status: raw.status } : {}),
     ...(raw.order !== undefined ? { order: raw.order } : {}),
+    ...(raw.expected_outcome ? { expected_outcome: raw.expected_outcome } : {}),
+    ...(raw.result ? { result: raw.result } : {}),
     ...(raw.sessionId || raw.session_id
       ? { sessionId: raw.sessionId || raw.session_id }
       : {}),
@@ -72,6 +78,8 @@ export function applyTodoUpdated(todos: TodoItem[], raw: RawTodoEvent): TodoItem
   updated[fallbackIndex] = {
     ...current,
     ...(raw.status ? { status: raw.status } : {}),
+    ...(raw.expected_outcome ? { expected_outcome: raw.expected_outcome } : {}),
+    ...(raw.result ? { result: raw.result } : {}),
     completed: raw.completed === true || raw.status === 'done' || current.completed,
   };
   return updated;

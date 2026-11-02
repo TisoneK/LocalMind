@@ -48,6 +48,13 @@ class InitializationDecision:
     # up front as the live Todos panel and checked off as the agent works. Empty
     # for direct/clarify and single-step tasks.
     plan_steps: list[str] = field(default_factory=list)
+    # The verification contract per plan step (same order, same length or
+    # shorter — padded with "" by the parser when a step has none): what
+    # evidence establishes that step done, as the Planner stated it at draw-up
+    # time. Empty string = no contract (the step closes on its tool success,
+    # the legacy contract). Consumed by the loop: it seeds the task state's
+    # success criteria and rides the todo_created events to the panel.
+    plan_outcomes: list[str] = field(default_factory=list)
     # Set when the classify JSON was unparseable AND there was no
     # salvageable prose — the `response` is then the generic canned fallback,
     # which IGNORES the conversation. The loop uses this to answer the user's
@@ -118,10 +125,7 @@ Modes (choose the tier):
 - clarify: a material detail is missing that NO search or inspection could
   resolve; put one question in clarifying_question.
 - execute: anything needing current info, files, code, browser, memory, or
-  multi-step work. List EVERY action in `plan` up front, in order (2-6 short
-  imperative steps), ending with the one that answers the user. Current info
-  takes three: "Search the web for X", "Check the sources", "Answer from what
-  I found". One step only for a single action on one named thing.
+  multi-step work. Draw up the TODO LIST in `plan` (see below).
 
 {env_context}{history_block}
 
@@ -132,10 +136,19 @@ JSON schema:
   "response": "complete answer only for direct mode",
   "objective": "what the user actually wants — one concise line (<=200 chars)",
   "title": "a 2-4 word action label for this turn (Title Case)",
-  "plan": ["ordered step 1", "ordered step 2", "..."],
+  "plan": [{{"todo": "work item", "outcome": "evidence of done"}}],
   "clarifying_question": "one question only for clarify mode",
   "confidence": 0.0
 }}
+
+THE TODO LIST (plan) — the work that answers the request:
+- Each todo is a MEANINGFUL PIECE OF WORK the user cares about, never a tool
+  call ("Establish the current conditions for X", not "Search the web for X").
+- Each todo carries `outcome`: the evidence that proves it done ("the
+  temperature for <place>, from a named source, dated today" — not "the
+  search ran").
+- Size it to the request (weather → 2-4 todos; an app → more). The LAST
+  todo prepares the answer. The agent may add, reorder or drop todos later.
 
 Rules:
 - direct for greetings and general questions needing no local/live data.
@@ -160,10 +173,7 @@ Rules:
   These inputs have no discoverable target — searching the filesystem or running
   random commands CANNOT resolve pure ambiguity. Ask what they want fixed/done.
   Only choose execute if the conversation history makes the referent obvious.
-- For an execute task, `plan` is the ordered checklist the agent will follow to
-  reach the objective — the user sees it as a live task list. Keep steps
-  concrete and complete; the agent may reorder, add, or skip steps as real
-  evidence changes. Leave `plan` empty for direct/clarify.
+- Leave `plan` empty for direct/clarify.
 - acknowledgement <=180 chars, response <=1200 chars, objective <=200 chars.
 - title names what this turn DOES as a 2-4 word Title-Case verb phrase, always
   provided — e.g. "Greet User", "Fetch Weather", "Generate Spreadsheet".
@@ -328,13 +338,41 @@ def parse_initialization(text: str) -> InitializationDecision:
 
     # Ordered upfront plan → the live Todos panel. Bounded + sanitized;
     # a model that omits it (or emits junk) just yields an empty plan (no todos).
+    # Each item is a meaningful WORK ITEM (not a tool call) with an optional
+    # `outcome` — the evidence that establishes it done. Both shapes are
+    # accepted fail-closed: objects {todo/text/content/task, outcome/expected/
+    # done_when/done-when} keep their outcome; plain strings (or junk objects)
+    # degrade to a todo with no verification contract — never a crash, never a
+    # dropped item.
     _raw_plan = payload.get("plan")
     if isinstance(_raw_plan, list):
-        decision.plan_steps = [
-            str(s).strip()[:120]
-            for s in _raw_plan
-            if isinstance(s, str) and s.strip()
-        ][:6]
+        for _item in _raw_plan[:12]:
+            if isinstance(_item, str):
+                _todo = _item.strip()[:160]
+                _outcome = ""
+            elif isinstance(_item, dict):
+                _todo = str(
+                    _item.get("todo")
+                    or _item.get("text")
+                    or _item.get("content")
+                    or _item.get("task")
+                    or ""
+                ).strip()[:160]
+                _outcome = str(
+                    _item.get("outcome")
+                    or _item.get("expected")
+                    or _item.get("expected_outcome")
+                    or _item.get("done_when")
+                    or _item.get("done when")
+                    or ""
+                ).strip()[:300]
+            else:
+                continue
+            if _todo:
+                decision.plan_steps.append(_todo)
+                decision.plan_outcomes.append(_outcome)
+        decision.plan_steps = decision.plan_steps[:8]
+        decision.plan_outcomes = decision.plan_outcomes[:8]
 
     if mode == "execute":
         # The only path to the tool loop — an explicit, parseable choice.

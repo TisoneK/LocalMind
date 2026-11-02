@@ -22,7 +22,7 @@ import json
 from core.models import Intent, RiskLevel, ToolResult
 from tools import register_tool
 
-_VALID_STATUS = ("pending", "in_progress", "completed", "blocked")
+_VALID_STATUS = ("pending", "in_progress", "completed", "blocked", "failed")
 
 
 def _coerce_todos(raw: object) -> list[dict]:
@@ -44,7 +44,7 @@ def _coerce_todos(raw: object) -> list[dict]:
             item = {"text": item}
         if not isinstance(item, dict):
             continue
-        text = str(item.get("text") or item.get("content") or item.get("task") or "").strip()
+        text = str(item.get("text") or item.get("content") or item.get("task") or item.get("todo") or "").strip()
         if not text:
             continue
         status = str(item.get("status") or "").strip().lower()
@@ -53,12 +53,21 @@ def _coerce_todos(raw: object) -> list[dict]:
         completed = bool(item.get("completed")) or status == "completed"
         if completed:
             status = "completed"
+        # The per-todo verification contract + the closing evidence. Optional
+        # on every item; a todo without an outcome closes on its tool success
+        # (the legacy contract), one WITH an outcome carries what proves it.
+        expected_outcome = str(
+            item.get("expected_outcome") or item.get("outcome") or item.get("done_when") or ""
+        ).strip()[:300]
+        result = str(item.get("result") or "").strip()[:300]
         todos.append(
             {
                 "id": str(item.get("id") or f"t{i + 1}"),
                 "text": text,
                 "completed": completed,
                 "status": status,
+                "expected_outcome": expected_outcome,
+                "result": result,
             }
         )
     return todos
@@ -67,8 +76,20 @@ def _coerce_todos(raw: object) -> list[dict]:
 def _render(todos: list[dict]) -> str:
     if not todos:
         return "Todo list cleared."
-    marker = {"completed": "[x]", "in_progress": "[~]", "blocked": "[!]", "pending": "[ ]"}
-    lines = [f"{marker.get(t['status'], '[ ]')} {t['text']}" for t in todos]
+    marker = {
+        "completed": "[x]",
+        "in_progress": "[~]",
+        "blocked": "[!]",
+        "failed": "[x!]",
+        "pending": "[ ]",
+    }
+    lines = []
+    for t in todos:
+        lines.append(f"{marker.get(t['status'], '[ ]')} {t['text']}")
+        if t.get("expected_outcome"):
+            lines.append(f"    done when: {t['expected_outcome']}")
+        if t.get("result"):
+            lines.append(f"    result: {t['result']}")
     done = sum(1 for t in todos if t["completed"])
     return f"Todo list ({done}/{len(todos)} done):\n" + "\n".join(lines)
 
@@ -118,13 +139,19 @@ register_tool(
     todo_write,
     description=(
         "Write or update the live task checklist shown in the user's Todos panel. "
-        "Pass the FULL list every time as a JSON array — "
-        '{"todos": [{"text": "step one", "status": "in_progress"}, '
-        '{"text": "step two", "status": "pending"}]} — statuses are '
-        "'pending' | 'in_progress' | 'completed' | 'blocked'. Use it for any "
-        "multi-step task: create the checklist up front, then call again to mark "
-        "the current step in_progress and finished steps completed, so the user "
-        "sees live progress. Fast and side-effect-free besides the panel."
+        "Each todo is a MEANINGFUL PIECE OF WORK the user cares about — never a "
+        "tool call. Pass the FULL list every time as a JSON array — "
+        '{"todos": [{"text": "establish the current conditions for X", '
+        '"expected_outcome": "the temperature and condition for X, from a named '
+        'source", "status": "in_progress"}, '
+        '{"text": "prepare the answer", "status": "pending"}]} — statuses are '
+        "'pending' | 'in_progress' | 'completed' | 'blocked' | 'failed'. "
+        "`expected_outcome` states what evidence proves a todo done; "
+        "`result` records what actually closed it (or why it is blocked or "
+        "failed). Tool calls are how a todo gets done, not the todo itself. "
+        "Use it for any multi-step task: create the checklist up front, then "
+        "call again to mark progress, add todos the evidence demands, or "
+        "revise the plan. Fast and side-effect-free besides the panel."
     ),
     cost=0.0,
     latency_ms=5,

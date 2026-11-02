@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useState } from 'react';
-import { Check, Plus, Loader2, X } from 'lucide-react';
+import { Check, ChevronRight, Loader2, Plus, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ActionItem, TodoItem } from '@/types';
 import { useEnterMotion } from '@/lib/localmind/motion';
@@ -40,6 +40,11 @@ export function TodoList({ todos, actions = [], onToggle, onAdd, settled = false
   // many are still running — so "one todo → many actions" stays visible
   // without duplicating the execution trace.
   const countByTodo = new Map<string, { total: number; running: number }>();
+  // Per-todo execution steps (level 3): the actual tool operations that ran
+  // under each todo, attributed via the loop's todo_id. The todo is the
+  // meaningful work item; these are how it got done — inspectable on
+  // request, never a replacement for the todo itself.
+  const stepsByTodo = new Map<string, ActionItem[]>();
   for (const a of actions) {
     if (!a.todoId) continue;
     const entry = countByTodo.get(a.todoId) ?? { total: 0, running: 0 };
@@ -52,7 +57,18 @@ export function TodoList({ todos, actions = [], onToggle, onAdd, settled = false
       entry.running += 1;
     }
     countByTodo.set(a.todoId, entry);
+    const list = stepsByTodo.get(a.todoId) ?? [];
+    list.push(a);
+    stepsByTodo.set(a.todoId, list);
   }
+  const [expandedTodos, setExpandedTodos] = useState<Set<string>>(new Set());
+  const toggleExpanded = (id: string) =>
+    setExpandedTodos((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const handleAddTodo = () => {
     const text = newTodoText.trim();
@@ -259,6 +275,93 @@ export function TodoList({ todos, actions = [], onToggle, onAdd, settled = false
                   </span>
                 </div>
               ))}
+              {/* The todo's verification contract — what evidence establishes
+                  it done. Visible while the todo is open; once closed, the
+                  result below carries what actually satisfied it. */}
+              {!todo.completed && todo.expected_outcome && (
+                <div
+                  data-testid="todo-outcome"
+                  className="pl-5 ml-1.5 text-[9px] leading-snug text-brand-green-faint"
+                  title="Done when — the evidence that closes this task"
+                >
+                  Done when: {todo.expected_outcome}
+                </div>
+              )}
+              {/* What actually closed the todo — the evidence (or why it
+                  blocked/failed). The close carries its own reason. */}
+              {todo.result &&
+                (todo.completed ||
+                  (todo.status as string) === 'failed' ||
+                  (todo.status as string) === 'blocked') && (
+                <div
+                  data-testid="todo-result"
+                  data-kind={
+                    todo.completed ? 'done' : (todo.status as string) || 'blocked'
+                  }
+                  className={`pl-5 ml-1.5 text-[9px] leading-snug ${
+                    todo.completed
+                      ? 'text-brand-green-muted/70'
+                      : (todo.status as string) === 'failed'
+                        ? 'text-brand-red/70'
+                        : 'text-brand-amber/80'
+                  }`}
+                >
+                  {todo.completed ? 'Result: ' : (todo.status as string) === 'failed' ? 'Failed: ' : 'Blocked: '}
+                  {todo.result}
+                </div>
+              )}
+              {/* Per-todo execution steps (inspectable on request): the tool
+                  operations that ran under THIS todo. Collapsed by default —
+                  the todo is the work item; the steps are the how. */}
+              {(stepsByTodo.get(todo.id)?.length ?? 0) > 0 && (
+                <div className="pl-5 ml-1.5">
+                  <button
+                    type="button"
+                    data-testid="todo-steps-toggle"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleExpanded(todo.id);
+                    }}
+                    className="flex items-center gap-0.5 text-[9px] text-brand-green-faint hover:text-brand-green-muted transition-colors"
+                    title="Execution details under this task"
+                  >
+                    <ChevronRight
+                      className={`h-2.5 w-2.5 transition-transform ${
+                        expandedTodos.has(todo.id) ? 'rotate-90' : ''
+                      }`}
+                    />
+                    {stepsByTodo.get(todo.id)!.length} step
+                    {stepsByTodo.get(todo.id)!.length === 1 ? '' : 's'}
+                  </button>
+                  {expandedTodos.has(todo.id) && (
+                    <div className="mt-0.5 space-y-0.5 border-l border-brand-border/50">
+                      {stepsByTodo.get(todo.id)!.map((step) => (
+                        <div
+                          key={step.id}
+                          data-testid="todo-step"
+                          className="flex items-center gap-1 pl-2 py-0.5"
+                          title={step.detail || step.label}
+                        >
+                          {step.status === 'done' ? (
+                            <Check className="h-2 w-2 text-brand-green shrink-0" />
+                          ) : step.status === 'failed' ? (
+                            <X className="h-2 w-2 text-brand-red shrink-0" />
+                          ) : (
+                            <Loader2
+                              className={`h-2 w-2 text-brand-amber shrink-0 ${
+                                reduceMotion ? '' : 'animate-spin'
+                              }`}
+                            />
+                          )}
+                          <span className="text-[9px] leading-tight text-brand-green-muted/80 truncate">
+                            {step.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               </Fragment>
             );
           })}

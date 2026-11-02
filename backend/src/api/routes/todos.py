@@ -38,11 +38,13 @@ class TodoItem(BaseModel):
     session_id: str
     content: str
     completed: bool = False
-    status: str = "pending"  # pending, in_progress, done, failed
+    status: str = "pending"  # pending, in_progress, done, blocked, failed
     priority: str = "medium"
     order: int = 0
     timestamp: float
     title: Optional[str] = None  # short user-facing label
+    expected_outcome: Optional[str] = None  # what evidence establishes done
+    result: Optional[str] = None  # what actually closed it (or why blocked/failed)
 
 
 class CreateTodoRequest(BaseModel):
@@ -95,6 +97,8 @@ async def get_todos(session_id: Optional[str] = Query(None)):
                 order=r["order"],
                 timestamp=r["created_at"],
                 title=r["title"] if "title" in r.keys() else None,
+                expected_outcome=(r["expected_outcome"] if "expected_outcome" in r.keys() else None),
+                result=r["result"] if "result" in r.keys() else None,
             )
             for r in rows
         ]

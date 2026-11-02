@@ -579,6 +579,8 @@ class SessionStore:
         completed: Optional[bool] = None,
         title: Optional[str] = None,
         status: Optional[str] = None,
+        expected_outcome: Optional[str] = None,
+        result: Optional[str] = None,
     ) -> None:
         """Create or update a plan todo (migration 006 schema). Only non-None
         fields are written, so a todo_completed event (id + completed only)
@@ -588,6 +590,12 @@ class SessionStore:
         it `content`); `title` is the short user-facing label. When a title
         is supplied on create, it's stored; on update (todo_completed) no
         title is passed, so an existing title survives.
+
+        `expected_outcome` is the todo's verification contract (migration 016
+        — what evidence establishes done, stated at planning time);
+        `result` is what actually satisfied it (or why it closed blocked or
+        failed). Both survive status-only updates the same way the title
+        does.
         """
         with self._conn() as conn:
             now = time.time()
@@ -597,8 +605,9 @@ class SessionStore:
             if row is None:
                 conn.execute(
                     'INSERT INTO todos (id, session_id, content, completed, status, '
-                    'priority, "order", created_at, updated_at, title) VALUES (?, ?, ?, ?, ?, '
-                    "'medium', 0, ?, ?, ?)",
+                    'priority, "order", created_at, updated_at, title, expected_outcome, result) '
+                    "VALUES (?, ?, ?, ?, ?, "
+                    "'medium', 0, ?, ?, ?, ?, ?)",
                     (
                         todo_id,
                         session_id,
@@ -608,6 +617,8 @@ class SessionStore:
                         now,
                         now,
                         title,
+                        expected_outcome,
+                        result,
                     ),
                 )
             else:
@@ -619,6 +630,10 @@ class SessionStore:
                 # update).
                 if title is not None:
                     updates["title"] = title
+                if expected_outcome is not None:
+                    updates["expected_outcome"] = expected_outcome
+                if result is not None:
+                    updates["result"] = result
                 if completed is not None:
                     updates["completed"] = 1 if completed else 0
                     updates["status"] = "done" if completed else "pending"
@@ -632,10 +647,22 @@ class SessionStore:
 
     def list_todos(self, session_id: str) -> list[dict]:
         """Return plan todos for a session, in display order."""
-        cols = ("id", "session_id", "content", "completed", "status", "priority", "order", "timestamp")
+        cols = (
+            "id",
+            "session_id",
+            "content",
+            "completed",
+            "status",
+            "priority",
+            "order",
+            "timestamp",
+            "expected_outcome",
+            "result",
+        )
         with self._conn() as conn:
             rows = conn.execute(
-                'SELECT id, session_id, content, completed, status, priority, "order", created_at '
+                'SELECT id, session_id, content, completed, status, priority, "order", created_at, '
+                "expected_outcome, result "
                 'FROM todos WHERE session_id = ? ORDER BY "order", created_at',
                 (session_id,),
             ).fetchall()

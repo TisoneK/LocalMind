@@ -287,9 +287,13 @@ def _bridge_todo_event(evt, session_id) -> list[str]:
         # persist the FULL content (paths/commands the
         # agent needs) while the UI text stays short. The loop emits
         # `text` (user-facing title) + `content` (full); when only `text`
-        # exists (legacy callers) it fills both.
+        # exists (legacy callers) it fills both. `expected_outcome` is the
+        # todo's verification contract (migration 016) and `result` its
+        # closing evidence — both optional, both persisted.
         _full = evt.data.get("content") or evt.data.get("text") or ""
         _title = evt.data.get("text") or ""
+        _outcome = str(evt.data.get("expected_outcome") or "")
+        _result = str(evt.data.get("result") or "")
         try:
             _engine._store.upsert_todo(
                 session_id,
@@ -299,47 +303,68 @@ def _bridge_todo_event(evt, session_id) -> list[str]:
                 title=_title,
                 # Only a failure is persisted as a status: it must survive the end-of-turn sweep.
                 status="failed" if evt.data.get("status") == "failed" else None,
+                expected_outcome=_outcome or None,
+                result=_result or None,
             )
         except Exception as _exc:
             logger.warning(f"[todos] persist failed: {_exc}")
-        return [
-            _sse(
-                {
-                    "type": "todo_created",
-                    "todo": {
-                        "id": evt.data.get("id", ""),
-                        "text": _title or _full[:120],
-                        "content": _full,
-                        "completed": evt.data.get("completed", False),
-                        # Status lets the Todos panel show in_progress (amber
-                        # spinner) for agent-driven todo_write checklists.
-                        "status": evt.data.get("status", "pending"),
-                    },
-                }
-            )
-        ]
+        _todo_sse = {
+            "id": evt.data.get("id", ""),
+            "text": _title or _full[:120],
+            "content": _full,
+            "completed": evt.data.get("completed", False),
+            # Status lets the Todos panel show in_progress (amber
+            # spinner) for agent-driven todo_write checklists.
+            "status": evt.data.get("status", "pending"),
+        }
+        if _outcome:
+            _todo_sse["expected_outcome"] = _outcome
+        if _result:
+            _todo_sse["result"] = _result
+        return [_sse({"type": "todo_created", "todo": _todo_sse})]
     if evt.type == "todo_completed":
+        _close_result = str(evt.data.get("result") or "")
         try:
             _engine._store.upsert_todo(
                 session_id,
                 evt.data.get("id", ""),
                 completed=bool(evt.data.get("completed", True)),
+                result=_close_result or None,
             )
         except Exception as _exc:
             logger.warning(f"[todos] persist failed: {_exc}")
-        return [
-            _sse(
-                {
-                    "type": "todo_completed",
-                    "todo": {
-                        "id": evt.data.get("id", ""),
-                        "completed": evt.data.get("completed", True),
-                    },
-                }
+        _todo_sse = {
+            "id": evt.data.get("id", ""),
+            "completed": evt.data.get("completed", True),
+        }
+        if _close_result:
+            _todo_sse["result"] = _close_result
+        return [_sse({"type": "todo_completed", "todo": _todo_sse})]
+    if evt.type == "todo_updated":
+        # A status-only lifecycle update (in_progress / failed / blocked)
+        # optionally carrying the closing `result`. Persisted so the status
+        # and the reason survive the end-of-turn sweep and the next turn's
+        # context render; the failed status in particular must not be
+        # forgotten by the refetch.
+        _status = str(evt.data.get("status") or "") or None
+        _update_result = str(evt.data.get("result") or "")
+        try:
+            _engine._store.upsert_todo(
+                session_id,
+                evt.data.get("id", ""),
+                status=_status,
+                result=_update_result or None,
             )
-        ]
+        except Exception as _exc:
+            logger.warning(f"[todos] record failed: {_exc}")
+        _todo_sse = {"id": evt.data.get("id", "")}
+        if _status:
+            _todo_sse["status"] = _status
+        if _update_result:
+            _todo_sse["result"] = _update_result
+        return [_sse({"type": "todo_updated", "todo": _todo_sse})]
     # legacy trio — same treatment (persist + dedicated SSE).
-    if evt.type in ("todo_added", "todo_updated", "todo_cleared"):
+    if evt.type in ("todo_added", "todo_cleared"):
         try:
             if evt.type == "todo_cleared":
                 _engine._store.clear_todos(session_id)
@@ -455,21 +480,21 @@ def _turn_did_not_finish(history) -> bool:
 
 
 def _finalize_plan_todos(session_id: str, skip: bool = False) -> list[dict]:
-    """mark any plan todos the loop didn't explicitly advance as
-    complete. The plan covers the whole turn, so when the turn ends the
-    remaining steps are done (or moot) — this makes the persisted Todos panel
-    agree with reality instead of leaving trailing "pending" rows.
+    """Close out plan todos the loop never advanced — honestly.
 
-    `skip=True` when the acceptance gate ended the turn with an
-    HONEST STOP (unmet goal criteria — the loop emitted
-    `agent_loop_gate_honest_stop`). Flipping the remaining plan todos then
-    would re-lie the self-mutating checklist: the unmet goal items would
-    show as complete and the panel would read 100% on a turn that did not
-    finish its work. On an honest stop the unmet items stay pending, so the
-    panel shows the true fraction.
+    A plan todo that got no tool, no tick and no failure by turn close was
+    NOT done. Marking it complete (the old behavior) is exactly the
+    execution-success-equals-objective-success lie: the panel read 100% on
+    work that never ran. It closes as `blocked` with a result that says what
+    happened — the true fraction stays visible, and a follow-up turn can pick
+    it up (the persisted status renders back into the model's context).
+
+    `skip=True` when the turn did not finish (honest stop, cap, provider
+    death): the untouched items stay PENDING — resumable, not blocked — so
+    the panel shows the true fraction and the next turn re-runs them.
 
     Returns the todos that were flipped so the SSE bridge can emit live
-    todo_completed events. Best-effort — never raises into the stream."""
+    todo_updated events. Best-effort — never raises into the stream."""
 
     flipped: list[dict] = []
     if skip:
@@ -479,10 +504,15 @@ def _finalize_plan_todos(session_id: str, skip: bool = False) -> list[dict]:
             if (
                 row.get("id", "").startswith("plan-")
                 and not row.get("completed")
-                and row.get("status") != "failed"  # a step that did not work is not "done or moot"
+                and row.get("status") not in ("failed", "blocked")  # closed states stay closed
             ):
-                _engine._store.upsert_todo(session_id, row["id"], completed=True)
-                flipped.append({"id": row["id"], "completed": True})
+                _result = "Not reached — the turn closed before this todo ran."
+                _engine._store.upsert_todo(
+                    session_id, row["id"], status="blocked", result=_result
+                )
+                flipped.append(
+                    {"id": row["id"], "status": "blocked", "result": _result}
+                )
     except Exception as _exc:
         logger.warning(f"[todos] finalize failed: {_exc}")
     return flipped
@@ -1246,13 +1276,14 @@ async def _event_stream(
             for extra in _dedicated_proactive_writes(evt):
                 yield extra
 
-        # the plan covers the whole turn — mark any plan todos
-        # the loop didn't advance as complete, live (the finally block repeats
-        # the DB update for aborted/disconnected streams). skip
-        # on an honest stop — unmet goal items must stay pending (no false
-        # 100%), and the loop already completed the passed ones itself.
+        # the plan covers the whole turn — plan todos the loop
+        # never advanced close as BLOCKED with a result that says so (the
+        # finally block repeats the DB update for aborted/disconnected
+        # streams). skip on an incomplete turn — unmet items stay pending
+        # (resumable, no false 100%), and the loop already closed the
+        # evidence-backed ones itself.
         for _td in _finalize_plan_todos(session_id, skip=_incomplete_turn):
-            yield _sse({"type": "todo_completed", "todo": _td})
+            yield _sse({"type": "todo_updated", "todo": _td})
 
     except Exception as exc:
         logger.error(f"[chat] stream error: {exc}", exc_info=True)
