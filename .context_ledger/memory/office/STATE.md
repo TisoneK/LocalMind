@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-11-02T05:40:18Z_
+_Regenerated: 2026-11-02T06:30:08Z_
 
 ## Standing params
 - **Core:** 2.3.2 (locked, verified 2026-11-02)
@@ -19,6 +19,7 @@ _Regenerated: 2026-11-02T05:40:18Z_
 - **Rosa** (S008) — Done — Build the turn-close attribution + honest completion contract (owner-observed "Working" w…
 - **Sefu** (S010) — Done — Exhaustive study of the owner-provided external harness reference + retire the zero-provi…
 - **Nia** (S017) — Done — The owner's "finish all" continuation: B-2026-11-01-27 (G7 request derivability from the …
+- **Jabari** (S020) — Done — Build B-2026-11-02-1 — Todo Planning & Hierarchical Execution (owner 2026-11-02): the r…
 
 ## Current task
 - **—** — none — no session in progress — *idle*
