@@ -31,3 +31,7 @@ names them), and roll-up candidates.
   a template, a rule>
 - **Status:** open | fixed in package <commit-sha or date>
 -->
+
+## 2026-11-02 — Tobias / unknown (no model ID)
+
+- none this session

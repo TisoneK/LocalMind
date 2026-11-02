@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-11-02T11:22:32Z_
+_Regenerated: 2026-11-02T11:44:53Z_
 
 ## Standing params
 - **Core:** 2.3.2 (locked, verified 2026-11-02)
@@ -15,10 +15,10 @@ _Regenerated: 2026-11-02T11:22:32Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-- **Tobias** (S001) — Working — Pull the latest main, close the full office, and verify the newly pulled Arsenal fix pack
+(office empty — no live roster rows)
 
 ## Current task
-- **2026-11-02 — Tobias / unknown (harness states no model ID)** — Close the full office, then pull and verify the Arsenal fix pack (structured system_search args, live-data routing, execution record, bound… — *in-progress*
+- **—** — none — no session in progress — *idle*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-10-31-1 | In-app State Explorer + engine selector (ADR-71): port the explorer into the app as its own interface (game tree, move list, eval bar, inspector, meters, rewindable timeline) and add the Classic/State engine setting. Reference: `docs/prototypes/state-explorer/`, `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter `state_agent/adapters/localmind.py`); `EngineEvent` is the UI contract. Check whether the in-flight port landed before starting. |
@@ -31,8 +31,8 @@ _Regenerated: 2026-11-02T11:22:32Z_
 _10 medium, 1 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
-- flaws/log.md (protocol/.context_ledger friction): 0 entries
-- inefficiencies/log.md (project code/env friction): 0 entries
+- flaws/log.md (protocol/.context_ledger friction): 1 entry, last added 2026-11-02
+- inefficiencies/log.md (project code/env friction): 1 entry, last added 2026-11-02
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-11-02
 
 ## Collaboration

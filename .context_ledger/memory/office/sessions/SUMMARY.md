@@ -30,3 +30,8 @@ records.
 - A removed summary line MUST have a corresponding permanent entry in
   agents/sessions.md — never delete the only record of a session.
 -->
+
+---
+- **2026-11-02 — Session 1** — Tobias / unknown (harness states no model ID) — closed office-004 at 21 sessions (permanent record + re-seeded queue), then pulled and verified the Arsenal fix pack.
+  73 targeted backend tests, 21 frontend client tests, tsc clean, and the new live harness ALL PASS on this box; exit gate green (4,022 passed, 22 documented Windows-baseline failures).
+  Detail: .context_ledger/memory/office/reviews/2026-11-02-review.md

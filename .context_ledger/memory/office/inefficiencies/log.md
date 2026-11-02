@@ -39,3 +39,7 @@ names them), and roll-up candidates.
 - **Upstream:** candidate  ← add this line ONLY for protocol-level friction
   worth a core fix; omit entirely for project-local friction.
 -->
+
+## 2026-11-02 — Tobias / unknown (no model ID)
+
+- none this session
