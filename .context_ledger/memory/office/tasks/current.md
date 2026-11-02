@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — no session in progress
-- **Status:** idle
+- **Session:** 2026-11-02 — Jabari / GLM (Z.ai sandbox)
+- **Task:** B-2026-11-02-1 — Todo Planning & Hierarchical Execution: the agent-generated Todo list (level 2, meaningful work items — not tool calls) + per-Todo internal execution steps (level 3), per-Todo lifecycle and verification, plan revision, persistence across cycles; the task panel shows the real Todos.
+- **Status:** in-progress
