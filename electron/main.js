@@ -38,11 +38,18 @@ const projectRoot = isDev
 
 const serverScript = path.join(projectRoot, 'backend', 'server.py');
 
-// In dev mode the Vite dev server serves the UI on localhost:3000.
-// In production the built files live in frontend/dist/ (relative to project root).
-const devServerUrl = 'http://localhost:3000';
+// In dev mode the Vite dev server serves the UI. Ports come from the env —
+// `npm start` (scripts/dev-full.js) resolves free ports BEFORE spawning and
+// passes them down, so the UI URL, the health polls and the backend that gets
+// spawned can never disagree. Packaged mode resolves its own target below.
+const FRONTEND_PORT = parseInt(process.env.LOCALMIND_FRONTEND_PORT || '3000', 10) || 3000;
+let backendHost = process.env.LOCALMIND_HOST || '127.0.0.1';
+let backendPort = parseInt(process.env.LOCALMIND_PORT || '8000', 10) || 8000;
+
+const devServerUrl = `http://127.0.0.1:${FRONTEND_PORT}`;
 const prodIndexPath = path.join(projectRoot, 'frontend', 'dist', 'index.html');
-const prodUiUrl = 'http://127.0.0.1:8000/'; // served by the backend (see LOCALMIND_FRONTEND_DIST)
+// Served by the backend (see LOCALMIND_FRONTEND_DIST); follows the resolved port.
+const prodUiUrl = () => `http://${backendHost}:${backendPort}/`;
 
 // ---------------------------------------------------------------------------
 // State
@@ -56,8 +63,6 @@ let backendRestartTimer = null;
 let backendStatus = 'stopped'; // stopped | starting | ready | error
 let restartAttempts = 0;
 const MAX_RESTART_ATTEMPTS = 5;
-const BACKEND_PORT = 8000;
-const BACKEND_HOST = '127.0.0.1';
 
 // ---------------------------------------------------------------------------
 // Python backend management
@@ -68,32 +73,28 @@ const BACKEND_HOST = '127.0.0.1';
 // ---------------------------------------------------------------------------
 
 function isPortInUse(port, host) {
+  // A hard timer race, not socket.setTimeout: a hung connect (full backlog,
+  // dropped SYN) must count as IN USE, never as free — a false "free" would
+  // send the backend at a port it cannot bind.
   return new Promise((resolve) => {
     const socket = new (require('net').Socket)();
-    socket.setTimeout(1000);
-
-    socket.on('connect', () => {
+    let settled = false;
+    const done = (result) => {
+      if (settled) return;
+      settled = true;
       socket.destroy();
-      resolve(true); // Port is in use — something responded
-    });
-
-    socket.on('timeout', () => {
-      socket.destroy();
-      resolve(false); // Port is not responding
-    });
-
-    socket.on('error', () => {
-      socket.destroy();
-      resolve(false); // Connection refused — port is free
-    });
-
+      resolve(result);
+    };
+    const timer = setTimeout(() => done(true), 1000);
+    socket.once('connect', () => { clearTimeout(timer); done(true); });
+    socket.once('error', () => { clearTimeout(timer); done(false); });
     socket.connect(port, host);
   });
 }
 
 function isBackendHealthy() {
   return new Promise((resolve) => {
-    const req = http.get(`http://${BACKEND_HOST}:${BACKEND_PORT}/api/health`, (res) => {
+    const req = http.get(`http://${backendHost}:${backendPort}/api/health`, (res) => {
       let body = '';
       res.on('data', (chunk) => { body += chunk; });
       res.on('end', () => {
@@ -115,6 +116,37 @@ function isBackendHealthy() {
   });
 }
 
+function findFreePort(startPort, host, attempts = 50) {
+  // Mirror of core.ports.find_free_port on the Python side.
+  return new Promise(async (resolve) => {
+    for (let candidate = startPort; candidate < startPort + attempts; candidate++) {
+      if (!(await isPortInUse(candidate, host))) return resolve(candidate);
+    }
+    resolve(null);
+  });
+}
+
+/**
+ * Resolve the backend target BEFORE the window loads. In dev mode the
+ * orchestrator (scripts/dev-full.js) already resolved the ports and passed
+ * them via env — trust it. In packaged mode: free port → keep; healthy
+ * LocalMind → keep (the spawn path reuses it); foreign app → move to the
+ * next free port instead of dying with the port held.
+ */
+async function resolveBackendTarget() {
+  if (process.env.ELECTRON_DEV_MODE === 'true') return;
+  const busy = await isPortInUse(backendPort, backendHost);
+  if (!busy) return;
+  if (await isBackendHealthy()) return; // reuse path — startPythonBackend handles it
+  const moved = await findFreePort(backendPort + 1, backendHost);
+  if (!moved) {
+    console.error(`[LocalMind] No free port found between ${backendPort + 1} and ${backendPort + 50} — the backend cannot start.`);
+    return;
+  }
+  console.log(`[LocalMind] Port ${backendPort} is held by another app — backend will use ${moved} (set LOCALMIND_PORT to pin it)`);
+  backendPort = moved;
+}
+
 async function startPythonBackend() {
   if (pythonProcess) {
     return;
@@ -131,11 +163,11 @@ async function startPythonBackend() {
   }
 
   // Check if backend is already running and healthy before spawning
-  const portInUse = await isPortInUse(BACKEND_PORT, BACKEND_HOST);
+  const portInUse = await isPortInUse(backendPort, backendHost);
   if (portInUse) {
     const healthy = await isBackendHealthy();
     if (healthy) {
-      console.log(`[LocalMind] Backend already running on port ${BACKEND_PORT} — reusing existing instance`);
+      console.log(`[LocalMind] Backend already running on port ${backendPort} — reusing existing instance`);
       backendStatus = 'ready';
       sendBackendStatus('ready');
       restartAttempts = 0;
@@ -144,13 +176,23 @@ async function startPythonBackend() {
         mainWindow.show();
       }
       return;
-    } else {
-      console.log(`[LocalMind] Port ${BACKEND_PORT} is in use but backend is not healthy`);
     }
+    // resolveBackendTarget already tried to move us; try once more in case the
+    // conflict appeared after window creation (e.g. another app grabbed the port).
+    const moved = await findFreePort(backendPort + 1, backendHost);
+    if (!moved) {
+      console.error(`[LocalMind] Port ${backendPort} is in use, the backend there is not healthy, and no free port was found — cannot start.`);
+      backendStatus = 'error';
+      sendBackendStatus('error');
+      restartAttempts = MAX_RESTART_ATTEMPTS;
+      return;
+    }
+    console.log(`[LocalMind] Port ${backendPort} is held by another app — backend will use ${moved} (set LOCALMIND_PORT to pin it)`);
+    backendPort = moved;
   }
 
   if (restartAttempts >= MAX_RESTART_ATTEMPTS) {
-    console.error(`[LocalMind] Backend failed to start after ${MAX_RESTART_ATTEMPTS} attempts — giving up. Kill any process on port ${BACKEND_PORT} and restart.`);
+    console.error(`[LocalMind] Backend failed to start after ${MAX_RESTART_ATTEMPTS} attempts — giving up. Kill any process on port ${backendPort} and restart.`);
     backendStatus = 'error';
     sendBackendStatus('error');
     return;
@@ -169,7 +211,13 @@ async function startPythonBackend() {
     cwd: path.join(projectRoot, 'backend'),
     // The backend serves the built UI itself, so the window loads it over http (same origin as
     // the API) instead of from disk, where asset URLs and API calls broke and the window stayed blank.
-    env: { ...process.env, LOCALMIND_FRONTEND_DIST: path.dirname(prodIndexPath) },
+    // The resolved port/host travel with the child so it binds the port this window will load.
+    env: {
+      ...process.env,
+      LOCALMIND_FRONTEND_DIST: path.dirname(prodIndexPath),
+      LOCALMIND_PORT: String(backendPort),
+      LOCALMIND_HOST: backendHost,
+    },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
@@ -193,7 +241,7 @@ async function startPythonBackend() {
       output.includes('error while attempting to bind') ||
       output.includes('EADDRINUSE')
     ) {
-      console.error('[LocalMind] Port is already in use — stopping restart loop. Kill any process on port ' + BACKEND_PORT + ' and restart.');
+      console.error('[LocalMind] Port is already in use — stopping restart loop. Kill any process on port ' + backendPort + ' and restart.');
       // Remove the 'close' listener so scheduleBackendRestart doesn't fire
       pythonProcess.removeAllListeners('close');
       pythonProcess.kill();
@@ -348,7 +396,7 @@ function pollBackendHealth() {
       return;
     }
 
-    const req = http.get(`http://${BACKEND_HOST}:${BACKEND_PORT}/api/health`, (res) => {
+    const req = http.get(`http://${backendHost}:${backendPort}/api/health`, (res) => {
       let body = '';
       res.on('data', (chunk) => { body += chunk; });
       res.on('end', () => {
@@ -492,7 +540,7 @@ function createMainWindow() {
     // Open DevTools in development
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    mainWindow.loadURL(prodUiUrl).catch(err => {
+    mainWindow.loadURL(prodUiUrl()).catch(err => {
       console.error('[LocalMind] Failed to load production index:', err.message);
     });
   }
@@ -512,7 +560,7 @@ function createMainWindow() {
   let loadRetries = 0;
   const loadUi = () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
-    const loading = mainWindow.loadURL(isDev ? devServerUrl : prodUiUrl);
+    const loading = mainWindow.loadURL(isDev ? devServerUrl : prodUiUrl());
     loading.catch(() => {});
   };
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDesc, _url, isMainFrame) => {
@@ -678,7 +726,10 @@ function registerIpcHandlers() {
 // App lifecycle
 // ---------------------------------------------------------------------------
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Resolve the backend target BEFORE the window loads: in packaged mode the
+  // window's URL must point at the port the backend will actually bind.
+  await resolveBackendTarget();
   createMainWindow();
   createTray();
   registerIpcHandlers();

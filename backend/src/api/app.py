@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -350,6 +351,37 @@ async def lifespan(app: FastAPI):
         await _shutdown(app)
 
 
+def _cors_allow_origins() -> list[str]:
+    """Origins allowed to call the API from a browser.
+
+    Defaults cover the local dev servers and the backend's own origin. The
+    frontend origins follow LOCALMIND_FRONTEND_PORT so a dev stack that moved
+    off the default port (scripts/dev-full.js picks a free port when one is
+    held by another app) still passes the browser's preflight. Set
+    LOCALMIND_CORS_ORIGINS (comma-separated) to replace the whole list.
+    """
+    env_override = os.environ.get("LOCALMIND_CORS_ORIGINS", "").strip()
+    if env_override:
+        return [origin.strip() for origin in env_override.split(",") if origin.strip()]
+    frontend_port = os.environ.get("LOCALMIND_FRONTEND_PORT", "").strip()
+    try:
+        frontend_port_num = int(frontend_port) if frontend_port else 3000
+    except ValueError:
+        frontend_port_num = 3000
+    origins = {
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:8000",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:8000",
+        f"http://localhost:{frontend_port_num}",
+        f"http://127.0.0.1:{frontend_port_num}",
+        f"http://{settings.localmind_host}:{settings.localmind_port}",
+    }
+    return sorted(origins)
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="LocalMind",
@@ -362,15 +394,7 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:3000",
-            "http://localhost:5173",
-            "http://localhost:8000",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:5173",
-            "http://127.0.0.1:8000",
-            f"http://{settings.localmind_host}:{settings.localmind_port}",
-        ],
+        allow_origins=_cors_allow_origins(),
         allow_methods=["*"],
         allow_headers=["*"],
     )

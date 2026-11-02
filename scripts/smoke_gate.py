@@ -14,11 +14,12 @@ Usage: backend/.venv/bin/python scripts/smoke_gate.py
 from __future__ import annotations
 
 import json
+import os
 import sys
 import urllib.parse
 import urllib.request
 
-BASE = "http://localhost:8000/api/chat"
+BASE = f"http://localhost:{os.environ.get('LOCALMIND_PORT', '8000')}/api/chat"
 
 
 def stream_chat(message: str, session_id: str = "smoke-gate") -> list[dict]:

@@ -6,9 +6,9 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "dev": "wait-on http://localhost:3000 && electron .",
+    "dev": "node ../scripts/wait-frontend.js && electron .",
     "vite": "npm --prefix ../frontend run dev",
-    "electron": "wait-on http://localhost:3000 && electron .",
+    "electron": "node ../scripts/wait-frontend.js && electron .",
     "build": "electron-builder --publish never",
     "build:win": "electron-builder --win --publish never",
     "build:mac": "electron-builder --mac --publish never",

@@ -350,7 +350,11 @@ function PermissionGate({ pending, onResolved }: { pending: PendingWrite; onReso
   const handleConfirm = async () => {
     setStatus('writing');
     try {
-      const API_BASE = (window as unknown as { __LOCALMIND_API__?: string }).__LOCALMIND_API__ || 'http://localhost:8000';
+      // Relative base — the same contract as lib/localmind/client.ts: the Vite
+      // proxy serves /api in dev, and Electron injects __LOCALMIND_API__ in
+      // desktop mode. An absolute localhost:8000 default here would break the
+      // moment the backend runs on a non-default port.
+      const API_BASE = (window as unknown as { __LOCALMIND_API__?: string }).__LOCALMIND_API__ || '';
       const res = await fetch(`${API_BASE}/api/confirm-write`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
