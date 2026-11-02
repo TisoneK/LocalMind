@@ -381,6 +381,16 @@ _CONVERSATIONAL_BLOCKED_KEYWORDS = (
     r"stock",
     r"shares",
     r"election",
+    # Match results and their recency window are live data too — "What was
+    # the results of arsenal yesterday" must reach the tool loop (it has
+    # web_search), not the no-tools conversational lane whose capability
+    # note produced the "I don't have access to live sports results… shall
+    # I look that up?" contradiction in the owner's 2026-11-02 export.
+    r"results?",
+    r"yesterday",
+    r"fixtures?",
+    r"standings",
+    r"leaderboard",
     # time / date (SYSINFO)
     r"time",
     r"date",

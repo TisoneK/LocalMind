@@ -380,6 +380,13 @@ describe('classifyClientIntent', () => {
     expect(classifyClientIntent('what day is it')).toBeUndefined();
     expect(classifyClientIntent('how do you run code')).toBeUndefined();
     expect(classifyClientIntent('who wrote the file')).toBeUndefined();
+    // Live-data results questions must reach the tool loop — the Arsenal
+    // export: "What was the results of arsenal yesterday" got the no-tools
+    // lane's "I don't have access… shall I look that up?" reply.
+    expect(classifyClientIntent('What was the results of arsenal yesterday')).toBeUndefined();
+    expect(classifyClientIntent('who won the match yesterday')).toBeUndefined();
+    expect(classifyClientIntent('any fixtures this week')).toBeUndefined();
+    expect(classifyClientIntent('what are the standings')).toBeUndefined();
   });
 
   it('returns undefined for empty, long, or non-interrogative inputs', () => {
