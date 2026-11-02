@@ -504,7 +504,10 @@ def _finalize_plan_todos(session_id: str, skip: bool = False) -> list[dict]:
             if (
                 row.get("id", "").startswith("plan-")
                 and not row.get("completed")
-                and row.get("status") not in ("failed", "blocked")  # closed states stay closed
+                # closed states stay closed — retired is a close too: the
+                # replan retired the work explicitly (B-2026-11-02-2); the
+                # sweep must not flip that into a false "Not reached".
+                and row.get("status") not in ("failed", "blocked", "retired")
             ):
                 _result = "Not reached — the turn closed before this todo ran."
                 _engine._store.upsert_todo(

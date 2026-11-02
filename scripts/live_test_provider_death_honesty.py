@@ -74,6 +74,7 @@ class FakeProvider(BaseHTTPRequestHandler):
     else (models list etc.) gets a minimal 200 so startup probes stay quiet."""
 
     request_count = 0
+    loop_served = False  # the ONE loop call that gets the tool call
 
     def log_message(self, *a):  # keep the scratch log readable
         pass
@@ -102,12 +103,23 @@ class FakeProvider(BaseHTTPRequestHandler):
 
     def do_POST(self):
         length = int(self.headers.get("Content-Length") or 0)
-        self.rfile.read(length)
+        raw = self.rfile.read(length)
         if "/chat/completions" not in self.path:
             self._json({"error": {"message": "not found"}}, 404)
             return
         FakeProvider.request_count += 1
-        if FakeProvider.request_count == 1:
+        # Content-routed (S023): the Planner lane may precede the loop's
+        # first call, so "request 1" is no longer the loop call. The loop
+        # call = the payload carries tool schemas — it gets the genuine
+        # tool call; EVERY other call (planner, consults, the synthesis)
+        # dies with the exact 12:45 shape.
+        try:
+            _payload = json.loads(raw)
+        except Exception:
+            _payload = {}
+        is_loop_call = bool((_payload or {}).get("tools")) and FakeProvider.loop_served is False
+        if is_loop_call:
+            FakeProvider.loop_served = True
             # Round 1: a genuine tool call — the engine executes web_search
             # for real, so the turn owns successful evidence when synthesis
             # dies. Chunked per the adapter's delta accumulation contract.
@@ -148,6 +160,7 @@ class FakeProvider(BaseHTTPRequestHandler):
 
 def boot_fake() -> ThreadingHTTPServer:
     FakeProvider.request_count = 0
+    FakeProvider.loop_served = False
     srv = ThreadingHTTPServer(("127.0.0.1", FAKE_PORT), FakeProvider)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv

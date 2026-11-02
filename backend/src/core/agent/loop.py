@@ -611,6 +611,30 @@ def _merge_call_usage(accum: dict[str, int], call: dict) -> None:
     accum.update(call)
 
 
+def _parse_replan_steps(text: str) -> list[str]:
+    """Parse the acceptance gate's revised plan into steps.
+
+    `_parse_plan_steps` wants the planner's `STEPS:`-headed format AND
+    applies the planner's filler filter (concrete-command steps only) —
+    both wrong for a gate replan: the prompt only says "Number each step",
+    and a replan step like "Verify the reading against a second source" is
+    exactly the revised work, not filler. Parse bare numbered lines, keep
+    anything step-shaped, and let the revision's equivalence diff decide
+    what is actually new.
+    """
+    steps = _parse_plan_steps(text)
+    if steps:
+        return steps
+    out: list[str] = []
+    for line in (text or "").split("\n"):
+        match = re.match(r"^\s*\d+[\.\)]\s*(.+)", line.strip())
+        if match:
+            step = match.group(1).strip().strip("`*")
+            if len(step) >= 8:
+                out.append(step)
+    return out[:6]
+
+
 def _thinker_context_block(analysis) -> str:
     """Render a Thinker analysis into a compact block the loop injects
     so the model's NEXT action is shaped by the reasoning-on-evidence — facts
@@ -2465,6 +2489,19 @@ class AgentLoop:
         # (same plan-{i} ids the planner would emit) and drive the plan
         # cursor, so the UI still shows a real plan + progress.
         plan_steps: Optional[list[str]] = None,
+        # The per-todo verification contract for caller-provided plan_steps
+        # ({todo, outcome} — the Planner's stated evidence of done), same
+        # order as plan_steps and padded with "". Rides todo_created to the
+        # panel, and when the caller supplied no explicit success_criteria
+        # it BECOMES the acceptance gate's criteria (the per-todo contract
+        # is the completion contract — S020's seeding, now on the
+        # production path).
+        plan_outcomes: Optional[list[str]] = None,
+        # The Planner's one-line understanding of the request ("what the
+        # user actually wants"). Injected as the plan context (the same
+        # UNDERSTANDING shape the init decision renders) so execution reads
+        # the objective, not just the step labels.
+        plan_objective: str = "",
         # Typed success criteria from an explicit plan
         # (or the model's create_plan). The acceptance gate
         # evaluates these against tool evidence + workspace; "done" requires
@@ -3275,14 +3312,35 @@ class AgentLoop:
         elif plan_steps:
             # Planning was skipped because the dispatcher's
             # execution_plan is being reused (injected via
-            # orchestrator_context). Seed the todo list from those steps so
-            # the Todos panel shows the plan and the cursor can advance as
+            # orchestrator_context) — or because the RUNTIME's Planner lane
+            # already drew the {todo, outcome} plan (the production
+            # warm-kernel path). Seed the todo list from those steps so the
+            # Todos panel shows the plan and the cursor can advance as
             # the model narrates each step. The UI text is
             # the goal's short title (when the goal tree supplied one);
             # `content` keeps the full checkable goal string.
             _plan_steps = list(plan_steps)
-            _plan_outcomes = []  # reused plans carry no per-step contract
+            # The caller's per-todo verification contract —
+            # padded to the plan length; a todo whose Planner stated no
+            # outcome carries "" (closes on its tool success, the legacy
+            # contract).
+            _plan_outcomes = [str(o or "").strip() for o in (plan_outcomes or [])][
+                : len(_plan_steps)
+            ]
+            while len(_plan_outcomes) < len(_plan_steps):
+                _plan_outcomes.append("")
+            # The Planner's objective line — the same
+            # UNDERSTANDING shape the init decision renders, so execution
+            # reads what the user actually wants, not just step labels.
+            if plan_objective and not plan_context:
+                plan_context = f"UNDERSTANDING: {str(plan_objective).strip()}"[:1800]
+                trace.plan_text = plan_context
             if _obs:
+                # A new plan replaces whatever the session showed
+                # before (the ids are per-chat stable) — clear first so
+                # this turn's rows render from zero, exactly like the
+                # parent-init branch.
+                _obs.emit("todo_cleared")
                 for i, step in enumerate(_plan_steps):
                     _ttl = ""
                     _ti = i
@@ -3295,7 +3353,9 @@ class AgentLoop:
                         id=f"plan-{i}",
                         text=_ttl or str(step)[:120],
                         content=str(step),
+                        expected_outcome=_plan_outcomes[i],
                         completed=False,
+                        status="pending",
                     )
                 # Seed the sub-goal rows
                 # (plan-{i}-sub-{j}) right after their parent goal — the
@@ -3350,6 +3410,18 @@ class AgentLoop:
         # re-injecting the criteria every turn). Objective prefers the short
         # user message; the plan text (already injected via plan_context) is
         # only a capped fallback so it is never duplicated.
+        # The Planner's per-todo contract IS the completion contract when
+        # the caller supplied no explicit criteria: the outcomes seed the
+        # trace's criteria (what the acceptance gate judges) — a lookup
+        # turn closes on the evidence its Planner said would close it, not
+        # on "a tool happened to succeed". Capped like the task-state
+        # seeding below; goal-item turns keep their explicit criteria.
+        if plan_outcomes and plan_steps and not trace.success_criteria:
+            trace.success_criteria = [
+                f"{step} — done when: {outcome}"
+                for step, outcome in zip(_plan_steps, _plan_outcomes)
+                if outcome
+            ][-6:]
         task_state = TaskState(
             objective=_user_message_text(messages)
             or (plan_context or "").strip()[:160]
@@ -3597,13 +3669,96 @@ class AgentLoop:
                 )
                 _complete_sub_goals(_plan_step_cursor)
 
-        # Synthesized harness-owned checklist. The warm-kernel
-        # runtime (agent_runtime passes skip_planning=True) gates out ALL plan→
-        # todo branches, so the Todos panel was structurally empty and the only
-        # remaining path was the model-voluntary todo_write tool. Instead, when
-        # no plan-based steps exist, synthesize one todo per REAL tool
-        # execution: todo_created on dispatch (pending→in_progress),
-        # todo_completed when the tool lands. Model-agnostic, bounded, and
+        # Adaptive plan revision (B-2026-11-02-2). The plan must EVOLVE
+        # when execution evidence changes the work: the acceptance gate's
+        # replan produces a revised plan, and the diff against the drawn
+        # plan surfaces in the Todos panel — a moot todo RETIRES (explicit
+        # `retired` status carrying the discovery in its result) instead of
+        # silently vanishing, and genuinely new work appears as new rows.
+        # One revision per turn — a second replan updates the model's
+        # instruction block only, it does not churn the panel again.
+        _plan_revision_used = False
+
+        def _steps_equivalent(a: str, b: str) -> bool:
+            """Two plan steps describe the same work when their token sets
+            overlap enough — the replan rephrases ("search the web for X" →
+            "look up X online"), and an exact-text diff would retire and
+            re-add the same work."""
+            ta = {t for t in re.findall(r"[a-z0-9]+", (a or "").lower()) if len(t) > 2}
+            tb = {t for t in re.findall(r"[a-z0-9]+", (b or "").lower()) if len(t) > 2}
+            if not ta or not tb:
+                return False
+            return len(ta & tb) / len(ta | tb) >= 0.5
+
+        def _apply_plan_revision(new_steps: list[str], discovery: str = "") -> None:
+            """Diff the replan's steps into the live todo list: retire what
+            the revised plan dropped, add what it introduced, emit the
+            revision diff. Called by the acceptance gate through its
+            plan_revision_cb after a replan."""
+            nonlocal _plan_revision_used
+            if _plan_revision_used or not _obs or not new_steps:
+                return
+            _plan_revision_used = True
+            _discovery = " ".join(str(discovery or "").split())[:160]
+            _retire_reason = (
+                _discovery
+                or "The revised plan no longer needs this step."
+            )
+            added: list[str] = []
+            retired: list[str] = []
+            _next_id = len(_plan_steps)
+            for _step in [str(s).strip() for s in new_steps if str(s).strip()][:4]:
+                if any(_steps_equivalent(_step, _old) for _old in _plan_steps if _old):
+                    continue
+                _sid = f"plan-{_next_id}"
+                _next_id += 1
+                _plan_steps.append(_step)
+                _plan_outcomes.append("")
+                added.append(_sid)
+                _obs.emit(
+                    "todo_created",
+                    id=_sid,
+                    text=_step[:120],
+                    content=_step,
+                    completed=False,
+                    status="pending",
+                )
+            for _i, _old in enumerate(_plan_steps):
+                if not _old:
+                    continue
+                _pid = f"plan-{_i}"
+                if _pid in _plan_done or _pid in _plan_failed:
+                    continue  # closed rows keep their outcome — history, not churn
+                if any(_steps_equivalent(_old, _new) for _new in new_steps if _new):
+                    continue
+                retired.append(_pid)
+                _obs.emit(
+                    "todo_updated",
+                    id=_pid,
+                    status="retired",
+                    result=_retire_reason,
+                )
+            if added or retired:
+                _obs.emit(
+                    "todo_revised",
+                    added=len(added),
+                    retired=len(retired),
+                    kept=max(0, len(_plan_steps) - len(added) - len(retired)),
+                )
+                logger.info(
+                    "[agent.loop] plan revised: +%d added, %d retired (%s)",
+                    len(added),
+                    len(retired),
+                    _discovery[:80],
+                )
+
+        # Synthesized harness-owned checklist. The runtime's Planner lane
+        # draws the real {todo, outcome} plan for task turns, so this
+        # fallback fires only when NO plan exists and the model has not
+        # written its own (todo_write): social/short turns that still touch
+        # a tool, or a planner fail-open. One todo per REAL tool execution:
+        # todo_created on dispatch (pending→in_progress), todo_completed
+        # when the tool lands. Model-agnostic, bounded, and
         # skipped for scaffolding calls (describe_tool) and single-step noise.
         _synthetic_todos: list[str] = []
         # Track total gate replans to cap replanning loops
@@ -8063,6 +8218,7 @@ class AgentLoop:
                         gate_force_tool=_gate_force_tool,
                         tools_withheld=_answer_only_call_used,
                         bus=_bus,
+                        plan_revision_cb=_apply_plan_revision,
                     )
                     _post_lanes["acceptance_gate"] = {
                         "ran": True,
@@ -8076,6 +8232,32 @@ class AgentLoop:
                         )
                         if _judge_fact:
                             _post_lanes["completion_judge"] = dict(_judge_fact.value or {})
+                    # Objective fidelity (B-2026-11-02-2): does the reply address
+                    # the ORIGINAL request, not merely the todos? One bounded
+                    # read-only lane; a drift verdict is a recorded nudge, never
+                    # a block — the turn closes either way, on the record.
+                    if _gate_final and _stripped_buffer and (
+                        trace.plan_text
+                        or any(getattr(s, "tool_name", "") for s in getattr(trace, "steps", []) or [])
+                    ):
+                        _fidelity_t0 = _turn_now_ms()
+                        _fidelity = await self._objective_fidelity_lane(
+                            original_request=reformulated_message
+                            or _user_message_text(messages),
+                            objective=str(trace.plan_text or "")[:400],
+                            reply=_stripped_buffer,
+                            active_adapter=active_adapter,
+                        )
+                        if _fidelity.get("ran"):
+                            _fidelity["elapsed_ms"] = _turn_now_ms() - _fidelity_t0
+                            _post_lanes["objective_fidelity"] = _fidelity
+                            if _fidelity.get("verdict") == "drifted" and _obs:
+                                _obs.emit(
+                                    "objective_drift",
+                                    iteration=iteration,
+                                    reason=str(_fidelity.get("reason", ""))[:200],
+                                    original=(reformulated_message or _user_message_text(messages))[:160],
+                                )
                     if not _gate_final:
                         _gate_replan_count += 1
                         _bus.replan()  # everything said about the old plan is now stale
@@ -8256,6 +8438,7 @@ class AgentLoop:
                     gate_force_tool=_gate_force_tool,
                     tools_withheld=_answer_only_call_used,
                     bus=_bus,
+                    plan_revision_cb=_apply_plan_revision,
                 )
                 _post_lanes["acceptance_gate"] = {
                     "ran": True,
@@ -8269,6 +8452,32 @@ class AgentLoop:
                     )
                     if _judge_fact:
                         _post_lanes["completion_judge"] = dict(_judge_fact.value or {})
+                # Objective fidelity (B-2026-11-02-2): does the reply address
+                # the ORIGINAL request, not merely the todos? One bounded
+                # read-only lane; a drift verdict is a recorded nudge, never
+                # a block — the turn closes either way, on the record.
+                if _gate_final and _stripped_buffer and (
+                    trace.plan_text
+                    or any(getattr(s, "tool_name", "") for s in getattr(trace, "steps", []) or [])
+                ):
+                    _fidelity_t0 = _turn_now_ms()
+                    _fidelity = await self._objective_fidelity_lane(
+                        original_request=reformulated_message
+                        or _user_message_text(messages),
+                        objective=str(trace.plan_text or "")[:400],
+                        reply=_stripped_buffer,
+                        active_adapter=active_adapter,
+                    )
+                    if _fidelity.get("ran"):
+                        _fidelity["elapsed_ms"] = _turn_now_ms() - _fidelity_t0
+                        _post_lanes["objective_fidelity"] = _fidelity
+                        if _fidelity.get("verdict") == "drifted" and _obs:
+                            _obs.emit(
+                                "objective_drift",
+                                iteration=iteration,
+                                reason=str(_fidelity.get("reason", ""))[:200],
+                                original=(reformulated_message or _user_message_text(messages))[:160],
+                            )
                 if not _gate_final:
                     _gate_replan_count += 1
                     _bus.replan()  # everything said about the old plan is now stale
@@ -8567,6 +8776,12 @@ class AgentLoop:
         # answer-only call (tool schemas withheld). Changes the recovery
         # for post-evidence narration from SYNTHESIZE to FORCE_TOOL.
         tools_withheld: bool = False,
+        # Adaptive plan revision (B-2026-11-02-2): run()'s
+        # `_apply_plan_revision(new_steps, discovery)` closure, invoked
+        # after each gate replan so the live todo list evolves with the
+        # revised plan (moot rows retire, new work appears) instead of the
+        # replan existing only as an instruction block. None = legacy.
+        plan_revision_cb=None,
     ) -> tuple[str, bool]:
         """Gate the model's "done" claim against the success criteria.
 
@@ -9023,6 +9238,14 @@ class AgentLoop:
                 observation_log=observation_log,
                 active_adapter=active_adapter,
             )
+            if plan_revision_cb is not None:
+                try:
+                    plan_revision_cb(
+                        _parse_replan_steps(revised),
+                        _floor_note or "the completion floor found the objective unmet",
+                    )
+                except Exception as _rev_exc:  # pragma: no cover — defensive
+                    logger.warning("[agent.loop] plan revision apply failed (non-fatal): %s", _rev_exc)
             if obs:
                 obs.emit(
                     "agent_loop_gate_failed_replan",
@@ -9198,6 +9421,14 @@ class AgentLoop:
                         observation_log=observation_log,
                         active_adapter=active_adapter,
                     )
+                    if plan_revision_cb is not None:
+                        try:
+                            plan_revision_cb(
+                                _parse_replan_steps(revised),
+                                "; ".join(f"{c}: {n}" for c, n in unmet)[:200],
+                            )
+                        except Exception as _rev_exc:  # pragma: no cover — defensive
+                            logger.warning("[agent.loop] plan revision apply failed (non-fatal): %s", _rev_exc)
                     if obs:
                         obs.emit(
                             "agent_loop_gate_failed_replan",
@@ -9322,6 +9553,14 @@ class AgentLoop:
                 observation_log=observation_log,
                 active_adapter=active_adapter,
             )
+            if plan_revision_cb is not None:
+                try:
+                    plan_revision_cb(
+                        _parse_replan_steps(revised),
+                        "; ".join(f"{c}: {n}" for c, n in unmet)[:200],
+                    )
+                except Exception as _rev_exc:  # pragma: no cover — defensive
+                    logger.warning("[agent.loop] plan revision apply failed (non-fatal): %s", _rev_exc)
             if obs:
                 obs.emit(
                     "agent_loop_gate_failed_replan",
@@ -9356,6 +9595,79 @@ class AgentLoop:
             )
         self._emit_honest_stop(criteria, results, obs, plan_steps)
         return f"\n\n{trace.gate_summary}", True
+
+    async def _objective_fidelity_lane(
+        self,
+        *,
+        original_request: str,
+        objective: str,
+        reply: str,
+        active_adapter,
+    ) -> dict:
+        """The objective-fidelity judge (B-2026-11-02-2): a bounded,
+        read-only lane that asks ONE question — does the reply address the
+        user's ORIGINAL request, not merely the todos the agent set for
+        itself? The benchmark the owner set: the agent knows where it is
+        coming from. A `drifted` verdict is a recorded nudge (the lane rides
+        post_answer_lanes and emits objective_drift); it NEVER blocks or
+        rewrites the turn. Any failure or timeout is `unjudged` — this check
+        must never slow or block a turn it could not judge."""
+        _request = (original_request or "").strip()
+        _reply = (reply or "").strip()
+        if not active_adapter or not _request or not _reply or len(_reply) > 6000:
+            return {"ran": False}
+        _prompt = (
+            "A user made a request and an assistant worked on it and replied. "
+            "Decide ONE thing: does the reply address the user's ORIGINAL "
+            "request — the thing they actually asked for — or did the work "
+            "drift onto something else (a sub-problem, a related topic, the "
+            "assistant's own checklist) while the original ask went "
+            "unanswered?\n\n"
+            "Original request:\n"
+            f"{_request[:800]}\n\n"
+        )
+        if objective.strip():
+            _prompt += f"Objective the assistant worked under:\n{objective.strip()[:400]}\n\n"
+        _prompt += f"Reply:\n{_reply[:3000]}\n\n"
+        _prompt += (
+            "Answer with exactly one word, then a short reason on the same "
+            "line. FAITHFUL = the reply answers the original request (a "
+            "clarifying question about IT also counts). DRIFTED = the reply "
+            "is about something else and the original request is not "
+            "addressed. One word, then the reason."
+        )
+        _msgs = [{"role": "user", "content": _prompt}]
+        _text = ""
+
+        async def _collect() -> None:
+            nonlocal _text
+            async for _chunk in active_adapter.chat(
+                _msgs, temperature=0.0, intent="chat", thinking_override="off"
+            ):
+                if getattr(_chunk, "error", None):
+                    break
+                _text += getattr(_chunk, "text", "") or ""
+                if len(_text) > 300:
+                    break
+
+        try:
+            # Same bound as the completion judge: a lane that cannot answer
+            # in 5s must cost seconds, never the close.
+            await asyncio.wait_for(_collect(), timeout=5.0)
+        except asyncio.TimeoutError:
+            return {"ran": True, "verdict": "unjudged", "reason": "timeout"}
+        except Exception as _exc:  # never let a lane break the close
+            logger.warning("[agent.loop] objective-fidelity lane failed: %s", _exc)
+            return {"ran": False}
+        _head = _text.strip()[:80]
+        if not _head:
+            return {"ran": True, "verdict": "unjudged", "reason": ""}
+        _verdict = "drifted" if _head.upper().startswith("DRIFTED") else "faithful"
+        return {
+            "ran": True,
+            "verdict": _verdict,
+            "reason": _head.split(None, 1)[1].strip()[:160] if len(_head.split(None, 1)) > 1 else "",
+        }
 
     async def _replan_for_gate(
         self,

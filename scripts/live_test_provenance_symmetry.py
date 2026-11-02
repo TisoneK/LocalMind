@@ -168,7 +168,13 @@ class FakeProvider(BaseHTTPRequestHandler):
             return
 
         if mode == "B":
-            if n == 1:
+            # First loop call (tools attached, no tool result yet) — count-
+            # addressing broke when the Planner lane added a preceding chat
+            # call (S023).
+            if body.get("tools") and not any(
+                isinstance(m, dict) and m.get("role") == "tool"
+                for m in body.get("messages", [])
+            ):
                 # First loop call: a code_exec tool call that sleeps well
                 # past the 2s dispatch timeout — both attempts will time out.
                 chunks = [
@@ -193,7 +199,12 @@ class FakeProvider(BaseHTTPRequestHandler):
             return
 
         # mode == "C": sysinfo evidence on the first loop call, then the death.
-        if n == 1:
+        # Same content-routing as mode B (S023): the first loop call is the
+        # first tools-carrying payload without a tool result.
+        if body.get("tools") and not any(
+            isinstance(m, dict) and m.get("role") == "tool"
+            for m in body.get("messages", [])
+        ):
             chunks = [
                 {"id": "c1", "object": "chat.completion.chunk", "created": 1,
                  "model": "wireproof-flash",

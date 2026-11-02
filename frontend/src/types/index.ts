@@ -1,5 +1,17 @@
 export type MessageRole = 'user' | 'assistant';
-export type ToolStatus = 'running' | 'started' | 'in_progress' | 'done' | 'failed' | 'pending';
+// Tool/todo lifecycle statuses. 'blocked' and 'retired' are TODO-only:
+// 'blocked' = the turn closed before the todo ran (honest "Not reached"),
+// 'retired' = a replan retired the work explicitly (B-2026-11-02-2) —
+// both close the row without completing it.
+export type ToolStatus =
+  | 'running'
+  | 'started'
+  | 'in_progress'
+  | 'done'
+  | 'failed'
+  | 'pending'
+  | 'blocked'
+  | 'retired';
 export type IntentType = 'code' | 'file' | 'chat' | 'search' | 'shell' | 'memory';
 
 // Response Block System — structured output from Presentation Intelligence.

@@ -58,7 +58,11 @@ REQUESTS: list[dict] = []
 
 
 class FakeProvider(BaseHTTPRequestHandler):
-    """Call 1: a dir_explorer tool call. Call 2: the final text answer."""
+    """Content-routed, not count-routed (S023): the Planner lane may add a
+    chat call BEFORE the loop's first call, so "request N" is no longer a
+    stable address. A loop call = the payload carries tool schemas → the
+    dir_explorer tool call; any chat call (planner, consults, title,
+    fidelity) → plain text."""
 
     def log_message(self, *a):  # silence request logging
         pass
@@ -79,7 +83,7 @@ class FakeProvider(BaseHTTPRequestHandler):
                 self.wfile.write(f"data: {json.dumps(obj)}\n\n".encode())
                 self.wfile.flush()
 
-            if len(REQUESTS) == 1:
+            if (REQUESTS[-1] or {}).get("tools"):
                 # Streaming tool-call shape: id/name first, then the
                 # arguments delta, then finish_reason tool_calls.
                 sse({
@@ -235,6 +239,9 @@ def audit_records() -> list[dict]:
 
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
+    # The audit is APPEND-only across runs — stale records from an earlier
+    # run poison any positional reasoning about the call sequence.
+    AUDIT.write_text("")
     if HOME.exists():
         for p in sorted(HOME.rglob("*"), reverse=True):
             p.unlink() if p.is_file() else None
@@ -266,14 +273,12 @@ def main() -> int:
         # "chat" call — it reviews the turn with complete context and is NOT
         # a staged action call. Loop calls are therefore classified by kind.
         recs = audit_records()
-        # A loop call = the audit's "tools" kind (tool schemas attached).
-        # The staged call intentionally LACKS the style/tool-guidance heads,
-        # so the heads cannot be part of the classification.
-        loop_payloads = [
-            (REQUESTS[i] if i < len(REQUESTS) else {})
-            for i, rec in enumerate(recs)
-            if rec.get("call") == "tools"
-        ]
+        # A loop call = a captured request that carries tool schemas —
+        # filtered from REQUESTS directly (NOT positionally against the
+        # audit records: the lanes' chat calls interleave with the loop's
+        # tools calls, and the two capture points count retries
+        # differently, so index-matching drifts — S023 live run).
+        loop_payloads = [req for req in REQUESTS if (req or {}).get("tools")]
         if not loop_payloads:
             failures.append(
                 "no loop call captured with the parent prompt; audit calls="
@@ -294,8 +299,14 @@ def main() -> int:
                     for m in loop_payloads[1].get("messages", [])
                     if m.get("role") == "system"
                 ]
-                staged = staged_msgs[0]
-                (OUT / "staged-system-prompt.txt").write_text(staged)
+                if staged_msgs:
+                    staged = staged_msgs[0]
+                    (OUT / "staged-system-prompt.txt").write_text(staged)
+                else:
+                    failures.append(
+                        "the second tools call carried no system message "
+                        f"(n_messages={len(loop_payloads[1].get('messages', []))})"
+                    )
             else:
                 failures.append("no staged (second) loop call captured")
 

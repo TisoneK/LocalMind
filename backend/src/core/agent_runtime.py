@@ -2314,6 +2314,109 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 goal_count=len(goal_items),
                 goals="; ".join(goal_items)[:400],
             )
+        # ── The Planner lane ─────────────────────────────────────────────
+        # The real todo list on every task turn (owner directive: the
+        # agent-generated plan IS the real todo list — Level 1 request →
+        # Level 2 todos, not tool echoes). Goal-derived checklists cover
+        # file deliverables and a request that spells its own sequence
+        # plans itself; everything else — the open-ended lookups that fell
+        # through to syn- tool-echo rows (live export session-1793620218681:
+        # "Search: weather Kitengela current now") — gets its plan drawn
+        # HERE, by the model, under the same {todo, outcome} contract the
+        # init classify call owns: meaningful work items, each with the
+        # evidence that closes it. Bounded and fail-open: a timeout, an
+        # error, or a non-execute verdict leaves the turn exactly as it
+        # was (the model's own todo_write or the synthesized rows remain
+        # the fallback).
+        _sequence_plan = derive_sequence_plan(message)
+        _planner_plan: list[str] = []
+        _planner_outcomes: list[str] = []
+        _planner_objective = ""
+        from core.trivial_input import is_pure_social_gesture
+
+        if (
+            not goal_items
+            and not _sequence_plan
+            and not _open_question_text
+            and not is_pure_social_gesture(message)
+        ):
+            try:
+                from core.agent.initialization import (
+                    build_initialization_prompt,
+                    parse_initialization,
+                )
+                from core.agent.pre_init_classifier import classify_pre_init
+                from core.config import settings as _planner_cfg
+
+                # The deterministic cluster guards own their turns
+                # (hallucination-class, analyze-only, pressure, impossible
+                # constraints) — when one fires, the loop handles the turn
+                # without a drawn plan, so the lane steps aside.
+                _pa_history = [
+                    {"role": str(m.get("role")), "content": str(m.get("content", ""))}
+                    for m in prompt_messages
+                    if m.get("role") in ("user", "assistant")
+                    and str(m.get("content", "")).strip()
+                ]
+                _pre_override = classify_pre_init(message, history=_pa_history[:-1][-6:])
+                if (
+                    not _pre_override.mode
+                    and getattr(_planner_cfg, "localmind_chat_mode", "auto") != "direct"
+                ):
+                    _planner_msgs = [
+                        {
+                            "role": "system",
+                            "content": build_initialization_prompt(
+                                user_message=message,
+                                env_context="",
+                                history=_pa_history,
+                            ),
+                        },
+                        {"role": "user", "content": message},
+                    ]
+                    _planner_text = ""
+
+                    async def _collect_planner() -> None:
+                        nonlocal _planner_text
+                        # A structured lane, not the answer path (ADR-41
+                        # governs the answer path): thinking off keeps the
+                        # plan seconds, not the turn's slowest call — the
+                        # same trade the completion judge made.
+                        async for _pc in adapter.chat(
+                            _planner_msgs,
+                            temperature=0.1,
+                            intent="chat",
+                            thinking_override="off",
+                        ):
+                            if getattr(_pc, "error", None):
+                                break
+                            _planner_text += getattr(_pc, "text", "") or ""
+                            if len(_planner_text) > 4000:
+                                break
+
+                    _planner_t0 = time.monotonic()
+                    await asyncio.wait_for(_collect_planner(), timeout=12.0)
+                    _planner_decision = parse_initialization(_planner_text)
+                    if _planner_decision.mode == "execute" and _planner_decision.plan_steps:
+                        _planner_plan = _planner_decision.plan_steps
+                        _planner_outcomes = _planner_decision.plan_outcomes
+                        _planner_objective = _planner_decision.objective
+                        collector.emit(
+                            "agent_planner_plan",
+                            todo_count=len(_planner_plan),
+                            objective=_planner_objective[:200],
+                            todos="; ".join(_planner_plan)[:400],
+                            elapsed_ms=round((time.monotonic() - _planner_t0) * 1000),
+                        )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "[agent_runtime] planner lane timed out after 12s — "
+                    "turn proceeds without a drawn plan (fail-open)"
+                )
+            except Exception as _planner_exc:
+                logger.warning(
+                    "[agent_runtime] planner lane failed (fail-open): %s", _planner_exc
+                )
         response_chunks: list[str] = []
         _tools_at_last_text = 0
         # Accumulate the reasoning trace so the persisted message
@@ -2376,17 +2479,29 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 task_type="",
                 reformulated_message=message,
                 agent_context_override=kernel.parent_context,
-                # Fixed goal checklist: seeds the Todos panel (plan-{i}, the
-                # denominator never mutates) AND the acceptance gate's
-                # success criteria (completion gated on evidence against
-                # these items). None when nothing concrete was derived.
-                # Anything without a derived goal has no canned plan: its tasks are the model's own
-                # (todo_write) or appear as the agent actually acts, so they follow what happens.
+                # The FIXED work program: goal-derived deliverables (+ their
+                # follow-ups), else a request that spells its own sequence,
+                # else — the default for every other task turn — the Planner
+                # lane's {todo, outcome} plan drawn by the model. Seeds the
+                # Todos panel (plan-{i}, the denominator) and, for goals and
+                # planner plans, the acceptance gate's success criteria.
+                # None when nothing concrete was derived or drawn: the tasks
+                # are then the model's own (todo_write) or appear as the
+                # agent actually acts.
                 plan_steps=(
                     [*goal_items, *derive_followup_steps(message, goal_items)]
                     if goal_items
-                    else derive_sequence_plan(message) or None
+                    else (_sequence_plan or _planner_plan or None)
                 ),
+                # The Planner's per-todo verification
+                # contract ({todo, outcome}) — seeds the panel's "Done
+                # when" rows and, with no goal items, the acceptance gate's
+                # criteria (the per-todo contract is the completion
+                # contract).
+                plan_outcomes=_planner_outcomes or None,
+                # The Planner's one-line understanding of
+                # the request — the objective execution works under.
+                plan_objective=_planner_objective,
                 # The same goals decomposed into an ordered
                 # sub-goal route, rendered nested in the Todos panel and
                 # injected into the model context so the agent follows the
@@ -2398,7 +2513,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # report), never at the iteration head — an early
                 # criteria-verified stop would end the turn with a bare
                 # "✓ n/n" summary before the model writes its synthesis.
-                skip_head_gate=bool(goal_items),
+                skip_head_gate=bool(goal_items) or bool(_planner_plan),
                 # The persisted todos from previous turns — the
                 # model must know its own checklist to act on it.
                 todo_state=current_todos,

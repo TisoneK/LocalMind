@@ -82,7 +82,27 @@ class FakeProvider(BaseHTTPRequestHandler):
                 self.wfile.flush()
 
             n = len(REQUESTS)
-            if n == 1:
+            # Content-routed, not count-routed (S023): the Planner lane may
+            # add a chat call BEFORE the loop's first call on either turn,
+            # so "request N" is no longer a stable address. A loop call =
+            # the payload carries tool schemas AND the turn is not the
+            # explain-yourself turn → the structured system_search call;
+            # everything else (planner lane, consults, title, fidelity,
+            # post-turn services, turn 2) → the text answer.
+            _last_user = ""
+            for _m in reversed((REQUESTS[-1] or {}).get("messages") or []):
+                if _m.get("role") == "user":
+                    _last_user = str(_m.get("content") or "")
+                    break
+            _has_tool_result = any(
+                m.get("role") == "tool" for m in (REQUESTS[-1] or {}).get("messages") or []
+            )
+            _turn1_loop_call = (
+                (REQUESTS[-1] or {}).get("tools")
+                and not _has_tool_result
+                and "why did you run" not in _last_user.lower()
+            )
+            if _turn1_loop_call:
                 # Turn 1 main call: the structured system_search tool call.
                 sse({
                     "id": "af", "object": "chat.completion.chunk", "created": 1,
@@ -264,7 +284,19 @@ def main() -> int:
         turn1_sse = (OUT / "sse-turn1.sse").read_text()
 
         # ── P5: the structured args survived dispatch ──
-        t1_tool_results = tool_messages(REQUESTS[1]) if len(REQUESTS) > 1 else []
+        # The turn-1 LOOP call = the first captured request with tool
+        # schemas (the Planner lane may precede it — count-indexing broke,
+        # S023). An empty tool-result list must FAIL, not pass: the turn
+        # had to actually run the search.
+        _t1_tool_results = []
+        for _r in REQUESTS:
+            if not (_r or {}).get("tools"):
+                continue
+            _msgs = tool_messages(_r)
+            if _msgs:
+                _t1_tool_results = _msgs  # the call AFTER the tool ran carries it
+                break
+        t1_tool_results = _t1_tool_results
         joined = "\n".join(t1_tool_results)
         if "name~'1 10'" in joined or 'name~"1 10"' in joined:
             failures.append(
@@ -272,10 +304,15 @@ def main() -> int:
             )
         else:
             print("P5 OK: no name~'1 10' filter in the tool result (structured args survived)")
-        if t1_tool_results and "recent" not in joined.lower():
-            failures.append(f"P5: the recent operation's output missing: {joined[:300]!r}")
+        if not t1_tool_results:
+            failures.append("P5: turn 1 ran no tool at all — the loop call never dispatched system_search")
+        elif "10 day" not in joined or "newest 1" not in joined:
+            failures.append(
+                "P5: the recent operation ran but the structured bounds are not visible in its output: "
+                f"{joined[:300]!r}"
+            )
         else:
-            print("P5 OK: the recent operation ran with the structured bounds")
+            print("P5 OK: the recent operation ran with the structured bounds (10-day window, newest 1)")
 
         # ── P6: the persisted identity stamps report the actual server ──
         # The stamps ride the persisted message metrics (the export's

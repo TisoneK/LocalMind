@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useState } from 'react';
-import { Check, ChevronRight, Loader2, Plus, X } from 'lucide-react';
+import { Ban, Check, ChevronRight, Loader2, Plus, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ActionItem, TodoItem } from '@/types';
 import { useEnterMotion } from '@/lib/localmind/motion';
@@ -26,10 +26,18 @@ export function TodoList({ todos, actions = [], onToggle, onAdd, settled = false
   // Sub-goal rows (plan-{i}-sub-{j}) are ordered guidance
   // nested under their parent goal — rendered indented, never counted in
   // the denominator (the parent plan rows own the n/n contract).
+  // Retired rows (a replan retired the work) render — they carry the
+  // discovery — but are closed without being done, so they leave the
+  // denominator too (B-2026-11-02-2).
   const isSubRow = (id: string) => /^plan-\d+-sub-\d+$/.test(id);
-  const parentRows = todos.filter((t) => !isSubRow(t.id));
+  const isRetiredRow = (t: TodoItem) => (t.status as string) === 'retired';
+  const parentRows = todos.filter((t) => !isSubRow(t.id) && !isRetiredRow(t));
   const completed = parentRows.filter((t) => t.completed).length;
   const total = parentRows.length;
+  // Plan revision (B-2026-11-02-2): retired rows stay visible with their
+  // discovery — the header counts them once so the evolution reads as a
+  // revision, not as work silently vanishing.
+  const retiredCount = todos.filter((t) => !isSubRow(t.id) && isRetiredRow(t)).length;
   // The visible label is the short title when present.
   // The full content (paths/commands) is preserved for the tooltip and
   // the agent context (todos are persisted with it).
@@ -116,6 +124,16 @@ export function TodoList({ todos, actions = [], onToggle, onAdd, settled = false
         </div>
       )}
 
+      {/* Plan revision marker — retired steps are kept below with why */}
+      {retiredCount > 0 && (
+        <div
+          className="px-1.5 text-[9px] text-brand-green-faint"
+          data-testid="todo-revised"
+        >
+          Plan revised — {retiredCount} step{retiredCount === 1 ? '' : 's'} retired
+        </div>
+      )}
+
       {/* Add todo input */}
       {showInput && onAdd && (
         <div className="flex items-center gap-1.5 px-1.5">
@@ -156,7 +174,9 @@ export function TodoList({ todos, actions = [], onToggle, onAdd, settled = false
             // nested right under their parent below.
             if (isSubRow(todo.id)) return null;
             const counts = countByTodo.get(todo.id);
+            const retired = isRetiredRow(todo);
             const isActive =
+              !retired &&
               !todo.completed &&
               (todo.status === 'running' ||
                 todo.status === 'started' ||
@@ -194,6 +214,14 @@ export function TodoList({ todos, actions = [], onToggle, onAdd, settled = false
                   <div className="w-3.5 h-3.5 rounded border border-brand-red/50 bg-brand-red/10 flex items-center justify-center shrink-0" title="Didn't work" data-testid="todo-failed">
                     <X className="h-2.5 w-2.5 text-brand-red" />
                   </div>
+                ) : retired ? (
+                  <div
+                    className="w-3.5 h-3.5 rounded-full border border-dashed border-brand-green-muted/50 flex items-center justify-center shrink-0"
+                    title="Retired — the revised plan no longer needs this"
+                    data-testid="todo-retired"
+                  >
+                    <Ban className="h-2.5 w-2.5 text-brand-green-muted/60" />
+                  </div>
                 ) : isActive ? (
                   <div className="w-3.5 h-3.5 flex items-center justify-center shrink-0" title="In progress">
                     <Loader2 className={`h-3 w-3 text-brand-amber ${reduceMotion ? '' : 'animate-spin'}`} />
@@ -215,11 +243,13 @@ export function TodoList({ todos, actions = [], onToggle, onAdd, settled = false
                       ? 'text-brand-green-muted line-through'
                       : (todo.status as string) === 'failed'
                         ? 'text-brand-red/80'
-                      : isActive
-                        ? 'text-brand-amber-soft font-medium'
-                        : settled
-                          ? 'text-brand-green-muted'
-                          : 'text-brand-green-soft'
+                        : retired
+                          ? 'text-brand-green-muted/60 line-through'
+                        : isActive
+                          ? 'text-brand-amber-soft font-medium'
+                          : settled
+                            ? 'text-brand-green-muted'
+                            : 'text-brand-green-soft'
                   }`}
                 >
                 <span
@@ -292,7 +322,8 @@ export function TodoList({ todos, actions = [], onToggle, onAdd, settled = false
               {todo.result &&
                 (todo.completed ||
                   (todo.status as string) === 'failed' ||
-                  (todo.status as string) === 'blocked') && (
+                  (todo.status as string) === 'blocked' ||
+                  retired) && (
                 <div
                   data-testid="todo-result"
                   data-kind={
@@ -303,10 +334,18 @@ export function TodoList({ todos, actions = [], onToggle, onAdd, settled = false
                       ? 'text-brand-green-muted/70'
                       : (todo.status as string) === 'failed'
                         ? 'text-brand-red/70'
+                        : retired
+                          ? 'text-brand-green-muted/60'
                         : 'text-brand-amber/80'
                   }`}
                 >
-                  {todo.completed ? 'Result: ' : (todo.status as string) === 'failed' ? 'Failed: ' : 'Blocked: '}
+                  {todo.completed
+                    ? 'Result: '
+                    : (todo.status as string) === 'failed'
+                      ? 'Failed: '
+                      : retired
+                        ? 'Retired — '
+                        : 'Blocked: '}
                   {todo.result}
                 </div>
               )}

@@ -224,6 +224,13 @@ class BaseAgent(ABC):
         # crashes with "got an unexpected keyword argument 'plan_steps'"
         # (a regression fixed once).
         plan_steps: Optional[list[str]] = None,
+        # The per-todo verification contract for plan_steps ({todo,
+        # outcome}) and the Planner's one-line objective — both forwarded
+        # to AgentLoop.run() (same failure mode as plan_steps: forgetting
+        # the forward crashes the runtime's planner-lane turns with "got an
+        # unexpected keyword argument").
+        plan_outcomes: Optional[list[str]] = None,
+        plan_objective: str = "",
         # Typed success criteria from an explicit plan or the
         # model's create_plan tool. Forwarded to AgentLoop.run() — the acceptance
         # gate evaluates them against tool evidence; "done" requires
@@ -397,6 +404,8 @@ class BaseAgent(ABC):
             agent_config=cfg,  # pass the scoped toolset + caps
             skip_planning=skip_planning,
             plan_steps=plan_steps,  # dispatcher plan reuse
+            plan_outcomes=plan_outcomes,  # per-todo verification contract
+            plan_objective=plan_objective,  # the Planner's objective line
             # The acceptance gate — pass this agent's real
             # is_done() (criteria-verified stop) plus any explicit criteria.
             is_done_fn=self.is_done,

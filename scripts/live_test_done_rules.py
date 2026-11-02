@@ -145,7 +145,13 @@ class FakeProvider(BaseHTTPRequestHandler):
             return
 
         if mode == "A":
-            if n == 1:
+            # First loop call (tools attached, no tool result yet) — count-
+            # addressing broke when the Planner lane added a preceding chat
+            # call (S023).
+            if body.get("tools") and not any(
+                isinstance(m, dict) and m.get("role") == "tool"
+                for m in body.get("messages", [])
+            ):
                 self._send_sse_chunks(
                     [
                         {"id": "c1", "object": "chat.completion.chunk", "created": 1,
@@ -176,7 +182,10 @@ class FakeProvider(BaseHTTPRequestHandler):
             return
 
         # mode == "B": sysinfo evidence on the first loop call, then the death.
-        if n == 1:
+        if body.get("tools") and not any(
+            isinstance(m, dict) and m.get("role") == "tool"
+            for m in body.get("messages", [])
+        ):
             self._send_sse_chunks(
                 [
                     {"id": "c1", "object": "chat.completion.chunk", "created": 1,

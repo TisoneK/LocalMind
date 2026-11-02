@@ -34,6 +34,63 @@ from .prompt import build_thinker_messages
 logger = logging.getLogger(__name__)
 
 
+class _FenceSuppressor:
+    """Drop fenced code blocks from a streamed reasoning channel, across
+    chunk boundaries.
+
+    The consult asks for EXACTLY ONE JSON object on the TEXT channel. A
+    model that rehearses that JSON on the THINKING channel ("Let me
+    structure this as a JSON response: ```json {…}```") turns the visible
+    reasoning into a wall of half-written decision JSON (live export
+    2026-11-02: the pre-tool consult's rehearsal filled the ThinkingBlock
+    and persisted into the message's thinking). The deliberation AROUND a
+    fence is real reasoning and stays verbatim; the fenced block is
+    decision construction, not thought, and goes. An unclosed fence
+    suppresses to the end of the stream — the honest reading of what the
+    model was doing, and the decision itself was never on this channel.
+    """
+
+    _FENCE = "```"
+
+    def __init__(self) -> None:
+        self._in_fence = False
+        # A trailing 1–2 char fragment that could be the head of a fence
+        # marker split across chunks ("`", "``") — held until the next
+        # chunk decides.
+        self._pending = ""
+
+    def feed(self, text: str) -> str:
+        out: list[str] = []
+        buf = self._pending + text
+        self._pending = ""
+        i = 0
+        n = len(buf)
+        while i < n:
+            if buf.startswith(self._FENCE, i):
+                i += 3
+                if self._in_fence:
+                    self._in_fence = False
+                else:
+                    self._in_fence = True
+                    # Skip a short language tag on the same line ("json").
+                    nl = buf.find("\n", i)
+                    if 0 <= nl <= i + 12:
+                        i = nl + 1
+                continue
+            if not self._in_fence and i >= n - 2 and buf[i:] in ("`", "``"):
+                self._pending = buf[i:]
+                break
+            if not self._in_fence:
+                out.append(buf[i])
+            i += 1
+        return "".join(out)
+
+    def flush(self) -> str:
+        """Emit a held fragment at stream end (it was never a fence)."""
+        held, self._pending = self._pending, ""
+        return held if not self._in_fence else ""
+
+
 class Thinker:
     """Reason on gathered evidence and produce a structured analysis.
 
@@ -57,10 +114,12 @@ class Thinker:
     ) -> AsyncIterator[StreamChunk]:
         """Run a consult, streaming the model's native reasoning live.
 
-        Whatever arrives on the thinking channel is yielded verbatim as it
-        arrives — real reasoning, unfiltered (the loop's
+        Whatever arrives on the thinking channel is yielded as it arrives —
+        real reasoning, verbatim, with one subtraction: fenced code blocks
+        (a model rehearsing the JSON decision on the thinking channel) are
+        stripped across chunk boundaries. The loop's
         `_filter_system_leaks` stays the second layer against prompt
-        echoes). The text channel is buffered and never yielded: it is the
+        echoes. The text channel is buffered and never yielded: it is the
         decision payload, not a thought. The parsed analysis is stashed on
         `self.last_analysis` and on the final chunk's metadata. Bounded by
         the reasoning timeout — a timeout yields whatever reasoning arrived
@@ -69,8 +128,9 @@ class Thinker:
         self.last_analysis = None
         messages = build_thinker_messages(evidence)
 
-        reasoning: list[str] = []  # the thinking channel — shown, verbatim
+        reasoning: list[str] = []  # the thinking channel — shown, fence-stripped
         payload: list[str] = []  # the text channel — the JSON decision, never shown
+        _fences = _FenceSuppressor()
         try:
             stream = adapter.chat(messages, temperature=temperature, intent="analyze")
             async for chunk in _with_timeout(stream, self._timeout):
@@ -78,14 +138,24 @@ class Thinker:
                     logger.warning("[thinker] provider error during consult: %s", chunk.error)
                     break
                 if chunk.thinking:
-                    reasoning.append(chunk.thinking)
-                    yield StreamChunk(text="", thinking=chunk.thinking, done=False)
+                    # The deliberation streams verbatim; a fenced JSON
+                    # rehearsal of the decision does not (the decision lives
+                    # on the text channel — this copy is construction noise
+                    # in the visible reasoning, the 2026-11-02 mess).
+                    shown = _fences.feed(chunk.thinking)
+                    if shown:
+                        reasoning.append(shown)
+                        yield StreamChunk(text="", thinking=shown, done=False)
                 if chunk.text:
                     payload.append(chunk.text)
         except asyncio.TimeoutError:
             logger.warning("[thinker] consult timed out after %.0fs — proceeding without analysis", self._timeout)
         except Exception as exc:  # never let a consult crash the turn
             logger.warning("[thinker] consult failed: %s — proceeding without analysis", exc)
+        _tail = _fences.flush()
+        if _tail:
+            reasoning.append(_tail)
+            yield StreamChunk(text="", thinking=_tail, done=False)
 
         analysis = parse_thinker_analysis("".join(payload), reasoning="".join(reasoning))
         self.last_analysis = analysis
