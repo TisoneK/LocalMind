@@ -126,6 +126,12 @@ def _parse_plain_query(text: str) -> dict:
     Leading operation keyword → that op, with a path-like token as `root` and
     the remaining words as `query`. No leading keyword → a files name search
     (the original behaviour), so genuine name lookups like "README" still work.
+
+    Bare digit tokens never become a name filter: a weak model that flattens
+    {"operation":"recent","limit":1,"days":10} into "recent 1 10" means limit
+    and window, not a filename of "1 10" (the misdirected search in the
+    owner's 2026-11-02 Arsenal export — filter: name~'1 10', zero results).
+    First digit → limit, second → days; further digits are dropped.
     """
     toks = text.split()
     op = _OP_SYNONYMS.get(toks[0].lower()) if toks else None
@@ -139,6 +145,14 @@ def _parse_plain_query(text: str) -> dict:
             continue
         if _looks_like_path(tc):
             args["root"] = tc
+        elif tc.isdigit() and op != "files":
+            # Numeric remnant of flattened structured args: a bound, not a
+            # name — EXCEPT on a files search, where digits are legitimate
+            # filenames ("files 2026" looks for a file named 2026).
+            if "limit" not in args:
+                args["limit"] = max(1, min(int(tc), 200))
+            elif "days" not in args and op == "recent":
+                args["days"] = max(1, min(int(tc), 365))
         else:
             query_terms.append(tc)
     if query_terms:

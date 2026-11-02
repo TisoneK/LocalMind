@@ -564,6 +564,16 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
         # goal tool calls could never create or mutate a goal (found LIVE:
         # the goal-idle harness's create was rejected as validation_error).
         return json.dumps(tool_args, ensure_ascii=False)
+    elif tool_name == "system_search":
+        # system_search's dispatcher JSON-decodes any input that starts
+        # with "{". Without this branch the fallback flattens structured
+        # args {"operation":"recent","limit":1,"days":10} to the string
+        # "recent 1 10", whose plain-query heuristic then re-parses the
+        # numbers as a FILENAME filter (name~'1 10') — the misdirected
+        # search in the owner's 2026-11-02 Arsenal export (an objective
+        # investigation degraded into an unrelated file scan). Same
+        # pattern as find_path/git: keep the args structured end to end.
+        return json.dumps(tool_args, ensure_ascii=False)
     else:
         # Fallback: join all values
         return " ".join(str(v) for v in tool_args.values() if v)
