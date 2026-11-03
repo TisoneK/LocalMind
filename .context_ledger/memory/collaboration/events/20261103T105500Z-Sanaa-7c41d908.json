@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261103T105500Z-Sanaa-7c41d908",
+  "type": "release",
+  "session": "S024",
+  "agent": "Sanaa",
+  "created": "2026-11-03T10:55:00Z",
+  "issue": "todo-model-rewrite",
+  "body": "S024 releasing c67b0e4c: B-2026-11-02-2 CLOSED — the model's own plan rewrite. A mid-turn todo_write now DIFFS against the live panel (_live_panel_todos: model list → planner rows → syn- fallbacks): dropped open rows retire with the reason, new work appends with fresh ids, matched rows update on stable ids, closed rows never churn, todo_revised {added, retired, kept} once per rewrite, _plan_retired closes retired rows to cursor + finalize sweep. Revised steps carry outcomes: model expected_outcome joins the acceptance contract, the gate replan prompt asks per-step done-when (backward-compatible parse), a step matching a RETIRED row is genuinely new work. todo_write excluded from the gate's evidence (a checklist cannot verify itself). Found live by the new harness and fixed: chat.py's main drain bridged every todo event TWICE (Session-27 + Session-359 sites) — one bridge per event now. 4,078 backend (15 new pins) / e2e 132 / frontend 678 / ruff clean; NEW live_test_todo_rewrite.py ALL PASS (RW1-RW5) + 8 standing harnesses + eval 13/13; thinking_block/stream_gating/replan_gate are real-provider harnesses (environment; A/B-verified not a regression). Review: office/reviews/2026-11-03-review-s024-todo-model-rewrite.md",
+  "paths": ["backend/src/core/agent/loop.py", "backend/src/core/agent/tool_schemas.py", "backend/src/core/agent/verify.py", "backend/src/tools/todo_write.py", "backend/src/api/routes/chat.py", "tests/core/test_todo_model_rewrite.py", "scripts/live_test_todo_rewrite.py"],
+  "refs": ["c67b0e4c"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

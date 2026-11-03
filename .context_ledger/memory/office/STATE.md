@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-11-03T08:47:00Z_
+_Regenerated: 2026-11-03T10:50:32Z_
 
 ## Standing params
 - **Core:** 2.3.2 (locked, verified 2026-11-03)
@@ -15,7 +15,7 @@ _Regenerated: 2026-11-03T08:47:00Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-- **Sanaa** (S024) — Working — B-2026-11-02-2 remainder: the model's own todo_write rewrite — a mid-turn diff (retire/…
+- **Sanaa** (S024) — Done — B-2026-11-02-2 remainder: the model's own todo_write rewrite — a mid-turn diff (retire/…
 - **Zuri** (S023) — Done — The owner's 2026-11-02 "How are things" export: the task list is still tool-echo (`syn-0`…
 
 ## Current task
@@ -27,7 +27,7 @@ _Regenerated: 2026-11-03T08:47:00Z_
 | B-2026-10-31-3 | Benchmark the state engine against Classic (ADR-71 §8): both engines selectable and observable, same tasks, measurable comparison, only then a decision about an `Auto` engine. Ties to B-2026-10-31-1. |
 | B-2026-10-31-4 | Confirmable-refusal rollout (ADR-67): convert every tool that refuses or guesses to "refuse only on a verified fact, name the fact and the confirming flag" — start with delete (`confirm_delete`), the shell tool's destructive/mass-touch commands (replace the substring blocklist), and installs (`scope=system`); record confirming flags in the run trace. |
 | B-2026-10-31-21 | Perspective & speaker-identity consistency (external audit 2026-10-31): the turn's reasoning got the relationship right ("they are my creator") while the reply reversed it ("As your creator…"). Add the exact exchange to a regression/eval set and evaluate a bounded read-only consistency check (same shape as the reply-is-pending judge) on replies that assert a relationship — who speaks, who is addressed, polarity preserved; nudge only, never a pronoun-replacement rule. Full context: `office/reviews/2026-10-31-external-audit-intake.md` §1.1. |
-| B-2026-11-02-2 | Adaptive plan revision & objective fidelity (owner 2026-11-02 advisor exchange — follow-on to B-2026-11-02-1): the todo list must EVOLVE when execution evidence changes the work — a discovery that moots a todo retires it (explicit `retired` status carrying the discovery in its result) instead of silently vanishing in a full-replace; mid-turn rewrites surface as a revision diff (`todo_revised`: added/retired/kept) in the Todos panel; and the close gains an objective-fidelity judge (bounded read-only lane, completion-judge shape): does the reply address the ORIGINAL request, not merely the todos — one drift nudge, on the record, never blocks. The benchmark: the agent "knows where it is coming from and where it is going". SHIPPED 2026-11-02 (S023): the gate's replan diffs into the live todo list (`retired` status carrying the discovery, appended rows, `todo_revised {added, retired, kept}` once per turn, closed rows never churn, the finalize sweep leaves retired closed) and the objective-fidelity judge runs at the close (bounded read-only lane, `post_answer_lanes.objective_fidelity` + `objective_drift`, one nudge, never blocks). What REMAINS: the MODEL's own rewrite trigger — a todo_write-driven mid-turn diff (the same retire/add/diff machinery, triggered by the model reshaping its own checklist rather than by the gate) and the acceptance criteria following a revision (revised steps carry outcomes too). |
+| B-2026-11-02-2 | Adaptive plan revision & objective fidelity (owner 2026-11-02 advisor exchange — follow-on to B-2026-11-02-1): the todo list must EVOLVE when execution evidence changes the work — a discovery that moots a todo retires it (explicit `retired` status carrying the discovery in its result) instead of silently vanishing in a full-replace; mid-turn rewrites surface as a revision diff (`todo_revised`: added/retired/kept) in the Todos panel; and the close gains an objective-fidelity judge (bounded read-only lane, completion-judge shape): does the reply address the ORIGINAL request, not merely the todos — one drift nudge, on the record, never blocks. The benchmark: the agent "knows where it is coming from and where it is going". SHIPPED 2026-11-02 (S023): the gate's replan diffs into the live todo list (`retired` status carrying the discovery, appended rows, `todo_revised {added, retired, kept}` once per turn, closed rows never churn, the finalize sweep leaves retired closed) and the objective-fidelity judge runs at the close (bounded read-only lane, `post_answer_lanes.objective_fidelity` + `objective_drift`, one nudge, never blocks). SHIPPED 2026-11-03 (S024) — the REMAINDER closed: a mid-turn `todo_write` call now DIFFS against the live panel rows (the model's own last-written list, else the planner rows, else the syn- fallbacks) instead of silently full-replacing — dropped open rows retire with the reason, new work appends with fresh ids, closed rows never churn, `todo_revised` lands once per actual rewrite, a retired row takes no more tool lifecycle — and revised steps carry outcomes: model-supplied `expected_outcome` joins the acceptance contract, the gate's replan prompt asks for per-step done-when contracts and the parser carries them into the added rows (backward-compatible), and `todo_write` is excluded from the gate's evidence (a checklist cannot verify itself). ITEM CLOSED. |
 
 _10 medium, 1 low priority row(s) — see tasks/backlog.md_
 
@@ -37,5 +37,5 @@ _10 medium, 1 low priority row(s) — see tasks/backlog.md_
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-11-02
 
 ## Collaboration
-- 190 event(s) on file; most recent: `20261103T084654Z-Sanaa-9ea8c602.json`
+- 191 event(s) on file; most recent: `20261103T105500Z-Sanaa-7c41d908.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`
