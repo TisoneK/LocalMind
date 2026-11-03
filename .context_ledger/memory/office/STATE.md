@@ -5,21 +5,20 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-11-03T07:03:43Z_
+_Regenerated: 2026-11-03T07:45:41Z_
 
 ## Standing params
-- **Core:** 2.3.2 (locked, verified 2026-11-02)
+- **Core:** 2.3.2 (locked, verified 2026-11-03)
 - **Target:** Resilience + ZCode-import program (set by owner 2026-09-12, S471; full map: `office/reviews/2026-09-12-review-s471.md`). DONE at setting: the provider-stall watchdog on chat turns (`e32e08a1` — no-first-byte stall names the provider at 5s, switch-model offer at 30s, no abort). NEXT, in priority order: (1) **MCP client support** (stdio + streamable-HTTP transports, `mcp__server__tool` naming — the tool surface stops being the boundary); (2) **read-only Explorer subagent** — a Parent TOOL, not a peer: read-only sandbox, returns bounded conclusions with `file:line` refs, not dumps; (3) **fresh-eyes acceptance judge** — read-only, re-reads a finished deliverable against the original request, structured per-item verdicts (deepens ADR-18; the loop never grades its own work); (4) **plugin-style skill packaging** — versioned, namespaced `plugin:skill`, seed manifest, bundleable scripts/.mcp.json/commands. Tier-2 backlog candidates: web_fetch prompt-distillation, background-exec completion re-invocation, structured clarifying questions, plan mode. LocalMind has exactly one active agent: the Parent; live multi-agent delegation stays parked compatibility residue (the explorer/judge are read-only Parent tools, not peers). **Do NOT regress:** the ADR-34 event order, Session 31-33 fixes (thinking-aware timeouts build on them), the ADR-40 guardrail (live-verify tool SELECTION on a weak model + cerebras before any further schema cut), the ADR-41 default (z.ai thinking ON — never re-add a thinking-disable for GLM; GLM-4.5-flash has no effort/budget param, timeout scaling is the lever), the S471 watchdog fall-through (once a first byte lands, the heartbeat must return to the truthful prior branches — never stall-shame a healthy stream), or the Parent-only scope. **Owner ruling 2026-11-01 (supersedes the S206 `Hi`→zero-provider-call boundary, which is RETIRED):** no input class is answered from a hardcoded string while the provider is healthy — bare social gestures ("hi", "hello", "what's up", "sup") reach the model like any other turn ("the answer was hardcoded and not ethical or my design at all"). The canned warm lines exist as the provider-down fallback only (S448 ruling stands). A chat-message target overrides this standing Target.
 - **Scope:** discovery + review + fix all safe issues
 - **Push policy:** push to main directly after each commit
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-- **Tobias** (S001) — Working — Pull the latest main and verify the Planner lane
 - **Zuri** (S023) — Done — The owner's 2026-11-02 "How are things" export: the task list is still tool-echo (`syn-0`…
 
 ## Current task
-- **2026-11-02 — Tobias / unknown (harness states no model ID)** — Pull the latest main and verify the Planner lane (adaptive plan revision, objective fidelity, production plan path) — *in-progress*
+- **—** — none — no session in progress — *idle*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-10-31-1 | In-app State Explorer + engine selector (ADR-71): port the explorer into the app as its own interface (game tree, move list, eval bar, inspector, meters, rewindable timeline) and add the Classic/State engine setting. Reference: `docs/prototypes/state-explorer/`, `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter `state_agent/adapters/localmind.py`); `EngineEvent` is the UI contract. Check whether the in-flight port landed before starting. |
@@ -32,8 +31,8 @@ _Regenerated: 2026-11-03T07:03:43Z_
 _10 medium, 1 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
-- flaws/log.md (protocol/.context_ledger friction): 2 entries, last added 2026-11-02
-- inefficiencies/log.md (project code/env friction): 1 entry, last added 2026-11-02
+- flaws/log.md (protocol/.context_ledger friction): 3 entries, last added 2026-11-02
+- inefficiencies/log.md (project code/env friction): 2 entries, last added 2026-11-02
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-11-02
 
 ## Collaboration

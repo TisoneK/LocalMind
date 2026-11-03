@@ -44,3 +44,7 @@ names them), and roll-up candidates.
 - **Root cause:** the CLI resolves the office from its own install tree (or an unexported env default) instead of the CWD's `.context_ledger/`, so a self-hosted core + vendored-consumer setup silently forks the collaboration trail across two trees.
 - **Suggested fix:** the CLI should anchor the office at the nearest `.context_ledger/` walking UP from CWD (and refuse loudly when none is found), so vendored consumers get the same trail the core's own office gets; a `--office <path>` flag would cover the rest.
 - **Status:** open (workaround used this session: the two S023 events were copied into the vendored office and the core-side copies deleted; STATE left at the last successful regeneration — the roster/sessions/events carry the record).
+
+## 2026-11-02 — Tobias / unknown (no model ID) — pull again
+
+- none this session

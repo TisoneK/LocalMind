@@ -235,3 +235,10 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Report:** `office/reviews/2026-11-02-review-s023-planner-lane.md`; CHANGELOG Added ×3; backlog B-2026-11-02-2 annotated (revision diff + drift judge landed, the model-rewrite trigger remains); `system/live-testing.md` gained the harness row; roster clocked out; sessions + SUMMARY entries.
 
 ---
+### Session 1 — follow-up 1 (pull again)
+- **Pulled:** `8dbac565` (`73559647..8dbac565`, fast-forward, clean tree) — the Planner lane (S023): the real `{todo, outcome}` plan drawn by the model before the loop (the production path had `skip_planning=True` since August, so the plan branch was dead and lookups rendered `syn-` tool echoes), adaptive plan revision (`retired` carrying the discovery, appended work, `todo_revised {added, retired, kept}` once per turn), the objective-fidelity judge at the close, the Thinker's fenced JSON rehearsal stripped from visible reasoning, and the new `scripts/live_test_planner_lane.py`.
+- **Outcome:** Done — verified on this box: `tests/core/test_planner_lane.py` + turn-close attribution + arsenal export fixes → 36 passed; `TodoList.test.tsx` → 10 passed; `tsc -b --noEmit` clean; the live harness ALL PASS (planner is the first call, plan rows carry outcome contracts, no `syn-` rows, contract closes without a false replan, no fenced rehearsal in the thinking stream, social turn skips the lane).
+- **Open items:** backlog B-2026-11-02-2 keeps its remainder (the model's own rewrite trigger; acceptance criteria following a revision) — annotated by S023, not new.
+- **Notes:** none
+- **Report:** .context_ledger/memory/office/reviews/2026-11-02-review.md (pull-again section)
+- **Exit gate (follow-up 1):** GATE PASSED — 4,035 passed, 22 documented Windows-baseline failures, 5 skipped; ruff/tsc/eslint clean; bookkeeping current.

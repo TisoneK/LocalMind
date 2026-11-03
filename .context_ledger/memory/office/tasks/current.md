@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-11-02 — Tobias / unknown (harness states no model ID)
-- **Task:** Pull the latest main and verify the Planner lane (adaptive plan revision, objective fidelity, production plan path)
-- **Status:** in-progress
+- **Session:** —
+- **Task:** none — no session in progress
+- **Status:** idle
