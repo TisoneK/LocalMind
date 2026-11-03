@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "20261103T120000Z-Jengo-s025-checkin",
+  "type": "claim",
+  "session": "S025",
+  "agent": "Jengo",
+  "created": "2026-11-03T12:00:00Z",
+  "issue": "markdown-render-pipeline",
+  "body": "S025 checking in: owner reports the UI shows model output as plain text (no table/format styling). Scope: prove the markdown pipeline on the wire (backend SSE passthrough + history persistence via a new live harness against a fake provider), fix the frontend renderer's real-world gaps (GLM-degraded table shapes — full-width pipes/dashes defeat remark-gfm), and harden the response_formatting prompt section (tables must be standard GFM pipe tables). Also completed en route: the S024 ledger close that the prior session's crash left uncommitted (roster Done, STATE regen, sessions/SUMMARY, backlog annotation, CHANGELOG) — committed as 2897b0f6 before this claim.",
+  "paths": [
+    "frontend/src/lib/markdownRepair.ts",
+    "frontend/src/components/shared/MarkdownContent.tsx",
+    "frontend/src/components/shared/MarkdownContent.test.tsx",
+    "backend/src/core/agent/prompt/sections/agent.py",
+    "scripts/live_test_markdown_render.py"
+  ],
+  "refs": ["2897b0f6"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
