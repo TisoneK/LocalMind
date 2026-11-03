@@ -61,6 +61,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
+| Tobias | S001 | unknown (harness states no model ID) | Pull the latest main and verify the Planner lane | Working | Checked in; Planner lane pulled at 8dbac565, verification next |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
