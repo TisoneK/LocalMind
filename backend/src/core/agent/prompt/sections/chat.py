@@ -15,9 +15,11 @@ from core.agent.prompt.names import (
     SECTION_CONVERSATION_CONTRACT,
     SECTION_GENERAL_RULES,
     SECTION_IDENTITY,
+    SECTION_RESPONSE_FORMATTING,
     SECTION_THINKING_DEPTH,
     SECTION_TIME_SENSITIVE_DATA,
 )
+from core.agent.prompt.sections.formatting import RESPONSE_FORMATTING_TEXT
 from core.agent.prompt.structure import Band, Layer, SectionRegistry, make
 
 
@@ -146,6 +148,21 @@ def build_chat_static_registry() -> SectionRegistry:
             "- For debugging questions: state the most likely cause, then alternative possibilities.\n"
             "- For design/architecture questions: present your recommendation with the trade-offs that led you there.\n"
             "- For creative requests: go deep. Give the user something they wouldn't have come up with on their own.",
+        )
+    )
+    # The response-formatting contract at the shared 405 slot (see
+    # sections/formatting.py): the chat surface answers conversational
+    # asks — comparisons, "weather in Nairobi", recommendations — which
+    # is exactly where the owner's "no tables, just text" report bit.
+    # This registration rides the same one shared text as the parent and
+    # agent surfaces.
+    registry.add(
+        make(
+            SECTION_RESPONSE_FORMATTING,
+            Band.STATIC,
+            Layer.GUIDANCE,
+            405,
+            RESPONSE_FORMATTING_TEXT,
         )
     )
     return registry

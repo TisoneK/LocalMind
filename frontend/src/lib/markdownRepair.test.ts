@@ -53,6 +53,84 @@ describe('repairMarkdown — normalize broken bullet lead-ins', () => {
   });
 });
 
+describe('repairMarkdown — full-width table lookalikes (GLM/CJK)', () => {
+  it('normalizes a fully full-width table row set into GFM', () => {
+    const text = [
+      '| Plan ｜ Price ｜ Speed ｜',
+      '｜－－－｜－－－｜－－－｜',
+      '｜ Plan A ｜ 1,500 ｜ 10 Mbps ｜',
+    ].join('\n');
+    // Punctuation substitution only — the model's spacing survives, and the
+    // (now-ASCII) delimiter row means no second delimiter is inserted.
+    expect(repairMarkdown(text)).toBe(
+      '| Plan | Price | Speed |\n|---|---|---|\n| Plan A | 1,500 | 10 Mbps |'
+    );
+  });
+
+  it('normalizes a MIXED row (ASCII outer pipes, one full-width inner pipe)', () => {
+    // The 2-column case: a single inner ｜ must still be normalized.
+    expect(repairMarkdown('| A ｜ B |')).toBe('| A | B |');
+  });
+
+  it('normalizes em/en dashes only inside table rows (spacing preserved)', () => {
+    const text = '| X ｜ Y |\n｜－－｜－－｜\nA — B – C － D';
+    // Punctuation substitution only — spacing is the model's, and `|--|--|`
+    // is valid GFM either way.
+    expect(repairMarkdown(text)).toBe(
+      '| X | Y |\n|--|--|\nA — B – C － D'
+    );
+  });
+
+  it('leaves a prose full-width divider (single ｜, no leading pipe) untouched', () => {
+    expect(repairMarkdown('上海｜北京')).toBe('上海｜北京');
+  });
+
+  it('never touches ｜ inside fenced code or inline code', () => {
+    const fenced = '```\n｜ a ｜ b ｜\n```';
+    expect(repairMarkdown(fenced)).toBe(fenced);
+    const inline = 'use `a ｜ b` here';
+    expect(repairMarkdown(inline)).toBe(inline);
+  });
+});
+
+describe('repairMarkdown — missing GFM delimiter row', () => {
+  it('inserts a delimiter under a detected header (3+ uniform rows)', () => {
+    const text = [
+      '| Plan | Price | Speed |',
+      '| Plan A | 1,500 | 10 Mbps |',
+      '| Plan B | 2,800 | 40 Mbps |',
+    ].join('\n');
+    expect(repairMarkdown(text)).toBe(
+      '| Plan | Price | Speed |\n| --- | --- | --- |\n| Plan A | 1,500 | 10 Mbps |\n| Plan B | 2,800 | 40 Mbps |'
+    );
+  });
+
+  it('leaves a well-formed table alone (data rows after a delimiter)', () => {
+    const text = [
+      '| Plan | Price |',
+      '| --- | --- |',
+      '| Plan A | 1,500 |',
+      '| Plan B | 2,800 |',
+    ].join('\n');
+    expect(repairMarkdown(text)).toBe(text);
+  });
+
+  it('leaves a 2-row run alone (too ambiguous to call a table)', () => {
+    const text = '| Plan | Price |\n| Plan A | 1,500 |';
+    expect(repairMarkdown(text)).toBe(text);
+  });
+
+  it('leaves a ragged run alone (uneven pipe counts)', () => {
+    const text = '| Plan | Price |\n| A | B | C |\n| D | E |';
+    expect(repairMarkdown(text)).toBe(text);
+  });
+
+  it('never inserts inside fenced code', () => {
+    const fenced = '```\n| a | b |\n| c | d |\n| e | f |\n```';
+    expect(repairMarkdown(fenced)).toBe(fenced);
+  });
+});
+
 describe('repairMarkdown — protects code', () => {
   it('does not repair inside fenced code blocks', () => {
     const text = 'Here is code:\n```js\nconst x = **not emphasis**;\n```\nDone.';

@@ -27,6 +27,7 @@ from core.agent.prompt.names import (
     SECTION_TOOL_LIST,
     SECTION_VERIFY_RESULTS,
 )
+from core.agent.prompt.sections.formatting import RESPONSE_FORMATTING_TEXT
 from core.agent.prompt.structure import Band, Layer, SectionRegistry, make
 from core.agent.tool_schemas import render_tool_list
 
@@ -212,12 +213,11 @@ def build_agent_static_registry(agent_tool_list: str) -> SectionRegistry:
             SECTION_RESPONSE_FORMATTING,
             Band.STATIC,
             Layer.GUIDANCE,
-            440,
-            "RESPONSE FORMATTING:\n"
-            "- **Lead with the answer,** then stop — don't bury it. Be concise: one sentence if it answers, never a wall of text.\n"
-            "- **Structure it:** tables for data (weather, file lists, comparisons), bullets for steps, bold for key numbers, code blocks for code/commands/paths.\n"
-            '- **No source citations** — synthesize into a clean, actionable answer ("Yes, bring an umbrella" beats "35% probability of precipitation").\n'
-            "- **Match length to the question:** one line + small table for a simple ask; a structured explanation for a deep one.",
+            405,
+            # One shared text with the parent and chat surfaces (see
+            # sections/formatting.py — the owner's "the UI shows plain
+            # text" gap was this section existing on ONE surface only).
+            RESPONSE_FORMATTING_TEXT,
         )
     )
     registry.add(

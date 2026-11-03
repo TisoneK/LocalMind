@@ -74,7 +74,11 @@ SECTION_VERIFY_RESULTS = "verify_results"  # 400
 SECTION_COMPLETION_ENFORCEMENT = "completion_enforcement"  # 410
 SECTION_TOOL_ARGUMENT_RULES = "tool_argument_rules"  # 420
 SECTION_THINKING_AND_RESPONDING = "thinking_and_responding"  # 430
-SECTION_RESPONSE_FORMATTING = "response_formatting"  # 440
+# 405 — shared by parent / chat / agent: AFTER the tool index (400) so the
+# SOCIAL relevance cut (a contiguous-suffix drop of the tool-choosing
+# guidance) can never strip the formatting contract from a conversational
+# turn, and BEFORE style_examples (410) so the suffix property holds.
+SECTION_RESPONSE_FORMATTING = "response_formatting"  # 405
 SECTION_ITERATION_BUDGET = "iteration_budget"  # 449
 
 # STATIC band — the chat-surface prompt
@@ -135,7 +139,7 @@ SECTION_SLOTS: dict[str, int] = {
     "completion_enforcement": 410,
     "tool_argument_rules": 420,
     "thinking_and_responding": 430,
-    "response_formatting": 440,
+    "response_formatting": 405,
     "iteration_budget": 449,
     # STATIC — chat-surface prompt
     "conversation_contract": 110,

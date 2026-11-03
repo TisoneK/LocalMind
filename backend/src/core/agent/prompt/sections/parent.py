@@ -3,7 +3,7 @@
 
 The 4-layer doctrine (User Objective Primacy) with allocated order
 slots: identity (10), constraints (110-140), relevant context
-(210-290), execution guidance (400-430). The user objective is
+(210-290), execution guidance (400-440). The user objective is
 deliberately ABSENT: it is per-turn content and leads the TURN band
 (sections/turn.py), never the byte-stable prefix.
 """
@@ -19,6 +19,7 @@ from core.agent.prompt.names import (
     SECTION_IDENTITY,
     SECTION_MULTI_PART_COMPLETION,
     SECTION_ON_DEMAND_LOADING,
+    SECTION_RESPONSE_FORMATTING,
     SECTION_SAFETY_GROUNDING,
     SECTION_SELECTION_HINTS,
     SECTION_STYLE_EXAMPLES,
@@ -27,6 +28,7 @@ from core.agent.prompt.names import (
     SECTION_USER_CONTEXT_DEDUCED,
     SECTION_USER_IDENTITY_STATED,
 )
+from core.agent.prompt.sections.formatting import RESPONSE_FORMATTING_TEXT
 from core.agent.prompt.structure import Band, Layer, SectionRegistry, make
 from core.agent.tool_schemas import compact_tool_summary
 from core.system_snapshot import get_cached_summary
@@ -75,14 +77,18 @@ def build_parent_static_registry(
     - relevant context (210-290): the agent playbook, the boot-cached system
       facts, deduced user context, stated identity facts, retrieved memory —
       everything the constraints above reason about.
-    - execution guidance (400-430): the tool index FIRST (the capability
+    - execution guidance (400-440): the tool index FIRST (the capability
       spine the conversation-or-action constraint points at — "read the tool
-      list below"), then the tool-choosing guidance (reply-style examples,
+      list below"), then the response-formatting contract (405 — after the
+      index so the per-turn relevance budget's contiguous-suffix cut of the
+      tool-choosing guidance can never drop it from a conversational turn;
+      the owner's "the UI shows plain text" gap was this contract missing
+      here entirely), then the tool-choosing guidance (reply-style examples,
       selection hints, on-demand loading). The index leads so the per-turn
       relevance budget (prompt/budget.py) can drop the tool-choosing suffix
-      on conversational turns while the capability spine stays — a cut that
-      keeps the referenced section is a byte-prefix of this render, not a
-      middle cut.
+      on conversational turns while the capability spine and the formatting
+      contract stay — a cut that keeps the referenced sections is a
+      byte-prefix of this render, not a middle cut.
 
     The user objective is deliberately ABSENT here: it is per-turn content
     and leads the TURN band (the trailing turn-context message), never the
@@ -270,6 +276,21 @@ def build_parent_static_registry(
             Layer.GUIDANCE,
             400,
             f"{_TOOLS_HEAD}\n{compact_tool_list}",
+        )
+    )
+    # The response-formatting contract at the shared 405 slot (see
+    # sections/formatting.py): after the tool index so the SOCIAL cut
+    # (style_examples onward) never drops it, before style_examples so
+    # the suffix property holds. This is the section whose absence on
+    # this surface produced the owner's "no tables, just text" report —
+    # the parent answers most ordinary turns directly.
+    registry.add(
+        make(
+            SECTION_RESPONSE_FORMATTING,
+            Band.STATIC,
+            Layer.GUIDANCE,
+            405,
+            RESPONSE_FORMATTING_TEXT,
         )
     )
     registry.add(
