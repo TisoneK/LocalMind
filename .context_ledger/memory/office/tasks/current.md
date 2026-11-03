@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — no session in progress
-- **Status:** idle
+- **Session:** 2026-11-03 — Sanaa / GLM (Z.ai sandbox)
+- **Task:** B-2026-11-02-2 remainder — the model's own todo_write rewrite: a mid-turn todo_write call diffs against the live panel (dropped rows retire with a reason, new rows append, todo_revised on the record) instead of the silent clear+replace; revised steps carry outcome contracts (model expected_outcome joins the acceptance criteria; the gate replan parses per-step done-when outcomes)
+- **Status:** in-progress

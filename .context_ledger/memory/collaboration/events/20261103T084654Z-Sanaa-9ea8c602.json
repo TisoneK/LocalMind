@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261103T084654Z-Sanaa-9ea8c602",
+  "type": "claim",
+  "session": "S024",
+  "agent": "Sanaa",
+  "created": "2026-11-03T08:46:54Z",
+  "issue": "todo-model-rewrite",
+  "body": "Claim: the model's own plan rewrite (B-2026-11-02-2 remainder)\n\nScope: backend/src/core/agent/loop.py (the todo_write result handler +\nthe gate-replan diff), backend/src/core/agent/tool_schemas.py (schema\nwording), backend/src/tools/todo_write.py (description only if needed),\ntests/core/test_planner_lane.py + a new tests/core/test_todo_model_rewrite.py,\nscripts/live_test_todo_rewrite.py (new standing harness).\n\nToday any mid-turn todo_write call silently full-replaces the panel\n(todo_cleared + one todo_created per item): evidence-backed and retired\nrows vanish, no revision diff lands on the record, and the acceptance\ncontract does not follow the rewrite. The change:\n\n1. The loop diffs a todo_write call against the live panel rows (planner\n   plan-{i} rows, or the model's own previous list, or syn- fallback rows):\n   dropped OPEN rows retire explicitly (status=retired + reason), genuinely\n   new work appends (fresh ids, never renumbering), matched open rows update\n   in place, closed rows never churn, and todo_revised {added, retired, kept}\n   lands once per actual rewrite — the same machinery S023 gave the gate\n   replan, triggered by the model reshaping its own checklist.\n2. Revised steps carry outcomes: model-supplied expected_outcome joins the\n   acceptance contract (trace.success_criteria / task_state) when absent;\n   the gate replan prompt asks for a per-step done-when outcome and the\n   parser carries it into the added rows' contracts (backward-compatible:\n   bare steps keep the empty outcome).\n\nHypothesis of safety: the diff only changes the todo_write emission path\nand the replan payload parse; plan ids stay stable (S023's fixed-denominator\ndiscipline); the bridge already treats retired as a close state\n(chat.py finalize sweep). Fail-open shapes unchanged: an unparsable write\nstill normalizes through todo_write's own validation.\n\nVerification bar: new unit pins (pure diff + loop-level rewrite behavior),\nfull backend suite, ruff on touched paths, frontend untouched (same event\nshapes the panel already renders), new live harness on the 8765\nfake-provider pattern + standing harnesses re-run.",
+  "paths": ["backend/src/core/agent/loop.py", "backend/src/core/agent/tool_schemas.py", "backend/src/tools/todo_write.py", "tests/core/test_planner_lane.py", "tests/core/test_todo_model_rewrite.py", "scripts/live_test_todo_rewrite.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-11-03T07:45:41Z_
+_Regenerated: 2026-11-03T08:47:00Z_
 
 ## Standing params
 - **Core:** 2.3.2 (locked, verified 2026-11-03)
@@ -15,10 +15,11 @@ _Regenerated: 2026-11-03T07:45:41Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
+- **Sanaa** (S024) — Working — B-2026-11-02-2 remainder: the model's own todo_write rewrite — a mid-turn diff (retire/…
 - **Zuri** (S023) — Done — The owner's 2026-11-02 "How are things" export: the task list is still tool-echo (`syn-0`…
 
 ## Current task
-- **—** — none — no session in progress — *idle*
+- **2026-11-03 — Sanaa / GLM (Z.ai sandbox)** — B-2026-11-02-2 remainder — the model's own todo_write rewrite: a mid-turn todo_write call diffs against the live panel (dropped rows reti… — *in-progress*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-10-31-1 | In-app State Explorer + engine selector (ADR-71): port the explorer into the app as its own interface (game tree, move list, eval bar, inspector, meters, rewindable timeline) and add the Classic/State engine setting. Reference: `docs/prototypes/state-explorer/`, `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter `state_agent/adapters/localmind.py`); `EngineEvent` is the UI contract. Check whether the in-flight port landed before starting. |
@@ -36,5 +37,5 @@ _10 medium, 1 low priority row(s) — see tasks/backlog.md_
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-11-02
 
 ## Collaboration
-- 189 event(s) on file; most recent: `20261102T151147Z-Zuri-d3ba5d23.json`
+- 190 event(s) on file; most recent: `20261103T084654Z-Sanaa-9ea8c602.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`
