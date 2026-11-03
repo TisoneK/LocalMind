@@ -933,11 +933,6 @@ async def _event_stream(
                     if _narr:
                         yield _narr
 
-                # legacy trio — shared todo bridging (also used by
-                # the lifecycle drain so these survive no-text turns too).
-                for extra in _bridge_todo_event(evt, session_id):
-                    yield extra
-
                 # Bridge thinking_start/thinking_done obs events to proper SSE
                 # thinking_start/thinking_end events. The frontend handles these
                 # to show the ThinkingBlock component with real-time content.
@@ -950,6 +945,9 @@ async def _event_stream(
 
                 # shared todo bridging — persist + emit the
                 # dedicated todo SSE (also used by the lifecycle drain).
+                # ONE bridge per event: an earlier legacy call site here made
+                # every todo event that reached the main drain land twice on
+                # the wire (and double-persist) — S024 live harness caught it.
                 for extra in _bridge_todo_event(evt, session_id):
                     yield extra
 

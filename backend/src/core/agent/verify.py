@@ -110,7 +110,14 @@ def _norm(s: str) -> str:
 
 
 def _evidence(trace: AgentTrace) -> list[dict]:
-    """Flatten trace steps into tool-evidence records."""
+    """Flatten trace steps into tool-evidence records.
+
+    todo_write is bookkeeping, not evidence about the world: its observation
+    renders the model's own checklist, so a criterion derived from that
+    checklist (the revision contracts) would quote its own tokens back and
+    verify itself — the same self-grounding the evidence gate forbids for
+    the answer. Checklist rows are judged by the WORK's evidence, which is
+    what remains after the exclusion."""
     return [
         {
             "tool": step.tool_name,
@@ -119,7 +126,7 @@ def _evidence(trace: AgentTrace) -> list[dict]:
             "succeeded": not step.tool_failed,
         }
         for step in trace.steps
-        if step.tool_name
+        if step.tool_name and step.tool_name != "todo_write"
     ]
 
 

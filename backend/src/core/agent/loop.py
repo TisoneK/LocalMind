@@ -971,6 +971,160 @@ def _emit_todo_write_events(tool_name: str, tool_result, obs) -> None:
         )
 
 
+# ── The model's own plan rewrite (B-2026-11-02-2 remainder) ─────────────────
+# A mid-turn todo_write call is the model reshaping its own checklist. The
+# old behavior full-replaced the panel (clear + create every item): closed
+# and retired rows silently vanished, no revision diff landed on the record,
+# and the acceptance contract ignored the rewrite. The loop now diffs the
+# write against the live rows with the same machinery the gate replan uses.
+
+# Panel-row statuses a rewrite must never churn — history, not rewrite
+# fodder. Mirrors the bridge's finalize sweep (chat.py) and the gate diff.
+_TODO_CLOSED_STATUSES = frozenset({"completed", "failed", "blocked", "retired"})
+
+
+def _todo_text_equivalent(a: str, b: str) -> bool:
+    """Two todo labels describe the same work when their token sets overlap
+    enough — a rewrite rephrases ("search the web for X" → "look up X
+    online"), and an exact-text diff would retire and re-add the same work.
+    Same rule the gate replan diff uses."""
+    ta = {t for t in re.findall(r"[a-z0-9]+", (a or "").lower()) if len(t) > 2}
+    tb = {t for t in re.findall(r"[a-z0-9]+", (b or "").lower()) if len(t) > 2}
+    if not ta or not tb:
+        return False
+    return len(ta & tb) / len(ta | tb) >= 0.5
+
+
+def _diff_todo_lists(
+    current: list[dict],
+    incoming: list[dict],
+    *,
+    id_prefix: str = "t",
+    existing_ids: Optional[set[str]] = None,
+) -> dict:
+    """Diff the model's rewritten todo list against the live panel rows.
+
+    Matching: token-set equivalence among OPEN rows first — the todo_write
+    tool re-mints ids positionally on every call, so a write's ids are NOT
+    cross-call identity; the model's labels are. Same id is the fallback for
+    rows the labels no longer name (a match on a closed row keeps it closed
+    and counts as kept). A closed row's text is history: re-listing that
+    work arrives as a new row — the model re-added the work. Returns a
+    pure diff the caller emits:
+    - ``creates`` — incoming items matching nothing; fresh ids (``id_prefix``
+      + n, never colliding with the panel's existing ids) carrying text /
+      status / expected_outcome / result verbatim.
+    - ``updates`` — matched OPEN rows, by id, with the incoming status /
+      expected_outcome / result. The drawn label stays (the panel renders
+      status/outcome changes on an id, and a matched row is the same work).
+    - ``retires`` — current OPEN rows no incoming item matches: the model's
+      rewrite dropped them.
+    - ``kept`` — matched CLOSED rows (completed/failed/blocked/retired):
+      counted, never churned.
+    """
+    by_id = {str(r.get("id")): r for r in current if r.get("id")}
+    used: set[str] = set()
+    taken = set(existing_ids or set()) | set(by_id.keys())
+    creates: list[dict] = []
+    updates: list[dict] = []
+    kept = 0
+    next_n = 1
+    for item in incoming:
+        text = str(item.get("text") or "").strip()
+        if not text:
+            continue
+        rid = str(item.get("id") or "")
+        row = None
+        for r in current:
+            if str(r.get("id")) in used:
+                continue
+            if str(r.get("status") or "pending") in _TODO_CLOSED_STATUSES:
+                continue  # closed rows are history — never text-matched
+            if _todo_text_equivalent(text, str(r.get("text") or "")):
+                row = r
+                break
+        if row is None and rid:
+            # No label names this row anymore — the write's own id (when it
+            # survives normalization) is the last identity signal.
+            row = by_id.get(rid)
+        if row is not None:
+            rid = str(row.get("id"))
+            used.add(rid)
+            if str(row.get("status") or "pending") in _TODO_CLOSED_STATUSES:
+                kept += 1
+                continue
+            updates.append(
+                {
+                    "id": rid,
+                    "status": str(item.get("status") or "pending"),
+                    "expected_outcome": str(item.get("expected_outcome") or ""),
+                    "result": str(item.get("result") or ""),
+                }
+            )
+            continue
+        new_id = f"{id_prefix}{next_n}"
+        while new_id in taken:
+            next_n += 1
+            new_id = f"{id_prefix}{next_n}"
+        taken.add(new_id)
+        next_n += 1
+        creates.append(
+            {
+                "id": new_id,
+                "text": text[:200],
+                "status": str(item.get("status") or "pending"),
+                "expected_outcome": str(item.get("expected_outcome") or ""),
+                "result": str(item.get("result") or ""),
+            }
+        )
+    retires = [
+        str(r.get("id"))
+        for r in current
+        if str(r.get("status") or "pending") not in _TODO_CLOSED_STATUSES
+        and str(r.get("id")) not in used
+    ]
+    return {"creates": creates, "updates": updates, "retires": retires, "kept": kept}
+
+
+_DONE_WHEN_SPLIT_RE = re.compile(
+    r"\s+(?:[—–-]+\s+)?done\s+when\s*:\s*", re.IGNORECASE
+)
+
+
+def _split_done_when(step: str) -> tuple[str, str]:
+    """Split a replan step's trailing verification contract —
+    'fetch X — done when: the reading appears in the page text' →
+    ('fetch X', 'the reading appears in the page text'). No contract
+    on the line → ('<step unchanged>', '')."""
+    parts = _DONE_WHEN_SPLIT_RE.split(step or "", maxsplit=1)
+    if len(parts) == 2 and parts[1].strip():
+        return parts[0].strip().rstrip("—–-").strip(), parts[1].strip()[:300]
+    return (step or "").strip(), ""
+
+
+def _parse_replan_contract(text: str) -> tuple[list[str], list[str]]:
+    """Parse the acceptance gate's revised plan into (steps, outcomes).
+
+    Same step shapes `_parse_replan_steps` accepts (the planner's
+    STEPS:-headed format first, then bare numbered lines); a step may carry
+    its done-when contract inline. Backward compatible: a bare step parses
+    with an empty outcome and the revision proceeds exactly as before."""
+    steps = _parse_plan_steps(text)
+    if not steps:
+        steps = []
+        for line in (text or "").split("\n"):
+            match = re.match(r"^\s*\d+[\.\)]\s*(.+)", line.strip())
+            if match:
+                step = match.group(1).strip().strip("`*")
+                if len(step) >= 8:
+                    steps.append(step)
+        steps = steps[:6]
+    if not steps:
+        return [], []
+    pairs = [_split_done_when(s) for s in steps]
+    return [p[0] for p in pairs], [p[1] for p in pairs]
+
+
 # Terse harness-owned step verbs for the synthesized
 # user-facing checklist. The Todos panel is a rendered artifact of what the
 # agent actually DID — it must never depend on the model choosing to plan,
@@ -3578,6 +3732,8 @@ class AgentLoop:
                 idx = int(plan_id.split("-")[1])
             except (IndexError, ValueError):
                 return
+            if plan_id in _plan_retired:
+                return  # a retired todo takes no more tool lifecycle
             key = (tool_name, (tool_input or "").strip().splitlines()[0][:120] if (tool_input or "").strip() else "")
             first_tool = _plan_step_tools.get(idx, 0) == 0
             _plan_step_tools[idx] = _plan_step_tools.get(idx, 0) + 1
@@ -3629,6 +3785,11 @@ class AgentLoop:
         # turn-end sweep must not overwrite that concrete result with a
         # generic close line.
         _plan_done: set[str] = set()
+        # Plan todos the plan revision retired explicitly (the gate's replan
+        # or the model's own todo_write rewrite dropped them). Retired is a
+        # CLOSE: the cursor never completes one, tools under one take no more
+        # lifecycle, and a rewrite diff never churns one back open.
+        _plan_retired: set[str] = set()
 
         def _mark_plan_step_failed(plan_id: str, reason: str = "") -> None:
             try:
@@ -3654,6 +3815,8 @@ class AgentLoop:
                 return
             if f"plan-{_plan_step_cursor}" in _plan_failed:
                 return
+            if f"plan-{_plan_step_cursor}" in _plan_retired:
+                return  # retired is closed — the finalize sweep never re-opens it
             if f"plan-{_plan_step_cursor}" in _plan_done:
                 return  # already closed with its tool evidence — keep that result
             if 0 <= _plan_step_cursor < len(_plan_steps):
@@ -3690,11 +3853,17 @@ class AgentLoop:
                 return False
             return len(ta & tb) / len(ta | tb) >= 0.5
 
-        def _apply_plan_revision(new_steps: list[str], discovery: str = "") -> None:
+        def _apply_plan_revision(
+            new_steps: list[str],
+            discovery: str = "",
+            outcomes: Optional[list[str]] = None,
+        ) -> None:
             """Diff the replan's steps into the live todo list: retire what
             the revised plan dropped, add what it introduced, emit the
             revision diff. Called by the acceptance gate through its
-            plan_revision_cb after a replan."""
+            plan_revision_cb after a replan. `outcomes` (when given) carries
+            each new step's done-when contract — revised steps hold outcomes
+            too, so the gate judges the revised work by its own contract."""
             nonlocal _plan_revision_used
             if _plan_revision_used or not _obs or not new_steps:
                 return
@@ -3704,17 +3873,33 @@ class AgentLoop:
                 _discovery
                 or "The revised plan no longer needs this step."
             )
+            _outs = [str(o or "").strip() for o in (outcomes or [])]
+            _all_steps = [str(s).strip() for s in new_steps if str(s).strip()]
+            _pairs = [
+                (str(_s).strip(), _outs[_i] if _i < len(_outs) else "")
+                for _i, _s in enumerate(new_steps)
+            ]
+            _pairs = [(_s, _o) for _s, _o in _pairs if _s][:4]
             added: list[str] = []
+            added_pairs: list[tuple[str, str]] = []
             retired: list[str] = []
             _next_id = len(_plan_steps)
-            for _step in [str(s).strip() for s in new_steps if str(s).strip()][:4]:
-                if any(_steps_equivalent(_step, _old) for _old in _plan_steps if _old):
+            for _step, _outcome in _pairs:
+                # Equivalence targets are the LIVE rows only: a step that
+                # matches a RETIRED row is genuinely new work (the revision
+                # brought it back) and must be added, not skipped.
+                if any(
+                    _steps_equivalent(_step, _old)
+                    for _i2, _old in enumerate(_plan_steps)
+                    if _old and f"plan-{_i2}" not in _plan_retired
+                ):
                     continue
                 _sid = f"plan-{_next_id}"
                 _next_id += 1
                 _plan_steps.append(_step)
-                _plan_outcomes.append("")
+                _plan_outcomes.append(_outcome)
                 added.append(_sid)
+                added_pairs.append((_step, _outcome))
                 _obs.emit(
                     "todo_created",
                     id=_sid,
@@ -3722,16 +3907,18 @@ class AgentLoop:
                     content=_step,
                     completed=False,
                     status="pending",
+                    expected_outcome=_outcome,
                 )
             for _i, _old in enumerate(_plan_steps):
                 if not _old:
                     continue
                 _pid = f"plan-{_i}"
-                if _pid in _plan_done or _pid in _plan_failed:
+                if _pid in _plan_done or _pid in _plan_failed or _pid in _plan_retired:
                     continue  # closed rows keep their outcome — history, not churn
-                if any(_steps_equivalent(_old, _new) for _new in new_steps if _new):
+                if any(_steps_equivalent(_old, _new) for _new in _all_steps):
                     continue
                 retired.append(_pid)
+                _plan_retired.add(_pid)
                 _obs.emit(
                     "todo_updated",
                     id=_pid,
@@ -3743,8 +3930,9 @@ class AgentLoop:
                     "todo_revised",
                     added=len(added),
                     retired=len(retired),
-                    kept=max(0, len(_plan_steps) - len(added) - len(retired)),
+                    kept=max(0, sum(1 for _s in _plan_steps if _s) - len(added) - len(retired)),
                 )
+                _extend_acceptance_contract(added_pairs)
                 logger.info(
                     "[agent.loop] plan revised: +%d added, %d retired (%s)",
                     len(added),
@@ -3783,6 +3971,15 @@ class AgentLoop:
         # synthesized on top of them.
         _model_owns_plan = False
         _synth_labels: dict[str, str] = {}
+        # The synth rows' close states — a model rewrite diffs against them
+        # (closed rows never churn) instead of silently re-creating them.
+        _synth_done: set[str] = set()
+        _synth_failed: set[str] = set()
+        # The model's own last-written checklist (the normalized todo_write
+        # payload). Once written, it IS the live panel for the next rewrite
+        # diff — the planner rows it replaced stay in _plan_steps for the
+        # cursor machinery, but the panel the model revises is this list.
+        _last_model_todos: list[dict] = []
 
         def _synth_begin(tool_name: str, tool_input: str) -> Optional[str]:
             nonlocal _model_owns_plan
@@ -3819,6 +4016,7 @@ class AgentLoop:
                 # A step that did not work says so, instead of hanging as "in progress" and being
                 # ticked or dropped later. The next step the agent takes (another source, another
                 # way) appears as its own task.
+                _synth_failed.add(todo_id)
                 label = _synth_labels.get(todo_id)
                 if label:
                     _obs.emit(
@@ -3830,7 +4028,195 @@ class AgentLoop:
                         status="failed",
                     )
                 return
+            _synth_done.add(todo_id)
             _obs.emit("todo_completed", id=todo_id, completed=True)
+
+        # ── The model's own plan rewrite (B-2026-11-02-2 remainder) ──────
+
+        def _plan_index(pid: str) -> Optional[int]:
+            if not pid.startswith("plan-"):
+                return None
+            try:
+                idx = int(pid.split("-")[1])
+            except (IndexError, ValueError):
+                return None
+            return idx if 0 <= idx < len(_plan_steps) else None
+
+        def _live_panel_todos() -> list[dict]:
+            """The loop's mirror of the live Todos panel — what a todo_write
+            rewrite diffs against. Once the model has written its own list,
+            that list IS the panel; before that, the planner rows (statuses
+            from the loop's own close sets + the cursor) and any synth
+            fallback rows are."""
+            if _last_model_todos:
+                return [dict(t) for t in _last_model_todos if str(t.get("text") or "").strip()]
+            rows: list[dict] = []
+            for i, step in enumerate(_plan_steps):
+                if not step:
+                    continue
+                pid = f"plan-{i}"
+                if pid in _plan_done:
+                    status = "completed"
+                elif pid in _plan_failed:
+                    status = "failed"
+                elif pid in _plan_retired:
+                    status = "retired"
+                elif i == _plan_step_cursor:
+                    status = "in_progress"
+                else:
+                    status = "pending"
+                rows.append(
+                    {
+                        "id": pid,
+                        "text": step,
+                        "status": status,
+                        "expected_outcome": _plan_outcomes[i] if i < len(_plan_outcomes) else "",
+                        "result": "",
+                    }
+                )
+            for j, label in enumerate(_synthetic_todos):
+                sid = f"syn-{j}"
+                status = (
+                    "failed" if sid in _synth_failed
+                    else "completed" if sid in _synth_done
+                    else "in_progress"
+                )
+                rows.append(
+                    {"id": sid, "text": label, "status": status, "expected_outcome": "", "result": ""}
+                )
+            return rows
+
+        def _extend_acceptance_contract(pairs: list[tuple[str, str]]) -> None:
+            """Revised steps carry outcomes too: a new todo's done-when
+            contract joins the acceptance contract (what the gate judges the
+            turn by) when it is not already on the record. Bounded like the
+            seeding above — the gate judges each criterion with evidence, so
+            the block stays small; the newest contracts win because the plan
+            evolved (the objective-fidelity lane still guards the original
+            ask)."""
+            _new = [
+                f"{step} — done when: {outcome}"
+                for step, outcome in pairs
+                if outcome
+            ]
+            if not _new:
+                return
+            if not trace.success_criteria:
+                trace.success_criteria = []
+            for _c in _new:
+                if _c not in trace.success_criteria:
+                    trace.success_criteria.append(_c)
+            trace.success_criteria = list(trace.success_criteria)[-8:]
+            for _c in _new:
+                if _c not in task_state.success_criteria:
+                    task_state.success_criteria.append(_c)
+            task_state.success_criteria = list(task_state.success_criteria)[-8:]
+
+        def _remember_model_todos(items: list[dict]) -> None:
+            _last_model_todos.clear()
+            _last_model_todos.extend(dict(t) for t in items)
+
+        def _handle_model_todo_write(tool_name: str, tool_result) -> None:
+            """A todo_write result is the model reshaping its own checklist.
+
+            With rows already live (planner plan-{i} rows, the model's own
+            previous list, or syn- fallback rows) the write DIFFS: dropped
+            open rows retire with a reason, new work appends with fresh ids
+            (never renumbering), matched open rows update status/outcome in
+            place, closed rows never churn, and todo_revised lands once per
+            actual rewrite — the same machinery the gate replan uses,
+            triggered by the model instead of the gate. With nothing live
+            (or an explicit empty list) the legacy fresh path applies:
+            clear + create — a list born this way has nothing to retire."""
+            nonlocal _model_owns_plan
+            if tool_name != "todo_write" or not _obs or tool_result is None or not tool_result.success:
+                return
+            todos = (tool_result.metadata or {}).get("todos")
+            if todos is None:
+                return
+            _model_owns_plan = True
+            incoming = [
+                t
+                for t in todos
+                if isinstance(t, dict) and str(t.get("text") or "").strip()
+            ]
+            current = _live_panel_todos()
+            if not current or not incoming:
+                _emit_todo_write_events(tool_name, tool_result, _obs)
+                _remember_model_todos(incoming)
+                _extend_acceptance_contract(
+                    [
+                        (str(t.get("text") or ""), str(t.get("expected_outcome") or ""))
+                        for t in incoming
+                    ]
+                )
+                return
+            plan_family = any(str(r.get("id") or "").startswith("plan-") for r in current)
+            diff = _diff_todo_lists(
+                current,
+                incoming,
+                id_prefix="plan-" if plan_family else "t",
+                existing_ids={str(r.get("id")) for r in current},
+            )
+            for u in diff["updates"]:
+                _status = u.get("status") or "pending"
+                _result = u.get("result") or ""
+                _outcome = u.get("expected_outcome") or ""
+                _idx = _plan_index(u["id"]) if plan_family else None
+                if _status == "completed":
+                    _obs.emit("todo_completed", id=u["id"], completed=True, result=_result)
+                    if _idx is not None:
+                        _plan_done.add(u["id"])
+                else:
+                    _payload: dict = {"id": u["id"], "status": _status}
+                    if _outcome:
+                        _payload["expected_outcome"] = _outcome
+                    if _result:
+                        _payload["result"] = _result
+                    _obs.emit("todo_updated", **_payload)
+                    if _status == "failed" and _idx is not None:
+                        _plan_failed.add(u["id"])
+                if _idx is not None and _outcome:
+                    _plan_outcomes[_idx] = _outcome
+            for c in diff["creates"]:
+                _obs.emit(
+                    "todo_created",
+                    id=c["id"],
+                    text=c["text"],
+                    content=c["text"],
+                    completed=False,
+                    status=c.get("status") or "pending",
+                    expected_outcome=c.get("expected_outcome") or "",
+                )
+                if plan_family:
+                    _plan_steps.append(c["text"])
+                    _plan_outcomes.append(c.get("expected_outcome") or "")
+            for rid in diff["retires"]:
+                _obs.emit(
+                    "todo_updated",
+                    id=rid,
+                    status="retired",
+                    result="Dropped from the agent's own revised plan.",
+                )
+                if plan_family:
+                    _plan_retired.add(rid)
+            if diff["creates"] or diff["retires"]:
+                _obs.emit(
+                    "todo_revised",
+                    added=len(diff["creates"]),
+                    retired=len(diff["retires"]),
+                    kept=len(diff["updates"]) + diff["kept"],
+                )
+                _extend_acceptance_contract(
+                    [(c["text"], c.get("expected_outcome") or "") for c in diff["creates"]]
+                )
+                logger.info(
+                    "[agent.loop] todo_write rewrite applied: +%d added, %d retired, %d kept",
+                    len(diff["creates"]),
+                    len(diff["retires"]),
+                    len(diff["updates"]) + diff["kept"],
+                )
+            _remember_model_todos(incoming)
 
         # ── Inject agent system prompt (with plan context) ──────────────
         loop_messages = list(messages)
@@ -5273,7 +5659,7 @@ class AgentLoop:
                         # the named tool for the rest of this run (metadata
                         # survives the wait_for task boundary).
                         _note_described_tool(tc_name, tc_result, loaded_tools)
-                        _emit_todo_write_events(tc_name, tc_result, _obs)
+                        _handle_model_todo_write(tc_name, tc_result)
                         tc_obs = tc_result.content if tc_result else f"[Tool {tc_name} returned no result]"
                         tc_obs = _filter_tool_injection(tc_obs)
                         # Collect result for post-loop synthesis
@@ -6367,7 +6753,7 @@ class AgentLoop:
                     # A describe_tool call loads the named
                     # long-tail tool into this run's native tools param.
                     _note_described_tool(tool_name, tool_result, loaded_tools)
-                    _emit_todo_write_events(tool_name, tool_result, _obs)
+                    _handle_model_todo_write(tool_name, tool_result)
 
                     latency_ms = round((time.monotonic() - t_tool) * 1000)
 
@@ -7151,7 +7537,7 @@ class AgentLoop:
                                 allowed_tool_names=effective_allowed,
                             )
                             _note_described_tool(tc_name, tool_result, loaded_tools)
-                            _emit_todo_write_events(tc_name, tool_result, _obs)
+                            _handle_model_todo_write(tc_name, tool_result)
                             latency_ms = round((time.monotonic() - t_tool) * 1000)
 
                             if tool_result:
@@ -8087,7 +8473,7 @@ class AgentLoop:
                                     allowed_tool_names=effective_allowed,
                                 )
                                 _note_described_tool(_tc_name, _late_result, loaded_tools)
-                                _emit_todo_write_events(_tc_name, _late_result, _obs)
+                                _handle_model_todo_write(_tc_name, _late_result)
                                 _late_lat = round((time.monotonic() - t_late) * 1000)
                                 _late_obs = (
                                     _filter_tool_injection(_late_result.content)
@@ -9240,9 +9626,11 @@ class AgentLoop:
             )
             if plan_revision_cb is not None:
                 try:
+                    _rev_steps, _rev_outcomes = _parse_replan_contract(revised)
                     plan_revision_cb(
-                        _parse_replan_steps(revised),
+                        _rev_steps,
                         _floor_note or "the completion floor found the objective unmet",
+                        outcomes=_rev_outcomes,
                     )
                 except Exception as _rev_exc:  # pragma: no cover — defensive
                     logger.warning("[agent.loop] plan revision apply failed (non-fatal): %s", _rev_exc)
@@ -9423,9 +9811,11 @@ class AgentLoop:
                     )
                     if plan_revision_cb is not None:
                         try:
+                            _rev_steps, _rev_outcomes = _parse_replan_contract(revised)
                             plan_revision_cb(
-                                _parse_replan_steps(revised),
+                                _rev_steps,
                                 "; ".join(f"{c}: {n}" for c, n in unmet)[:200],
+                                outcomes=_rev_outcomes,
                             )
                         except Exception as _rev_exc:  # pragma: no cover — defensive
                             logger.warning("[agent.loop] plan revision apply failed (non-fatal): %s", _rev_exc)
@@ -9555,9 +9945,11 @@ class AgentLoop:
             )
             if plan_revision_cb is not None:
                 try:
+                    _rev_steps, _rev_outcomes = _parse_replan_contract(revised)
                     plan_revision_cb(
-                        _parse_replan_steps(revised),
+                        _rev_steps,
                         "; ".join(f"{c}: {n}" for c, n in unmet)[:200],
+                        outcomes=_rev_outcomes,
                     )
                 except Exception as _rev_exc:  # pragma: no cover — defensive
                     logger.warning("[agent.loop] plan revision apply failed (non-fatal): %s", _rev_exc)
@@ -9693,7 +10085,9 @@ class AgentLoop:
                     "You are the replanning step of an acceptance-gate loop. "
                     "A previous plan did not meet its success criteria. Produce "
                     "a REVISED, concrete, step-by-step plan to meet the unmet "
-                    "criteria. Number each step."
+                    "criteria. Number each step. For every step you added or "
+                    "changed, end that line with its verification contract — "
+                    "'done when: <the evidence that proves it>'."
                 ),
             },
             {

@@ -689,7 +689,7 @@ TOOL_DEFINITIONS: list[dict] = [
         "type": "function",
         "function": {
             "name": "todo_write",
-            "description": "Write/update the live task checklist in the user's Todos panel. Pass the FULL list every call as todos:[{text,status}] with status 'pending'|'in_progress'|'completed'|'blocked'. Use for any multi-step task: create it up front, then call again to mark the current step in_progress and finished steps completed so the user sees live progress.",
+            "description": "Write/update the live task checklist in the Todos panel. Pass the FULL list every call as todos:[{text,status,expected_outcome}]. Create it up front, then update progress. A call on a live list DIFFS: dropped todos retire (reason on the row), new ones append — revise freely as evidence changes the work. expected_outcome: what proves a todo done — the completion contract follows it.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -701,8 +701,9 @@ TOOL_DEFINITIONS: list[dict] = [
                                 "text": {"type": "string"},
                                 "status": {
                                     "type": "string",
-                                    "enum": ["pending", "in_progress", "completed", "blocked"],
+                                    "enum": ["pending", "in_progress", "completed", "blocked", "failed"],
                                 },
+                                "expected_outcome": {"type": "string"},
                             },
                             "required": ["text"],
                         },

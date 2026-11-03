@@ -151,7 +151,10 @@ register_tool(
         "failed). Tool calls are how a todo gets done, not the todo itself. "
         "Use it for any multi-step task: create the checklist up front, then "
         "call again to mark progress, add todos the evidence demands, or "
-        "revise the plan. Fast and side-effect-free besides the panel."
+        "revise the plan — a call on a live list DIFFS (dropped todos retire "
+        "with the reason on the row, new ones append, the revision shows in "
+        "the panel; closed rows are never rewritten). Fast and side-effect-free "
+        "besides the panel."
     ),
     cost=0.0,
     latency_ms=5,
