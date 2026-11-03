@@ -12,6 +12,4 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-11-03 — Jengo / GLM (Z.ai sandbox)
-- **Task:** Owner-reported (2026-11-03): the UI renders model output as plain text — no table/format styling. Diagnose the markdown render pipeline end to end on the wire (backend SSE passthrough → frontend MarkdownContent), fix the renderer's real-world gaps (GLM-degraded table shapes), and harden the response_formatting prompt contract
-- **Status:** in-progress
+(none — the board is clear; the next session claims from the backlog)

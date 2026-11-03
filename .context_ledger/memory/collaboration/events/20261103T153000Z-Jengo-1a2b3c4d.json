@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "id": "20261103T153000Z-Jengo-1a2b3c4d",
+  "type": "release",
+  "session": "S025",
+  "agent": "Jengo",
+  "created": "2026-11-03T15:30:00Z",
+  "issue": "markdown-render-pipeline",
+  "body": "S025 releasing the markdown render pipeline fix (the owner's 2026-11-03 'the UI does not format the output in style eg tables etc its just text'). Evidence-first probe (live_test_markdown_render.py, MD1-MD5): the frontend renderer works and the transport is clean (well-formed + GLM-degraded markdown crosses SSE and history byte-exact) — the ROOT CAUSE was the response_formatting section existing ONLY on the scoped-agent registry while the parent warm-kernel and chat surfaces carried none. Fix: one shared contract text (prompt/sections/formatting.py) at the shared slot 405 on all three surfaces (after the tool index so the SOCIAL contiguous-suffix cut can never drop it from a conversational turn) + the GFM pipe-table line; the renderer gained two conservative repair passes (full-width pipe/dash normalization scoped to leading-pipe rows, missing-delimiter-row insertion that never re-delimits a real table). 23 new tests; backend 3,955 + e2e 132 / frontend 693 / ruff clean; NEW harness ALL PASS + 8 standing harnesses + eval 13/13. Also committed first thing: S024's crash-left-uncommitted ledger close (2897b0f6). Found live and filed: B-2026-11-03-1 (the zero-tool forced-replan storm, 20 provider calls measured).",
+  "paths": [
+    "backend/src/core/agent/prompt/sections/formatting.py",
+    "backend/src/core/agent/prompt/names.py",
+    "backend/src/core/agent/prompt/sections/agent.py",
+    "backend/src/core/agent/prompt/sections/parent.py",
+    "backend/src/core/agent/prompt/sections/chat.py",
+    "frontend/src/lib/markdownRepair.ts",
+    "frontend/src/components/shared/MarkdownContent.test.tsx",
+    "tests/core/test_response_formatting_section.py",
+    "scripts/live_test_markdown_render.py"
+  ],
+  "refs": ["2897b0f6"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

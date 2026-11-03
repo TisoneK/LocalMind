@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-11-03T10:50:32Z_
+_Regenerated: 2026-11-03T14:50:38Z_
 
 ## Standing params
 - **Core:** 2.3.2 (locked, verified 2026-11-03)
@@ -15,11 +15,12 @@ _Regenerated: 2026-11-03T10:50:32Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
+- **Jengo** (S025) — Done — Owner-reported: the UI shows model output as plain text — no table/format styling. Diag…
 - **Sanaa** (S024) — Done — B-2026-11-02-2 remainder: the model's own todo_write rewrite — a mid-turn diff (retire/…
 - **Zuri** (S023) — Done — The owner's 2026-11-02 "How are things" export: the task list is still tool-echo (`syn-0`…
 
 ## Current task
-- **2026-11-03 — Sanaa / GLM (Z.ai sandbox)** — B-2026-11-02-2 remainder — the model's own todo_write rewrite: a mid-turn todo_write call diffs against the live panel (dropped rows reti… — *in-progress*
+(idle — no task recorded)
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-10-31-1 | In-app State Explorer + engine selector (ADR-71): port the explorer into the app as its own interface (game tree, move list, eval bar, inspector, meters, rewindable timeline) and add the Classic/State engine setting. Reference: `docs/prototypes/state-explorer/`, `backend/src/api/static/state-explorer/`; engine package `backend/src/state_agent/` (adapter `state_agent/adapters/localmind.py`); `EngineEvent` is the UI contract. Check whether the in-flight port landed before starting. |
@@ -27,6 +28,7 @@ _Regenerated: 2026-11-03T10:50:32Z_
 | B-2026-10-31-3 | Benchmark the state engine against Classic (ADR-71 §8): both engines selectable and observable, same tasks, measurable comparison, only then a decision about an `Auto` engine. Ties to B-2026-10-31-1. |
 | B-2026-10-31-4 | Confirmable-refusal rollout (ADR-67): convert every tool that refuses or guesses to "refuse only on a verified fact, name the fact and the confirming flag" — start with delete (`confirm_delete`), the shell tool's destructive/mass-touch commands (replace the substring blocklist), and installs (`scope=system`); record confirming flags in the run trace. |
 | B-2026-10-31-21 | Perspective & speaker-identity consistency (external audit 2026-10-31): the turn's reasoning got the relationship right ("they are my creator") while the reply reversed it ("As your creator…"). Add the exact exchange to a regression/eval set and evaluate a bounded read-only consistency check (same shape as the reply-is-pending judge) on replies that assert a relationship — who speaks, who is addressed, polarity preserved; nudge only, never a pronoun-replacement rule. Full context: `office/reviews/2026-10-31-external-audit-intake.md` §1.1. |
+| B-2026-11-03-1 | The zero-tool forced-replan storm (found live by S025's markdown harness): an analyze-intent turn WITH a drawn plan whose model persistently answers in prose (no tool call) triggers the gate's zero-tool force EVERY iteration — the probe measured 20 forced-provider calls (each carrying the full system prompt) before the honest stop, for one knowledge-comparison question a fake could only answer in text. A real model usually calls a tool or the turn classifies chat, so the storm is rare — but on the owner's pay-per-token key the cost is real. Design a bound: a distinct cap for consecutive zero-tool forces (distinct from `effective_max_iter`), or a classify re-check after the first force (is this turn actually a task?), or an honest-stop after N forces that names the mismatch on the record. Reproduce first with `scripts/live_test_markdown_render.py` probe B pre-fix shape (plan row + zero-tool fake). |
 | B-2026-11-02-2 | Adaptive plan revision & objective fidelity (owner 2026-11-02 advisor exchange — follow-on to B-2026-11-02-1): the todo list must EVOLVE when execution evidence changes the work — a discovery that moots a todo retires it (explicit `retired` status carrying the discovery in its result) instead of silently vanishing in a full-replace; mid-turn rewrites surface as a revision diff (`todo_revised`: added/retired/kept) in the Todos panel; and the close gains an objective-fidelity judge (bounded read-only lane, completion-judge shape): does the reply address the ORIGINAL request, not merely the todos — one drift nudge, on the record, never blocks. The benchmark: the agent "knows where it is coming from and where it is going". SHIPPED 2026-11-02 (S023): the gate's replan diffs into the live todo list (`retired` status carrying the discovery, appended rows, `todo_revised {added, retired, kept}` once per turn, closed rows never churn, the finalize sweep leaves retired closed) and the objective-fidelity judge runs at the close (bounded read-only lane, `post_answer_lanes.objective_fidelity` + `objective_drift`, one nudge, never blocks). SHIPPED 2026-11-03 (S024) — the REMAINDER closed: a mid-turn `todo_write` call now DIFFS against the live panel rows (the model's own last-written list, else the planner rows, else the syn- fallbacks) instead of silently full-replacing — dropped open rows retire with the reason, new work appends with fresh ids, closed rows never churn, `todo_revised` lands once per actual rewrite, a retired row takes no more tool lifecycle — and revised steps carry outcomes: model-supplied `expected_outcome` joins the acceptance contract, the gate's replan prompt asks for per-step done-when contracts and the parser carries them into the added rows (backward-compatible), and `todo_write` is excluded from the gate's evidence (a checklist cannot verify itself). ITEM CLOSED. |
 
 _10 medium, 1 low priority row(s) — see tasks/backlog.md_
@@ -37,5 +39,5 @@ _10 medium, 1 low priority row(s) — see tasks/backlog.md_
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-11-02
 
 ## Collaboration
-- 191 event(s) on file; most recent: `20261103T105500Z-Sanaa-7c41d908.json`
+- 193 event(s) on file; most recent: `20261103T153000Z-Jengo-1a2b3c4d.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`
