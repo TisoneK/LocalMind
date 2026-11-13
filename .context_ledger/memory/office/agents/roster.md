@@ -61,6 +61,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
+| Baraka | OF06SS01 | DeepSeek V4.1 Flash Free | Owner's "pull latest then clockout any stale agents or worktrees": sync, close the full office, clear stale worktrees, check in | Working | Phase 2 check-in: pulled to `1b812576`, closed office-005 (21 sessions) with its permanent record and re-seed; next: stale worktree cleanup |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
