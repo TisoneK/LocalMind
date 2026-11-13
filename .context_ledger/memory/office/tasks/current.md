@@ -12,4 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-(none — the board is clear; the next session claims from the backlog)
+- **Session:** —
+- **Task:** none — no session in progress
+- **Status:** idle

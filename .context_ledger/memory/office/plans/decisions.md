@@ -13,13 +13,13 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
 -->
 
 ---
-## ADR-73: Carryover decisions in force from the closed office (2026-11-02)
+## ADR-74: Carryover decisions in force from the closed office (2026-11-13)
 - **Status:** accepted
 - **Context:** the previous office closed; its frozen decisions live at
-  `history/office-004/plans/decisions.md` and its permanent summary at
-  `history/office-004.md`. The decisions below still bind.
+  `history/office-005/plans/decisions.md` and its permanent summary at
+  `history/office-005.md`. The decisions below still bind.
 - **Decision:** respect ADR-41 (thinking policy on the answer path), ADR-66b
-  (an answer is final when the reply is final; post-turn bookkeeping runs as
+  (an answer is final when the reply is final; post-turn bookkeeping runs in
   detached lanes), ADR-67 (refuse only on a verified fact, name the fact and
   the confirming flag), ADR-69 as amended (explicit `fallback_to` only — no
   implicit keyed-provider tail; record `{from, code, to}`; identity stamps
