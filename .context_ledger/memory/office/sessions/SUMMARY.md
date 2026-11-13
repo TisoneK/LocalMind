@@ -30,3 +30,8 @@ records.
 - A removed summary line MUST have a corresponding permanent entry in
   agents/sessions.md — never delete the only record of a session.
 -->
+
+---
+- **2026-11-13 — Session 1** — Baraka / DeepSeek V4.1 Flash Free — pulled `1b812576`, closed the full office-005 (21 sessions) with its permanent record and re-seed, removed two stale worktrees plus their leftover local branches.
+  The frozen office's trailing blank line had to be trimmed to pass the universal pre-commit gate; logged as a protocol flaw in `flaws/log.md`.
+  Detail: summary only.

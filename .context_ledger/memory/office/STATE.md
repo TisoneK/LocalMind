@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-11-13T05:56:39Z_
+_Regenerated: 2026-11-13T05:58:39Z_
 
 ## Standing params
 - **Core:** 2.3.2 (locked, verified 2026-11-03)
@@ -15,7 +15,7 @@ _Regenerated: 2026-11-13T05:56:39Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-- **Baraka** (OF06SS01) — Working — Owner's "pull latest then clockout any stale agents or worktrees": sync, close the full o…
+(office empty — no live roster rows)
 
 ## Current task
 - **—** — none — no session in progress — *idle*
@@ -31,8 +31,8 @@ _Regenerated: 2026-11-13T05:56:39Z_
 _10 medium, 1 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
-- flaws/log.md (protocol/.context_ledger friction): 0 entries
-- inefficiencies/log.md (project code/env friction): 0 entries
+- flaws/log.md (protocol/.context_ledger friction): 1 entry, last added 2026-11-13
+- inefficiencies/log.md (project code/env friction): 1 entry, last added 2026-11-13
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-11-13
 
 ## Collaboration

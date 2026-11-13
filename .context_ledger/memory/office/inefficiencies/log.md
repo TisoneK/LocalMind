@@ -39,3 +39,11 @@ names them), and roll-up candidates.
 - **Upstream:** candidate  ← add this line ONLY for protocol-level friction
   worth a core fix; omit entirely for project-local friction.
 -->
+
+---
+## 2026-11-13 — Baraka / DeepSeek V4.1 Flash Free
+- **Problem:** none this session — every step ran at first attempt after the frozen-roster whitespace fix (recorded as a protocol flaw).
+- **Cost:** none beyond that one gate re-run.
+- **Cause:** n/a
+- **Workaround / fix:** n/a
+- **Prevent next time:** n/a

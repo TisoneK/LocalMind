@@ -31,3 +31,11 @@ names them), and roll-up candidates.
   a template, a rule>
 - **Status:** open | fixed in package <commit-sha or date>
 -->
+
+## 2026-11-13 — Baraka / DeepSeek V4.1 Flash Free (Session 1)
+
+- **Flaw:** `ledger-history close --confirm` freezes the office verbatim, but the universal pre-commit gate (`git diff --cached --check`) rejects the frozen copy when any source file ends with a blank line — and the close flow itself offers no way to pass the gate without editing the "verbatim" freeze.
+- **Symptom:** after the close, `ledger-gates run pre-commit` failed on `history/office-005/agents/roster.md:92: new blank line at EOF`; the close could only be committed after trimming that one trailing blank line from a directory the protocol says is frozen unchanged.
+- **Root cause:** the close tool copies files byte-for-byte while the pre-commit gate enforces a stricter whitespace rule than the live office ever enforced on itself, so a file that was legal in the live office becomes illegal the moment it is frozen.
+- **Suggested fix:** have `ledger-history close` normalize trailing blank lines at EOF while freezing (documented as the one permitted whitespace change), or have the universal gate exempt `history/**` from `--check`.
+- **Status:** open
