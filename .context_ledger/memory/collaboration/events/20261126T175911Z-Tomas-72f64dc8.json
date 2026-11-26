@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261126T175911Z-Tomas-72f64dc8",
+  "type": "claim",
+  "session": "OF06SS02",
+  "agent": "Tomas",
+  "created": "2026-11-26T17:59:11Z",
+  "issue": "machine-setup",
+  "body": "Set up this checkout on the local Windows machine: verify/install npm workspace deps and the backend venv, run the project's own gates and suite, then record the verified environment block. No product code changes planned.",
+  "paths": [".context_ledger/memory/system/environments.md", ".context_ledger/memory/office/agents/sessions.md"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
