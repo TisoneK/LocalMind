@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-11-13T05:58:39Z_
+_Regenerated: 2026-11-26T17:52:55Z_
 
 ## Standing params
 - **Core:** 2.3.2 (locked, verified 2026-11-03)
@@ -15,7 +15,7 @@ _Regenerated: 2026-11-13T05:58:39Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-(office empty — no live roster rows)
+- **Tomas** (OF06SS02) — Working — Machine setup: bootstrap the checkout so LocalMind builds and its checks run locally
 
 ## Current task
 - **—** — none — no session in progress — *idle*
@@ -36,4 +36,5 @@ _10 medium, 1 low priority row(s) — see tasks/backlog.md_
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-11-13
 
 ## Collaboration
-(no events yet)
+- 193 event(s) on file; most recent: `20261103T153000Z-Jengo-1a2b3c4d.json`
+- Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`

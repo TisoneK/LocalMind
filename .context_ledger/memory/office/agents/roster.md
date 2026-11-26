@@ -61,6 +61,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
+| Tomas | OF06SS02 | Buffy (Freebuff agent) | Machine setup: bootstrap the checkout so LocalMind builds and its checks run locally | Working | Phase 2 check-in, signing the board |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
